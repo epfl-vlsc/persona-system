@@ -3,6 +3,12 @@ syntax = "proto3";
 package tensorflow;
 // option cc_enable_arenas = true;
 
+message FPGAOptions {
+  string system_type = 1; // "harp" or "catapult"
+  string version = 2;     // different versions may require
+                          // different management interfaces
+};
+
 message GPUOptions {
   // A value between 0 and 1 that indicates what fraction of the
   // available GPU memory to pre-allocate for each process.  1 means
@@ -93,4 +99,8 @@ message ConfigProto {
 
   // Options that apply to all graphs.
   GraphOptions graph_options = 10;
+  
+  // Options that apply to FPGA accelerated nodes
+  FPGAOptions fpga_options = 11;
+
 };
