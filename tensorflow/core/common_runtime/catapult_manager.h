@@ -11,7 +11,7 @@ namespace tensorflow {
 
 class CatapultManager : public FPGAManagerBase {
     public:
-        CatapultManager(const SessionOptions& options) : FPGAManagerBase(options) {};
+        CatapultManager(const SessionOptions& options) : FPGAManagerBase(options) {LOG(INFO) << "CREATING NEW CATAPULT MANAGER\n";};
         ~CatapultManager() {};
         void FPGACompute(OpKernel* op_kernel, OpKernelContext* context) override;
     private:

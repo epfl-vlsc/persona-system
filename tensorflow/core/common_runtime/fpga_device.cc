@@ -25,7 +25,6 @@ FPGADevice::FPGADevice(const SessionOptions& options,
                   allocator),
       allocator_(allocator) {
 
-  // instantiate manager for FPGA system
   // TODO factoryize 
   FPGAOptions f_options = options.config.fpga_options();
   if (f_options.system_type() == "harp")
