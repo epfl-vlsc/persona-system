@@ -22,11 +22,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import BaseHTTPServer
+from six.moves import BaseHTTPServer
 import functools
 import os
 import socket
-import SocketServer
+from six.moves import socketserver
 
 import tensorflow.python.platform
 
@@ -112,7 +112,7 @@ def ParseEventFilesFlag(flag_value):
   return files
 
 
-class ThreadedHTTPServer(SocketServer.ThreadingMixIn,
+class ThreadedHTTPServer(socketserver.ThreadingMixIn,
                          BaseHTTPServer.HTTPServer):
   """A threaded HTTP server."""
   daemon = True
@@ -155,7 +155,7 @@ def main(unused_argv=None):
 
   status_bar.SetupStatusBarInsideGoogle('TensorBoard %s' % tag, FLAGS.port)
   print('Starting TensorBoard %s on port %d' % (tag, FLAGS.port))
-  print('(You can navigate to http://localhost:%d)' % FLAGS.port)
+  print('(You can navigate to http://%s:%d)' % (FLAGS.host, FLAGS.port))
   server.serve_forever()
 
 

@@ -39,7 +39,7 @@ The MNIST data is hosted on
 [Yann LeCun's website](http://yann.lecun.com/exdb/mnist/).  For your
 convenience, we've included some python code to download and install the data
 automatically. You can either download
-[the code](https://tensorflow.googlesource.com/tensorflow/+/master/tensorflow/examples/tutorials/mnist/input_data.py)
+[the code](https://www.tensorflow.org/code/tensorflow/examples/tutorials/mnist/input_data.py)
 and import it as below, or simply copy and paste it in.
 
 ```python
@@ -406,7 +406,7 @@ cast to floating point numbers and then take the mean. For example,
 `[True, False, True, True]` would become `[1,0,1,1]` which would become `0.75`.
 
 ```python
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 ```
 
 Finally, we ask for our accuracy on our test data.

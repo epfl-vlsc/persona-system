@@ -13,12 +13,12 @@
 # limitations under the License.
 # ==============================================================================
 
-"""A very simple MNIST classifer, modified to display data in TensorBoard.
+"""A very simple MNIST classifier, modified to display data in TensorBoard.
 
 See extensive documentation for the original model at
 http://tensorflow.org/tutorials/mnist/beginners/index.md
 
-See documentaion on the TensorBoard specific pieces at
+See documentation on the TensorBoard specific pieces at
 http://tensorflow.org/how_tos/summaries_and_tensorboard/index.md
 
 If you modify this file, please update the exerpt in
@@ -49,11 +49,11 @@ def main(_):
   sess = tf.InteractiveSession()
 
   # Create the model
-  x = tf.placeholder('float', [None, 784], name='x-input')
+  x = tf.placeholder(tf.float32, [None, 784], name='x-input')
   W = tf.Variable(tf.zeros([784, 10]), name='weights')
   b = tf.Variable(tf.zeros([10], name='bias'))
 
-  # use a name scope to organize nodes in the graph visualizer
+  # Use a name scope to organize nodes in the graph visualizer
   with tf.name_scope('Wx_b'):
     y = tf.nn.softmax(tf.matmul(x, W) + b)
 
@@ -63,7 +63,7 @@ def main(_):
   _ = tf.histogram_summary('y', y)
 
   # Define loss and optimizer
-  y_ = tf.placeholder('float', [None, 10], name='y-input')
+  y_ = tf.placeholder(tf.float32, [None, 10], name='y-input')
   # More name scopes will clean up the graph representation
   with tf.name_scope('xent'):
     cross_entropy = -tf.reduce_sum(y_ * tf.log(y))
@@ -74,7 +74,7 @@ def main(_):
 
   with tf.name_scope('test'):
     correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, 'float'))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     _ = tf.scalar_summary('accuracy', accuracy)
 
   # Merge all the summaries and write them out to /tmp/mnist_logs
@@ -85,7 +85,7 @@ def main(_):
   # Train the model, and feed in test data and record summaries every 10 steps
 
   for i in range(FLAGS.max_steps):
-    if i % 10 == 0:  # Record summary data, and the accuracy
+    if i % 10 == 0:  # Record summary data and the accuracy
       if FLAGS.fake_data:
         batch_xs, batch_ys = mnist.train.next_batch(
             100, fake_data=FLAGS.fake_data)
