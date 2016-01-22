@@ -11,9 +11,10 @@ namespace tensorflow {
 
 class HarpManager : public FPGAManagerBase {
     public:
-        HarpManager(const SessionOptions& options) : FPGAManagerBase(options) {};
+        HarpManager(const SessionOptions& options);
         ~HarpManager() {};
         void FPGACompute(OpKernel* op_kernel, OpKernelContext* context) override;
+        int FPGADeviceStatus() override { return -1; }  
     private:
         TF_DISALLOW_COPY_AND_ASSIGN(HarpManager);
 };

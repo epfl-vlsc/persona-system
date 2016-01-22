@@ -61,7 +61,9 @@ Allocator* FPGADevice::GetAllocator(AllocatorAttributes attr) {
 }
 
 
-// same as threadpool device for now
+// same as threadpool device for now, probably don't need to change
+// fpga process normally would marshal tensor into FPGA board or
+// device memory, but we need it on the host to do that
 Status FPGADevice::MakeTensorFromProto(
     const TensorProto& tensor_proto, const AllocatorAttributes alloc_attrs,
     Tensor* tensor) {

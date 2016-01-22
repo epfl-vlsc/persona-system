@@ -8,12 +8,16 @@
 
 namespace tensorflow {
 
+    //mostly an abstract class
 class FPGAManagerBase {
     public:
-        FPGAManagerBase(const SessionOptions& options) {};
+        FPGAManagerBase(const SessionOptions& options, string deviceType) : device_type_(deviceType) {};
         ~FPGAManagerBase() {};
-        virtual void FPGACompute(OpKernel* op_kernel, OpKernelContext* context);
+        virtual void FPGACompute(OpKernel* op_kernel, OpKernelContext* context) = 0;
+        string FPGADeviceType() { return device_type_; }
+        virtual int FPGADeviceStatus() = 0;
     private:
+        string device_type_;  // "catapult" or "harp" for now
         TF_DISALLOW_COPY_AND_ASSIGN(FPGAManagerBase);
 };
 

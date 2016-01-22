@@ -4,6 +4,7 @@
 #include "tensorflow/core/common_runtime/device_factory.h"
 #include "tensorflow/core/common_runtime/local_device.h"
 #include "tensorflow/core/common_runtime/fpga_manager.h"
+#include "tensorflow/core/public/status.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
@@ -23,6 +24,8 @@ class FPGADevice : public LocalDevice {
                              Tensor* tensor) override;
 
   Status Sync() override { return Status::OK(); }
+  int FPGADeviceStatus() { return fpga_manager_->FPGADeviceStatus(); }
+  string FPGADeviceType() { return fpga_manager_->FPGADeviceType(); }
 
  private:
   Allocator* allocator_;  // Not owned

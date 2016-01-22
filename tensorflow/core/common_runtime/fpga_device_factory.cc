@@ -12,7 +12,7 @@ class FPGADeviceFactory : public DeviceFactory {
   void CreateDevices(const SessionOptions& options, const string& name_prefix,
                      std::vector<Device*>* devices) override {
     
-    int n = 0;  // there should only be one FPGA for now
+    int n = 0;  // there should only be one FPGA for now, at least on catapult
     // TODO: platfrom specific code to detect available devices
     auto iter = options.config.device_count().find("FPGA");
     if (iter != options.config.device_count().end()) {
@@ -27,8 +27,16 @@ class FPGADeviceFactory : public DeviceFactory {
       
     for (int i = 0; i < n; i++) {
       string name = strings::StrCat(name_prefix, "/fpga:", i);
-      devices->push_back(new FPGADevice(options, name, Bytes(256 << 20),
+      FPGADevice * new_device = new FPGADevice(options, name, Bytes(256 << 20),
+                                              BUS_ANY, cpu_allocator());
+      if (new_device->FPGADeviceStatus() >= 0)
+        devices->push_back(new FPGADevice(options, name, Bytes(256 << 20),
                                               BUS_ANY, cpu_allocator()));
+      else {
+        LOG(INFO) << "FPGA Device " << name << " failed to initialize properly \
+            with status code " << new_device->FPGADeviceStatus() << "\n";
+        delete new_device;
+      }
     }
   }
 };
