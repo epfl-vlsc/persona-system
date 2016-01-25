@@ -149,6 +149,14 @@ bool DeviceNameUtils::ParseFullName(StringPiece fullname, ParsedName* p) {
       if (p->has_id && !ConsumeNumber(&fullname, &p->id)) {
         return false;
       }
+    } else if (str_util::ConsumePrefix(&fullname, "/fpga:") ||
+               str_util::ConsumePrefix(&fullname, "/FPGA:")) {
+      p->has_type = true;
+      p->type = "FPGA";  // Treat '/fpga:..' as uppercase '/device:FPGA:...'
+      p->has_id = !str_util::ConsumePrefix(&fullname, "*");
+      if (p->has_id && !ConsumeNumber(&fullname, &p->id)) {
+        return false;
+      }
     } else {
       return false;
     }
