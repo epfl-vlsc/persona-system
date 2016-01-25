@@ -27,11 +27,11 @@ class FPGADeviceFactory : public DeviceFactory {
       
     for (int i = 0; i < n; i++) {
       string name = strings::StrCat(name_prefix, "/fpga:", i);
+      // may need to change memory about to 8GB ...
       FPGADevice * new_device = new FPGADevice(options, name, Bytes(256 << 20),
                                               BUS_ANY, cpu_allocator());
       if (new_device->FPGADeviceStatus() >= 0)
-        devices->push_back(new FPGADevice(options, name, Bytes(256 << 20),
-                                              BUS_ANY, cpu_allocator()));
+        devices->push_back(new_device);
       else {
         LOG(INFO) << "FPGA Device " << name << " failed to initialize properly \
             with status code " << new_device->FPGADeviceStatus() << "\n";
