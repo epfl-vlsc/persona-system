@@ -136,6 +136,19 @@ class DeviceBase {
   const GpuDeviceInfo* tensorflow_gpu_device_info() const {
     return gpu_device_info_;
   }
+  
+  struct FpgaDeviceInfo {
+	  string device_type = "catapult";
+  };
+
+  // Does not take ownership.
+  void set_tensorflow_fpga_device_info(FpgaDeviceInfo* f) {
+    fpga_device_info_ = f;
+  }
+
+  const FpgaDeviceInfo* tensorflow_fpga_device_info() const {
+    return fpga_device_info_;
+  }
 
   // Does not take ownership.
   void set_eigen_cpu_device(Eigen::ThreadPoolDevice* d) {
@@ -196,6 +209,7 @@ class DeviceBase {
   CpuWorkerThreads* cpu_worker_threads_ = nullptr;
   GpuDeviceInfo* gpu_device_info_ = nullptr;
   Eigen::ThreadPoolDevice* eigen_cpu_device_ = nullptr;
+  FpgaDeviceInfo* fpga_device_info_ = nullptr;
 };
 
 }  // namespace tensorflow

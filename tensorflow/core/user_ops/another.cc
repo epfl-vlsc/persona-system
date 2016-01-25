@@ -1,6 +1,6 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/common_runtime/fpga_device.h"
+#include "tensorflow/core/framework/device_base.h"
 
 // include FPGA APIs ?
 using namespace tensorflow;
@@ -17,8 +17,9 @@ class AnotherOp : public OpKernel {
     // get the FPGA device pointer so we know which API to use
     // TODO: find a better way, because this won't work if this kernel is 
     // registered with other devices, could use dynamic_cast
-    FPGADevice * device = static_cast<FPGADevice*>(context->device());
-    if (device->FPGADeviceType() == "catapult") {
+    DeviceBase * device = context->device();
+	const DeviceBase::FpgaDeviceInfo* fpga_info = device->tensorflow_fpga_device_info();
+    if (fpga_info->device_type == "catapult") {
         // placeholder crap
         // Create an output tensor
         Tensor* output_tensor = NULL;
@@ -30,7 +31,7 @@ class AnotherOp : public OpKernel {
         output() = "This is the test of the FPGA OP!\n";
     } else {
         LOG(FATAL) << "Op kernel FPGATest is not implemented for FPGA device \"" << 
-            device->FPGADeviceType() << "\"\n";
+            fpga_info->device_type << "\"\n";
     }
   }
 };

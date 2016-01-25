@@ -27,10 +27,18 @@ FPGADevice::FPGADevice(const SessionOptions& options,
 
   // TODO factoryize 
   FPGAOptions f_options = options.config.fpga_options();
-  if (f_options.system_type() == "harp")
+  if (f_options.system_type() == "harp") {
+	  FpgaDeviceInfo* info = new FpgaDeviceInfo();
+	  info->device_type = "harp";
+	  set_tensorflow_fpga_device_info(info);
       fpga_manager_ = new HarpManager(options);
-  else if (f_options.system_type() == "catapult")
+  }
+  else if (f_options.system_type() == "catapult") {
+	  FpgaDeviceInfo* info = new FpgaDeviceInfo();
+	  info->device_type = "catapult";
+	  set_tensorflow_fpga_device_info(info);
       fpga_manager_ = new CatapultManager(options);
+  }
   else
       LOG(FATAL) << "Unrecognized FPGA system type \"" << f_options.system_type() << "\" \n";
           // initialize FPGA device and acquire lock on it?
@@ -39,6 +47,7 @@ FPGADevice::FPGADevice(const SessionOptions& options,
 }
 
 FPGADevice::~FPGADevice() {
+  delete tensorflow_fpga_device_info();
   delete fpga_manager_;
 }
 
