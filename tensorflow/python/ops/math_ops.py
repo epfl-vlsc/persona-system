@@ -171,6 +171,7 @@ import tensorflow.python.platform
 import numpy as np
 import six.moves
 
+from tensorflow.python.client import graph_util
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
@@ -609,9 +610,9 @@ def range(start, limit=None, delta=1, name="range"):
 
 @ops.RegisterShape("Range")
 def _RangeShape(op):
-  start_value = tensor_util.ConstantValue(op.inputs[0])
-  limit_value = tensor_util.ConstantValue(op.inputs[1])
-  delta_value = tensor_util.ConstantValue(op.inputs[2])
+  start_value = tensor_util.constant_value(op.inputs[0])
+  limit_value = tensor_util.constant_value(op.inputs[1])
+  delta_value = tensor_util.constant_value(op.inputs[2])
   if start_value is None or limit_value is None or delta_value is None:
     return [tensor_shape.vector(None)]
   else:
@@ -654,7 +655,7 @@ def reduce_sum(input_tensor, reduction_indices=None, keep_dims=False,
 
   Args:
     input_tensor: The tensor to reduce. Should have numeric type.
-    reduction_indices: The dimensions to reduce. If `None` (the defaut),
+    reduction_indices: The dimensions to reduce. If `None` (the default),
       reduces all dimensions.
     keep_dims: If true, retains reduced dimensions with length 1.
     name: A name for the operation (optional).
@@ -691,7 +692,7 @@ def reduce_mean(input_tensor, reduction_indices=None, keep_dims=False,
 
   Args:
     input_tensor: The tensor to reduce. Should have numeric type.
-    reduction_indices: The dimensions to reduce. If `None` (the defaut),
+    reduction_indices: The dimensions to reduce. If `None` (the default),
       reduces all dimensions.
     keep_dims: If true, retains reduced dimensions with length 1.
     name: A name for the operation (optional).
@@ -718,7 +719,7 @@ def reduce_prod(input_tensor, reduction_indices=None, keep_dims=False,
 
   Args:
     input_tensor: The tensor to reduce. Should have numeric type.
-    reduction_indices: The dimensions to reduce. If `None` (the defaut),
+    reduction_indices: The dimensions to reduce. If `None` (the default),
       reduces all dimensions.
     keep_dims: If true, retains reduced dimensions with length 1.
     name: A name for the operation (optional).
@@ -745,7 +746,7 @@ def reduce_min(input_tensor, reduction_indices=None, keep_dims=False,
 
   Args:
     input_tensor: The tensor to reduce. Should have numeric type.
-    reduction_indices: The dimensions to reduce. If `None` (the defaut),
+    reduction_indices: The dimensions to reduce. If `None` (the default),
       reduces all dimensions.
     keep_dims: If true, retains reduced dimensions with length 1.
     name: A name for the operation (optional).
@@ -772,7 +773,7 @@ def reduce_max(input_tensor, reduction_indices=None, keep_dims=False,
 
   Args:
     input_tensor: The tensor to reduce. Should have numeric type.
-    reduction_indices: The dimensions to reduce. If `None` (the defaut),
+    reduction_indices: The dimensions to reduce. If `None` (the default),
       reduces all dimensions.
     keep_dims: If true, retains reduced dimensions with length 1.
     name: A name for the operation (optional).
@@ -809,7 +810,7 @@ def reduce_all(input_tensor, reduction_indices=None, keep_dims=False,
 
   Args:
     input_tensor: The boolean tensor to reduce.
-    reduction_indices: The dimensions to reduce. If `None` (the defaut),
+    reduction_indices: The dimensions to reduce. If `None` (the default),
       reduces all dimensions.
     keep_dims: If true, retains reduced dimensions with length 1.
     name: A name for the operation (optional).
@@ -846,7 +847,7 @@ def reduce_any(input_tensor, reduction_indices=None, keep_dims=False,
 
   Args:
     input_tensor: The boolean tensor to reduce.
-    reduction_indices: The dimensions to reduce. If `None` (the defaut),
+    reduction_indices: The dimensions to reduce. If `None` (the default),
       reduces all dimensions.
     keep_dims: If true, retains reduced dimensions with length 1.
     name: A name for the operation (optional).
@@ -925,6 +926,35 @@ batch_matmul = gen_math_ops._batch_mat_mul
 
 ops.RegisterShape("MatMul")(common_shapes.matmul_shape)
 ops.RegisterShape("SparseMatMul")(common_shapes.matmul_shape)
+
+
+@ops.RegisterStatistics("MatMul", "flops")
+def _calc_mat_mul_flops(graph, node):
+  """Calculates the compute resources needed for MatMul."""
+  transpose_a = node.attr["transpose_a"].b
+  a_shape = graph_util.tensor_shape_from_node_def_name(graph, node.input[0])
+  a_shape.assert_is_fully_defined()
+  if transpose_a:
+    k = int(a_shape[1])
+  else:
+    k = int(a_shape[0])
+  output_shape = graph_util.tensor_shape_from_node_def_name(graph, node.name)
+  output_shape.assert_is_fully_defined()
+  output_count = np.prod(output_shape.as_list())
+  return ops.OpStats("flops", (k * output_count * 2))
+
+
+@ops.RegisterStatistics("MatMul", "weight_parameters")
+def _calc_mat_mul_weight_parameters(graph, node):
+  """Calculates the on-disk size of the weights for MatMul."""
+  # We assume here that the weights are always in the second input to the op,
+  # which is generally true by convention for fully-connected layers, but not
+  # enforced or checked.
+  weights_shape = graph_util.tensor_shape_from_node_def_name(graph,
+                                                             node.input[1])
+  weights_shape.assert_is_fully_defined()
+  return ops.OpStats("weight_parameters",
+                     (int(weights_shape[1]) * int(weights_shape[0])))
 
 
 def _as_indexed_slices(x):
@@ -1280,7 +1310,7 @@ def _ArgOpShape(op):
   elif input_shape.ndims <= 1:
     return [tensor_shape.scalar()]
 
-  dimension = tensor_util.ConstantValue(op.inputs[1])
+  dimension = tensor_util.constant_value(op.inputs[1])
   if dimension is None:
     return [tensor_shape.unknown_shape(ndims=input_shape.ndims - 1)]
   elif 0 <= dimension and dimension < input_shape.ndims:
@@ -1306,7 +1336,7 @@ def _ArgOpShape(op):
 def _ReductionShape(op):
   """Common shape function for reduction ops."""
   input_shape = op.inputs[0].get_shape()
-  reduction_indices = tensor_util.ConstantValue(op.inputs[1])
+  reduction_indices = tensor_util.constant_value(op.inputs[1])
   keep_dims = op.get_attr("keep_dims")
   if reduction_indices is None or input_shape.ndims is None:
     if keep_dims:
@@ -1375,7 +1405,7 @@ def _SparseSegmentReductionGradShape(op):
   unused_segment_ids_shape = op.inputs[2].get_shape().merge_with(indices_shape)
   unused_output_dim0_shape = op.inputs[3].get_shape().merge_with(
       tensor_shape.scalar())
-  output_dim0 = tensor_util.ConstantValue(op.inputs[3])
+  output_dim0 = tensor_util.constant_value(op.inputs[3])
   if output_dim0 is not None:
     dim0 = output_dim0[0]
   else:
@@ -1393,12 +1423,12 @@ def _UnsortedSegmentSumShape(op):
   if mid is None:
     return [tensor_shape.unknown_shape()]
   else:
-    num_segments = tensor_util.ConstantValue(op.inputs[2])
+    num_segments = tensor_util.constant_value(op.inputs[2])
     return [tensor_shape.TensorShape([num_segments]).concatenate(
         data_shape[mid:])]
 
 
 @ops.RegisterShape("LinSpace")
 def _LinspaceShape(op):
-  num = tensor_util.ConstantValue(op.inputs[2])
+  num = tensor_util.constant_value(op.inputs[2])
   return [tensor_shape.vector(num)]

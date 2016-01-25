@@ -20,7 +20,7 @@ limitations under the License.
 #ifndef TENSORFLOW_COMMON_RUNTIME_GPU_GPU_DEVICE_H_
 #define TENSORFLOW_COMMON_RUNTIME_GPU_GPU_DEVICE_H_
 
-#include "tensorflow/stream_executor/stream.h"
+#include <vector>
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/common_runtime/device_factory.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_event_mgr.h"
@@ -31,13 +31,12 @@ limitations under the License.
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/port.h"
+#include "tensorflow/core/platform/stream_executor.h"
 #include "tensorflow/core/public/session_options.h"
 #include "tensorflow/core/public/status.h"
 #include "tensorflow/core/public/tensor.h"
 
 namespace tensorflow {
-
-class EigenAllocator;
 
 class BaseGPUDevice : public LocalDevice {
  public:
@@ -52,7 +51,11 @@ class BaseGPUDevice : public LocalDevice {
   // GPU devices require the Op Compute method to save a reference to
   // any temporary tensors that are allocated until the Op execution
   // completes.
-  bool SaveTemporaryTensors() const override { return true; }
+  bool RequiresRecordingAccessedTensors() const override { return true; }
+
+  void ConsumeListOfAccessedTensors(
+      DeviceContext* device_context,
+      const TensorReferenceVector& tensor_refs) override;
 
   Status FillContextMap(const Graph* graph,
                         DeviceContextMap* device_context_map);
@@ -69,8 +72,10 @@ class BaseGPUDevice : public LocalDevice {
                              Tensor* tensor) override;
 
   // The caller owns the returned device.
-  const PerOpGpuDevice* MakeGpuDevice(DeviceContext* dc,
-                                      Allocator* allocator) override;
+  PerOpGpuDevice* MakeGpuDevice() override;
+
+  void ReinitializeGpuDevice(PerOpGpuDevice* device, DeviceContext* dc,
+                             Allocator* allocator) override;
 
  protected:
   Allocator* gpu_allocator_;  // not owned
@@ -85,7 +90,8 @@ class BaseGPUDevice : public LocalDevice {
   const bool sync_every_op_ = false;
   std::unique_ptr<EventMgr> em_;
 
-  const PerOpGpuDevice* NewDevice(int stream_id, Allocator* allocator);
+  void ReinitializeDevice(PerOpGpuDevice* device, int stream_id,
+                          Allocator* allocator);
 };
 
 class BaseGPUDeviceFactory : public DeviceFactory {

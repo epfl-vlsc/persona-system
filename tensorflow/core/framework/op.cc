@@ -60,14 +60,14 @@ const OpDef* OpRegistry::LookUp(const string& op_type_name,
   if (op_def == nullptr) {
     status->Update(
         errors::NotFound("Op type not registered '", op_type_name, "'"));
-    LOG(INFO) << status->ToString();
+    VLOG(1) << status->ToString();
     static bool first_unregistered = true;
     if (first_unregistered) {
       OpList op_list;
       Export(true, &op_list);
-      LOG(INFO) << "All registered Ops:";
+      VLOG(1) << "All registered Ops:";
       for (const auto& op : op_list.op()) {
-        LOG(INFO) << SummarizeOpDef(op);
+        VLOG(1) << SummarizeOpDef(op);
       }
       first_unregistered = false;
     }
