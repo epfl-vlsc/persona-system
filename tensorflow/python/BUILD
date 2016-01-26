@@ -12,6 +12,7 @@ load("//tensorflow:tensorflow.bzl", "tf_gen_op_wrapper_py")
 load("//tensorflow:tensorflow.bzl", "py_tests")
 load("//tensorflow:tensorflow.bzl", "cuda_py_tests")
 load("//tensorflow:tensorflow.bzl", "tf_py_wrap_cc")
+load("//tensorflow/core:platform/default/build_config.bzl", "tf_proto_library")
 load("//tensorflow/core:platform/default/build_config.bzl", "tf_proto_library_py")
 
 py_library(
@@ -32,6 +33,7 @@ py_library(
         ":platform_test",
         ":summary",
         ":training",
+        "//tensorflow/contrib:contrib_py",
     ],
 )
 
@@ -239,6 +241,17 @@ py_test(
     ],
 )
 
+py_test(
+    name = "contrib_test",
+    srcs = ["framework/contrib_test.py"],
+    main = "framework/contrib_test.py",
+    srcs_version = "PY2AND3",
+    deps = [
+        ":framework_test_lib",
+        "//tensorflow:tensorflow_py",
+    ],
+)
+
 tf_gen_op_wrapper_py(
     name = "functional_ops",
     out = "ops/gen_functional_ops.py",
@@ -368,6 +381,7 @@ py_test(
         ":framework_test_lib",
         ":ops",
         ":platform_test",
+        "//tensorflow:tensorflow_py",
     ],
 )
 
@@ -806,7 +820,7 @@ tf_proto_library_py(
     deps = [":public_protos_py"],
 )
 
-tf_proto_library_py(
+tf_proto_library(
     name = "public_protos",
     srcs = ["training/saver.proto"],
     visibility = ["//visibility:public"],
@@ -1123,17 +1137,6 @@ py_binary(
         ":docs",
         ":platform",
         "//tensorflow:tensorflow_py",
-    ],
-)
-
-sh_test(
-    name = "gen_docs_test",
-    size = "small",
-    srcs = [
-        "framework/gen_docs_test.sh",
-    ],
-    data = [
-        ":gen_docs_combined",
     ],
 )
 
