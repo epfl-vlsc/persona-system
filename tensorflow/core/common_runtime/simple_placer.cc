@@ -119,6 +119,15 @@ class ColocationGraph {
         device_types_(device_set->PrioritizedDeviceTypeList()),
         options_(options) {
     members_.reserve(graph->num_node_ids());
+
+	// initialized FPGA devices to unused
+    for (auto device : device_set_->devices()) {
+	  printf("Placer has device: %s which has type %s \n", device->name().c_str(),
+			  device->device_type().c_str());
+	  if (device->device_type() == DEVICE_FPGA) {
+		  fpga_device_set_[device->name()] = false;
+	  }
+	}
   }
 
   // Adds the given node to this ColocationGraph as a singleton.
@@ -144,6 +153,35 @@ class ColocationGraph {
   // NOTE: If this method returns an error, *this is left in an undefined
   // state.
   Status ColocateNodes(const Node& x, const Node& y) {
+	// if x or y supports FPGA device and CPU, we can colocate but only on CPU
+	// if x or y supports only FPGA, we cannot colocate
+	Member* x_mem = &members_[x.id()];	
+	Member* y_mem = &members_[y.id()];
+	auto x_dev_type = std::find(x_mem->supported_device_types.begin(), 
+			x_mem->supported_device_types.end(), DeviceType(DEVICE_FPGA));
+	auto y_dev_type = std::find(y_mem->supported_device_types.begin(), 
+			y_mem->supported_device_types.end(), DeviceType(DEVICE_FPGA));
+	if (x_dev_type != x_mem->supported_device_types.end() && 
+			x_mem->supported_device_types.size() == 1) {
+		return errors::InvalidArgument(
+			"error: cannot colocate node ", x.name(), " and ", 
+			y.name(), " because the first only supports FPGA devices ",
+			"and cannot be colocated.\n");
+    }
+	if (y_dev_type != y_mem->supported_device_types.end() && 
+			y_mem->supported_device_types.size() == 1) {
+		return errors::InvalidArgument(
+			"error: cannot colocate node ", y.name(), " and ", 
+			x.name(), " because the first only supports FPGA devices ",
+			"and cannot be colocated.\n");
+    }
+
+	// remove FPGA from supported devices so we can colocate on CPU/other
+	if (x_dev_type != x_mem->supported_device_types.end())
+	  x_mem->supported_device_types.erase(x_dev_type);
+	if (y_dev_type != y_mem->supported_device_types.end())
+	  y_mem->supported_device_types.erase(y_dev_type);
+
     int x_root = FindRoot(x.id());
     int y_root = FindRoot(y.id());
     if (x_root != y_root) {
@@ -227,6 +265,20 @@ class ColocationGraph {
           // node (and its children).
           devices = FilterSupportedDevices(
               devices, members_[node_root].supported_device_types);
+		  // remove already used FPGA devices
+		  bool was_not_empty = !devices.empty();
+		  auto device = devices.begin();
+		  while (device != devices.end()) {
+			if ((*device)->device_type() == DEVICE_FPGA && fpga_device_set_[(*device)->name()])
+				device = devices.erase(device);
+			else
+				++device;
+		  }
+		  if (was_not_empty && devices.empty()) {
+			return errors::InvalidArgument("Could not place node ", 
+				node->name(), " on an FPGA device. Are you sure there are",
+				" enough FPGA devices available?\n");
+		  }
         }
 
         // Perform soft placement if allow_soft_placement is set.  options_
@@ -294,6 +346,11 @@ class ColocationGraph {
       // Returns the first device in sorted devices list so we will always
       // choose the same device.
       members_[node_root].assigned_device = devices[0];
+	  if (devices[0]->device_type() == DEVICE_FPGA) {
+		// mark fpga device as used
+		printf("Placer: Marking device %s as used!\n", devices[0]->name().c_str());
+	    fpga_device_set_[devices[0]->name()] = true;
+	  }
     }
     node->set_assigned_device_name(members_[node_root].assigned_device->name());
 
@@ -445,6 +502,7 @@ class ColocationGraph {
 
   std::vector<Member> members_;
   const DeviceSet* device_set_;  // Not owned.
+  std::unordered_map<string, bool> fpga_device_set_;	 // fpgas require special treatment
   const std::vector<DeviceType> device_types_;
   const SessionOptions* options_;  // Not owned;
 };
@@ -457,7 +515,9 @@ SimplePlacer::SimplePlacer(Graph* graph, const DeviceSet* devices,
     : graph_(graph),
       devices_(devices),
       name_to_id_map_(name_to_id_map),
-      options_(options) {}
+      options_(options) {
+
+}
 
 SimplePlacer::SimplePlacer(Graph* graph, const DeviceSet* devices,
                            const NodeNameToIdMap* name_to_id_map)
