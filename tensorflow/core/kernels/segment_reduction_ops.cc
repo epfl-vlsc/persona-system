@@ -23,11 +23,11 @@ limitations under the License.
 #include "tensorflow/core/framework/numeric_op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/public/status.h"
-#include "tensorflow/core/public/tensor.h"
 #include "tensorflow/core/util/util.h"
 
 namespace tensorflow {
@@ -466,7 +466,7 @@ class SparseSegmentGradOpBase : public OpKernel {
     for (int64 i = 0; i < N; ++i) {
       scaling[segment_vec(i)] += 1;
     }
-    for (int i = 0; i < scaling.size(); ++i) {
+    for (size_t i = 0; i < scaling.size(); ++i) {
       if (is_sqrtn_) {
         scaling[i] = 1.0 / sqrt(std::max(scaling[i], 1.0));
       } else {

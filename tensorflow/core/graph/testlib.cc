@@ -22,8 +22,8 @@ limitations under the License.
 #include "tensorflow/core/framework/types.pb.h"
 #include "tensorflow/core/graph/graph.h"
 #include "tensorflow/core/graph/node_builder.h"
+#include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/public/status.h"
 
 namespace tensorflow {
 namespace test {
@@ -304,6 +304,15 @@ Node* Cast(Graph* g, Node* in, DataType dst) {
   TF_CHECK_OK(NodeBuilder(g->NewName("n"), "Cast")
                   .Input(in)
                   .Attr("DstT", dst)
+                  .Finalize(g, &ret));
+  return ret;
+}
+
+Node* BroadcastGradientArgs(Graph* g, Node* s0, Node* s1) {
+  Node* ret;
+  TF_CHECK_OK(NodeBuilder(g->NewName("n"), "BroadcastGradientArgs")
+                  .Input(s0)
+                  .Input(s1)
                   .Finalize(g, &ret));
   return ret;
 }

@@ -539,7 +539,7 @@ Status FunctionLibraryRuntimeImpl::Instantiate(
   return Status::OK();
 }
 
-static void DumpGraph(StringPiece label, const Graph* g) {
+void DumpGraph(StringPiece label, const Graph* g) {
   // TODO(zhifengc): Change Graph to record #nodes.
   VLOG(1) << "Graph " << label << " #edges " << g->edges().size();
   if (VLOG_IS_ON(2)) {
@@ -1059,7 +1059,7 @@ void ToGraphDef(const Graph* g, GraphDef* gdef, bool pretty) {
   }
   gtl::InlinedVector<const Edge*, 4> inputs;
   gdef->Clear();
-  gdef->set_version(g->version());
+  gdef->mutable_versions()->CopyFrom(g->versions());
   while (!ready.empty()) {
     const Node* n = ready.front();
     ready.pop_front();

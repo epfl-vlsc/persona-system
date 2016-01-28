@@ -263,6 +263,7 @@ tf_gen_op_wrapper_py(
 py_library(
     name = "functional_ops_lib",
     srcs = ["ops/functional_ops.py"],
+    srcs_version = "PY2AND3",
     deps = [
         ":functional_ops",
     ],
@@ -713,6 +714,7 @@ py_library(
         "ops/gen_string_ops.py",
         "ops/gen_summary_ops.py",
         "ops/gradients.py",
+        "ops/histogram_ops.py",
         "ops/image_grad.py",
         "ops/image_ops.py",
         "ops/init_ops.py",
@@ -741,6 +743,8 @@ py_library(
         "ops/string_ops.py",
         "ops/summary_ops.py",
         "ops/template.py",
+        "ops/tensor_array_grad.py",
+        "ops/tensor_array_ops.py",
         "ops/variable_scope.py",
         "ops/variables.py",
         "user_ops/user_ops.py",
@@ -986,6 +990,7 @@ cpu_only_kernel_test_list = glob([
     "kernel_tests/matrix_inverse_op_test.py",
     "kernel_tests/matrix_solve_op_test.py",
     "kernel_tests/matrix_triangular_solve_op_test.py",
+    "kernel_tests/matrix_solve_ls_op_test.py",
     "kernel_tests/mutex_ops_test.py",
     "kernel_tests/parsing_ops_test.py",
     "kernel_tests/queue_ops_test.py",

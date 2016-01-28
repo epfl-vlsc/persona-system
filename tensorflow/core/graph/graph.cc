@@ -141,7 +141,10 @@ Node::Properties::~Properties() {}
 // Graph
 
 Graph::Graph(const OpRegistryInterface* ops)
-    : ops_(ops), version_(TF_GRAPH_DEF_VERSION), arena_(8 << 10 /* 8kB */) {
+    : ops_(ops), arena_(8 << 10 /* 8kB */) {
+  versions_.set_producer(TF_GRAPH_DEF_VERSION);
+  versions_.set_min_consumer(TF_GRAPH_DEF_VERSION_MIN_CONSUMER);
+
   // Source and sink have no endpoints, just control edges.
   NodeDef def;
   def.set_name("_SOURCE");
@@ -282,7 +285,7 @@ void AddInput(NodeDef* dst, StringPiece src_name, int src_slot) {
 
 void Graph::ToGraphDef(GraphDef* graph_def) const {
   graph_def->Clear();
-  graph_def->set_version(version());
+  graph_def->mutable_versions()->CopyFrom(versions());
   std::vector<const Edge*>
       inputs;  // Construct this outside the loop for speed.
   for (const Node* node : nodes()) {
@@ -351,6 +354,7 @@ Node* Graph::AllocateNode(Node::Properties* props, const Node* cost_node) {
   int cost_id = cost_node ? cost_node->cost_id() : id;
   node->Initialize(id, cost_id, props);
   nodes_.push_back(node);
+  ++num_nodes_;
   return node;
 }
 
@@ -358,6 +362,7 @@ void Graph::ReleaseNode(Node* node) {
   DCHECK(IsValidNode(node)) << node->DebugString();
   nodes_[node->id()] = nullptr;
   free_nodes_.push_back(node);
+  --num_nodes_;
   node->Clear();
 }
 
