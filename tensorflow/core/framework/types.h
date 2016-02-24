@@ -72,6 +72,7 @@ extern const char* const DEVICE_GPU;  // "GPU"
 extern const char* const DEVICE_FPGA;  // "FPGA"
 
 typedef gtl::InlinedVector<MemoryType, 4> MemoryTypeVector;
+typedef gtl::ArraySlice<MemoryType> MemoryTypeSlice;
 
 typedef gtl::InlinedVector<DataType, 4> DataTypeVector;
 typedef gtl::ArraySlice<DataType> DataTypeSlice;
@@ -188,6 +189,9 @@ MATCH_TYPE_AND_ENUM(bfloat16, DT_BFLOAT16);
 bool DataTypeCanUseMemcpy(DataType dt);
 
 bool DataTypeIsQuantized(DataType dt);
+
+// Returns a 0 on failure
+int DataTypeSize(DataType dt);
 
 }  // namespace tensorflow
 
