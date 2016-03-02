@@ -42,6 +42,7 @@ namespace tensorflow {
 class Device;
 class Env;
 class EventMgr;
+class OpKernelContext;
 class ResourceMgr;
 
 namespace thread {
@@ -183,7 +184,8 @@ class DeviceBase {
 
   // This is overridden by GPU devices to reinitialize the derived
   // type returned by MakeGpuDevice.
-  virtual void ReinitializeGpuDevice(PerOpGpuDevice* /*device*/,
+  virtual void ReinitializeGpuDevice(OpKernelContext* /*context*/,
+                                     PerOpGpuDevice* /*device*/,
                                      DeviceContext* /*dc*/,
                                      Allocator* /*allocator*/) {}
 

@@ -24,9 +24,7 @@
 #     common_runtime/: Common code for execution of graphs
 #     public/: Public APIs for running graphs
 # ":core" - The code for ":core_cpu" plus a GPU runtime
-# ":kernel_lib" - Library with code common to multiple kernel implementations.
-# ":gpu_kernels" - The gpu-specific kernels
-# ":all_kernels" - The cpu-specific kernels, plus ":gpu_kernels" if
+# ":all_kernels" - The cpu-specific kernels, plus gpu kernels if
 #     built with Cuda
 # ":tensorflow_opensource" - The complete open-source package, including
 #      ":all_kernels", ":core", and a Session implementation.
@@ -55,12 +53,12 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 load("//tensorflow:tensorflow.bzl", "tf_cc_tests")
 load("//tensorflow:tensorflow.bzl", "tf_cuda_library")
 load("//tensorflow:tensorflow.bzl", "tf_gen_op_libs")
-load("//tensorflow:tensorflow.bzl", "tf_gpu_kernel_library")
 
 # For platform specific build config
 load(
     "//tensorflow/core:platform/default/build_config.bzl",
     "tf_proto_library",
+    "tf_proto_library_cc",
     "tf_additional_lib_srcs",
     "tf_additional_stream_executor_srcs",
     "tf_additional_test_deps",
@@ -77,12 +75,68 @@ load(
 
 tf_proto_library(
     name = "protos_all",
-    srcs = glob(["**/*.proto"]),
+    srcs = glob(
+        ["**/*.proto"],
+        exclude = [
+            "protobuf/worker.proto",
+            "protobuf/worker_service.proto",
+            "protobuf/master.proto",
+            "protobuf/master_service.proto",
+        ],
+    ),
     cc_api_version = 2,
     go_api_version = 2,
     java_api_version = 2,
     py_api_version = 2,
     visibility = ["//visibility:public"],
+)
+
+tf_proto_library_cc(
+    name = "worker_proto",
+    srcs = ["protobuf/worker.proto"],
+    cc_api_version = 2,
+    cc_libs = [":protos_all_cc"],
+    visibility = [
+        "//tensorflow:internal",
+    ],
+)
+
+tf_proto_library_cc(
+    name = "worker_service_proto",
+    srcs = ["protobuf/worker_service.proto"],
+    has_services = 1,
+    cc_api_version = 2,
+    cc_grpc_version = 1,
+    cc_libs = [":worker_proto_cc"],
+    cc_stubby_versions = ["2"],
+    visibility = [
+        "//tensorflow:internal",
+    ],
+)
+
+tf_proto_library_cc(
+    name = "master_proto",
+    srcs = ["protobuf/master.proto"],
+    cc_api_version = 2,
+    cc_libs = [":protos_all_cc"],
+    py_api_version = 2,
+    visibility = [
+        "//tensorflow:internal",
+    ],
+)
+
+tf_proto_library_cc(
+    name = "master_service_proto",
+    srcs = ["protobuf/master_service.proto"],
+    has_services = 1,
+    cc_api_version = 2,
+    cc_grpc_version = 1,
+    cc_libs = [":master_proto_cc"],
+    cc_stubby_versions = ["2"],
+    py_api_version = 2,
+    visibility = [
+        "//tensorflow:internal",
+    ],
 )
 
 cc_library(
@@ -145,11 +199,13 @@ cc_library(
     testonly = 1,
     srcs = [
         "platform/test.cc",
+        "util/reporter.cc",
     ] + tf_additional_test_srcs(),
     hdrs = [
         "lib/core/status_test_util.h",
         "platform/test.h",
         "platform/test_benchmark.h",
+        "util/reporter.h",
     ],
     copts = tf_copts(),
     linkopts = ["-lm"],
@@ -171,7 +227,9 @@ tf_cuda_library(
         "framework/control_flow.h",  # TODO(josh11b): Make internal?
         "framework/device_base.h",
         "framework/function.h",
+        "framework/graph_def_util.h",
         "framework/kernel_def_builder.h",
+        "framework/log_memory.h",
         "framework/lookup_interface.h",
         "framework/memory_types.h",
         "framework/node_def_builder.h",
@@ -194,6 +252,7 @@ tf_cuda_library(
         "framework/tensor_slice.h",
         "framework/tensor_types.h",
         "framework/tensor_util.h",
+        "framework/tracking_allocator.h",
         "framework/type_index.h",
         "framework/type_traits.h",
         "framework/types.h",
@@ -236,34 +295,6 @@ cc_binary(
     deps = [":framework"],
 )
 
-tf_cuda_library(
-    name = "ops",
-    srcs = glob(
-        [
-            "ops/**/*.h",
-            "ops/**/*.cc",
-            "user_ops/**/*.h",
-            "user_ops/**/*.cc",
-        ],
-        exclude = [
-            "**/*test*",
-            "**/*main.cc",
-            "user_ops/**/*.cu.cc",
-        ],
-    ),
-    copts = tf_copts(),
-    linkstatic = 1,
-    visibility = ["//visibility:public"],
-    deps = [
-        ":framework",
-        ":lib",
-        ":protos_cc",
-        "//tensorflow/models/embedding:word2vec_ops",
-        "//third_party/eigen3",
-    ],
-    alwayslink = 1,
-)
-
 # Generates library per group of ops.
 tf_gen_op_libs(
     op_lib_names = [
@@ -271,12 +302,14 @@ tf_gen_op_libs(
         "attention_ops",
         "candidate_sampling_ops",
         "control_flow_ops",
+        "ctc_ops",
         "data_flow_ops",
+        "function_ops",
+        "functional_ops",
         "image_ops",
         "io_ops",
         "linalg_ops",
         "logging_ops",
-        "functional_ops",
         "math_ops",
         "nn_ops",
         "no_op",
@@ -300,6 +333,92 @@ cc_library(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = [":framework"],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "ops",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":array_ops_op_lib",
+        ":attention_ops_op_lib",
+        ":candidate_sampling_ops_op_lib",
+        ":control_flow_ops_op_lib",
+        ":ctc_ops_op_lib",
+        ":data_flow_ops_op_lib",
+        ":function_ops_op_lib",
+        ":functional_ops_op_lib",
+        ":image_ops_op_lib",
+        ":io_ops_op_lib",
+        ":linalg_ops_op_lib",
+        ":logging_ops_op_lib",
+        ":math_ops_op_lib",
+        ":nn_ops_op_lib",
+        ":no_op_op_lib",
+        ":parsing_ops_op_lib",
+        ":random_ops_op_lib",
+        ":script_ops_op_lib",
+        ":sendrecv_ops_op_lib",
+        ":sparse_ops_op_lib",
+        ":state_ops_op_lib",
+        ":string_ops_op_lib",
+        ":summary_ops_op_lib",
+        ":training_ops_op_lib",
+        ":user_ops_op_lib",
+        "//tensorflow/models/embedding:word2vec_ops",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "array_grad",
+    srcs = ["ops/array_grad.cc"],
+    linkstatic = 1,  # Seems to be needed since alwayslink is broken in bazel
+    visibility = ["//visibility:public"],
+    deps = [
+        ":array_ops_op_lib",
+        ":framework",
+        ":lib",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "functional_grad",
+    srcs = ["ops/functional_grad.cc"],
+    linkstatic = 1,  # Seems to be needed since alwayslink is broken in bazel
+    visibility = ["//visibility:public"],
+    deps = [
+        ":framework",
+        ":functional_ops_op_lib",
+        ":lib",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "math_grad",
+    srcs = ["ops/math_grad.cc"],
+    linkstatic = 1,  # Seems to be needed since alwayslink is broken in bazel
+    visibility = ["//visibility:public"],
+    deps = [
+        ":framework",
+        ":lib",
+        ":math_ops_op_lib",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "nn_grad",
+    srcs = ["ops/nn_grad.cc"],
+    linkstatic = 1,  # Seems to be needed since alwayslink is broken in bazel
+    visibility = ["//visibility:public"],
+    deps = [
+        ":framework",
+        ":lib",
+        ":nn_ops_op_lib",
+    ],
     alwayslink = 1,
 )
 
@@ -333,71 +452,31 @@ cc_library(
     ],
 )
 
-tf_gpu_kernel_library(
-    name = "gpu_kernels",
-    srcs = glob(
-        [
-            "kernels/**/*.h",
-            "kernels/*.cu.cc",
-            "user_ops/**/*.h",
-            "user_ops/*.cu.cc",
-        ],
-    ),
-    visibility = ["//visibility:public"],
-    deps = [
-        ":cuda",
-        ":framework",
-        ":framework_internal",
-        ":lib",
-        ":lib_internal",
-        "//third_party/eigen3",
-    ],
-)
-
-# Common libraries used for implementing kernels.
-# TODO(josh11b): This also currently includes all the kernel implementations,
-# should split that out into the ":all_kernels" target.
-tf_cuda_library(
-    name = "kernel_lib",
-    # TODO(josh11b): Pull common dependencies out into a separate library.
-    srcs = glob(
-        [
-            "kernels/**/*.cc",
-        ],
-        exclude = [
-            "kernels/**/*test*",
-            "kernels/**/*main.cc",
-            "kernels/**/*.cu.cc",
-        ],
-    ),
-    hdrs = glob(["kernels/**/*.h"]),
-    copts = tf_copts(),
-    cuda_deps = [
-        ":gpu_kernels",
-    ],
-    linkstatic = 0,
-    visibility = ["//visibility:public"],
-    deps = [
-        ":core_cpu",
-        ":framework",
-        ":framework_internal",
-        ":lib",
-        ":lib_internal",
-        ":ops",
-        ":protos_all_cc",
-        ":stream_executor",
-        "//tensorflow/models/embedding:word2vec_kernels",
-        "//third_party/eigen3",
-    ],
-    alwayslink = 1,
-)
-
 # This includes implementations of all kernels built into TensorFlow.
-tf_cuda_library(
+cc_library(
     name = "all_kernels",
     visibility = ["//visibility:public"],
     deps = [
-        ":kernel_lib",
+        "//tensorflow/core/kernels:array",
+        "//tensorflow/core/kernels:candidate_sampler_ops",
+        "//tensorflow/core/kernels:control_flow_ops",
+        "//tensorflow/core/kernels:ctc_ops",
+        "//tensorflow/core/kernels:data_flow",
+        "//tensorflow/core/kernels:fact_op",
+        "//tensorflow/core/kernels:image",
+        "//tensorflow/core/kernels:io",
+        "//tensorflow/core/kernels:linalg",
+        "//tensorflow/core/kernels:logging",
+        "//tensorflow/core/kernels:math",
+        "//tensorflow/core/kernels:nn",
+        "//tensorflow/core/kernels:parsing",
+        "//tensorflow/core/kernels:random_ops",
+        "//tensorflow/core/kernels:required",
+        "//tensorflow/core/kernels:sparse",
+        "//tensorflow/core/kernels:state",
+        "//tensorflow/core/kernels:string",
+        "//tensorflow/core/kernels:training_ops",
+        "//tensorflow/models/embedding:word2vec_kernels",
     ],
 )
 
@@ -431,9 +510,7 @@ cc_library(
         "common_runtime/kernel_benchmark_testlib.cc",
         "framework/fake_input.cc",
         "framework/function_testlib.cc",
-        "framework/tensor_testutil.cc",
         "graph/testlib.cc",
-        "kernels/ops_testutil.cc",
     ],
     hdrs = [
         "common_runtime/kernel_benchmark_testlib.h",
@@ -441,7 +518,9 @@ cc_library(
         "framework/function_testlib.h",
         "framework/tensor_testutil.h",
         "graph/testlib.h",
-        "kernels/ops_testutil.h",
+        # TODO(josh11b): Drop this once users are depending on
+        # kernels:ops_testutil instead.
+        "//tensorflow/core/kernels:ops_testutil.h",
     ],
     copts = tf_copts(),
     visibility = ["//visibility:public"],
@@ -451,11 +530,14 @@ cc_library(
         ":core_cpu_internal",
         ":framework",
         ":framework_internal",
-        ":kernel_lib",
         ":lib",
         ":protos_all_cc",
+        ":tensor_testutil",
         ":tensorflow",  # TODO(josh11b): Drop this dep?
         ":test",
+        "//tensorflow/core/kernels:constant_op",
+        "//tensorflow/core/kernels:ops_testutil",
+        "//tensorflow/core/kernels:ops_util",
         "//tensorflow/core/platform/default/build_config:gtest",
     ],
 )
@@ -477,7 +559,10 @@ filegroup(
 # sources.
 filegroup(
     name = "android_srcs",
-    srcs = glob(
+    srcs = [
+        "//tensorflow/core/kernels:android_srcs",
+        "//tensorflow/core/util/ctc:android_srcs",
+    ] + glob(
         [
             "client/**/*.cc",
             "common_runtime/**/*.h",
@@ -497,12 +582,6 @@ filegroup(
             "public/**/*.h",
             "util/**/*.h",
             "util/**/*.cc",
-            "kernels/ops_util.cc",
-            "kernels/ops_util.h",
-            "kernels/avgpooling_op.h",
-            "kernels/maxpooling_op.h",
-            "kernels/pooling_ops_common.h",
-            "kernels/pooling_ops_common.cc",
         ],
         exclude = [
             "**/*test.cc",
@@ -515,6 +594,8 @@ filegroup(
             "lib/png/*.cc",
             "util/events_writer.cc",
             "util/events_writer.h",
+            "util/reporter.cc",
+            "util/reporter.h",
             # Exclude all protobuf/google headers except protobuf_android.h
             "platform/google/cord_coding.h",
             "platform/google/dynamic_annotations.h",
@@ -526,7 +607,8 @@ filegroup(
             "platform/google/*.cc",
             "platform/google/test_benchmark.cc",
             "platform/google/test_benchmark.h",
-            "kernels/**/*.cu.cc",
+            "platform/test_benchmark.h",
+            "platform/default/test_benchmark.cc",
             "user_ops/**/*.cu.cc",
             "common_runtime/gpu/*.cc",
             "common_runtime/gpu_device_factory.cc",
@@ -540,54 +622,7 @@ filegroup(
 filegroup(
     name = "android_core_ops",
     srcs = [
-        "//tensorflow/core:kernels/aggregate_ops.cc",
-        "//tensorflow/core:kernels/aggregate_ops.h",
-        "//tensorflow/core:kernels/aggregate_ops_cpu.h",
-        "//tensorflow/core:kernels/assign_op.h",
-        "//tensorflow/core:kernels/bias_op.cc",
-        "//tensorflow/core:kernels/bias_op.h",
-        "//tensorflow/core:kernels/cast_op.cc",
-        "//tensorflow/core:kernels/cast_op.h",
-        "//tensorflow/core:kernels/concat_op.cc",
-        "//tensorflow/core:kernels/concat_op.h",
-        "//tensorflow/core:kernels/concat_op_cpu.cc",
-        "//tensorflow/core:kernels/constant_op.cc",
-        "//tensorflow/core:kernels/constant_op.h",
-        "//tensorflow/core:kernels/cwise_ops.h",
-        "//tensorflow/core:kernels/cwise_ops_common.cc",
-        "//tensorflow/core:kernels/cwise_ops_common.h",
-        "//tensorflow/core:kernels/dense_update_ops.cc",
-        "//tensorflow/core:kernels/dense_update_ops.h",
-        "//tensorflow/core:kernels/example_parsing_ops.cc",
-        "//tensorflow/core:kernels/fill_functor.h",
-        "//tensorflow/core:kernels/gather_op.cc",
-        "//tensorflow/core:kernels/identity_op.cc",
-        "//tensorflow/core:kernels/identity_op.h",
-        "//tensorflow/core:kernels/matmul_op.cc",
-        "//tensorflow/core:kernels/matmul_op.h",
-        "//tensorflow/core:kernels/no_op.cc",
-        "//tensorflow/core:kernels/no_op.h",
-        "//tensorflow/core:kernels/ops_util.h",
-        "//tensorflow/core:kernels/pack_op.cc",
-        "//tensorflow/core:kernels/pooling_ops_common.h",
-        "//tensorflow/core:kernels/reshape_op.cc",
-        "//tensorflow/core:kernels/reshape_op.h",
-        "//tensorflow/core:kernels/reverse_sequence_op.cc",
-        "//tensorflow/core:kernels/reverse_sequence_op.h",
-        "//tensorflow/core:kernels/sendrecv_ops.cc",
-        "//tensorflow/core:kernels/sendrecv_ops.h",
-        "//tensorflow/core:kernels/sequence_ops.cc",
-        "//tensorflow/core:kernels/shape_ops.cc",
-        "//tensorflow/core:kernels/slice_op.cc",
-        "//tensorflow/core:kernels/slice_op.h",
-        "//tensorflow/core:kernels/softmax_op.cc",
-        "//tensorflow/core:kernels/softmax_op.h",
-        "//tensorflow/core:kernels/split_op.cc",
-        "//tensorflow/core:kernels/split_op.h",
-        "//tensorflow/core:kernels/split_op_cpu.cc",
-        "//tensorflow/core:kernels/unpack_op.cc",
-        "//tensorflow/core:kernels/variable_ops.cc",
-        "//tensorflow/core:kernels/variable_ops.h",
+        "//tensorflow/core/kernels:android_core_ops",
     ],
     visibility = ["//visibility:public"],
 )
@@ -611,23 +646,7 @@ filegroup(
 filegroup(
     name = "android_extended_ops_headers",
     srcs = [
-        "//tensorflow/core:kernels/argmax_op.h",
-        "//tensorflow/core:kernels/avgpooling_op.h",
-        "//tensorflow/core:kernels/control_flow_ops.h",
-        "//tensorflow/core:kernels/conv_2d.h",
-        "//tensorflow/core:kernels/io.h",
-        "//tensorflow/core:kernels/maxpooling_op.h",
-        "//tensorflow/core:kernels/reduction_ops.h",
-        "//tensorflow/core:kernels/reduction_ops_common.h",
-        "//tensorflow/core:kernels/relu_op.h",
-        "//tensorflow/core:kernels/softplus_op.h",
-        "//tensorflow/core:kernels/softsign_op.h",
-        "//tensorflow/core:kernels/tile_ops.h",
-        "//tensorflow/core:kernels/training_ops.h",
-        "//tensorflow/core:kernels/transpose_op.h",
-        "//tensorflow/core:kernels/transpose_op_functor.h",
-        "//tensorflow/core:kernels/where_op.h",
-        "//tensorflow/core:kernels/xent_op.h",
+        "//tensorflow/core/kernels:android_extended_ops_headers",
     ],
 )
 
@@ -635,31 +654,7 @@ filegroup(
     name = "android_extended_ops_group1",
     srcs = [
         ":android_extended_ops_headers",
-        "//tensorflow/core:kernels/argmax_op.cc",
-        "//tensorflow/core:kernels/avgpooling_op.cc",
-        "//tensorflow/core:kernels/bcast_ops.cc",
-        "//tensorflow/core:kernels/control_flow_ops.cc",
-        "//tensorflow/core:kernels/conv_2d.h",
-        "//tensorflow/core:kernels/conv_ops.cc",
-        "//tensorflow/core:kernels/cwise_op_add.cc",
-        "//tensorflow/core:kernels/cwise_op_div.cc",
-        "//tensorflow/core:kernels/cwise_op_equal_to.cc",
-        "//tensorflow/core:kernels/cwise_op_exp.cc",
-        "//tensorflow/core:kernels/cwise_op_greater.cc",
-        "//tensorflow/core:kernels/cwise_op_isfinite.cc",
-        "//tensorflow/core:kernels/cwise_op_less.cc",
-        "//tensorflow/core:kernels/cwise_op_log.cc",
-        "//tensorflow/core:kernels/cwise_op_maximum.cc",
-        "//tensorflow/core:kernels/cwise_op_minimum.cc",
-        "//tensorflow/core:kernels/cwise_op_mul.cc",
-        "//tensorflow/core:kernels/cwise_op_neg.cc",
-        "//tensorflow/core:kernels/cwise_op_select.cc",
-        "//tensorflow/core:kernels/cwise_op_sigmoid.cc",
-        "//tensorflow/core:kernels/cwise_op_sqrt.cc",
-        "//tensorflow/core:kernels/cwise_op_square.cc",
-        "//tensorflow/core:kernels/cwise_op_sub.cc",
-        "//tensorflow/core:kernels/cwise_op_tanh.cc",
-        "//tensorflow/core:kernels/dynamic_partition_op.cc",
+        "//tensorflow/core/kernels:android_extended_ops_group1",
     ],
     visibility = ["//visibility:public"],
 )
@@ -668,56 +663,16 @@ filegroup(
     name = "android_extended_ops_group2",
     srcs = [
         ":android_extended_ops_headers",
-        "//tensorflow/core:kernels/dynamic_stitch_op.cc",
-        "//tensorflow/core:kernels/in_topk_op.cc",
-        "//tensorflow/core:kernels/io.cc",
-        "//tensorflow/core:kernels/lrn_op.cc",
-        "//tensorflow/core:kernels/maxpooling_op.cc",
-        "//tensorflow/core:kernels/reduction_ops_max.cc",
-        "//tensorflow/core:kernels/reduction_ops_mean.cc",
-        "//tensorflow/core:kernels/reduction_ops_min.cc",
-        "//tensorflow/core:kernels/reduction_ops_prod.cc",
-        "//tensorflow/core:kernels/reduction_ops_sum.cc",
-        "//tensorflow/core:kernels/relu_op.cc",
-        "//tensorflow/core:kernels/restore_op.cc",
-        "//tensorflow/core:kernels/save_op.cc",
-        "//tensorflow/core:kernels/softplus_op.cc",
-        "//tensorflow/core:kernels/softsign_op.cc",
-        "//tensorflow/core:kernels/sparse_to_dense_op.cc",
-        "//tensorflow/core:kernels/stack_ops.cc",
-        "//tensorflow/core:kernels/tile_ops.cc",
-        "//tensorflow/core:kernels/topk_op.cc",
-        "//tensorflow/core:kernels/training_ops.cc",
-        "//tensorflow/core:kernels/transpose_op.cc",
-        "//tensorflow/core:kernels/transpose_op_cpu.cc",
-        "//tensorflow/core:kernels/where_op.cc",
-        "//tensorflow/core:kernels/xent_op.cc",
+        "//tensorflow/core/kernels:android_extended_ops_group2",
     ],
     visibility = ["//visibility:public"],
 )
 
-# Config settings for determining if we are building for Android
-# (the android_32 and android_64 entries are only relevant to internal Google builds).
+# Config setting for determining if we are building for Android.
 config_setting(
     name = "android",
     values = {
         "crosstool_top": "//external:android/crosstool",
-    },
-)
-
-config_setting(
-    name = "android_32",
-    values = {
-        "crosstool_top": "//external:android/crosstool",
-        "custom_malloc": "//third_party/java/android/android_ndk_linux/toolchains/gcc_4_8:custom_malloc",
-    },
-)
-
-config_setting(
-    name = "android_64",
-    values = {
-        "crosstool_top": "//external:android/crosstool",
-        "custom_malloc": "//third_party/java/android/android_ndk_linux/toolchains/gcc_4_9:custom_malloc",
     },
 )
 
@@ -737,8 +692,6 @@ cc_library(
     name = "android_tensorflow_lib_lite",
     srcs = select({
         ":android": ["//tensorflow/core:android_srcs"],
-        ":android_32": ["//tensorflow/core:android_srcs"],
-        ":android_64": ["//tensorflow/core:android_srcs"],
         "//conditions:default": [],
     }),
     hdrs = [
@@ -752,8 +705,6 @@ cc_library(
     ],
     copts = select({
         ":android": ANDROID_TF_COPTS,
-        ":android_32": ANDROID_TF_COPTS,
-        ":android_64": ANDROID_TF_COPTS,
         "//conditions:default": [],
     }),
     tags = [
@@ -763,31 +714,6 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "@re2//:re2",
-        ":protos_cc",
-        "//third_party/eigen3",
-    ],
-)
-
-cc_library(
-    name = "android_tensorflow_operators",
-    srcs = [
-        "//tensorflow/core:android_core_ops",
-        "//tensorflow/core:android_extended_ops",
-    ],
-    copts = select({
-        ":android": ANDROID_TF_COPTS,
-        ":android_32": ANDROID_TF_COPTS,
-        ":android_64": ANDROID_TF_COPTS,
-        "//conditions:default": [],
-    }),
-    tags = [
-        "manual",
-        "notap",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "@re2//:re2",
-        ":android_tensorflow_lib_lite",
         ":protos_cc",
         "//third_party/eigen3",
     ],
@@ -797,15 +723,46 @@ cc_library(
 # binary size (by packaging a reduced operator set) is a concern.
 cc_library(
     name = "android_tensorflow_lib",
-    srcs = [],
+    srcs = [
+        "//tensorflow/core:android_core_ops",
+        "//tensorflow/core:android_extended_ops",
+    ],
+    copts = select({
+        ":android": ANDROID_TF_COPTS,
+        "//conditions:default": [],
+    }),
     tags = [
         "manual",
         "notap",
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "@re2//:re2",
         ":android_tensorflow_lib_lite",
-        ":android_tensorflow_operators",
+        ":protos_cc",
+        "//third_party/eigen3",
+    ],
+)
+
+# Libraries for GPU facilities that are useful for writing kernels.
+cc_library(
+    name = "gpu_lib",
+    srcs = [
+        "common_runtime/gpu/gpu_event_mgr.cc",
+    ],
+    hdrs = [
+        "common_runtime/gpu/gpu_event_mgr.h",
+        "common_runtime/gpu_device_context.h",
+    ],
+    copts = tf_copts(),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":framework",
+        ":framework_internal",
+        ":lib",
+        ":lib_internal",
+        ":protos_all_cc",
+        ":stream_executor",
     ],
 )
 
@@ -869,11 +826,12 @@ tf_cuda_library(
         exclude = [
             "**/*test*",
             "**/*main.cc",
+            "util/reporter.h",
+            "util/reporter.cc",
             "framework/fake_input.*",
         ],
     ),
     hdrs = [
-        "framework/graph_def_util.h",
         "framework/op_segment.h",
         "framework/rendezvous.h",  # only needed for tests
         "framework/tensor_reference.h",
@@ -994,9 +952,9 @@ tf_cuda_library(
         exclude = [
             "**/*test*",
             "**/*main.cc",
-            "common_runtime/gpu_device_factory.cc",
             "common_runtime/direct_session.cc",
             "common_runtime/direct_session.h",
+            "common_runtime/gpu_device_context.h",
         ],
     ),
     hdrs = glob(
@@ -1007,15 +965,20 @@ tf_cuda_library(
         exclude = [
             "**/*test*",
             "common_runtime/direct_session.h",
+            "common_runtime/gpu_device_context.h",
         ],
     ),
     copts = tf_copts(),
     deps = [
         ":framework",
         ":framework_internal",
+        ":function_ops_op_lib",
+        ":functional_grad",
+        ":functional_ops_op_lib",
         ":lib",
         ":lib_internal",
         ":protos_all_cc",
+        "//tensorflow/core/kernels:required",
         "//third_party/eigen3",
     ],
     alwayslink = 1,
@@ -1040,7 +1003,6 @@ tf_cuda_library(
     deps = [
         ":core_cpu_internal",
         ":framework",
-        ":framework_internal",
         ":lib",
         ":lib_internal",
         ":protos_all_cc",
@@ -1057,9 +1019,13 @@ tf_cuda_library(
         exclude = [
             "**/*main.cc",
             "**/*test.cc",
+            "common_runtime/gpu/gpu_event_mgr.cc",
         ],
     ),
-    hdrs = glob(["common_runtime/gpu/*.h"]),
+    hdrs = glob(
+        ["common_runtime/gpu/*.h"],
+        exclude = ["common_runtime/gpu/gpu_event_mgr.h"],
+    ),
     copts = tf_copts(),
     cuda_deps = [
         ":cuda",
@@ -1070,6 +1036,7 @@ tf_cuda_library(
         ":core_cpu_internal",
         ":framework",
         ":framework_internal",
+        ":gpu_lib",
         ":lib",
         ":lib_internal",
         ":protos_all_cc",
@@ -1094,6 +1061,19 @@ cc_library(
         "platform/snappy.h",
     ],
     deps = [":lib_internal"],
+)
+
+cc_library(
+    name = "tensor_testutil",
+    testonly = 1,
+    srcs = ["framework/tensor_testutil.cc"],
+    hdrs = ["framework/tensor_testutil.h"],
+    copts = tf_copts(),
+    deps = [
+        ":framework",
+        ":lib",
+        ":test",
+    ],
 )
 
 # Main program for tests
@@ -1183,7 +1163,6 @@ tf_cc_tests(
         ":direct_session",
         ":framework",
         ":framework_internal",
-        ":kernel_lib",
         ":lib",
         ":lib_internal",
         ":ops",
@@ -1192,6 +1171,7 @@ tf_cc_tests(
         ":test_main",
         ":testlib",
         "//tensorflow/cc:cc_ops",
+        "//tensorflow/core/kernels:ops_util",
         "//third_party/eigen3",
     ],
 )
@@ -1202,7 +1182,6 @@ tf_cc_tests(
     tags = tf_cuda_tests_tags(),
     tests = glob(
         [
-            "kernels/**/*_test.cc",
             "user_ops/**/*_test.cc",
             "common_runtime/gpu/*_test.cc",
         ],
@@ -1219,7 +1198,6 @@ tf_cc_tests(
         ":framework",
         ":framework_internal",
         ":gpu_runtime",
-        ":kernel_lib",
         ":lib",
         ":lib_internal",
         ":protos_all_cc",
@@ -1227,6 +1205,7 @@ tf_cc_tests(
         ":test_main",
         ":testlib",
         "//tensorflow/cc:cc_ops",
+        "//tensorflow/core/kernels:ops_util",
     ],
 )
 
@@ -1242,7 +1221,6 @@ tf_cc_tests(
         ":framework",
         ":framework_internal",
         ":gpu_runtime",
-        ":kernel_lib",
         ":lib",
         ":lib_internal",
         ":protos_all_cc",
