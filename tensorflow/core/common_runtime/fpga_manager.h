@@ -12,7 +12,7 @@ namespace tensorflow {
 class FPGAManagerBase {
     public:
         FPGAManagerBase(const SessionOptions& options, string deviceType) : device_type_(deviceType) {};
-        ~FPGAManagerBase() {};
+        virtual ~FPGAManagerBase() {};
         virtual void FPGACompute(OpKernel* op_kernel, OpKernelContext* context) = 0;
         string FPGADeviceType() { return device_type_; }
         virtual int FPGADeviceStatus() = 0;
