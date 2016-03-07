@@ -25,7 +25,7 @@ limitations under the License.
 
 namespace tensorflow {
 
-REGISTER_OP("FASTQReader")
+REGISTER_OP("FastqReader")
     .Output("reader_handle: Ref(string)")
     .Attr("skip_header_lines: int = 0")
     .Attr("container: string = ''")
@@ -42,10 +42,10 @@ container: If non-empty, this reader is placed in the given container.
         Otherwise, a default container is used.
 )doc");
 
-class FASTQReader : public ReaderBase {
+class FastqReader : public ReaderBase {
  public:
-  FASTQReader(const string& node_name, int skip_header_lines, int batch_size, Env* env)
-      : ReaderBase(strings::StrCat("FASTQReader '", node_name, "'")),
+  FastqReader(const string& node_name, int skip_header_lines, int batch_size, Env* env)
+      : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
         skip_header_lines_(skip_header_lines),
         env_(env),
         line_number_(0),
@@ -78,6 +78,8 @@ class FASTQReader : public ReaderBase {
   Status ReadLocked(string* key, string* value, bool* produced,
                     bool* at_end) override {
 
+    //LOG(INFO) << "Reading from file " << current_work() << " !\n";
+
     string lines[4];
     Status status;
     bool atend = false;
@@ -88,7 +90,7 @@ class FASTQReader : public ReaderBase {
           if (i != 3 && errors::IsOutOfRange(status)) {
             errors::Internal("FASTQ Read error in " + current_work() +
                     " : EOF encountered in read.");
-          } else {
+          } else if (errors::IsOutOfRange(status)) {
             // just EOF
             atend = true;
             break;
@@ -97,7 +99,8 @@ class FASTQReader : public ReaderBase {
         }
          
         if (status.ok()) {
-          *value += lines[1];  // just the nucleotides
+          *value += lines[1] + "\n";  // just the nucleotides
+          LOG(INFO) << "Seq was: " << lines[1] << "\n";
         } else {
           return status;
         }
@@ -135,9 +138,9 @@ class FASTQReader : public ReaderBase {
   std::unique_ptr<io::InputBuffer> input_buffer_;
 };
 
-class FASTQReaderOp : public ReaderOpKernel {
+class FastqReaderOp : public ReaderOpKernel {
  public:
-  explicit FASTQReaderOp(OpKernelConstruction* context)
+  explicit FastqReaderOp(OpKernelConstruction* context)
       : ReaderOpKernel(context) {
     int skip_header_lines = -1;
     int read_batch_size = -1;
@@ -153,12 +156,12 @@ class FASTQReaderOp : public ReaderOpKernel {
                                         read_batch_size));
     Env* env = context->env();
     SetReaderFactory([this, skip_header_lines, read_batch_size, env]() {
-      return new FASTQReader(name(), skip_header_lines, read_batch_size, env);
+      return new FastqReader(name(), skip_header_lines, read_batch_size, env);
     });
   }
 };
 
-REGISTER_KERNEL_BUILDER(Name("FASTQReader").Device(DEVICE_CPU),
-                        FASTQReaderOp);
+REGISTER_KERNEL_BUILDER(Name("FastqReader").Device(DEVICE_CPU),
+                        FastqReaderOp);
 
 }  // namespace tensorflow

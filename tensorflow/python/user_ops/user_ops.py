@@ -22,7 +22,24 @@ from __future__ import print_function
 from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
+from tensorflow.python.framework import ops
+from tensorflow.python.ops import common_shapes
+from tensorflow.python.ops import io_ops
 
 def my_fact():
   """Example of overriding the generated code for an Op."""
   return gen_user_ops._fact()
+
+class FASTQReader(io_ops.ReaderBase):
+
+    def __init__(self, name=None, read_batch_size=1):
+        rr = gen_user_ops.fastq_reader(name=name, read_batch_size=read_batch_size)
+        super(FASTQReader, self).__init__(rr)
+
+ops.NoGradient("FASTQReader")
+ops.RegisterShape("FASTQ")(common_shapes.scalar_shape)
+
+def FASTQDecoder(value):
+
+    return gen_user_ops.decode_fastq(value)
+
