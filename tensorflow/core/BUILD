@@ -328,7 +328,7 @@ cc_library(
     copts = tf_copts(),
     linkstatic = 1,
     visibility = ["//visibility:public"],
-    deps = [":framework"],
+    deps = [":framework", "//tensorflow/core/kernels:reader_base"],
     alwayslink = 1,
 )
 

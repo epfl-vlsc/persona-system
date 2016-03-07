@@ -30,6 +30,7 @@ REGISTER_OP("FASTQReader")
     .Attr("skip_header_lines: int = 0")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
+    .Attr("read_batch_size: int = 1")
     .SetIsStateful()
     .Doc(R"doc(
 A Reader that outputs the read sequences in a FASTQ file. Does not output
@@ -43,15 +44,16 @@ container: If non-empty, this reader is placed in the given container.
 
 class FASTQReader : public ReaderBase {
  public:
-  FASTQReader(const string& node_name, int skip_header_lines, Env* env)
+  FASTQReader(const string& node_name, int skip_header_lines, int batch_size, Env* env)
       : ReaderBase(strings::StrCat("FASTQReader '", node_name, "'")),
         skip_header_lines_(skip_header_lines),
         env_(env),
-        line_number_(0) {}
+        line_number_(0),
+        batch_size_(batch_size) {}
 
   Status OnWorkStartedLocked() override {
     line_number_ = 0;
-    read_number_ = 0;
+    batch_number_ = 0;
     RandomAccessFile* file = nullptr;
     TF_RETURN_IF_ERROR(env_->NewRandomAccessFile(current_work(), &file));
     input_buffer_.reset(new io::InputBuffer(file, kBufferSize));
@@ -78,31 +80,47 @@ class FASTQReader : public ReaderBase {
 
     string lines[4];
     Status status;
-    for (int i = 0; i < 4; i++)
-    {
-      status = input_buffer_->ReadLine(&lines[i]);
-      if (i != 3 && errors::IsOutOfRange(status)) {
-        errors::Internal("FASTQ Read error in " + current_work() +
-                " : EOF encountered in read.");
-      } else {
-        // just EOF
-        *at_end = true;
-      }
-      ++line_number_;
+    bool atend = false;
+    for (int b = 0; b < batch_size_; b++) {
+        for (int i = 0; i < 4; i++)
+        {
+          status = input_buffer_->ReadLine(&lines[i]);
+          if (i != 3 && errors::IsOutOfRange(status)) {
+            errors::Internal("FASTQ Read error in " + current_work() +
+                    " : EOF encountered in read.");
+          } else {
+            // just EOF
+            atend = true;
+            break;
+          }
+          ++line_number_;
+        }
+         
+        if (status.ok()) {
+          *value += lines[1];  // just the nucleotides
+        } else {
+          return status;
+        }
+
+        if (atend) 
+          break;
     }
-     
+
     if (status.ok()) {
-      *value = lines[1];  // just the nucleotides
-      *key = strings::StrCat(current_work(), ":", read_number_);
-      ++read_number_;
-      *produced = true;
-      return status;
+        *key = strings::StrCat(current_work(), ":", batch_number_);
+        *produced = true;
+        *at_end = atend;
+        ++batch_number_;
+        return status;
+    } else {
+        return status;
     }
+
   }
 
   Status ResetLocked() override {
     line_number_ = 0;
-    read_number_ = 0;
+    batch_number_ = 0;
     input_buffer_.reset(nullptr);
     return ReaderBase::ResetLocked();
   }
@@ -112,7 +130,8 @@ class FASTQReader : public ReaderBase {
   const int skip_header_lines_;
   Env* const env_;
   int64 line_number_;
-  int64 read_number_;
+  int64 batch_number_;
+  int64 batch_size_;
   std::unique_ptr<io::InputBuffer> input_buffer_;
 };
 
@@ -121,14 +140,20 @@ class FASTQReaderOp : public ReaderOpKernel {
   explicit FASTQReaderOp(OpKernelConstruction* context)
       : ReaderOpKernel(context) {
     int skip_header_lines = -1;
+    int read_batch_size = -1;
     OP_REQUIRES_OK(context,
                    context->GetAttr("skip_header_lines", &skip_header_lines));
+    OP_REQUIRES_OK(context,
+                   context->GetAttr("read_batch_size", &read_batch_size));
     OP_REQUIRES(context, skip_header_lines >= 0,
                 errors::InvalidArgument("skip_header_lines must be >= 0 not ",
                                         skip_header_lines));
+    OP_REQUIRES(context, read_batch_size > 0,
+                errors::InvalidArgument("read_batch_size must be > 0 not ",
+                                        read_batch_size));
     Env* env = context->env();
-    SetReaderFactory([this, skip_header_lines, env]() {
-      return new FASTQReader(name(), skip_header_lines, env);
+    SetReaderFactory([this, skip_header_lines, read_batch_size, env]() {
+      return new FASTQReader(name(), skip_header_lines, read_batch_size, env);
     });
   }
 };
