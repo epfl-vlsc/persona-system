@@ -1,0 +1,29 @@
+
+package SnapProto;
+
+message Read {
+    string bases = 1;
+    int32 length = 2;
+    string qualities = 3;
+    string meta = 4;
+}
+
+message SingleResult {
+    enum AlignmentResult {
+        NOT_FOUND = 0;
+        SINGLE_HIT = 1;
+        MULTIPLE_HITS = 2;
+        UNKNOWN_ALIGNMENT = 3;
+    }
+
+    AlignmentResult result = 0;
+    int64 genomeLocation = 1;
+    int32 score = 2;
+    int32 mapq = 3;
+    int32 direction = 4;
+}
+
+message AlignmentResults {
+    repeated SingleResult results = 0;
+}
+
