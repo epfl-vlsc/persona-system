@@ -6,11 +6,11 @@
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/strings/numbers.h"
-#include <iostream>
+
 namespace tensorflow {
 
 REGISTER_OP("DecodeFastq")
-    .Input("reads: string")
+    .Input("read: string")
     .Output("output: string")
     .Doc(R"doc(
 Convert fastq reads to tensors. A read batch maps to one tensor.
@@ -23,25 +23,18 @@ class DecodeFastqOp : public OpKernel {
   explicit DecodeFastqOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
   void Compute(OpKernelContext* ctx) override {
-    const Tensor* reads;
+    const Tensor* read;
 
-    OP_REQUIRES_OK(ctx, ctx->input("reads", &reads));
-
-    auto reads_t = reads->flat<string>();
-    int reads_size = reads_t.size();
-    LOG(INFO) << "reads_size is " << reads_size;
+    OP_REQUIRES_OK(ctx, ctx->input("read", &read));
 
     Tensor* output_tensor = NULL;
     OP_REQUIRES_OK(ctx,
                    ctx->allocate_output(0, TensorShape(), &output_tensor));
-    auto output = output_tensor->template scalar<string>();
 
-    output() = "Just testing decode fastq ...";
-
-    for (int i = 0; i < reads_size; i++) {
-        const StringPiece read(reads_t(i));
-        std::cout << "printing read: " << read << std::endl;
-    }
+    // just copy over for now, should share same underlying storage as per tensor.h
+    OP_REQUIRES(ctx, output_tensor->CopyFrom(*read, read->shape()),
+                  errors::InvalidArgument("DecodeFastq copy failed, input shape was ", 
+                      read->shape().DebugString()));
   }
 };
 

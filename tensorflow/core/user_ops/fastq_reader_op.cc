@@ -100,7 +100,7 @@ class FastqReader : public ReaderBase {
          
         if (status.ok()) {
           *value += lines[1] + "\n";  // just the nucleotides
-          LOG(INFO) << "Seq was: " << lines[1] << "\n";
+          //LOG(INFO) << "Seq was: " << lines[1] << "\n";
         } else {
           return status;
         }
