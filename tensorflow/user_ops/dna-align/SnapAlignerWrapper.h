@@ -42,19 +42,19 @@ namespace snap_wrapper {
 
         bool passesAlignmentFilter(AlignmentResult result, bool isPrimary) {
             // Don't filter out secondary alignments for low MAPQ
-            if (result == MultipleHits && !isPrimary && (alignmentFilter & AlignmentFilter::Single) != 0) {
+            if (result == AlignmentResult::MultipleHits && !isPrimary && (alignmentFilter & AlignmentFilter::Single) != 0) {
                 return true;
             }
 
             switch (result) {
-            case NotFound:
-            case UnknownAlignment:
+            case AlignmentResult::NotFound:
+            case AlignmentResult::UnknownAlignment:
                 return (alignmentFilter & AlignmentFilter::Unaligned) != 0;
 
-            case SingleHit:
+            case AlignmentResult::SingleHit:
                 return (alignmentFilter & AlignmentFilter::Single) != 0;
 
-            case MultipleHits:
+            case AlignmentResult::MultipleHits:
                 return (alignmentFilter & AlignmentFilter::Multiple) != 0;
 
             default:
