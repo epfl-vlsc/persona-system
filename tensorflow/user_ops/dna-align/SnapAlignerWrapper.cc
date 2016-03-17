@@ -7,6 +7,7 @@
 #include "snap/SNAPLib/GenomeIndex.h"
 #include "snap/SNAPLib/Read.h"
 #include "snap/SNAPLib/SingleAligner.h"
+#include "tensorflow/core/lib/core/status.h"
 
 #include "SnapAlignerWrapper.h"
 
@@ -34,20 +35,19 @@ namespace snap_wrapper {
             );
     }
 
-    std::vector<SingleAlignmentResult*> alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read) {
-        std::vector<SingleAlignmentResult*> results;
+    Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult*>* results) {
 
         if (!options->passesReadFilter(read)) {
-            SingleAlignmentResult* result = new SingleAlignmentResult();
+            SingleAlignmentResult* result = new SingleAlignmentResult(); 
             result->status = AlignmentResult::NotFound;
             result->location = InvalidGenomeLocation;
             result->mapq = 0;
             result->direction = 0;
-            results.push_back(result);
+            results->push_back(result);
             return results;
         }
 
-        SingleAlignmentResult* primaryResult;
+        SingleAlignmentResult* primaryResult = new SingleAlignmentResult();
         SingleAlignmentResult* secondaryResults = new SingleAlignmentResult[options->maxSecondaryAlignmentsPerRead];
         int secondaryResultsCount;
 
@@ -62,15 +62,15 @@ namespace snap_wrapper {
             );
 
         if (options->passesAlignmentFilter(primaryResult->status, true)) {
-            results.push_back(primaryResult);
+            results->push_back(primaryResult);
         }
 
         for (int i = 0; i < secondaryResultsCount; ++i) {
             if (options->passesAlignmentFilter(secondaryResults[i].status, false)) {
-                results.push_back(&secondaryResults[i]);
+                results->push_back(&secondaryResults[i]);
             }
         }
 
-        return results;
+        return Status::OK;
     }
 }

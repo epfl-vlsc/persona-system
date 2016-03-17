@@ -5,16 +5,23 @@
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "./snap/SNAPLib/GenomeIndex.h"
 #include "./snap/SNAPLib/Read.h"
 #include "./snap_proto.pb.h"
+#include "tensorflow/user_ops/SnapAlignerWrapper.h"
 
 namespace tensorflow {
+    using namespace std;
+
     class SnapAlignOp : public OpKernel {
     public:
         explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
             OP_REQUIRES_OK(ctx, ctx->GetAttr("genome_index_location", &genome_index_location_));
+
+            options_ = new snap_wrapper::AlignmentOptions();
+            // TODO configure options here
         }
 
         ~SnapAlignOp() override {
@@ -36,6 +43,8 @@ namespace tensorflow {
 
                     OP_REQUIRES_OK(ctx, cinfo_.resource_manager()->LookupOrCreate<GenomeIndexResource>(
                         cinfo_.container(), cinfo_.name(), &genome_index_, creator));
+            
+                    base_aligner_ = snap_wrapper::createAligner(genome_index_->value(), options_);
                 }
             }
 
@@ -48,26 +57,33 @@ namespace tensorflow {
             unsigned int num_reads = reads_t.size();
             vector<Read*> input_reads;
             input_reads.reserve(num_reads);
-            SnapProto::Read* read_protos = new SnapProto::Read[num_reads];
+            SnapProto::Read read_proto;
 
             for (int i = 0; i < num_reads; i++) {
-                if (!read_protos[i].ParseFromString(reads_t(i)))
+                if (!read_proto.ParseFromString(reads_t(i)))
                     LOG(INFO) << "SNAP Align: failed to parse read from protobuf";
 
                 Read* snap_read = new Read();
-                snap_read.init(read_protos[i].meta().c_str(), read_protos[i].meta().length(), read_protos[i].bases().c_str(),
-                        read_protos[i].qualities().c_str(), read_protos[i].length());
+                snap_read.init(read_proto.meta().c_str(), read_protosmeta().length(), read_protosbases().c_str(),
+                        read_proto.qualities().c_str(), read_proto.length());
 
                 input_reads.push_back(snap_read);
 
-                LOG(INFO) << "SnapAlignOp: added read " << read_protos[i].bases();
+                LOG(INFO) << "SnapAlignOp: added read " << read_proto.bases();
             }
 
 
-            auto alignment_results = new vector<vector<SingleAlignmentResult>>();
+            auto alignment_results = new vector<vector<SingleAlignmentResult*>>();
             alignment_results->reserve(num_reads);
 
-            // call align() here
+            // call align() here for each input_reads[i]
+            for (int i = 0; i < input_reads.size(); i++) {
+                // call align
+                vector<SingleAlignmentResult*>* results = &(*alignment_results)[i]; // a little messy :-/
+                Status status = snap_wrapper::alignSingle(base_aligner_, options_, input_reads[i], results);
+                if (!status.ok())
+                    LOG(INFO) << "alignSingle failed!!";
+            }
             
             // shape of output tensor is [num_reads, 2] 
             Tensor* out = nullptr;
@@ -122,12 +138,15 @@ namespace tensorflow {
             TF_DISALLOW_COPY_AND_ASSIGN(GenomeIndexResource);
         };
 
+        // Options
+        snap_wrapper::AlignmentOptions* options_;
         // Attributes
         string genome_index_location_;
 
         mutex init_mu_;
         ContainerInfo cinfo_ GUARDED_BY(init_mu_);
         GenomeIndexResource* genome_index_ GUARDED_BY(init_mu_) = nullptr;
+        BaseAligner* base_aligner_ = nullptr;
     };
 
 
