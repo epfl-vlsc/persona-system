@@ -1,10 +1,10 @@
 #pragma once
 
 #include <vector>
-#include "snap/SNAPLib/AlignmentResult.h"
-#include "snap/SNAPLib/BaseAligner.h"
-#include "snap/SNAPLib/GenomeIndex.h"
-#include "snap/SNAPLib/Read.h"
+#include "AlignmentResult.h"
+#include "BaseAligner.h"
+#include "GenomeIndex.h"
+#include "Read.h"
 
 namespace snap_wrapper {
     enum AlignmentFilter {

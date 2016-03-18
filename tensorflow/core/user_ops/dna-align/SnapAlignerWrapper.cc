@@ -1,12 +1,12 @@
 #include <vector>
 
-#include "snap/SNAPLib/AlignerOptions.h"
-#include "snap/SNAPLib/AlignmentResult.h"
-#include "snap/SNAPLib/BaseAligner.h"
-#include "snap/SNAPLib/Genome.h"
-#include "snap/SNAPLib/GenomeIndex.h"
-#include "snap/SNAPLib/Read.h"
-#include "snap/SNAPLib/SingleAligner.h"
+#include "AlignerOptions.h"
+#include "AlignmentResult.h"
+#include "BaseAligner.h"
+#include "Genome.h"
+#include "GenomeIndex.h"
+#include "Read.h"
+#include "SingleAligner.h"
 #include "tensorflow/core/lib/core/status.h"
 
 #include "SnapAlignerWrapper.h"

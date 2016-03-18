@@ -7,10 +7,10 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/strings/numbers.h"
-#include "./snap/SNAPLib/GenomeIndex.h"
-#include "./snap/SNAPLib/Read.h"
-#include "./snap_proto.pb.h"
-#include "tensorflow/user_ops/SnapAlignerWrapper.h"
+#include "GenomeIndex.h"
+#include "Read.h"
+#include "snap_proto.pb.h"
+#include "SnapAlignerWrapper.h"
 
 namespace tensorflow {
     using namespace std;

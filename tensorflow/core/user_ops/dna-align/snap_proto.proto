@@ -1,4 +1,6 @@
 
+syntax = "proto3";
+
 package SnapProto;
 
 message Read {
@@ -16,14 +18,14 @@ message SingleResult {
         UNKNOWN_ALIGNMENT = 3;
     }
 
-    AlignmentResult result = 0;
-    int64 genomeLocation = 1;
-    int32 score = 2;
-    int32 mapq = 3;
-    int32 direction = 4;
+    AlignmentResult result = 1;
+    int64 genomeLocation = 2;
+    int32 score = 3;
+    int32 mapq = 4;
+    int32 direction = 5;
 }
 
 message AlignmentResults {
-    repeated SingleResult results = 0;
+    repeated SingleResult results = 1;
 }
 

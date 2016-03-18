@@ -324,7 +324,8 @@ tf_gen_op_libs(
 # And one for all user ops
 cc_library(
     name = "user_ops_op_lib",
-    srcs = glob(["user_ops/**/*.cc"]),
+    srcs = glob(["user_ops/**/*.cc"],
+            exclude = ["user_ops/dna-align/**/*.cc"],),
     copts = tf_copts(),
     linkstatic = 1,
     visibility = ["//visibility:public"],
