@@ -3,7 +3,7 @@ load(
     "//tensorflow/core:platform/default/build_config.bzl",
     "tf_proto_library",
 )
-load("//tensorflow:tensorflow.bzl", "tf_copts")
+#load("//tensorflow:tensorflow.bzl", "tf_copts")
 
 
 tf_proto_library(

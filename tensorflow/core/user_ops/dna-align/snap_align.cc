@@ -33,6 +33,7 @@ namespace tensorflow {
                 mutex_lock l(init_mu_);
 
                 if (genome_index_ == nullptr) {
+                    LOG(INFO) << "SNAP Kernel creating/getting genome index and creating BaseAligner";
                     OP_REQUIRES_OK(ctx, cinfo_.Init(ctx->resource_manager(), def()));
 
                     auto creator = [this](GenomeIndexResource** index) {

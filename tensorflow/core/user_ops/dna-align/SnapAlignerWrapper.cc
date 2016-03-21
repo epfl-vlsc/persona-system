@@ -46,7 +46,8 @@ namespace snap_wrapper {
             results->push_back(result);
             return results;
         }
-
+        
+        // it might be good to avoid this memory allocation somehow?
         SingleAlignmentResult* primaryResult = new SingleAlignmentResult();
         SingleAlignmentResult* secondaryResults = new SingleAlignmentResult[options->maxSecondaryAlignmentsPerRead];
         int secondaryResultsCount;
