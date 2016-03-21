@@ -5,7 +5,6 @@ load(
 )
 #load("//tensorflow:tensorflow.bzl", "tf_copts")
 
-
 tf_proto_library(
     name = "snap_protos",
     srcs = ["snap_proto.proto"],
@@ -18,23 +17,13 @@ tf_proto_library(
 cc_library(
     name = "snap_lib",
     srcs = glob(["snap/SNAPLib/*.cpp"]),
-    includes = [".", "snap/SNAPLib"],
-    #hdrs = ["snap/SNAPLib/GenomeIndex.h",
-            #"snap/SNAPLib/Read.h",
-            #"snap/SNAPLib/AlignmentResult.h",
-            #"snap/SNAPLib/BaseAligner.h",
-            #"snap/SNAPLib/AlignerOptions.h",
-            #"snap/SNAPLib/Genome.h",
-            #"snap/SNAPLib/SingleAligner.h",
-            #"snap/SNAPLib/SAM.h",
-            #"snap/SNAPLib/ProbabilityDistance.h",
-            #],
-    hdrs = glob(["snap/SNAPLib/*.h"]),
+    includes = ["snap/SNAPLib"],
     linkopts = [
-        "-lm", "-lrt", "-lz",
+        "-lm", "-lrt", "-lz"
     ],
     visibility = ["//visibility:public"],
-    copts = ["-pthread", "-MMD", "-msse", "-Wno-format"],
+	# Bazel uses -std=c++0x by default, but gcc will happily overwrite that with a later -std definition
+    copts = ["-pthread", "-MMD", "-msse", "-Wno-format", "-std=gnu++98"]
 )
 
 cc_binary(
@@ -44,14 +33,14 @@ cc_binary(
     #copts = tf_copts(),
     linkopts = [
         "-Wl,-Bsymbolic",
-        "-lm",
+        "-lm"
     ],
     linkstatic = 1,
     linkshared = 1,
     visibility = ["//visibility:public"],
     deps = ["//tensorflow/core:protos_all_cc",
             "//tensorflow/core:framework",
-            ":snap_lib",],
+            ":snap_lib"]
 )
 
 #cc_binary(
