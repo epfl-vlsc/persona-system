@@ -35,7 +35,7 @@ namespace snap_wrapper {
             );
     }
 
-    Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult*>* results) {
+    tensorflow::Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult*>* results) {
 
         if (!options->passesReadFilter(read)) {
             SingleAlignmentResult* result = new SingleAlignmentResult(); 
@@ -44,7 +44,7 @@ namespace snap_wrapper {
             result->mapq = 0;
             result->direction = 0;
             results->push_back(result);
-            return results;
+            return tensorflow::Status::OK();
         }
         
         // it might be good to avoid this memory allocation somehow?
@@ -72,6 +72,6 @@ namespace snap_wrapper {
             }
         }
 
-        return Status::OK;
+        return tensorflow::Status::OK();
     }
 }

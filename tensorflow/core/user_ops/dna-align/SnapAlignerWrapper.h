@@ -67,5 +67,5 @@ namespace snap_wrapper {
 
     BaseAligner* createAligner(GenomeIndex* index, AlignmentOptions* options);
 
-    Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult>* results);
+    tensorflow::Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult>* results);
 }
