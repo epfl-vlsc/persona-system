@@ -1,13 +1,14 @@
 # user ops
 load(
     "//tensorflow/core:platform/default/build_config.bzl",
-    "tf_proto_library",
+    "tf_proto_library_cc",
 )
 load("//tensorflow:tensorflow.bzl", "tf_copts")
 
-tf_proto_library(
+tf_proto_library_cc(
     name = "snap_protos",
     srcs = ["snap_proto.proto"],
+    cc_libs = ["//tensorflow/core:protos_all_cc"],
     cc_api_version = 2,
     go_api_version = 2,
     java_api_version = 2,
@@ -17,6 +18,7 @@ tf_proto_library(
 cc_library(
     name = "snap_lib",
     srcs = glob(["snap/SNAPLib/*.cpp"]),
+    hdrs = glob(["snap/SNAPLib/*.h"]),
     includes = ["snap/SNAPLib"],
     linkopts = [
         "-lm", "-lrt", "-lz"
@@ -25,21 +27,23 @@ cc_library(
     copts = ["-pthread", "-MMD", "-msse", "-Wno-format"]
 )
 
-cc_binary(
-    name = "snap_align.so",
-    #includes = [".", "snap/SNAPLib"],
+cc_library(
+    name = "snap_align_lib",
+    hdrs = ["SnapAlignerWrapper.h"],
+    includes = ["."],
     srcs = glob(["*.cc"]),
-    #copts = tf_copts(),
-    linkopts = [
-        "-Wl,-Bsymbolic",
-        "-lm"
-    ],
+    copts = tf_copts(),
+    #linkopts = [
+        #"-Wl,-Bsymbolic",
+        #"-lm"
+    #],
     linkstatic = 1,
-    linkshared = 1,
     visibility = ["//visibility:public"],
-    deps = ["//tensorflow/core:protos_all_cc",
+    deps = [
             "//tensorflow/core:framework",
-            ":snap_lib"]
+            ":snap_protos_cc",
+            ":snap_lib"],
+    alwayslink=1,
 )
 
 #cc_binary(
