@@ -35,14 +35,14 @@ namespace snap_wrapper {
             );
     }
 
-    tensorflow::Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult*>* results) {
+    tensorflow::Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult>* results) {
 
         if (!options->passesReadFilter(read)) {
-            SingleAlignmentResult* result = new SingleAlignmentResult(); 
-            result->status = AlignmentResult::NotFound;
-            result->location = InvalidGenomeLocation;
-            result->mapq = 0;
-            result->direction = 0;
+            SingleAlignmentResult result; 
+            result.status = AlignmentResult::NotFound;
+            result.location = InvalidGenomeLocation;
+            result.mapq = 0;
+            result.direction = 0;
             results->push_back(result);
             return tensorflow::Status::OK();
         }
@@ -63,12 +63,12 @@ namespace snap_wrapper {
             );
 
         if (options->passesAlignmentFilter(primaryResult->status, true)) {
-            results->push_back(primaryResult);
+            results->push_back(*primaryResult);
         }
 
         for (int i = 0; i < secondaryResultsCount; ++i) {
             if (options->passesAlignmentFilter(secondaryResults[i].status, false)) {
-                results->push_back(&secondaryResults[i]);
+                results->push_back(secondaryResults[i]);
             }
         }
 

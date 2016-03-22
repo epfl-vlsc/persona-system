@@ -65,7 +65,7 @@ namespace tensorflow {
                     LOG(INFO) << "SNAP Align: failed to parse read from protobuf";
 
                 Read* snap_read = new Read();
-                snap_read.init(read_proto.meta().c_str(), read_protosmeta().length(), read_protosbases().c_str(),
+                snap_read->init(read_proto.meta().c_str(), read_proto.meta().length(), read_proto.bases().c_str(),
                         read_proto.qualities().c_str(), read_proto.length());
 
                 input_reads.push_back(snap_read);
@@ -74,13 +74,13 @@ namespace tensorflow {
             }
 
 
-            auto alignment_results = new vector<vector<SingleAlignmentResult*>>();
+            auto alignment_results = new vector<vector<SingleAlignmentResult>>();
             alignment_results->reserve(num_reads);
 
             // call align() here for each input_reads[i]
             for (int i = 0; i < input_reads.size(); i++) {
                 // call align
-                vector<SingleAlignmentResult*>* results = &(*alignment_results)[i]; // a little messy :-/
+                vector<SingleAlignmentResult>* results = &(*alignment_results)[i]; // a little messy :-/
                 Status status = snap_wrapper::alignSingle(base_aligner_, options_, input_reads[i], results);
                 if (!status.ok())
                     LOG(INFO) << "alignSingle failed!!";
@@ -88,8 +88,8 @@ namespace tensorflow {
             
             // shape of output tensor is [num_reads, 2] 
             Tensor* out = nullptr;
-            OP_REQUIRES_OK(context,
-                   context->allocate_output(0, TensorShape({num_reads, 2}), &out));
+            OP_REQUIRES_OK(ctx,
+                   ctx->allocate_output(0, TensorShape({num_reads, 2}), &out));
 
             auto out_t = out->matrix<string>();
 
@@ -98,9 +98,9 @@ namespace tensorflow {
 
                 SnapProto::AlignmentResults results;
 
-                for (auto result : alignment_results[i]) {
+                for (auto result : (*alignment_results)[i]) {
                     SnapProto::SingleResult* result_proto = results.add_results();
-                    populateSingleResultProto(result_proto, result);
+                    populateSingleResultProto_(result_proto, result);
                 }
 
                 results.SerializeToString(&out_t(i, 1));
@@ -110,9 +110,9 @@ namespace tensorflow {
 
     private:
 
-        void populateSingleResultProto_(SnapProto::SingleResult* result_proto, SingleAlignmentResult& result) {
-            result_proto->set_result(result.status);
-            result_proto->set_genomeLocation(GenomeLocationAsInt64(result.location));
+        void populateSingleResultProto_(SnapProto::SingleResult* result_proto, SingleAlignmentResult result) {
+            result_proto->set_result((SnapProto::SingleResult::AlignmentResult)result.status);
+            result_proto->set_genomelocation(GenomeLocationAsInt64(result.location));
             result_proto->set_score(result.score);
             result_proto->set_mapq(result.mapq);
             result_proto->set_direction(result.direction);
