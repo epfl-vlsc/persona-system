@@ -22,8 +22,7 @@ cc_library(
         "-lm", "-lrt", "-lz"
     ],
     visibility = ["//visibility:public"],
-	# Bazel uses -std=c++0x by default, but gcc will happily overwrite that with a later -std definition
-    copts = ["-pthread", "-MMD", "-msse", "-Wno-format", "-std=gnu++98"]
+    copts = ["-pthread", "-MMD", "-msse", "-Wno-format"]
 )
 
 cc_binary(
