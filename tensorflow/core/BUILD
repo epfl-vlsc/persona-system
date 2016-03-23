@@ -360,6 +360,7 @@ cc_library(
         ":string_ops_op_lib",
         ":training_ops_op_lib",
         ":user_ops_op_lib",
+        "//tensorflow/core/user_ops/dna-align:snap_align_lib",
         "//tensorflow/models/embedding:word2vec_ops",
     ],
     alwayslink = 1,
