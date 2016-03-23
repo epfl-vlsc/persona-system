@@ -14,23 +14,25 @@ namespace snap_wrapper {
     };
 
     struct AlignmentOptions {
-        int maxHitsPerSeed;
-        int maxEditDistance;
+        // Default values pulled from SNAP options
 
-        int minReadLength;
-        int maxReadLength;
+        unsigned int maxHitsPerSeed = 300;
+        unsigned int maxEditDistance = 14;
+
+        unsigned int minReadLength = 50;
+        unsigned int maxReadLength = 400;
 
         // These two are mutually exclusive: either a fixed number of seeds, or a percentage of the read size
-        int seedsPerRead;
-        float seedsCoverage;
+        unsigned int seedsPerRead = 25;
+        float seedsCoverage = 0;
 
-        int minimumSeedMatchesPerLocation;
+        unsigned int minimumSeedMatchesPerLocation = 1;
 
         // "edit distance beyond the best hit that SNAP uses to compute MAPQ"
-        int extraSearchDepth;
+        unsigned int extraSearchDepth = 2;
 
         int maxSecondaryAlignmentEditDistance;
-        int maxSecondaryAlignmentsPerContig;
+        int maxSecondaryAlignmentsPerContig = -1; // -1 means no limit
         int maxSecondaryAlignmentsPerRead;
 
         AlignmentFilter alignmentFilter;

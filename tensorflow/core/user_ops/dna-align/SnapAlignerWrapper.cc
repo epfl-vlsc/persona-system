@@ -13,6 +13,7 @@
 
 namespace snap_wrapper {
     GenomeIndex* loadIndex(const char* path) {
+        // 1st argument is non-const for no reason, it's not actually modified
         // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
         return GenomeIndex::loadFromDirectory(const_cast<char*>(path), false, false);
     }
@@ -32,13 +33,12 @@ namespace snap_wrapper {
             nullptr, nullptr, // Uncached Landau-Vishkin
             nullptr, // No need for stats
             nullptr // No special allocator
-            );
+        );
     }
 
     tensorflow::Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult>* results) {
-
         if (!options->passesReadFilter(read)) {
-            SingleAlignmentResult result; 
+            SingleAlignmentResult result;
             result.status = AlignmentResult::NotFound;
             result.location = InvalidGenomeLocation;
             result.mapq = 0;
@@ -46,24 +46,23 @@ namespace snap_wrapper {
             results->push_back(result);
             return tensorflow::Status::OK();
         }
-        
-        // it might be good to avoid this memory allocation somehow?
-        SingleAlignmentResult* primaryResult = new SingleAlignmentResult();
+
+        SingleAlignmentResult primaryResult;
         SingleAlignmentResult* secondaryResults = new SingleAlignmentResult[options->maxSecondaryAlignmentsPerRead];
         int secondaryResultsCount;
 
         aligner->AlignRead(
             read,
-            primaryResult,
+            &primaryResult,
             options->maxSecondaryAlignmentEditDistance,
             options->maxSecondaryAlignmentsPerRead,
             &secondaryResultsCount,
             options->maxSecondaryAlignmentsPerRead,
             secondaryResults
-            );
+        );
 
-        if (options->passesAlignmentFilter(primaryResult->status, true)) {
-            results->push_back(*primaryResult);
+        if (options->passesAlignmentFilter(primaryResult.status, true)) {
+            results->push_back(primaryResult);
         }
 
         for (int i = 0; i < secondaryResultsCount; ++i) {
@@ -71,6 +70,8 @@ namespace snap_wrapper {
                 results->push_back(secondaryResults[i]);
             }
         }
+
+        delete[] secondaryResults;
 
         return tensorflow::Status::OK();
     }

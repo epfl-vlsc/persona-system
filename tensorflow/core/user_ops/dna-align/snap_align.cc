@@ -20,7 +20,6 @@ namespace tensorflow {
         explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
             OP_REQUIRES_OK(ctx, ctx->GetAttr("genome_index_location", &genome_index_location_));
 
-            options_ = new snap_wrapper::AlignmentOptions();
             // TODO configure options here
         }
 
@@ -42,31 +41,42 @@ namespace tensorflow {
                         return Status::OK();
                     };
 
-                    OP_REQUIRES_OK(ctx, cinfo_.resource_manager()->LookupOrCreate<GenomeIndexResource>(
-                        cinfo_.container(), cinfo_.name(), &genome_index_, creator));
+                    OP_REQUIRES_OK(ctx, 
+                        cinfo_.resource_manager()->LookupOrCreate<GenomeIndexResource>(
+                            cinfo_.container(),
+                            cinfo_.name(),
+                            &genome_index_,
+                            creator
+                        )
+                    );
             
-                    base_aligner_ = snap_wrapper::createAligner(genome_index_->value(), options_);
+                    base_aligner_ = snap_wrapper::createAligner(genome_index_->value(), &options_);
                 }
             }
 
             const Tensor* reads;
-
-            // get the input tensor called "read"
             OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
             
-            auto reads_t = reads->flat<string>();
-            unsigned int num_reads = reads_t.size();
+            auto reads_flat = reads->flat<string>();
+            size_t num_reads = reads_flat.size();
+
             vector<Read*> input_reads;
             input_reads.reserve(num_reads);
-            SnapProto::Read read_proto;
 
-            for (int i = 0; i < num_reads; i++) {
-                if (!read_proto.ParseFromString(reads_t(i)))
-                    LOG(INFO) << "SNAP Align: failed to parse read from protobuf";
+            for (size_t i = 0; i < num_reads; i++) {
+                SnapProto::Read read_proto;
+                if (!read_proto.ParseFromString(reads_flat(i))) {
+                    LOG(INFO) << "SnapAlignOp: failed to parse read from protobuf";
+                }
 
                 Read* snap_read = new Read();
-                snap_read->init(read_proto.meta().c_str(), read_proto.meta().length(), read_proto.bases().c_str(),
-                        read_proto.qualities().c_str(), read_proto.length());
+                snap_read->init(
+                    read_proto.meta().c_str(),
+                    read_proto.meta().length(),
+                    read_proto.bases().c_str(),
+                    read_proto.qualities().c_str(),
+                    read_proto.length()
+                );
 
                 input_reads.push_back(snap_read);
 
@@ -74,42 +84,40 @@ namespace tensorflow {
             }
 
 
-            auto alignment_results = new vector<vector<SingleAlignmentResult>>();
-            alignment_results->reserve(num_reads);
+            vector<vector<SingleAlignmentResult>> alignment_results;
+            alignment_results.reserve(num_reads);
 
-            // call align() here for each input_reads[i]
-            for (int i = 0; i < input_reads.size(); i++) {
-                // call align
-                vector<SingleAlignmentResult>* results = &(*alignment_results)[i]; // a little messy :-/
-                Status status = snap_wrapper::alignSingle(base_aligner_, options_, input_reads[i], results);
-                if (!status.ok())
-                    LOG(INFO) << "alignSingle failed!!";
+            for (size_t i = 0; i < input_reads.size(); i++) {
+                Status status = snap_wrapper::alignSingle(base_aligner_, &options_, input_reads[i], &alignment_results[i]);
+
+                // TODO(solal): Smart pointers would probably make this unnecessary, but I'm not knowledgeable enough in C++ to do that
+                delete input_reads[i];
+
+                if (!status.ok()) {
+                    LOG(INFO) << "SnapAlignOp: alignSingle failed!!";
+                }
             }
-            
+
             // shape of output tensor is [num_reads, 2] 
             Tensor* out = nullptr;
-            OP_REQUIRES_OK(ctx,
-                   ctx->allocate_output(0, TensorShape({num_reads, 2}), &out));
+            OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({num_reads, 2}), &out));
 
-            auto out_t = out->matrix<string>();
-
-            for (int i = 0; i < num_reads; i++) {
-                out_t(i, 0) = reads_t(i); // copy over the read (not sure if uses same buffer)
+            auto out_matrix = out->matrix<string>();
+            for (size_t i = 0; i < num_reads; i++) {
+                out_matrix(i, 0) = reads_flat(i); // copy over the read (not sure if uses same buffer)
 
                 SnapProto::AlignmentResults results;
 
-                for (auto result : (*alignment_results)[i]) {
+                for (auto result : alignment_results[i]) {
                     SnapProto::SingleResult* result_proto = results.add_results();
                     populateSingleResultProto_(result_proto, result);
                 }
 
-                results.SerializeToString(&out_t(i, 1));
+                results.SerializeToString(&out_matrix(i, 1));
             }
-
         }
 
     private:
-
         void populateSingleResultProto_(SnapProto::SingleResult* result_proto, SingleAlignmentResult result) {
             result_proto->set_result((SnapProto::SingleResult::AlignmentResult)result.status);
             result_proto->set_genomelocation(GenomeLocationAsInt64(result.location));
@@ -139,15 +147,16 @@ namespace tensorflow {
             TF_DISALLOW_COPY_AND_ASSIGN(GenomeIndexResource);
         };
 
-        // Options
-        snap_wrapper::AlignmentOptions* options_;
+        snap_wrapper::AlignmentOptions options_;
+        BaseAligner* base_aligner_ = nullptr;
+
         // Attributes
         string genome_index_location_;
 
+        // Resources
         mutex init_mu_;
         ContainerInfo cinfo_ GUARDED_BY(init_mu_);
         GenomeIndexResource* genome_index_ GUARDED_BY(init_mu_) = nullptr;
-        BaseAligner* base_aligner_ = nullptr;
     };
 
 
