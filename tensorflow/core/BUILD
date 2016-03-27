@@ -329,7 +329,9 @@ cc_library(
     copts = tf_copts(),
     linkstatic = 1,
     visibility = ["//visibility:public"],
-    deps = [":framework", "//tensorflow/core/kernels:reader_base"],
+    # TODO  do something about this hacky stuff
+    deps = [":framework", "//tensorflow/core/kernels:reader_base",
+            "//tensorflow/core/user_ops/dna-align:snap_protos_cc"],
     alwayslink = 1,
 )
 

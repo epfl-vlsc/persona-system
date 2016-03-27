@@ -37,9 +37,18 @@ class FASTQReader(io_ops.ReaderBase):
         super(FASTQReader, self).__init__(rr)
 
 ops.NoGradient("FASTQReader")
-ops.RegisterShape("FASTQ")(common_shapes.scalar_shape)
+ops.RegisterShape("FASTQReader")(common_shapes.scalar_shape)
 
 def FASTQDecoder(value):
 
     return gen_user_ops.decode_fastq(value)
+
+class SamWriter(io_ops.WriterBase):
+
+    def __init__(self, name=None):
+        ww = gen_user_ops.sam_writername=name)
+        super(SamWriter, self).__init__(ww)
+
+ops.NoGradient("SamWriter")
+ops.RegisterShape("SamWriter")(common_shapes.scalar_shape)
 

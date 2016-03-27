@@ -268,6 +268,87 @@ def _ShardedFilespecShape(op):
       tensor_shape.scalar())
   return [tensor_shape.scalar()]
 
+class WriterBase(object):
+  """Base class for different Writer types, that write a record every step. 
+
+  Writers take values and write them to a specific file.
+  """
+
+  def __init__(self, writer_ref, supports_serialize=False):
+    """Creates a new WriterBase.
+
+    Args:
+      reader_ref: The operation that implements the reader.
+      supports_serialize: True if the writer implementation can
+        serialize its state.
+    """
+    self._writer_ref = writer_ref
+    self._supports_serialize = supports_serialize
+
+  @property
+  def writer_ref(self):
+    """Op that implements the writer."""
+    return self._writer_ref
+
+  def write(self, value, name=None):
+    """Instructs the Writer to write a value to file.
+
+    Args:
+      value: The value to write to the file.
+      name: A name for the operation (optional).
+
+    """
+    return gen_io_ops._writer_write(self._writer_ref, value, name=name)
+
+  def num_records_produced(self, name=None):
+    """Returns the number of records this writer has written.
+
+    This is the same as the number of Write executions that have
+    succeeded.
+
+    Args:
+      name: A name for the operation (optional).
+
+    Returns:
+      An int64 Tensor.
+
+    """
+    return gen_io_ops._writer_num_records_produced(self._writer_ref, name=name)
+
+  def serialize_state(self, name=None):
+    """Produce a string tensor that encodes the state of a writer.
+
+    Not all writers support being serialized, so this can produce an
+    Unimplemented error.
+
+    Args:
+      name: A name for the operation (optional).
+
+    Returns:
+      A string Tensor.
+    """
+    return gen_io_ops._writer_serialize_state(self._writer_ref, name=name)
+
+  def restore_state(self, state, name=None):
+    """Restore a writer to a previously saved state.
+
+    Not all Writers support being restored, so this can produce an
+    Unimplemented error.
+
+    Args:
+      state: A string Tensor.
+        Result of a SerializeState of a Writer with matching type.
+      name: A name for the operation (optional).
+
+    Returns:
+      The created Operation.
+    """
+    return gen_io_ops._writer_restore_state(self._writer_ref, state, name=name)
+
+  @property
+  def supports_serialize(self):
+    """Whether the Reader implementation can serialize its state."""
+    return self._supports_serialize
 
 class ReaderBase(object):
   """Base class for different Reader types, that produce a record every step.

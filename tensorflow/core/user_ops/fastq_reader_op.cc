@@ -13,10 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-// Reader OP to read FASTQ files and returns ONLY THE SEQUENCE DATA
+// Reader OP to read FASTQ files and returns 
 #include <memory>
 #include "tensorflow/core/framework/reader_op_kernel.h"
 #include "tensorflow/core/kernels/reader_base.h"
+#include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/lib/strings/strcat.h"
@@ -30,7 +31,6 @@ REGISTER_OP("FastqReader")
     .Attr("skip_header_lines: int = 0")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
-    .Attr("read_batch_size: int = 1")
     .SetIsStateful()
     .Doc(R"doc(
 A Reader that outputs the read sequences in a FASTQ file. Does not output
@@ -44,16 +44,14 @@ container: If non-empty, this reader is placed in the given container.
 
 class FastqReader : public ReaderBase {
  public:
-  FastqReader(const string& node_name, int skip_header_lines, int batch_size, Env* env)
+  FastqReader(const string& node_name, int skip_header_lines, Env* env)
       : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
         skip_header_lines_(skip_header_lines),
         env_(env),
-        line_number_(0),
-        batch_size_(batch_size) {}
+        line_number_(0) {}
 
   Status OnWorkStartedLocked() override {
     line_number_ = 0;
-    batch_number_ = 0;
     RandomAccessFile* file = nullptr;
     TF_RETURN_IF_ERROR(env_->NewRandomAccessFile(current_work(), &file));
     input_buffer_.reset(new io::InputBuffer(file, kBufferSize));
@@ -83,37 +81,30 @@ class FastqReader : public ReaderBase {
     string lines[4];
     Status status;
     bool atend = false;
-    for (int b = 0; b < batch_size_; b++) {
-        for (int i = 0; i < 4; i++)
-        {
-          status = input_buffer_->ReadLine(&lines[i]);
-          if (i != 3 && errors::IsOutOfRange(status)) {
-            errors::Internal("FASTQ Read error in " + current_work() +
-                    " : EOF encountered in read.");
-          } else if (errors::IsOutOfRange(status)) {
-            // just EOF
-            atend = true;
-            break;
-          }
-          ++line_number_;
-        }
-         
-        if (status.ok()) {
-          *value += lines[1] + "\n";  // just the nucleotides
-          //LOG(INFO) << "Seq was: " << lines[1] << "\n";
-        } else {
-          return status;
-        }
-
-        if (atend) 
-          break;
+    for (int i = 0; i < 4; i++)
+    {
+      status = input_buffer_->ReadLine(&lines[i]);
+      if (i != 3 && errors::IsOutOfRange(status)) {
+        errors::Internal("FASTQ Read error in " + current_work() +
+                " : EOF encountered in read.");
+      } else if (errors::IsOutOfRange(status)) {
+        // just EOF
+        atend = true;
+      }
+      ++line_number_;
     }
 
     if (status.ok()) {
-        *key = strings::StrCat(current_work(), ":", batch_number_);
+        SnapProto::AlignmentDef alignment;
+        SnapProto::ReadDef* read = alignment.mutable_read();
+        read->set_bases(lines[1]);
+        read->set_meta(lines[0]);
+        read->set_length(lines[1].length());
+        read->set_qualities(lines[3]);
+        alignment.SerializeToString(value);
+        *key = strings::StrCat(current_work(), ":", line_number_);
         *produced = true;
         *at_end = atend;
-        ++batch_number_;
         return status;
     } else {
         return status;
@@ -123,7 +114,6 @@ class FastqReader : public ReaderBase {
 
   Status ResetLocked() override {
     line_number_ = 0;
-    batch_number_ = 0;
     input_buffer_.reset(nullptr);
     return ReaderBase::ResetLocked();
   }
@@ -133,7 +123,6 @@ class FastqReader : public ReaderBase {
   const int skip_header_lines_;
   Env* const env_;
   int64 line_number_;
-  int64 batch_number_;
   int64 batch_size_;
   std::unique_ptr<io::InputBuffer> input_buffer_;
 };
@@ -151,12 +140,9 @@ class FastqReaderOp : public ReaderOpKernel {
     OP_REQUIRES(context, skip_header_lines >= 0,
                 errors::InvalidArgument("skip_header_lines must be >= 0 not ",
                                         skip_header_lines));
-    OP_REQUIRES(context, read_batch_size > 0,
-                errors::InvalidArgument("read_batch_size must be > 0 not ",
-                                        read_batch_size));
     Env* env = context->env();
     SetReaderFactory([this, skip_header_lines, read_batch_size, env]() {
-      return new FastqReader(name(), skip_header_lines, read_batch_size, env);
+      return new FastqReader(name(), skip_header_lines, env);
     });
   }
 };

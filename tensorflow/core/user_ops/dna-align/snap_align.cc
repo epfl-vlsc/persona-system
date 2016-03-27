@@ -61,14 +61,18 @@ namespace tensorflow {
             size_t num_reads = reads_flat.size();
 
             vector<Read*> input_reads;
+            vector<SnapProto::AlignmentDef> alignments;
+            alignments.reserve(num_reads);
             input_reads.reserve(num_reads);
 
             for (size_t i = 0; i < num_reads; i++) {
-                SnapProto::Read read_proto;
-                if (!read_proto.ParseFromString(reads_flat(i))) {
+                SnapProto::AlignmentDef alignment;
+                SnapProto::ReadDef read_proto;
+                if (!alignment.ParseFromString(reads_flat(i))) {
                     LOG(INFO) << "SnapAlignOp: failed to parse read from protobuf";
                 }
 
+                read_proto = alignment.read();
                 Read* snap_read = new Read();
                 snap_read->init(
                     read_proto.meta().c_str(),
@@ -79,7 +83,7 @@ namespace tensorflow {
                 );
 
                 input_reads.push_back(snap_read);
-
+                alignments.push_back(alignment);
                 LOG(INFO) << "SnapAlignOp: added read " << read_proto.bases();
             }
 
@@ -98,22 +102,21 @@ namespace tensorflow {
                 }
             }
 
-            // shape of output tensor is [num_reads, 2] 
+            // shape of output tensor is [num_reads] 
             Tensor* out = nullptr;
-            OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({num_reads, 2}), &out));
+            OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({num_reads}), &out));
 
-            auto out_matrix = out->matrix<string>();
+            auto out_t = out->flat<string>();
             for (size_t i = 0; i < num_reads; i++) {
-                out_matrix(i, 0) = reads_flat(i); // copy over the read (not sure if uses same buffer)
 
-                SnapProto::AlignmentResults results;
+                SnapProto::AlignmentDef* alignment = &alignments[i];
 
                 for (auto result : alignment_results[i]) {
-                    SnapProto::SingleResult* result_proto = results.add_results();
+                    SnapProto::SingleResult* result_proto = alignment.add_results();
                     populateSingleResultProto_(result_proto, result);
                 }
 
-                results.SerializeToString(&out_matrix(i, 1));
+                alignment->SerializeToString(&out_t(i));
             }
         }
 
@@ -170,7 +173,7 @@ namespace tensorflow {
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
 generation of alignment candidates.
-output: a tensor [num_reads, 2] containing serialized reads and results
+output: a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates. 
 )doc");
 

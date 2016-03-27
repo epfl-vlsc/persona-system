@@ -13,6 +13,7 @@ tf_proto_library_cc(
     go_api_version = 2,
     java_api_version = 2,
     py_api_version = 2,
+    visibility = ["//visibility:public"],
 )
 
 cc_library(

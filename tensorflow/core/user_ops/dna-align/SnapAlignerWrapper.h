@@ -13,6 +13,22 @@ namespace snap_wrapper {
         Multiple = 0x4
     };
 
+    enum FileType {UnknownFileType, SAMFile, FASTQFile, BAMFile, InterleavedFASTQFile, CRAMFile};  // Add more as needed
+
+    struct SNAPFile {
+        SNAPFile() : fileName(NULL), secondFileName(NULL), fileType(UnknownFileType), isStdio(false), omitSQLines(false) {}
+        const char          *fileName;
+        const char          *secondFileName;
+        FileType             fileType;
+        bool                 isCompressed;
+        bool                 isStdio;           // Only applies to the first file for two-file inputs
+        bool				 omitSQLines;		// Special undocumented option for Charles Chiu's group.  Mostly a bad idea.
+
+        PairedReadSupplierGenerator *createPairedReadSupplierGenerator(int numThreads, bool quicklyDropUnpairedReads, const ReaderContext& context);
+        ReadSupplierGenerator *createReadSupplierGenerator(int numThreads, const ReaderContext& context);
+        static bool generateFromCommandLine(const char **args, int nArgs, int *argsConsumed, SNAPFile *snapFile, bool paired, bool isInput);
+    };
+
     struct AlignmentOptions {
         // Default values pulled from SNAP options
 
@@ -21,6 +37,12 @@ namespace snap_wrapper {
 
         unsigned int minReadLength = 50;
         unsigned int maxReadLength = 400;
+        ReadClippingType    clipping;
+        const char         *defaultReadGroup; // if not specified in input
+        float               expansionFactor;
+        bool                ignoreSecondaryAlignments = true; // on input, default true
+        SNAPFile            outputFile;
+        const char         *rgLineContents = "@RG\tID:FASTQ\tPL:Illumina\tPU:pu\tLB:lb\tSM:sm";
 
         // These two are mutually exclusive: either a fixed number of seeds, or a percentage of the read size
         unsigned int seedsPerRead = 25;

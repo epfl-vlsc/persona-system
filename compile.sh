@@ -1,3 +1,3 @@
 
-bazel build -c opt //tensorflow/tools/pip_package:build_pip_package
+bazel build -c opt --verbose_failures //tensorflow/tools/pip_package:build_pip_package
 
