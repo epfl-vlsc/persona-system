@@ -7,9 +7,29 @@ exports_files(["LICENSE"])
 package(default_visibility = ["//tensorflow:__subpackages__"])
 
 cc_library(
-    name = "logistic-loss",
-    hdrs = ["logistic-loss.h"],
-    deps = ["//tensorflow/core:lib"],
+    name = "loss_updaters",
+    hdrs = [
+        "hinge-loss.h",
+        "logistic-loss.h",
+        "loss.h",
+        "squared-loss.h",
+    ],
+    deps = [
+        "//google/protobuf",
+        "//tensorflow/core:framework_headers_lib",
+    ],
+)
+
+cc_test(
+    name = "loss_test",
+    size = "small",
+    srcs = ["loss_test.cc"],
+    deps = [
+        ":loss_updaters",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+    ],
 )
 
 cc_library(
@@ -17,13 +37,15 @@ cc_library(
     srcs = ["resources.cc"],
     hdrs = ["resources.h"],
     deps = [
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
+        "//google/protobuf",
+        "//tensorflow/core:framework_headers_lib",
+        "//third_party/eigen3",
     ],
 )
 
 cc_test(
     name = "resources_test",
+    size = "small",
     srcs = ["resources_test.cc"],
     deps = [
         ":resources",
@@ -35,23 +57,15 @@ cc_test(
 )
 
 cc_library(
-    name = "squared-loss",
-    hdrs = ["squared-loss.h"],
-    deps = ["//tensorflow/core:lib"],
-)
-
-# TODO(katsiapis): Add tests for losses.
-
-cc_library(
     name = "sdca_ops",
     srcs = ["sdca_ops.cc"],
     deps = [
-        ":logistic-loss",
+        ":loss_updaters",
         ":resources",
-        ":squared-loss",
+        "//google/protobuf",
+        "//tensorflow/core:framework_headers_lib",
+        "//tensorflow/core/kernels:bounds_check_lib",
         "//third_party/eigen3",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
     ],
     alwayslink = 1,
 )

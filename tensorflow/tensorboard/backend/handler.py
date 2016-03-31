@@ -40,8 +40,8 @@ from tensorflow.python.platform import logging
 from tensorflow.python.platform import resource_loader
 from tensorflow.python.summary import event_accumulator
 from tensorflow.python.util import compat
-from tensorflow.tensorboard.backend import float_wrapper
 from tensorflow.tensorboard.backend import process_graph
+from tensorflow.tensorboard.lib.python import json_util
 
 
 DATA_PREFIX = '/data'
@@ -52,6 +52,7 @@ HISTOGRAMS_ROUTE = '/' + event_accumulator.HISTOGRAMS
 COMPRESSED_HISTOGRAMS_ROUTE = '/' + event_accumulator.COMPRESSED_HISTOGRAMS
 INDIVIDUAL_IMAGE_ROUTE = '/individualImage'
 GRAPH_ROUTE = '/' + event_accumulator.GRAPH
+RUN_METADATA_ROUTE = '/' + event_accumulator.RUN_METADATA
 TAB_ROUTES = ['', '/events', '/images', '/graphs', '/histograms']
 
 _IMGHDR_TO_MIMETYPE = {
@@ -167,7 +168,7 @@ class TensorboardHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       code: The numeric HTTP status code to use.
     """
 
-    output = json.dumps(float_wrapper.WrapSpecialFloats(obj))
+    output = json.dumps(json_util.WrapSpecialFloats(obj))
 
     self.send_response(code)
     self.send_header('Content-Type', 'application/json')
@@ -265,6 +266,27 @@ class TensorboardHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     graph_pbtxt = str(graph)
     # Gzip it and send it to the user.
     self._send_gzip_response(graph_pbtxt, 'text/plain')
+
+  def _serve_run_metadata(self, query_params):
+    """Given a tag and a TensorFlow run, return the session.run() metadata."""
+    tag = query_params.get('tag', None)
+    run = query_params.get('run', None)
+    if tag is None:
+      self.send_error(400, 'query parameter "tag" is required')
+      return
+    if run is None:
+      self.send_error(400, 'query parameter "run" is required')
+      return
+
+    try:
+      run_metadata = self._multiplexer.RunMetadata(run, tag)
+    except ValueError:
+      self.send_response(404)
+      return
+    # Serialize to pbtxt format.
+    run_metadata_pbtxt = str(run_metadata)
+    # Gzip it and send it to the user.
+    self._send_gzip_response(run_metadata_pbtxt, 'text/plain')
 
   def _serve_histograms(self, query_params):
     """Given a tag and single run, return an array of histogram values."""
@@ -429,6 +451,7 @@ class TensorboardHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     data_handlers = {
         DATA_PREFIX + SCALARS_ROUTE: self._serve_scalars,
         DATA_PREFIX + GRAPH_ROUTE: self._serve_graph,
+        DATA_PREFIX + RUN_METADATA_ROUTE: self._serve_run_metadata,
         DATA_PREFIX + HISTOGRAMS_ROUTE: self._serve_histograms,
         DATA_PREFIX + COMPRESSED_HISTOGRAMS_ROUTE:
             self._serve_compressed_histograms,

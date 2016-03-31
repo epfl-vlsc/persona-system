@@ -18,47 +18,87 @@ limitations under the License.
 
 #include <memory>
 
-#include "tensorflow/core/lib/core/status.h"
-#include "tensorflow/core/platform/macros.h"
-#include "tensorflow/core/platform/types.h"
-#include "tensorflow/core/protobuf/tensorflow_server.pb.h"
+#include "grpc++/grpc++.h"
+#include "grpc++/security/credentials.h"
+
+#include "tensorflow/core/distributed_runtime/master_env.h"
+#include "tensorflow/core/distributed_runtime/process_util.h"
+#include "tensorflow/core/distributed_runtime/rpc/async_service_interface.h"
+#include "tensorflow/core/distributed_runtime/rpc/grpc_channel.h"
+#include "tensorflow/core/distributed_runtime/server_lib.h"
+#include "tensorflow/core/distributed_runtime/worker_env.h"
+#include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/platform/env.h"
 
 namespace tensorflow {
 
-// Represents a single TensorFlow server, which exports Master and Worker
-// services.
-class ServerInterface {
+class GrpcServer : public ServerInterface {
+ protected:
+  GrpcServer(const ServerDef& server_def, Env* env);
+
  public:
-  ServerInterface() {}
-  virtual ~ServerInterface() {}
+  static Status Create(const ServerDef& server_def, Env* env,
+                       std::unique_ptr<ServerInterface>* out_server);
 
-  // Starts the server running asynchronously. Returns OK on success, otherwise
-  // returns an error.
-  virtual Status Start() = 0;
+  virtual ~GrpcServer();
 
-  // Stops the server asynchronously. Returns OK on success, otherwise returns
-  // an error.
-  //
-  // After calling `Stop()`, the caller may call `Join()` to block until the
-  // server has stopped.
-  virtual Status Stop() = 0;
+  // Implementations of ServerInterface methods.
+  Status Start() override;
+  Status Stop() override;
+  Status Join() override;
+  const string target() const override;
 
-  // Blocks until the server has stopped. Returns OK on success, otherwise
-  // returns an error.
-  virtual Status Join() = 0;
+ protected:
+  Status Init();
 
-  // Returns a target string that can be used to connect to this server using
-  // `tensorflow::NewSession()`.
-  virtual const string& target() const = 0;
+  // A subclass can override this method to support secure credentials.
+  virtual std::shared_ptr<::grpc::ServerCredentials> GetServerCredentials(
+      const ServerDef& server_def) const;
+
+  virtual ChannelCreationFunction GetChannelCreationFunction(
+      const ServerDef& server_def) const;
+
+  // Returns the port to which this server is bound.
+  // This method may only be called after `this->Init()` returns successfully.
+  int bound_port() const { return bound_port_; }
 
  private:
-  TF_DISALLOW_COPY_AND_ASSIGN(ServerInterface);
-};
+  // The overall server configuration.
+  const ServerDef server_def_;
+  Env* env_;
 
-// Creates a server based on the given `server_def`, and stores it in
-// *out_server. Returns OK on success, otherwise returns an error.
-Status NewServer(const ServerDef& server_def,
-                 std::unique_ptr<ServerInterface>* out_server);
+  // The port requested for this server.
+  int requested_port_;
+  // The port to which this server is bound.
+  int bound_port_ = 0;
+
+  // Guards state transitions.
+  mutex mu_;
+
+  // Represents the current state of the server, which changes as follows:
+  //
+  //                 Join()            Join()
+  //                  ___               ___
+  //      Start()     \ /    Stop()     \ /
+  // NEW ---------> STARTED --------> STOPPED
+  //   \                          /
+  //    \________________________/
+  //            Stop(), Join()
+  enum State { NEW, STARTED, STOPPED };
+  State state_ GUARDED_BY(mu_);
+
+  // Implementation of a TensorFlow master, and RPC polling thread.
+  MasterEnv master_env_;
+  AsyncServiceInterface* master_service_;
+  std::unique_ptr<Thread> master_thread_ GUARDED_BY(mu_);
+
+  // Implementation of a TensorFlow worker, and RPC polling thread.
+  WorkerEnv worker_env_;
+  AsyncServiceInterface* worker_service_;
+  std::unique_ptr<Thread> worker_thread_ GUARDED_BY(mu_);
+
+  std::unique_ptr<::grpc::Server> server_ GUARDED_BY(mu_);
+};
 
 }  // namespace tensorflow
 

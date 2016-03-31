@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "tensorflow/contrib/linear_optimizer/kernels/resources.h"
 
+#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/hash/hash.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/types.h"
@@ -32,10 +33,10 @@ DataByExample::Key DataByExample::MakeKey(const string& example_id) {
   // The current probability of at least one collision for 1B example_ids is
   // approximately 10^-11 (ie 2^60 / 2^97).
   //
-  // TODO(katsiapis): Investigate using a smaller key space to save memory if
+  // TODO(sibyl-Mooth6ku): Investigate using a smaller key space to save memory if
   // collisions are not much of an issue.
   //
-  // TODO(katsiapis): Avoid the double-pass over the data.
+  // TODO(sibyl-Mooth6ku): Avoid the double-pass over the data.
   static const uint64 kSeed1 = 0xDECAFCAFFE;  // Same as Hash64 default seed.
   static const uint64 kSeed2 = 0xABCDEF0123;  // Anything != kSeed1 will do.
   return std::make_pair(
@@ -43,9 +44,52 @@ DataByExample::Key DataByExample::MakeKey(const string& example_id) {
       Hash64(example_id.data(), example_id.size(), kSeed2) & 0xFFFFFFFF);
 }
 
-DataByExample::Data& DataByExample::operator[](const Key& key) {
+DataByExample::Data DataByExample::Get(const Key& key) {
   mutex_lock l(mu_);
-  return duals_by_key[key];
+  return data_by_key_[key];
+}
+
+void DataByExample::Set(const Key& key, const Data& data) {
+  mutex_lock l(mu_);
+  data_by_key_[key] = data;
+}
+
+Status DataByExample::Visit(
+    std::function<void(const Data& data)> visitor) const {
+  struct State {
+    // Snapshoted size of data_by_key_.
+    size_t size;
+
+    // Number of elements visited so far.
+    size_t num_visited = 0;
+
+    // Current element.
+    DataByKey::const_iterator it;
+  };
+
+  auto state = [this] {
+    mutex_lock l(mu_);
+    State result;
+    result.size = data_by_key_.size();
+    result.it = data_by_key_.cbegin();
+    return result;
+  }();
+
+  while (state.num_visited < state.size) {
+    mutex_lock l(mu_);
+    // Since DataByExample is modify-or-append only, a visit will (continue to)
+    // be successful if and only if the size of the backing store hasn't
+    // changed (since the body of this while-loop is under lock).
+    if (data_by_key_.size() != state.size) {
+      return errors::Unavailable("The number of elements for ", solver_uuid_,
+                                 " has changed which nullifies a visit.");
+    }
+    for (size_t i = 0; i < kVisitChunkSize && state.num_visited < state.size;
+         ++i, ++state.num_visited, ++state.it) {
+      visitor(state.it->second);
+    }
+  }
+  return Status::OK();
 }
 
 string DataByExample::DebugString() {

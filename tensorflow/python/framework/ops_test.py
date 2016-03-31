@@ -751,11 +751,40 @@ class CollectionTest(test_util.TensorFlowTestCase):
     blank2 = ObjectWithName("junk/foo")
     g.add_to_collection("blah", blank2)
 
-    self.assertEqual(["foo"], g.get_collection("other"))
     self.assertEqual([12, 34], g.get_collection("key"))
     self.assertEqual([], g.get_collection("nothing"))
     self.assertEqual([27, blank1, blank2], g.get_collection("blah"))
     self.assertEqual([blank1], g.get_collection("blah", "prefix"))
+
+    # Make sure that get_collection() returns a first-level
+    # copy of the collection, while get_collection_ref() returns
+    # the original list.
+    other_collection_snapshot = g.get_collection("other")
+    other_collection_ref = g.get_collection_ref("other")
+    self.assertEqual(["foo"], other_collection_snapshot)
+    self.assertEqual(["foo"], other_collection_ref)
+    g.add_to_collection("other", "bar")
+    self.assertEqual(["foo"], other_collection_snapshot)
+    self.assertEqual(["foo", "bar"], other_collection_ref)
+    self.assertEqual(["foo", "bar"], g.get_collection("other"))
+    self.assertTrue(other_collection_ref is g.get_collection_ref("other"))
+
+    # Verify that getting an empty collection ref returns a modifiable list.
+    empty_coll_ref = g.get_collection_ref("empty")
+    self.assertEqual([], empty_coll_ref)
+    empty_coll = g.get_collection("empty")
+    self.assertEqual([], empty_coll)
+    self.assertFalse(empty_coll is empty_coll_ref)
+    empty_coll_ref2 = g.get_collection_ref("empty")
+    self.assertTrue(empty_coll_ref2 is empty_coll_ref)
+    # Add to the collection.
+    empty_coll_ref.append("something")
+    self.assertEqual(["something"], empty_coll_ref)
+    self.assertEqual(["something"], empty_coll_ref2)
+    self.assertEqual([], empty_coll)
+    self.assertEqual(["something"], g.get_collection("empty"))
+    empty_coll_ref3 = g.get_collection_ref("empty")
+    self.assertTrue(empty_coll_ref3 is empty_coll_ref)
 
   def testDefaulGraph(self):
     with ops.Graph().as_default():
@@ -1228,8 +1257,8 @@ class ColocationGroupTest(test_util.TensorFlowTestCase):
     with ops.colocate_with(a.op):
       b = constant_op.constant(3.0)
     c = constant_op.constant(4.0)
-    self.assertEqual(["loc:@a"], a.op.colocation_groups())
-    self.assertEqual(["loc:@a"], b.op.colocation_groups())
+    self.assertEqual([b"loc:@a"], a.op.colocation_groups())
+    self.assertEqual([b"loc:@a"], b.op.colocation_groups())
     with self.assertRaises(ValueError):
       c.op.get_attr("_class")
 
@@ -1242,7 +1271,7 @@ class ColocationGroupTest(test_util.TensorFlowTestCase):
         # colocated with 'a', which is on '/gpu:0'.  colocate_with
         # overrides devices because it is a stronger constraint.
         b = constant_op.constant(3.0)
-    self.assertEqual(["loc:@a"], b.op.colocation_groups())
+    self.assertEqual([b"loc:@a"], b.op.colocation_groups())
     self.assertEqual(a.op.device, b.op.device)
 
   def testLocationOverrides(self):
@@ -1258,7 +1287,7 @@ class ColocationGroupTest(test_util.TensorFlowTestCase):
         c = constant_op.constant(4.0)
       d = constant_op.constant(5.0)
 
-    self.assertEqual(["loc:@a"], b.op.colocation_groups())
+    self.assertEqual([b"loc:@a"], b.op.colocation_groups())
     self.assertEqual("/device:GPU:0", a.op.device)
     self.assertEqual(a.op.device, b.op.device)
 
@@ -1272,8 +1301,8 @@ class ColocationGroupTest(test_util.TensorFlowTestCase):
       b = constant_op.constant(3.0)
       with ops.colocate_with(b.op):
         c = constant_op.constant(4.0)
-    self.assertEqual(["loc:@a"], b.op.colocation_groups())
-    self.assertEqual(["loc:@a"], c.op.colocation_groups())
+    self.assertEqual([b"loc:@a"], b.op.colocation_groups())
+    self.assertEqual([b"loc:@a"], c.op.colocation_groups())
 
   def testMultiColocationGroups(self):
     a = constant_op.constant([2.0], name="a")
@@ -1281,13 +1310,21 @@ class ColocationGroupTest(test_util.TensorFlowTestCase):
     with ops.colocate_with(a.op):
       with ops.colocate_with(b.op):
         c = constant_op.constant(4.0)
-    self.assertEqual(set(["loc:@a", "loc:@b"]), set(c.op.colocation_groups()))
+    self.assertEqual(set([b"loc:@a", b"loc:@b"]), set(c.op.colocation_groups()))
+
+  def testColocationIgnoreStack(self):
+    a = constant_op.constant([2.0], name="a")
+    b = constant_op.constant(3.0, name="b")
+    with ops.colocate_with(a.op):
+      with ops.colocate_with(b.op, ignore_existing=True):
+        c = constant_op.constant(4.0)
+    self.assertEqual(set([b"loc:@b"]), set(c.op.colocation_groups()))
 
   def testColocateVariables(self):
     a = variables.Variable([2.0], name="a")
     with ops.colocate_with(a.op):
       b = variables.Variable([3.0], name="b")
-    self.assertEqual(["loc:@a"], b.op.colocation_groups())
+    self.assertEqual([b"loc:@a"], b.op.colocation_groups())
 
   def testInconsistentDeviceWithinColocate(self):
     with ops.device("/gpu:0"):

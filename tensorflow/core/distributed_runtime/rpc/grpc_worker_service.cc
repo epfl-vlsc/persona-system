@@ -24,7 +24,6 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/common_runtime/dma_helper.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_util.h"
-#include "tensorflow/core/common_runtime/gpu_device_context.h"
 #include "tensorflow/core/common_runtime/local_device.h"
 #include "tensorflow/core/common_runtime/step_stats_collector.h"
 #include "tensorflow/core/distributed_runtime/graph_mgr.h"
@@ -96,7 +95,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
 // The implementation of the request handler for each RPC method
 // must ensure that it calls ENQUEUE_REQUEST() for that RPC method,
 // to keep accepting new requests.
-#define ENQUEUE_REQUEST(method)                                               \
+#define ENQUEUE_REQUEST(method, supports_cancel)                              \
   do {                                                                        \
     mutex_lock l(shutdown_mu_);                                               \
     if (!is_shutdown_) {                                                      \
@@ -104,7 +103,8 @@ class GrpcWorkerService : public AsyncServiceInterface {
            method##Request, method##Response>::                               \
           EnqueueRequest(&worker_service_, cq_,                               \
                          &grpc::WorkerService::AsyncService::Request##method, \
-                         &GrpcWorkerService::method##Handler);                \
+                         &GrpcWorkerService::method##Handler,                 \
+                         (supports_cancel));                                  \
     }                                                                         \
   } while (0)
 
@@ -117,18 +117,23 @@ class GrpcWorkerService : public AsyncServiceInterface {
     // method, by re-enqueuing a request before the previous one
     // completes, and we may decide to bound some of the request
     // types.
-    ENQUEUE_REQUEST(GetStatus);
-    ENQUEUE_REQUEST(CleanupAll);
-    ENQUEUE_REQUEST(RegisterGraph);
-    ENQUEUE_REQUEST(DeregisterGraph);
+    ENQUEUE_REQUEST(GetStatus, false);
+    ENQUEUE_REQUEST(CleanupAll, false);
+    ENQUEUE_REQUEST(RegisterGraph, false);
+    ENQUEUE_REQUEST(DeregisterGraph, false);
 
-    // TODO(mrry): Consider enqueuing more of these request types.
-    ENQUEUE_REQUEST(RecvTensor);
-    ENQUEUE_REQUEST(RunGraph);
+    // TODO(mrry): Determine a better policy for enqueuing the appropriate
+    // number of each request type.
+    for (int i = 0; i < 1000; ++i) {
+      ENQUEUE_REQUEST(RecvTensor, true);
+    }
+    for (int i = 0; i < 100; ++i) {
+      ENQUEUE_REQUEST(RunGraph, true);
+    }
 
-    ENQUEUE_REQUEST(CleanupGraph);
-    ENQUEUE_REQUEST(Logging);
-    ENQUEUE_REQUEST(Tracing);
+    ENQUEUE_REQUEST(CleanupGraph, false);
+    ENQUEUE_REQUEST(Logging, false);
+    ENQUEUE_REQUEST(Tracing, false);
 
     void* tag;
     bool ok;
@@ -161,7 +166,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
   ::grpc::Alarm* shutdown_alarm_;
 
   // The following section contains one request handler method per
-  // RPC. The The `FooHandler` method is called (indirectly) by
+  // RPC. The `FooHandler` method is called (indirectly) by
   // `HandleRPCsLoop()` when the next Foo RPC is received. Each
   // `FooHandler` call schedules a closure on `env_->compute_pool`,
   // and is responsible for requesting the next Foo call by calling
@@ -182,7 +187,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
       }
       call->SendResponse(::grpc::Status::OK);
     });
-    ENQUEUE_REQUEST(GetStatus);
+    ENQUEUE_REQUEST(GetStatus, false);
   }
 
   void CleanupAllHandler(
@@ -193,7 +198,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
       env_->device_mgr->ClearContainers(containers);
       call->SendResponse(::grpc::Status::OK);
     });
-    ENQUEUE_REQUEST(CleanupAll);
+    ENQUEUE_REQUEST(CleanupAll, false);
   }
 
   void RegisterGraphHandler(
@@ -204,7 +209,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
           call->request.graph_options(), call->response.mutable_graph_handle());
       call->SendResponse(ToGrpcStatus(s));
     });
-    ENQUEUE_REQUEST(RegisterGraph);
+    ENQUEUE_REQUEST(RegisterGraph, false);
   }
 
   void DeregisterGraphHandler(
@@ -213,18 +218,18 @@ class GrpcWorkerService : public AsyncServiceInterface {
       Status s = env_->graph_mgr->Deregister(call->request.graph_handle());
       call->SendResponse(ToGrpcStatus(s));
     });
-    ENQUEUE_REQUEST(DeregisterGraph);
+    ENQUEUE_REQUEST(DeregisterGraph, false);
   }
 
   void RunGraphHandler(WorkerCall<RunGraphRequest, RunGraphResponse>* call) {
     env_->compute_pool->Schedule([this, call]() { DoRunGraph(call); });
-    ENQUEUE_REQUEST(RunGraph);
+    ENQUEUE_REQUEST(RunGraph, true);
   }
 
   void RecvTensorHandler(
       WorkerCall<RecvTensorRequest, RecvTensorResponse>* call) {
     env_->compute_pool->Schedule([this, call]() { DoRecvTensor(call); });
-    ENQUEUE_REQUEST(RecvTensor);
+    ENQUEUE_REQUEST(RecvTensor, true);
   }
 
   void CleanupGraphHandler(
@@ -234,7 +239,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
       env_->rendezvous_mgr->Cleanup(step_id);
       call->SendResponse(::grpc::Status::OK);
     });
-    ENQUEUE_REQUEST(CleanupGraph);
+    ENQUEUE_REQUEST(CleanupGraph, false);
   }
 
   void LoggingHandler(WorkerCall<LoggingRequest, LoggingResponse>* call) {
@@ -242,7 +247,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
       Status s = DoLogging(call);
       call->SendResponse(ToGrpcStatus(s));
     });
-    ENQUEUE_REQUEST(Logging);
+    ENQUEUE_REQUEST(Logging, false);
   }
 
   void TracingHandler(WorkerCall<TracingRequest, TracingResponse>* call) {
@@ -250,7 +255,7 @@ class GrpcWorkerService : public AsyncServiceInterface {
       Status s = DoTracing(call);
       call->SendResponse(ToGrpcStatus(s));
     });
-    ENQUEUE_REQUEST(Tracing);
+    ENQUEUE_REQUEST(Tracing, false);
   }
 #undef ENQUEUE_REQUEST
 
