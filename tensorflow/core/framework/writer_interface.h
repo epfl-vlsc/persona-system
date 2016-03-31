@@ -47,7 +47,7 @@ class WriterInterface : public ResourceBase {
   // *context with an OutOfRange Status if the current work is
   // complete and the queue is done (closed and empty).
   // This method may block.
-  virtual void Write(string* value, OpKernelContext* context) = 0;
+  virtual void Write(const string* value, OpKernelContext* context) = 0;
 
   // close any open files,etc. Normally called at end of session 
   virtual void Done(OpKernelContext* context) = 0;

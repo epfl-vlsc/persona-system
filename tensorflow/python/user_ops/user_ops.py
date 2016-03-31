@@ -32,8 +32,8 @@ def my_fact():
 
 class FASTQReader(io_ops.ReaderBase):
 
-    def __init__(self, name=None, read_batch_size=1):
-        rr = gen_user_ops.fastq_reader(name=name, read_batch_size=read_batch_size)
+    def __init__(self, name=None):
+        rr = gen_user_ops.fastq_reader(name=name)
         super(FASTQReader, self).__init__(rr)
 
 ops.NoGradient("FASTQReader")
@@ -43,12 +43,36 @@ def FASTQDecoder(value):
 
     return gen_user_ops.decode_fastq(value)
 
+ops.NoGradient("FASTQDecoder")
+
+@ops.RegisterShape("FASTQDecoder")
+def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
+  """Shape function for the FASTQDecoder op."""
+  input_shape = op.inputs[0].get_shape()
+  # Optionally check that all of other inputs are scalar or empty.
+  for default_input in op.inputs[1:]:
+    default_input_shape = default_input.get_shape().with_rank(1)
+    if default_input_shape[0] > 1:
+      raise ValueError(
+          "Shape of a default must be a length-0 or length-1 vector.")
+  return [input_shape] * len(op.outputs)
+
 class SamWriter(io_ops.WriterBase):
 
     def __init__(self, name=None):
-        ww = gen_user_ops.sam_writername=name)
+        ww = gen_user_ops.sam_writer(name=name)
         super(SamWriter, self).__init__(ww)
 
 ops.NoGradient("SamWriter")
 ops.RegisterShape("SamWriter")(common_shapes.scalar_shape)
 
+class SamWriterTest(io_ops.WriterBase):
+
+    def __init__(self, name=None, out_file=None):
+        if out_file is None:
+            out_file = name + '_out.txt'
+        ww = gen_user_ops.sam_writer_test(name=name, out_file=out_file)
+        super(SamWriterTest, self).__init__(ww)
+
+ops.NoGradient("SamWriterTest")
+ops.RegisterShape("SamWriterTest")(common_shapes.scalar_shape)

@@ -28,7 +28,6 @@ namespace tensorflow {
 
 REGISTER_OP("FastqReader")
     .Output("reader_handle: Ref(string)")
-    .Attr("skip_header_lines: int = 0")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
     .SetIsStateful()
@@ -44,9 +43,8 @@ container: If non-empty, this reader is placed in the given container.
 
 class FastqReader : public ReaderBase {
  public:
-  FastqReader(const string& node_name, int skip_header_lines, Env* env)
+  FastqReader(const string& node_name, Env* env)
       : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
-        skip_header_lines_(skip_header_lines),
         env_(env),
         line_number_(0) {}
 
@@ -55,16 +53,6 @@ class FastqReader : public ReaderBase {
     RandomAccessFile* file = nullptr;
     TF_RETURN_IF_ERROR(env_->NewRandomAccessFile(current_work(), &file));
     input_buffer_.reset(new io::InputBuffer(file, kBufferSize));
-    for (; line_number_ < skip_header_lines_; ++line_number_) {
-      string line_contents;
-      Status status = input_buffer_->ReadLine(&line_contents);
-      if (errors::IsOutOfRange(status)) {
-        // We ignore an end of file error when skipping header lines.
-        // We will end up skipping this file.
-        return Status::OK();
-      }
-      TF_RETURN_IF_ERROR(status);
-    }
     return Status::OK();
   }
 
@@ -120,10 +108,8 @@ class FastqReader : public ReaderBase {
 
  private:
   enum { kBufferSize = 256 << 10 /* 256 kB */ };
-  const int skip_header_lines_;
   Env* const env_;
   int64 line_number_;
-  int64 batch_size_;
   std::unique_ptr<io::InputBuffer> input_buffer_;
 };
 
@@ -131,18 +117,10 @@ class FastqReaderOp : public ReaderOpKernel {
  public:
   explicit FastqReaderOp(OpKernelConstruction* context)
       : ReaderOpKernel(context) {
-    int skip_header_lines = -1;
-    int read_batch_size = -1;
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("skip_header_lines", &skip_header_lines));
-    OP_REQUIRES_OK(context,
-                   context->GetAttr("read_batch_size", &read_batch_size));
-    OP_REQUIRES(context, skip_header_lines >= 0,
-                errors::InvalidArgument("skip_header_lines must be >= 0 not ",
-                                        skip_header_lines));
+    
     Env* env = context->env();
-    SetReaderFactory([this, skip_header_lines, read_batch_size, env]() {
-      return new FastqReader(name(), skip_header_lines, env);
+    SetReaderFactory([this, env]() {
+      return new FastqReader(name(), env);
     });
   }
 };

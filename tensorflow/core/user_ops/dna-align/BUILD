@@ -47,6 +47,16 @@ cc_library(
     alwayslink=1,
 )
 
+cc_library(
+    name = "sam_writer_test",
+    srcs = ["sam_writer_test_op.cc"],
+    copts = tf_copts(),
+    linkstatic = 1,
+    visibility = ["//visibility:public"],
+    deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:writer_base",
+            ":snap_protos_cc", ":snap_lib"],
+    alwayslink = 1,
+)
 #cc_binary(
 #    name = "dna_align.so",
 #    includes = ["snap/SNAPLib"],

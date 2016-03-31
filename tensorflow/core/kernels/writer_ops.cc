@@ -78,12 +78,13 @@ class WriterWriteOp : public WriterVerbAsyncOpKernel {
 
   void ComputeWithWriter(OpKernelContext* context,
                          WriterInterface* writer) override {
-    Tensor* value = nullptr;
-    OP_REQUIRES_OK(context,
-                   context->input("value", TensorShape({}), &value));
 
+    const Tensor* value;
+    OP_REQUIRES_OK(context, context->input("value", &value));
+    
     auto value_scalar = value->scalar<string>();
-    writer->Write(value_scalar(), context);
+
+    writer->Write(&value_scalar(), context);
   }
 };
 
@@ -111,7 +112,7 @@ class WriterDoneOp : public WriterVerbSyncOpKernel {
 
   void ComputeWithWriter(OpKernelContext* context,
                          WriterInterface* writer) override {
-    writer->Done();
+    writer->Done(context);
   }
 };
 

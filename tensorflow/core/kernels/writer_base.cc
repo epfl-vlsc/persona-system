@@ -47,9 +47,9 @@ Status WriterBase::SerializeStateLocked(string* state) {
 Status WriterBase::RestoreState(const string& state) {
   mutex_lock lock(mu_);
   Status status = RestoreStateLocked(state);
-  if (!status.ok()) {
+  /*if (!status.ok()) {  // should still have reset?
     ResetLocked();
-  }
+  }*/
   return status;
 }
 
@@ -60,11 +60,11 @@ Status WriterBase::RestoreStateLocked(const string& state) {
 void WriterBase::Done(OpKernelContext* context) {
   mutex_lock lock(mu_);
 
-  if (!work_in_progess()) {
+  /*if (!work_in_progess()) {
     context->SetStatus(errors::Internal("Tried to call Done",
                   " on Writer with no work in progress"));
     return;
-  }
+  }*/
 
   Status status = OnWorkFinishedLocked();
   if (!status.ok()) {
@@ -74,7 +74,7 @@ void WriterBase::Done(OpKernelContext* context) {
   return;
 }
 
-void WriterBase::Write(string& value,
+void WriterBase::Write(const string* value,
                       OpKernelContext* context) {
   mutex_lock lock(mu_);
 
@@ -87,7 +87,7 @@ void WriterBase::Write(string& value,
     }
   }
 
-  Status status = WriteLocked(value);
+  Status status = WriteLocked(*value);
   
   if (!status.ok()) {
     context->SetStatus(errors::Internal(

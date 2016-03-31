@@ -20,7 +20,7 @@ limitations under the License.
 #include <string>
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/framework/writer_interface.h"
-//#include "tensorflow/core/kernels/reader_base.pb.h"
+#include "tensorflow/core/kernels/writer_base.pb.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
 
 namespace tensorflow {
@@ -42,11 +42,14 @@ class WriterBase : public WriterInterface {
   // that serializes all Writer calls.
   // Usage:
   //    Should return a valid status. OK on successful write to file.
-  virtual Status WriteLocked(string& value) = 0;
+  virtual Status WriteLocked(const string& value) = 0;
 
   // Called when work starts / finishes.
   virtual Status OnWorkStartedLocked() = 0; 
   virtual Status OnWorkFinishedLocked()  = 0;
+
+  // do we still need to reset writer kernels?
+  //virtual Status ResetLocked()  = 0;
 
   // Default implementation generates an Unimplemented error.
   // See the protected helper methods below.
@@ -80,7 +83,7 @@ class WriterBase : public WriterInterface {
   // Implementations of WriterInterface methods.  These ensure thread-safety
   // and call the methods above to do the work.
   void Done(OpKernelContext* context) override;
-  void Write(string* value,
+  void Write(const string* value,
             OpKernelContext* context) override;
   int64 NumRecordsProduced() override;
   Status SerializeState(string* state) override;

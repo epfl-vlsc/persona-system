@@ -264,7 +264,6 @@ REGISTER_OP("WriterDone")
 Instruct writer_handle writer to finish.
 
 writer_handle: Handle to a Writer.
-value: A scalar.
 )doc");
 
 REGISTER_OP("WriterNumRecordsProduced")

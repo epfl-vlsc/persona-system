@@ -300,7 +300,7 @@ class WriterBase(object):
       name: A name for the operation (optional).
 
     """
-    return gen_io_ops._writer_write(self._writer_ref, value, name=name)
+    return gen_io_ops.writer_write(self._writer_ref, value, name=name)
 
   def num_records_produced(self, name=None):
     """Returns the number of records this writer has written.
@@ -659,3 +659,10 @@ def _MatchingFilesShape(op):
   unused_patern_shape = op.inputs[0].get_shape().merge_with(
       tensor_shape.scalar())
   return [tensor_shape.unknown_shape(ndims=1)]
+
+
+@ops.RegisterShape("WriterWrite")
+def _WriterWriteShape(op):
+  """Shape function for the WriterBase.Write op."""
+  return []
+

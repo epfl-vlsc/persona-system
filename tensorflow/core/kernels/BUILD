@@ -148,6 +148,25 @@ cc_library(
 )
 
 tf_proto_library(
+    name = "writer_base_proto",
+    srcs = ["writer_base.proto"],
+    cc_api_version = 2,
+    go_api_version = 2,
+    java_api_version = 2,
+)
+
+cc_library(
+    name = "writer_base",
+    srcs = ["writer_base.cc"],
+    hdrs = ["writer_base.h"],
+    deps = [
+        ":writer_base_proto_cc",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+    ],
+)
+
+tf_proto_library(
     name = "reader_base_proto",
     srcs = ["reader_base.proto"],
     cc_api_version = 2,
@@ -710,6 +729,7 @@ tf_kernel_libraries(
         "identity_reader_op",
         "matching_files_op",
         "reader_ops",
+        "writer_ops",
         "restore_op",
         "save_op",
         "text_line_reader_op",
@@ -719,6 +739,7 @@ tf_kernel_libraries(
     deps = [
         ":ops_util",
         ":reader_base",
+        ":writer_base",
         ":save_restore_tensor",
         "//tensorflow/core:framework",
         "//tensorflow/core:io_ops_op_lib",
