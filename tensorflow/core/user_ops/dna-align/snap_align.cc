@@ -11,48 +11,36 @@
 #include "Read.h"
 #include "snap_proto.pb.h"
 #include "SnapAlignerWrapper.h"
+#include "genome_index_resource.h"
+#include "aligner_options_resource.h"
 
 namespace tensorflow {
     using namespace std;
 
     class SnapAlignOp : public OpKernel {
     public:
-        explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-            OP_REQUIRES_OK(ctx, ctx->GetAttr("genome_index_location", &genome_index_location_));
-
-            // TODO configure options here
-        }
+        explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
         ~SnapAlignOp() override {
-            if (genome_index_) genome_index_->Unref();
+        //    if (genome_index_) genome_index_->Unref();
         }
 
         void Compute(OpKernelContext* ctx) override {
-            {
-                mutex_lock l(init_mu_);
 
-                if (genome_index_ == nullptr) {
-                    LOG(INFO) << "SNAP Kernel creating/getting genome index and creating BaseAligner";
-                    OP_REQUIRES_OK(ctx, cinfo_.Init(ctx->resource_manager(), def()));
+            GenomeIndexResource* index_resource;
+            AlignerOptionsResource* options_resource;
 
-                    auto creator = [this](GenomeIndexResource** index) {
-                        *index = new GenomeIndexResource();
-                        (*index)->init(genome_index_location_);
-                        return Status::OK();
-                    };
+            OP_REQUIRES_OK(context,
+                           GetResourceFromContext(context, "options_handle", &options_resource));
+            OP_REQUIRES_OK(context,
+                           GetResourceFromContext(context, "genome_handle", &index_resource));
 
-                    OP_REQUIRES_OK(ctx, 
-                        cinfo_.resource_manager()->LookupOrCreate<GenomeIndexResource>(
-                            cinfo_.container(),
-                            cinfo_.name(),
-                            &genome_index_,
-                            creator
-                        )
-                    );
-            
-                    base_aligner_ = snap_wrapper::createAligner(genome_index_->value(), &options_);
-                }
+            if (base_aligner_ == nullptr) {
+                LOG(INFO) << "SNAP Kernel creating BaseAligner";
+        
+                base_aligner_ = snap_wrapper::createAligner(index_resource->value(), options_resource->value());
             }
+
 
             const Tensor* reads;
             OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
@@ -92,7 +80,7 @@ namespace tensorflow {
             alignment_results.reserve(num_reads);
 
             for (size_t i = 0; i < input_reads.size(); i++) {
-                Status status = snap_wrapper::alignSingle(base_aligner_, &options_, input_reads[i], &alignment_results[i]);
+                Status status = snap_wrapper::alignSingle(base_aligner_, options_resouce->value(), input_reads[i], &alignment_results[i]);
 
                 // TODO(solal): Smart pointers would probably make this unnecessary, but I'm not knowledgeable enough in C++ to do that
                 delete input_reads[i];
@@ -129,46 +117,16 @@ namespace tensorflow {
             result_proto->set_direction(result.direction);
         }
 
-        class GenomeIndexResource : public ResourceBase {
-        public:
-            explicit GenomeIndexResource() {}
-
-            GenomeIndex* value() { return value_; }
-
-            void init(string path) {
-                // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
-                value_ = GenomeIndex::loadFromDirectory(const_cast<char*>(path.c_str()), false, false);
-            }
-
-            string DebugString() override {
-                return "SNAP GenomeIndex";
-            }
-
-        private:
-            GenomeIndex* value_;
-
-            TF_DISALLOW_COPY_AND_ASSIGN(GenomeIndexResource);
-        };
-
-        snap_wrapper::AlignmentOptions options_;
         BaseAligner* base_aligner_ = nullptr;
-
-        // Attributes
-        string genome_index_location_;
-
-        // Resources
-        mutex init_mu_;
-        ContainerInfo cinfo_ GUARDED_BY(init_mu_);
-        GenomeIndexResource* genome_index_ GUARDED_BY(init_mu_) = nullptr;
+        
     };
 
 
     REGISTER_OP("SnapAlign")
-        .Attr("genome_index_location: string")
+        .Input("genome_handle: Ref(string)")
+        .Input("options_handle: Ref(string)")
         .Input("read: string")
         .Output("output: string")
-        .Attr("container: string = 'gac_container'")
-        .Attr("shared_name: string = 'gac_name'")
         .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform

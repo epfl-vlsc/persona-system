@@ -18,7 +18,7 @@ namespace snap_wrapper {
         return GenomeIndex::loadFromDirectory(const_cast<char*>(path), false, false);
     }
 
-    BaseAligner* createAligner(GenomeIndex* index, AlignmentOptions* options) {
+    BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options) {
         return new BaseAligner(
             index,
             options->maxHitsPerSeed,
@@ -36,7 +36,7 @@ namespace snap_wrapper {
         );
     }
 
-    tensorflow::Status alignSingle(BaseAligner* aligner, AlignmentOptions* options, Read* read, std::vector<SingleAlignmentResult>* results) {
+    tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read, std::vector<SingleAlignmentResult>* results) {
         if (!options->passesReadFilter(read)) {
             SingleAlignmentResult result;
             result.status = AlignmentResult::NotFound;

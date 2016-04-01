@@ -59,20 +59,23 @@ def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
 
 class SamWriter(io_ops.WriterBase):
 
-    def __init__(self, name=None):
-        ww = gen_user_ops.sam_writer(name=name)
+    def __init__(self, name=None, out_file=None):
+        if out_file is None:
+            out_file = name + '_out.txt'
+        ww = gen_user_ops.sam_writer_test(name=name, out_file=out_file)
         super(SamWriter, self).__init__(ww)
 
 ops.NoGradient("SamWriter")
 ops.RegisterShape("SamWriter")(common_shapes.scalar_shape)
 
-class SamWriterTest(io_ops.WriterBase):
+def GenomeIndex(filePath):
 
-    def __init__(self, name=None, out_file=None):
-        if out_file is None:
-            out_file = name + '_out.txt'
-        ww = gen_user_ops.sam_writer_test(name=name, out_file=out_file)
-        super(SamWriterTest, self).__init__(ww)
+    return gen_user_ops.genome_index(genome_location=filePath);
 
-ops.NoGradient("SamWriterTest")
-ops.RegisterShape("SamWriterTest")(common_shapes.scalar_shape)
+ops.NoGradient("GenomeIndex")
+
+def AlignerOptions(cmdLine):
+
+    return gen_user_ops.aligner_options(cmd_line=cmdLine);
+
+ops.NoGradient("AlignerOptions")
