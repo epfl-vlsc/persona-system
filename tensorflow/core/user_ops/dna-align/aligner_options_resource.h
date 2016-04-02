@@ -52,14 +52,15 @@ class AlignerOptionsResource : public ResourceBase {
             // a '2' is here because the first two cmd line options
             // are the program and single or paired. The SNAP 'parse'
             // function skips these. 
-            bool success = value_->parse(argv, argc, 2, &done);
+            int start = 2;
+            bool success = value_->parse((const char**)argv, argc, start, &done);
             if (!success)
                 LOG(INFO) << "ERROR: AlignerOptionsResource::parse failed!";
             delete [] argv;
         }
 
         string DebugString() override {
-            return "SNAP Genome";
+            return "SNAP Aligneroptions";
         }
 
     private:

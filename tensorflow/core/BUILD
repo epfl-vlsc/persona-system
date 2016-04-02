@@ -317,7 +317,9 @@ cc_library(
     # TODO  do something about this hacky stuff
     deps = [":framework", "//tensorflow/core/kernels:reader_base",
             "//tensorflow/core/user_ops/dna-align:snap_protos_cc",
-            "//tensorflow/core/user_ops/dna-align:sam_writer_test",],
+            "//tensorflow/core/user_ops/dna-align:sam_writer",
+            "//tensorflow/core/user_ops/dna-align:snap_align",
+           ],
     alwayslink = 1,
 )
 

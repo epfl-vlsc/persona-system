@@ -17,16 +17,16 @@ namespace snap_wrapper {
         // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
         return GenomeIndex::loadFromDirectory(const_cast<char*>(path), false, false);
     }
-
+    
     BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options) {
         return new BaseAligner(
             index,
-            options->maxHitsPerSeed,
-            options->maxEditDistance,
-            options->maxReadLength,
-            options->seedsPerRead,
-            options->seedsCoverage,
-            options->minimumSeedMatchesPerLocation,
+            options->maxHits,
+            options->maxDist,
+            MAX_READ_LENGTH,
+            options->numSeedsFromCommandLine,
+            options->seedCoverage,
+            options->minWeightToCheck,
             options->extraSearchDepth,
             false, false, false, // stuff that would decrease performance without impacting quality
             options->maxSecondaryAlignmentsPerContig,
@@ -36,8 +36,13 @@ namespace snap_wrapper {
         );
     }
 
-    tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read, std::vector<SingleAlignmentResult>* results) {
-        if (!options->passesReadFilter(read)) {
+    bool passesReadFilter(Read* read, AlignerOptions* options) {
+      return read->getDataLength() >= options->minReadLength && read->countOfNs() <= options->maxDist;
+    }
+
+    tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read, 
+        std::vector<SingleAlignmentResult>* results, int num_secondary_alignments) {
+        if (!passesReadFilter(read, options)) {
             SingleAlignmentResult result;
             result.status = AlignmentResult::NotFound;
             result.location = InvalidGenomeLocation;
@@ -48,25 +53,25 @@ namespace snap_wrapper {
         }
 
         SingleAlignmentResult primaryResult;
-        SingleAlignmentResult* secondaryResults = new SingleAlignmentResult[options->maxSecondaryAlignmentsPerRead];
+        SingleAlignmentResult* secondaryResults = new SingleAlignmentResult[num_secondary_alignments];
         int secondaryResultsCount;
 
         aligner->AlignRead(
             read,
             &primaryResult,
-            options->maxSecondaryAlignmentEditDistance,
-            options->maxSecondaryAlignmentsPerRead,
+            options->maxSecondaryAlignmentAdditionalEditDistance,
+            num_secondary_alignments,
             &secondaryResultsCount,
-            options->maxSecondaryAlignmentsPerRead,
+            num_secondary_alignments,
             secondaryResults
         );
-
-        if (options->passesAlignmentFilter(primaryResult.status, true)) {
+        
+        if (options->passFilter(read, primaryResult.status, false, false)) {
             results->push_back(primaryResult);
         }
 
         for (int i = 0; i < secondaryResultsCount; ++i) {
-            if (options->passesAlignmentFilter(secondaryResults[i].status, false)) {
+            if (options->passFilter(read, secondaryResults[i].status, false, true)) {
                 results->push_back(secondaryResults[i]);
             }
         }

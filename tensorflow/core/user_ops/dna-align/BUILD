@@ -29,10 +29,10 @@ cc_library(
 )
 
 cc_library(
-    name = "snap_align_lib",
+    name = "snap_align",
     hdrs = ["SnapAlignerWrapper.h"],
     includes = ["."],
-    srcs = glob(["*.cc"]),
+    srcs = glob(["*.cc"], exclude = ["sam_writer_op.cc", "sam_writer.cc"],),
     copts = tf_copts(),
     #linkopts = [
         #"-Wl,-Bsymbolic",
@@ -48,8 +48,9 @@ cc_library(
 )
 
 cc_library(
-    name = "sam_writer_test",
-    srcs = ["sam_writer_test_op.cc"],
+    name = "sam_writer",
+    srcs = ["sam_writer_op.cc"],
+    includes = ["."],
     copts = tf_copts(),
     linkstatic = 1,
     visibility = ["//visibility:public"],
@@ -57,15 +58,4 @@ cc_library(
             ":snap_protos_cc", ":snap_lib"],
     alwayslink = 1,
 )
-#cc_binary(
-#    name = "dna_align.so",
-#    includes = ["snap/SNAPLib"],
-#    srcs = glob(["*.cc"]),
-#	#copts = ["-w"],
-#    linkopts = [
-#        "-Wl,-Bsymbolic",
-#        "-lm",
-#    ],
-#    linkshared = 1,
-#    linkstatic = 1,
-#)
+

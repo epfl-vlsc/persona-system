@@ -80,7 +80,7 @@ void WriterBase::Write(const string* value,
 
   if (!work_in_progress()) {
     ++work_started_;
-    Status status = OnWorkStartedLocked();
+    Status status = OnWorkStartedLocked(context);
     if (!status.ok()) {
       context->SetStatus(status);
       --work_started_;

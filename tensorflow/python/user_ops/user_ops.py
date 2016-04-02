@@ -57,12 +57,12 @@ def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
           "Shape of a default must be a length-0 or length-1 vector.")
   return [input_shape] * len(op.outputs)
 
-class SamWriter(io_ops.WriterBase):
+class SAMWriter(io_ops.WriterBase):
 
     def __init__(self, name=None, out_file=None):
         if out_file is None:
             out_file = name + '_out.txt'
-        ww = gen_user_ops.sam_writer_test(name=name, out_file=out_file)
+        ww = gen_user_ops.sam_writer(name=name, out_file=out_file)
         super(SamWriter, self).__init__(ww)
 
 ops.NoGradient("SamWriter")
@@ -79,3 +79,9 @@ def AlignerOptions(cmdLine):
     return gen_user_ops.aligner_options(cmd_line=cmdLine);
 
 ops.NoGradient("AlignerOptions")
+
+def SnapAlign(genome, options, read):
+
+    return gen_user_ops.snap_align(genome_handle=genome, options_handle=options, read=read)
+
+ops.NoGradient("SnapAlign")

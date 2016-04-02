@@ -17,12 +17,15 @@ limitations under the License.
 #include <memory>
 #include <vector>
 #include "tensorflow/core/framework/writer_op_kernel.h"
+#include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/kernels/writer_base.h"
 #include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Read.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignerOptions.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
 #include "tensorflow/core/user_ops/dna-align/aligner_options_resource.h"
+#include "tensorflow/core/user_ops/dna-align/genome_index_resource.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/lib/strings/strcat.h"
@@ -54,21 +57,35 @@ out_file: The file to write results to.
 class SamWriter : public WriterBase {
  public:
   
-  SamWriter(const string& node_name, Env* env, const string& work,
-          GenomeIndexResource* index, AlignerOptionsResource* options)
+  SamWriter(const string& node_name, Env* env, const string& work)
       : WriterBase(strings::StrCat("SamWriter'", node_name, "'"), work),
-        env_(env),
-        genome_index_(index)
-    {
-      // hack -- copy aligner options so we can assign a different filename
-      // for each writer. 
-      aligner_options_ = new AlignerOptions();
-      *aligner_options_ = *(options->value()); 
-      aligner_options_->outputFile->fileName = current_work().c_str();
-    }
+        env_(env) {}
 
-  Status OnWorkStartedLocked() override {
+  ~SamWriter() {
+    delete aligner_options_;
+  }
+
+  Status OnWorkStartedLocked(OpKernelContext* context) override {
     record_number_ = 0;
+    if (!genome_index_) {
+      AlignerOptionsResource* options;
+      Status status = GetResourceFromContext(context, "options_handle", &options);
+      if (!TF_PREDICT_TRUE(status.ok())) {
+        context->CtxFailure(status);
+        return status;
+      }
+      status = GetResourceFromContext(context, "genome_handle", &genome_index_);
+      if (!TF_PREDICT_TRUE(status.ok())) {
+        context->CtxFailure(status);
+        return status;
+      }
+      // hack -- copy aligner options so we can assign a different filename
+      // for each writer. Alternative is changing SNAP which we prefer to 
+      // avoid
+      aligner_options_ = new AlignerOptions("Copy of the options!");
+      *aligner_options_ = *(options->value()); 
+      aligner_options_->outputFile.fileName = current_work().c_str();
+    }
     //TF_RETURN_IF_ERROR(env_->NewWritableFile(current_work(), &out_file_));
     //LOG(INFO) << "Opening file " << current_work(); 
 
@@ -76,9 +93,9 @@ class SamWriter : public WriterBase {
     reader_context_.clipping = aligner_options_->clipping;
     reader_context_.defaultReadGroup = aligner_options_->defaultReadGroup;
     reader_context_.genome = genome_index_->get_genome();
-    reader_context_.ignoreSecondaryAlignments = aligner_options->ignoreSecondaryAlignments;
-    reader_context_.ignoreSupplementaryAlignments = aligner_options->ignoreSecondaryAlignments;
-    DataSupplier::ExpansionFactor = options->expansionFactor;
+    reader_context_.ignoreSecondaryAlignments = aligner_options_->ignoreSecondaryAlignments;
+    reader_context_.ignoreSupplementaryAlignments = aligner_options_->ignoreSecondaryAlignments;
+    DataSupplier::ExpansionFactor = aligner_options_->expansionFactor;
 
     const FileFormat* format;
     format = FileFormat::SAM[false];
@@ -87,15 +104,16 @@ class SamWriter : public WriterBase {
     writer_supplier_ = format->getWriterSupplier(aligner_options_, reader_context_.genome);
     read_writer_ = writer_supplier_->getWriter();
     char argv[128] = "TFBioflow";
-    read_writer->writeHeader(reader_context_, aligner_options_->sortOutput, 1, &argv, 
-            "version", aligner_options->rgLineContents, aligner_options->outputFile.omitSQLines);
+    read_writer_->writeHeader(reader_context_, aligner_options_->sortOutput, 1, (const char**)&argv, 
+            "version", aligner_options_->rgLineContents, aligner_options_->outputFile.omitSQLines);
     
     return Status::OK();
   }
 
   Status OnWorkFinishedLocked() override {
     //out_file_->Close();
-    readWriter->close();
+    read_writer_->close();
+    writer_supplier_->close();
     return Status::OK();
   }
 
@@ -147,16 +165,17 @@ class SamWriter : public WriterBase {
     }
        
     record_number_++;
-    read_writer_->writeReads(reader_context_, &snap_read, snap_results, results_proto.results_size(), results_proto.firstIsPrimary()); 
+    read_writer_->writeReads(reader_context_, &snap_read, snap_results, alignment.results_size(), alignment.firstisprimary()); 
     delete [] snap_results;
+    return Status::OK();
   }
 
  private:
   //WritableFile* out_file_ = nullptr;
   Env* const env_;
   int64 record_number_;
-  GenomeIndexResource* genome_index_;
-  AlignerOptions* aligner_options_;
+  GenomeIndexResource* genome_index_ = nullptr;
+  AlignerOptions* aligner_options_ = nullptr;
   ReaderContext reader_context_;
   ReadWriterSupplier *writer_supplier_;
   ReadWriter* read_writer_;
@@ -168,22 +187,14 @@ class SamWriterOp : public WriterOpKernel {
   explicit SamWriterOp(OpKernelConstruction* context)
       : WriterOpKernel(context) {
           
-    OP_REQUIRES_OK(context,
-                   GetResourceFromContext(context, "options_handle", &aligner_options_));
-    OP_REQUIRES_OK(context,
-                   GetResourceFromContext(context, "genome_handle", &genome_));
     string out_file;
     OP_REQUIRES_OK(context,
                    context->GetAttr("out_file", &out_file));
     Env* env = context->env();
-    SetWriterFactory([this, out_file, env, genome_index_, aligner_options_]() {
-      return new SamWriter(name(), env, out_file, genome_index_, aligner_options_);
+    SetWriterFactory([this, out_file, env]() {
+      return new SamWriter(name(), env, out_file);
     });
   }
-
- private:
-    GenomeIndexResource* genome_index_;
-    AlignerOptionsResource* aligner_options_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("SamWriter").Device(DEVICE_CPU),

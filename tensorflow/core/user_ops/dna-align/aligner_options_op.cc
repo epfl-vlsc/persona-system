@@ -32,7 +32,7 @@ class AlignerOptionsOp : public OpKernel {
   void Compute(OpKernelContext* ctx) override {
     mutex_lock l(mu_);
     if (!options_handle_set_) {
-      OP_REQUIRES_OK(ctx, SetOptionsHandle(ctx));
+      OP_REQUIRES_OK(ctx, SetOptionsHandle(ctx, cmd_line_));
     }
     ctx->set_output_ref(0, &mu_, options_handle_.AccessTensor(ctx));
   }
@@ -52,11 +52,11 @@ class AlignerOptionsOp : public OpKernel {
   ContainerInfo cinfo_;
 
  private:
-  Status SetOptionsHandle(OpKernelContext* ctx) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+  Status SetOptionsHandle(OpKernelContext* ctx, string cmd_line) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
     AlignerOptionsResource* options;
 
-    auto creator = [this, cmd_line_](AlignerOptionsResource** options) {
+    auto creator = [this, cmd_line](AlignerOptionsResource** options) {
         *options = new AlignerOptionsResource();
         (*options)->init(cmd_line_); 
         return Status::OK();

@@ -30,15 +30,22 @@ namespace tensorflow {
             GenomeIndexResource* index_resource;
             AlignerOptionsResource* options_resource;
 
-            OP_REQUIRES_OK(context,
-                           GetResourceFromContext(context, "options_handle", &options_resource));
-            OP_REQUIRES_OK(context,
-                           GetResourceFromContext(context, "genome_handle", &index_resource));
+            OP_REQUIRES_OK(ctx,
+                           GetResourceFromContext(ctx, "options_handle", &options_resource));
+            OP_REQUIRES_OK(ctx,
+                           GetResourceFromContext(ctx, "genome_handle", &index_resource));
 
             if (base_aligner_ == nullptr) {
                 LOG(INFO) << "SNAP Kernel creating BaseAligner";
         
-                base_aligner_ = snap_wrapper::createAligner(index_resource->value(), options_resource->value());
+                base_aligner_ = snap_wrapper::createAligner(index_resource->get_index(), options_resource->value());
+                AlignerOptions* options = options_resource->value();
+                if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+                  num_secondary_alignments_ = 0;
+                } else {
+                  num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine, 
+                        options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource->get_index()->getSeedLength());
+                }
             }
 
 
@@ -80,7 +87,8 @@ namespace tensorflow {
             alignment_results.reserve(num_reads);
 
             for (size_t i = 0; i < input_reads.size(); i++) {
-                Status status = snap_wrapper::alignSingle(base_aligner_, options_resouce->value(), input_reads[i], &alignment_results[i]);
+                Status status = snap_wrapper::alignSingle(base_aligner_, options_resource->value(), input_reads[i],
+                    &alignment_results[i], num_secondary_alignments_);
 
                 // TODO(solal): Smart pointers would probably make this unnecessary, but I'm not knowledgeable enough in C++ to do that
                 delete input_reads[i];
@@ -92,7 +100,7 @@ namespace tensorflow {
 
             // shape of output tensor is [num_reads] 
             Tensor* out = nullptr;
-            OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({num_reads}), &out));
+            OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({(int64)num_reads}), &out));
 
             auto out_t = out->flat<string>();
             for (size_t i = 0; i < num_reads; i++) {
@@ -100,7 +108,7 @@ namespace tensorflow {
                 SnapProto::AlignmentDef* alignment = &alignments[i];
 
                 for (auto result : alignment_results[i]) {
-                    SnapProto::SingleResult* result_proto = alignment.add_results();
+                    SnapProto::SingleResultDef* result_proto = alignment->add_results();
                     populateSingleResultProto_(result_proto, result);
                 }
 
@@ -109,8 +117,8 @@ namespace tensorflow {
         }
 
     private:
-        void populateSingleResultProto_(SnapProto::SingleResult* result_proto, SingleAlignmentResult result) {
-            result_proto->set_result((SnapProto::SingleResult::AlignmentResult)result.status);
+        void populateSingleResultProto_(SnapProto::SingleResultDef* result_proto, SingleAlignmentResult result) {
+            result_proto->set_result((SnapProto::SingleResultDef::AlignmentResult)result.status);
             result_proto->set_genomelocation(GenomeLocationAsInt64(result.location));
             result_proto->set_score(result.score);
             result_proto->set_mapq(result.mapq);
@@ -118,6 +126,7 @@ namespace tensorflow {
         }
 
         BaseAligner* base_aligner_ = nullptr;
+        int num_secondary_alignments_ = 0;
         
     };
 

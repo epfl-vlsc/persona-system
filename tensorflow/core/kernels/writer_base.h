@@ -45,7 +45,7 @@ class WriterBase : public WriterInterface {
   virtual Status WriteLocked(const string& value) = 0;
 
   // Called when work starts / finishes.
-  virtual Status OnWorkStartedLocked() = 0; 
+  virtual Status OnWorkStartedLocked(OpKernelContext* context) = 0; 
   virtual Status OnWorkFinishedLocked()  = 0;
 
   // do we still need to reset writer kernels?

@@ -31,11 +31,6 @@ class GenomeIndexResource : public ResourceBase {
         GenomeIndex* value_;
 
         TF_DISALLOW_COPY_AND_ASSIGN(GenomeIndexResource);
-
-        string DebugString() override {
-            return "SNAP GenomeIndex";
-        }
-
 };
 
 } // namespace tensorflow
