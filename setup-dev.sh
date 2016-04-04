@@ -2,7 +2,9 @@
 
 # unofficial "bash strict mode"
 # http://redsymbol.net/articles/unofficial-bash-strict-mode/
-set -euo pipefail
+# Commented out 'u' because the `activate` script has some unassignment issues
+# set -u
+set -eo pipefail
 IFS=$'\n\t'
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -38,8 +40,8 @@ install_dev_build() {
     pushd .
     cd $build_virtualenv_dir
 
-    ln -s ../bazel-bin/tensorflow/tools/pip_package/build_pip_package.runfiles/* .
-    ln -s ../tensorflow/tools/pip_package/* .
+    ln -sf ../bazel-bin/tensorflow/tools/pip_package/build_pip_package.runfiles/* .
+    ln -sf ../tensorflow/tools/pip_package/* .
     python setup.py develop
 
     popd
