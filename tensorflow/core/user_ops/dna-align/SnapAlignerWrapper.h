@@ -8,6 +8,7 @@
 #include "Read.h"
 
 namespace snap_wrapper {
+    tensorflow::Status init();
 
     GenomeIndex* loadIndex(const char* path);
 

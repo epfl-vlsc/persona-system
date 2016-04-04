@@ -7,11 +7,17 @@
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "SingleAligner.h"
+#include "SeedSequencer.h"
 #include "tensorflow/core/lib/core/status.h"
 
 #include "SnapAlignerWrapper.h"
 
 namespace snap_wrapper {
+    tensorflow::Status init() {
+        InitializeSeedSequencers();
+        return tensorflow::Status::OK();
+    }
+
     GenomeIndex* loadIndex(const char* path) {
         // 1st argument is non-const for no reason, it's not actually modified
         // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
@@ -53,19 +59,22 @@ namespace snap_wrapper {
         }
 
         SingleAlignmentResult primaryResult;
-        SingleAlignmentResult* secondaryResults = new SingleAlignmentResult[num_secondary_alignments];
+        SingleAlignmentResult* secondaryResults = nullptr;
+        if (num_secondary_alignments != 0) {
+            secondaryResults = new SingleAlignmentResult[num_secondary_alignments];
+        }
         int secondaryResultsCount;
 
         aligner->AlignRead(
             read,
             &primaryResult,
             options->maxSecondaryAlignmentAdditionalEditDistance,
-            num_secondary_alignments,
+            num_secondary_alignments * sizeof(SingleAlignmentResult),
             &secondaryResultsCount,
             num_secondary_alignments,
             secondaryResults
         );
-        
+
         if (options->passFilter(read, primaryResult.status, false, false)) {
             results->push_back(primaryResult);
         }
