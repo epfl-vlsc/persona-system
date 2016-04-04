@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# unofficial "bash strict mode"
+# http://redsymbol.net/articles/unofficial-bash-strict-mode/
+set -euo pipefail
+IFS=$'\n\t'
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 build_virtualenv_dir="${DIR}/_python_build"
@@ -39,6 +44,8 @@ install_dev_build() {
 
     popd
 }
+
+echo "Make sure you have run the ./configure script in the project root!"
 
 build_tensorflow
 prep_dirs
