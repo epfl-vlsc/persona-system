@@ -59,10 +59,10 @@ def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
 
 class SAMWriter(io_ops.WriterBase):
 
-    def __init__(self, name=None, out_file=None):
+    def __init__(self, genome, options, name=None, out_file=None):
         if out_file is None:
             out_file = name + '_out.txt'
-        ww = gen_user_ops.sam_writer(name=name, out_file=out_file)
+        ww = gen_user_ops.sam_writer(name=name, out_file=out_file, genome_handle=genome, options_handle=options)
         super(SamWriter, self).__init__(ww)
 
 ops.NoGradient("SamWriter")
