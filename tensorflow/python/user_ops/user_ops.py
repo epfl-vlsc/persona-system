@@ -63,10 +63,10 @@ class SAMWriter(io_ops.WriterBase):
         if out_file is None:
             out_file = name + '_out.txt'
         ww = gen_user_ops.sam_writer(name=name, out_file=out_file, genome_handle=genome, options_handle=options)
-        super(SamWriter, self).__init__(ww)
+        super(SAMWriter, self).__init__(ww)
 
-ops.NoGradient("SamWriter")
-ops.RegisterShape("SamWriter")(common_shapes.scalar_shape)
+ops.NoGradient("SAMWriter")
+ops.RegisterShape("SAMWriter")(common_shapes.scalar_shape)
 
 def GenomeIndex(filePath):
 

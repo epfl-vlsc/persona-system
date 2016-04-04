@@ -12,8 +12,8 @@
 #include <ctype.h>
 
 namespace tensorflow {
-  
-class AlignerOptionsResource : public ResourceBase {
+
+    class AlignerOptionsResource : public ResourceBase {
     public:
         explicit AlignerOptionsResource() {}
 
@@ -24,11 +24,11 @@ class AlignerOptionsResource : public ResourceBase {
             // may need to trim cmdLine?
             strcpy(cmd_line_, cmdLine.c_str());
             char* pChar = cmd_line_;
-            int argc = 0;
+            int argc = 1; // we assume there'll always be something
             while (*pChar) {
                 if (isspace(*pChar)) {
                     argc++;
-                    while(isspace(*pChar)) {
+                    while (isspace(*pChar)) {
                         *pChar = '\0';
                         pChar++; // multi-space
                     }
@@ -37,7 +37,6 @@ class AlignerOptionsResource : public ResourceBase {
             }
             char** argv = new char*[argc];
             pChar = cmd_line_;
-            pChar++;
             argv[0] = cmd_line_;
             int count = 1;
             while (count < argc) {
@@ -48,15 +47,19 @@ class AlignerOptionsResource : public ResourceBase {
                 }
                 pChar++;
             }
-            bool done; 
-            // a '2' is here because the first two cmd line options
-            // are the program and single or paired. The SNAP 'parse'
-            // function skips these. 
-            int start = 2;
-            bool success = value_->parse((const char**)argv, argc, start, &done);
-            if (!success)
-                LOG(INFO) << "ERROR: AlignerOptionsResource::parse failed!";
-            delete [] argv;
+
+            bool ignored = false;
+            // SNAP's options parsing is weird, it only parses 1 arg at a time
+            for (int n = 0; n < argc; ++n) {
+                bool success = value_->parse((const char**)argv, argc, n, &ignored);
+
+                if (!success) {
+                    LOG(INFO) << "ERROR: AlignerOptionsResource::parse failed at index " << n;
+                    break;
+                }
+            }
+
+            delete[] argv;
         }
 
         string DebugString() override {
@@ -67,7 +70,7 @@ class AlignerOptionsResource : public ResourceBase {
         AlignerOptions* value_;
         char cmd_line_[512]; // safe enough length?
 
-};
+    };
 
 } // namespace tensorflow
 
