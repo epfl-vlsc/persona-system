@@ -47,7 +47,7 @@ namespace snap_wrapper {
     }
 
     tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read, 
-        std::vector<SingleAlignmentResult>* results, int num_secondary_alignments) {
+        std::vector<SingleAlignmentResult>* results, int num_secondary_alignments, bool& first_is_primary) {
         if (!passesReadFilter(read, options)) {
             SingleAlignmentResult result;
             result.status = AlignmentResult::NotFound;
@@ -82,6 +82,9 @@ namespace snap_wrapper {
         if (options->passFilter(read, primaryResult.status, false, false)) {
             LOG(INFO) << "pushing back primary result";
             results->push_back(primaryResult);
+            first_is_primary = true;
+        } else {
+            first_is_primary = false;
         }
 
         for (int i = 0; i < secondaryResultsCount; ++i) {

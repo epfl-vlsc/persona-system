@@ -38,6 +38,8 @@ REGISTER_OP("SamWriter")
     .Input("genome_handle: Ref(string)")
     .Input("options_handle: Ref(string)")
     .Output("writer_handle: Ref(string)")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
 /*    .Attr("chromosome_padding: int")
     .Attr("genome_container: string = ''")
     .Attr("genome_shared_name: string = ''")
@@ -49,8 +51,6 @@ REGISTER_OP("SamWriter")
 A writer that writes aligned reads to stdout to test.
 
 writer_handle: The handle to reference the Writer.
-container: If non-empty, this writer is placed in the given container.
-        Otherwise, a default container is used.
 out_file: The file to write results to.
 )doc");
 
@@ -162,9 +162,12 @@ class SamWriter : public WriterBase {
         snap_results[j].location = GenomeLocation(single_result.genomelocation());
         snap_results[j].direction = (Direction)single_result.direction();
         snap_results[j].mapq = single_result.mapq();
+        LOG(INFO) << " result: location " << snap_results[j].location <<
+          " direction: " << snap_results[j].direction << " score " << snap_results[j].score;
     }
        
     record_number_++;
+    LOG(INFO) << "Writing read result";
     read_writer_->writeReads(reader_context_, &snap_read, snap_results, alignment.results_size(), alignment.firstisprimary()); 
     delete [] snap_results;
     return Status::OK();

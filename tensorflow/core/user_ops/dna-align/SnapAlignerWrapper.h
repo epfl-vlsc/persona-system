@@ -15,5 +15,5 @@ namespace snap_wrapper {
     BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options);
 
     tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read, 
-        std::vector<SingleAlignmentResult>* results, int num_secondary_alignments);
+        std::vector<SingleAlignmentResult>* results, int num_secondary_alignments, bool& first_is_primary);
 }

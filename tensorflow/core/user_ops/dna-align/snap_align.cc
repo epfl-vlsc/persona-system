@@ -130,9 +130,12 @@ namespace tensorflow {
                 alignment_results.push_back(res);
             }
 
+            bool first_is_primary;
             for (size_t i = 0; i < input_reads.size(); i++) {
                 Status status = snap_wrapper::alignSingle(base_aligner_, options_resource->value(), input_reads[i],
-                    &alignment_results[i], num_secondary_alignments_);
+                    &alignment_results[i], num_secondary_alignments_, first_is_primary);
+
+                alignments[i].set_firstisprimary(first_is_primary);
 
                 LOG(INFO) << "11";
 
