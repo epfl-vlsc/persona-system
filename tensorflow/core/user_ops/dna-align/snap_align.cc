@@ -91,7 +91,7 @@ namespace tensorflow {
             alignments.reserve(num_reads);
             input_reads.reserve(num_reads);
 
-            LOG(INFO) << "8";
+            LOG(INFO) << "8:  num_reads is " << num_reads;
 
             for (size_t i = 0; i < num_reads; i++) {
                 SnapProto::AlignmentDef alignment;
@@ -124,6 +124,12 @@ namespace tensorflow {
             vector<vector<SingleAlignmentResult>> alignment_results;
             alignment_results.reserve(num_reads);
 
+            for (size_t i = 0; i < num_reads; i++) {
+                // push back empty result vector for each read
+                vector<SingleAlignmentResult> res;
+                alignment_results.push_back(res);
+            }
+
             for (size_t i = 0; i < input_reads.size(); i++) {
                 Status status = snap_wrapper::alignSingle(base_aligner_, options_resource->value(), input_reads[i],
                     &alignment_results[i], num_secondary_alignments_);
@@ -149,6 +155,7 @@ namespace tensorflow {
             LOG(INFO) << "14";
 
             auto out_t = out->flat<string>();
+            LOG(INFO) << "alignment_results.size is " << alignment_results.size();
             for (size_t i = 0; i < num_reads; i++) {
                 LOG(INFO) << "15_" << i;
 

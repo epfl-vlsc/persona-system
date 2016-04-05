@@ -75,12 +75,18 @@ namespace snap_wrapper {
             secondaryResults
         );
 
+        LOG(INFO) << "Primary result: location " << primaryResult.location <<
+          " direction: " << primaryResult.direction << " score " << primaryResult.score;
+        LOG(INFO) << "secondaryResultsCount is " << secondaryResultsCount;
+
         if (options->passFilter(read, primaryResult.status, false, false)) {
+            LOG(INFO) << "pushing back primary result";
             results->push_back(primaryResult);
         }
 
         for (int i = 0; i < secondaryResultsCount; ++i) {
             if (options->passFilter(read, secondaryResults[i].status, false, true)) {
+                LOG(INFO) << "pushing back secondary result";
                 results->push_back(secondaryResults[i]);
             }
         }
