@@ -28,6 +28,7 @@ prep_virtualenv() {
 
 build_tensorflow() {
     echo "Building using $max_build_threads threads"
+    git submodule update --init # in case you forget, or switched branches
     bazel build -j $max_build_threads -c opt //tensorflow/tools/pip_package:build_pip_package
 }
 
