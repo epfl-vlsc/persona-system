@@ -35,8 +35,6 @@ limitations under the License.
 namespace tensorflow {
 
 REGISTER_OP("SamWriter")
-    .Input("genome_handle: Ref(string)")
-    .Input("options_handle: Ref(string)")
     .Output("writer_handle: Ref(string)")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
@@ -67,28 +65,73 @@ class SamWriter : public WriterBase {
 
   Status OnWorkStartedLocked(OpKernelContext* context) override {
     record_number_ = 0;
+    LOG(INFO) << "OnWorkStartedLocked Called!!!";
     if (!genome_index_) {
+
+      string options_container;
+      string genome_container;
+      string options_shared_name;
+      string genome_shared_name;
+      
+      OpMutableInputList meta_list;
+      Status status = context->mutable_input_list("meta_handles", &meta_list);
+      if (!status.ok()) {
+        LOG(INFO) << "Failed to get meta handles! " << status.ToString();
+      } else {
+        LOG(INFO) << "Got handles!!";
+      }
+      Tensor options_handle = meta_list.at(0, false);
+      if (options_handle.NumElements() != 2) {
+        return errors::InvalidArgument(
+            "Metadata handle for SamWriter must have 2 elements ",
+            options_handle.shape().DebugString());
+      }
+      Tensor genome_handle = meta_list.at(1, false);
+      if (genome_handle.NumElements() != 2) {
+        return errors::InvalidArgument(
+            "Metadata genome handle for SamWriter must have 2 elements ",
+            genome_handle.shape().DebugString());
+      }
+      options_container = options_handle.flat<string>()(0);
+      options_shared_name = options_handle.flat<string>()(1);
+      genome_container = genome_handle.flat<string>()(0);
+      genome_shared_name = genome_handle.flat<string>()(1);
+      LOG(INFO) << options_container << " | " << options_shared_name
+        << " | " << genome_container << " | " << genome_shared_name;
+
       AlignerOptionsResource* options;
-      Status status = GetResourceFromContext(context, "options_handle", &options);
+      status = context->resource_manager()->Lookup(options_container, 
+          options_shared_name, &options);
       if (!TF_PREDICT_TRUE(status.ok())) {
+        LOG(INFO) << "failed to get aligner options: " 
+          << status.ToString();
         context->CtxFailure(status);
         return status;
       }
-      status = GetResourceFromContext(context, "genome_handle", &genome_index_);
+      status = context->resource_manager()->Lookup(genome_container, 
+          genome_shared_name, &genome_index_);
       if (!TF_PREDICT_TRUE(status.ok())) {
+        LOG(INFO) << "failed to get genome: " << status.ToString();
         context->CtxFailure(status);
         return status;
       }
       // hack -- copy aligner options so we can assign a different filename
       // for each writer. Alternative is changing SNAP which we prefer to 
       // avoid
+      LOG(INFO) << "Copying aligneroptions!";
       aligner_options_ = new AlignerOptions("Copy of the options!");
       *aligner_options_ = *(options->value()); 
       aligner_options_->outputFile.fileName = current_work().c_str();
+      options->Unref();
+
+      argv_ = new char*();
+      argv_[0] = new char[128]();
+      strcpy(argv_[0], "TFBioFLow!");
     }
     //TF_RETURN_IF_ERROR(env_->NewWritableFile(current_work(), &out_file_));
     //LOG(INFO) << "Opening file " << current_work(); 
 
+    LOG(INFO) << "setting up reader context n' stuff";
     memset(&reader_context_, 0, sizeof(reader_context_));
     reader_context_.clipping = aligner_options_->clipping;
     reader_context_.defaultReadGroup = aligner_options_->defaultReadGroup;
@@ -103,8 +146,7 @@ class SamWriter : public WriterBase {
 
     writer_supplier_ = format->getWriterSupplier(aligner_options_, reader_context_.genome);
     read_writer_ = writer_supplier_->getWriter();
-    char argv[128] = "TFBioflow";
-    read_writer_->writeHeader(reader_context_, aligner_options_->sortOutput, 1, (const char**)&argv, 
+    read_writer_->writeHeader(reader_context_, aligner_options_->sortOutput, 1, (const char**)argv_, 
             "version", aligner_options_->rgLineContents, aligner_options_->outputFile.omitSQLines);
     
     return Status::OK();
@@ -120,6 +162,8 @@ class SamWriter : public WriterBase {
   Status WriteLocked(const string& value) override {
 
     //LOG(INFO) << "Reading from file " << current_work() << " !\n";
+    if (!genome_index_)
+      LOG(INFO) << "WTF genome index is null!";
 
     // `value` is a serialized AlignmentDef protobuf message
     // get submessage ReadDef, write each SingleResult to file
@@ -182,6 +226,7 @@ class SamWriter : public WriterBase {
   ReaderContext reader_context_;
   ReadWriterSupplier *writer_supplier_;
   ReadWriter* read_writer_;
+  char** argv_;
 
 };
 

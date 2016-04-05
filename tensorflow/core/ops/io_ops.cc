@@ -249,13 +249,18 @@ shared_name: If non-empty, this reader is named in the given bucket
 // Ops that operate on Writers  ------------------------------------------------
 
 REGISTER_OP("WriterWrite")
+    .Attr("N: int")
     .Input("writer_handle: Ref(string)")
     .Input("value: string")
+    .Input("meta_handles: Ref(N * string)")
     .Doc(R"doc(
 Write value to file.
 
 writer_handle: Handle to a Reader.
+meta_handles: handles to shared resources that the writer
+interface may need to access.
 value: A scalar.
+N: number of metadata handles.
 )doc");
 
 REGISTER_OP("WriterDone")

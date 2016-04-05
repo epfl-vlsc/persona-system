@@ -292,7 +292,7 @@ class WriterBase(object):
     """Op that implements the writer."""
     return self._writer_ref
 
-  def write(self, value, name=None):
+  def write(self, value, meta, name=None):
     """Instructs the Writer to write a value to file.
 
     Args:
@@ -300,7 +300,7 @@ class WriterBase(object):
       name: A name for the operation (optional).
 
     """
-    return gen_io_ops.writer_write(self._writer_ref, value, name=name)
+    return gen_io_ops.writer_write(self._writer_ref, value, meta, name=name)
 
   def num_records_produced(self, name=None):
     """Returns the number of records this writer has written.
