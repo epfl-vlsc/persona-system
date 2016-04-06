@@ -29,6 +29,7 @@ prep_virtualenv() {
 build_tensorflow() {
     echo "Building using $max_build_threads threads"
     git submodule update --init # in case you forget, or switched branches
+    PYTHON_BIN_PATH=$(which python) TF_NEED_CUDA=0 ./configure
     bazel build -j $max_build_threads -c opt //tensorflow/tools/pip_package:build_pip_package
 }
 
@@ -47,8 +48,6 @@ install_dev_build() {
 
     popd
 }
-
-echo "Make sure you have run the ./configure script in the project root!"
 
 build_tensorflow
 prep_dirs
