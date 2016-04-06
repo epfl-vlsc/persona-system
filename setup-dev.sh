@@ -11,7 +11,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 build_virtualenv_dir="${DIR}/_python_build"
 dev_dir="${DIR}/python_dev"
-max_build_threads=$(bc <<< "scale=0; ($(nproc) * 0.6) / 1" )
+max_build_threads=$(bc <<< "scale=0; ($(nproc) * 0.7) / 1" )
 
 prep_virtualenv() {
     if [[ $OSTYPE == darwin* ]]; then
