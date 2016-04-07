@@ -22,8 +22,11 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/user_ops/dense-format/format.h"
 
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/filter/bzip2.hpp>
+
 namespace tensorflow {
-  
+
 class DenseReader : public ReaderBase {
 public:
   DenseReader(const string& node_name, Env* env)
@@ -55,7 +58,7 @@ class DenseReaderOp : public ReaderOpKernel {
   public:
     explicit DenseReaderOp(OpKernelConstruction* context)
       : ReaderOpKernel(context) {
-    
+
       Env* env = context->env();
       SetReaderFactory([this, env]() {
           return new DenseReader(name(), env);

@@ -15,4 +15,7 @@ cc_library(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:reader_base"],
+    linkopts = [
+             "-lboost_iostreams"
+    ]
 )
