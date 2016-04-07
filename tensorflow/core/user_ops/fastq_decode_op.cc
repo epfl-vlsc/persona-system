@@ -32,7 +32,7 @@ class DecodeFastqOp : public OpKernel {
                    ctx->allocate_output(0, read->shape(), &output_tensor));
 
     // just copy over for now, should share same underlying storage as per tensor.h
-    LOG(INFO) << "read shape is " << read->shape().DebugString();
+    //LOG(INFO) << "read shape is " << read->shape().DebugString() << std::endl;
 
     OP_REQUIRES(ctx, output_tensor->CopyFrom(*read, read->shape()),
                   errors::InvalidArgument("DecodeFastq copy failed, input shape was ", 
