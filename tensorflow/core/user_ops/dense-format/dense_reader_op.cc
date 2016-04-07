@@ -13,6 +13,7 @@
    limitations under the License.
    ==============================================================================*/
 
+#include <vector>
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/framework/reader_op_kernel.h"
 #include "tensorflow/core/kernels/reader_base.h"
@@ -21,6 +22,7 @@
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/user_ops/dense-format/format.h"
+#include "decompress.h"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/bzip2.hpp>
@@ -52,6 +54,12 @@ public:
 
 private:
   Env* const env_;
+  std::vector<char> output_;
+
+  // Some indices for keeping track of our ordinals
+  std::uint64_t ordinal_start_;
+  std::uint64_t current_idx_;
+  std::size_t record_count_;
 };
 
 class DenseReaderOp : public ReaderOpKernel {
