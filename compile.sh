@@ -26,6 +26,6 @@ esac
 process_args "$@"
 
 echo "Building configuration $build_type"
-max_build_threads=$(bc <<< "scale=0; ($(nproc) * 0.6) / 1" )
-bazel build -j $max_build_threads -c $build_type --verbose_failures //tensorflow/tools/pip_package:build_pip_package
+max_build_threads=$(bc <<< "scale=0; ($(nproc) * 0.7) / 1" )
+bazel build -j $max_build_threads -c $build_type //tensorflow/tools/pip_package:build_pip_package
 

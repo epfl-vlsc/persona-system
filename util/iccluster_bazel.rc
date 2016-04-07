@@ -1,0 +1,10 @@
+# Modify this and put it into your home directory
+# It will be read from there
+# You can override it with other options
+# these are just the most useful ones
+
+# this specificies how the bazel instance will start up
+startup --batch --host_jvm_args=-XX:-UseParallelGC --output_user_root=/scratch/sam/.bazel_cache
+
+# you can specify individual commands here
+build --color=yes --verbose_failures
