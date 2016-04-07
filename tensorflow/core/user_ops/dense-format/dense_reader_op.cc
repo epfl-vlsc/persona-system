@@ -20,7 +20,7 @@
 #include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/framework/op.h"
-#include "tensorflow/core/user_ops/format.h"
+#include "tensorflow/core/user_ops/dense-format/format.h"
 
 namespace tensorflow {
   

@@ -14,4 +14,5 @@ cc_library(
     copts = tf_copts(),
     linkstatic = 1,
     visibility = ["//visibility:public"],
+    deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:reader_base"],
 )
