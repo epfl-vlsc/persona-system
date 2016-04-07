@@ -302,6 +302,15 @@ class WriterBase(object):
     """
     return gen_io_ops.writer_write(self._writer_ref, value, meta, name=name)
 
+  def done(self, name=None):
+    """Instructs the Writer to complete writing a file. 
+
+    Args:
+      name: A name for the operation (optional).
+
+    """
+    return gen_io_ops.writer_done(self._writer_ref, name=name)
+
   def num_records_produced(self, name=None):
     """Returns the number of records this writer has written.
 
@@ -666,3 +675,7 @@ def _WriterWriteShape(op):
   """Shape function for the WriterBase.Write op."""
   return []
 
+@ops.RegisterShape("WriterDone")
+def _WriterDoneShape(op):
+  """Shape function for the WriterBase.Done op."""
+  return []

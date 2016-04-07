@@ -154,6 +154,8 @@ from tensorflow.python.training.queue_runner import *
 # For the module level doc.
 from tensorflow.python.training import input as _input
 from tensorflow.python.training.input import *
+from tensorflow.python.training import output as _output
+from tensorflow.python.training.output import *
 
 from tensorflow.python.training.device_setter import replica_device_setter
 from tensorflow.python.training.saver import generate_checkpoint_state_proto

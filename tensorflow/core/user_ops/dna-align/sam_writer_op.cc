@@ -154,7 +154,9 @@ class SamWriter : public WriterBase {
 
   Status OnWorkFinishedLocked() override {
     //out_file_->Close();
+    LOG(INFO) << "Closing read writer";
     read_writer_->close();
+    LOG(INFO) << "Closing writer supplier";
     writer_supplier_->close();
     return Status::OK();
   }
