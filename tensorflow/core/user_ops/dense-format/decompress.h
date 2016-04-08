@@ -27,7 +27,7 @@ Status decompressSegment(const char* segment,
                          const std::size_t segment_size,
                          std::vector<char> &output);
 
-auto decompressBZIP2 = decompressSegment<boost::iostreams::bzip2_decompressor>;
+auto const decompressBZIP2 = &decompressSegment<boost::iostreams::bzip2_decompressor>;
 
 } // namespace tensorflow
 
