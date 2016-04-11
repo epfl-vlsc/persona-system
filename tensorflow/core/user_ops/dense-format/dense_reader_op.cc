@@ -14,6 +14,7 @@
    ==============================================================================*/
 
 #include <vector>
+#include <memory>
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/framework/reader_op_kernel.h"
 #include "tensorflow/core/kernels/reader_base.h"
@@ -38,16 +39,12 @@ public:
 
   Status OnWorkStartedLocked() override {
     using namespace std;
-    namespace bios = boost::iostreams;
 
-    bios::mapped_file_source input_dense_file;
-    input_dense_file.open(current_work());
+    ReadOnlyMemoryRegion *mapped_file = nullptr;
+    TF_RETURN_IF_ERROR(env_->NewReadOnlyMemoryRegionFromFile(current_work(), &mapped_file));
+    std::unique_ptr<ReadOnlyMemoryRegion> close_for_sure(mapped_file);
 
-    if (!input_dense_file.is_open()) {
-      return errors::Unavailable("Cannot create mapped file of '", current_work(), "'");
-    }
-
-    const size_t file_size = input_dense_file.size();
+    const uint64_t file_size = mapped_file->length();
 
     if (file_size < sizeof(format::FileHeader)) {
       return errors::ResourceExhausted("Dense file '", current_work(), "' is not large enough for file header. Actual size ",
@@ -55,9 +52,9 @@ public:
                                        sizeof(format::FileHeader), " bytes");
     }
 
-    const char* file_data = input_dense_file.data();
-    const format::FileHeader *file_header = reinterpret_cast<const format::FileHeader*>(file_data);
-    const char* payload_start = file_data + file_header->segment_start;
+    auto file_data = reinterpret_cast<const char*>(mapped_file->data());
+    auto file_header = reinterpret_cast<const format::FileHeader*>(file_data);
+    auto payload_start = reinterpret_cast<const char*>(file_data + file_header->segment_start);
     const size_t payload_size = file_size - file_header->segment_start;
 
     Status status;
@@ -69,8 +66,30 @@ public:
     TF_RETURN_IF_ERROR(status);
 
     // 2. do math on the file size
-    
-    // 3. read in the rest of the file size, but use boost stuff (memory mapping) instead of slow system calls and unneeded buffering
+    const uint64_t num_records = file_header->last_ordinal - file_header->first_ordinal; // FIXME off-by-1?
+    const auto output_size = output_.size();
+    if (output_size < num_records) {
+      output_.clear();
+      return errors::InvalidArgument("Mapped file '", current_work(), "' is smaller than the stated index entries");
+    }
+
+    auto data = output_.data();
+    auto records = reinterpret_cast<const format::RecordTable*>(data);
+    size_t data_size = 0;
+    for (uint64_t i = 0; i < num_records; ++i) {
+      data_size += records->relative_index[i];
+    }
+
+    const size_t expected_size = output_size - num_records;
+    if (data_size != expected_size) {
+      if (data_size < expected_size) {
+        output_.clear();
+        return errors::OutOfRange("Expected a file size of ", expected_size, " bytes, but only found",
+                                  data_size, " bytes in ", current_work());
+      } else {
+        LOG(WARNING) << current_work() << " has an extra " << data_size - expected_size << " bytes in uncompressed format";
+      }
+    }
 
     return Status::OK();
   }
