@@ -17,7 +17,9 @@
 #define TENSORFLOW_CORE_USER_OPS_FORMAT_H_
 
 #include <cstdint>
+#include "tensorflow/core/lib/core/errors.h"
 
+namespace tensorflow {
 namespace format {
   struct __attribute__((packed)) RecordTable {
     uint8_t relative_index[];
@@ -59,30 +61,29 @@ namespace format {
   struct __attribute__((packed)) BinaryBases {
     BinaryBases() : bases(0) {};
 
-    void setBase(const char base, std::size_t position);
-
-    BaseAlphabet getBase(std::size_t position) const;
-
-    void terminate(std::size_t position);
+    Status getBase(const std::size_t position, char* base) const;
 
     uint64_t bases;
 
     static const std::size_t compression = 21; //sizeof(uint64_t) * 2; // 4 bits = 2 per byte
-  private:
-    void setBaseAtPosition(const BaseAlphabet base, const std::size_t position);
 
   protected:
     static const std::size_t base_width = 3;
   };
 
   struct __attribute__((packed)) BinaryBaseRecord {
+    /*
     static
-      std::size_t
-      intoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<uint64_t> &bases);
+    std::size_t
+    intoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<uint64_t> &bases);
+    */
+    Status
+      toString(const std::size_t record_size_in_bytes, std::string *output) const;
 
     BinaryBases bases[]; // relative length stored in the RecordTable.relative_index
   };
   
 } // namespace format
+} // namespace tensorflow
 
 #endif // TENSORFLOW_CORE_USER_OPS_FORMAT_H_
