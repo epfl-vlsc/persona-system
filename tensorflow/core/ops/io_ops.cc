@@ -263,6 +263,22 @@ value: A scalar.
 N: number of metadata handles.
 )doc");
 
+REGISTER_OP("WriterWriteBatch")
+    .Attr("N: int")
+    .Input("writer_handle: Ref(string)")
+    .Input("value: string")
+    .Input("meta_handles: Ref(N * string)")
+    .Doc(R"doc(
+Write value to file. Value is expected to be a 1D string 
+type tensor with >= one entry
+
+writer_handle: Handle to a writer.
+meta_handles: handles to shared resources that the writer
+interface may need to access.
+value: A scalar.
+N: number of metadata handles.
+)doc");
+
 REGISTER_OP("WriterDone")
     .Input("writer_handle: Ref(string)")
     .Doc(R"doc(
@@ -327,6 +343,25 @@ reader_handle: Handle to a Reader.
 queue_handle: Handle to a Queue, with string work items.
 key: A scalar.
 value: A scalar.
+)doc");
+
+REGISTER_OP("ReaderReadBatch")
+    .Input("reader_handle: Ref(string)")
+    .Input("queue_handle: Ref(string)")
+    .Attr("batch_size: int")
+    .Output("key: string")
+    .Output("value: string")
+    .Doc(R"doc(
+Returns the next record (key, value pair) produced by a Reader.
+
+Will dequeue from the input queue if necessary (e.g. when the
+Reader needs to start reading from a new file since it has finished
+with the previous file).
+
+reader_handle: Handle to a Reader.
+queue_handle: Handle to a Queue, with string work items.
+key: A scalar.
+value: A vector.
 )doc");
 
 REGISTER_OP("ReaderNumRecordsProduced")

@@ -97,6 +97,43 @@ class ReaderReadOp : public ReaderVerbAsyncOpKernel {
 
 REGISTER_KERNEL_BUILDER(Name("ReaderRead").Device(DEVICE_CPU), ReaderReadOp);
 
+class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
+ public:
+  using ReaderVerbAsyncOpKernel::ReaderVerbAsyncOpKernel;
+
+  ReaderReadBatchOp(OpKernelConstruction* context)
+    : ReaderVerbAsyncOpKernel(context) {
+    OP_REQUIRES_OK(context, context->GetAttr("batch_size", &batch_size_));
+  }
+
+  void ComputeWithReader(OpKernelContext* context,
+                         ReaderInterface* reader) override {
+    QueueInterface* queue;
+    OP_REQUIRES_OK(context,
+                   GetResourceFromContext(context, "queue_handle", &queue));
+    core::ScopedUnref unref_me(queue);
+    Tensor* key = nullptr;
+    OP_REQUIRES_OK(context,
+                   context->allocate_output("key", TensorShape({}), &key));
+
+    Tensor* value = nullptr;
+    OP_REQUIRES_OK(context,
+                   context->allocate_output("value", TensorShape({batch_size_}), &value));
+
+    //LOG(INFO) << "reading a batch of size " << batch_size_;
+
+    auto key_scalar = key->scalar<string>();
+    auto value_vector = value->flat<string>();
+    for (int i = 0; i < batch_size_; i++) {
+      reader->Read(queue, &key_scalar(), &value_vector(i), context);
+    }
+  }
+ private:
+  int batch_size_ = 1;
+};
+
+REGISTER_KERNEL_BUILDER(Name("ReaderReadBatch").Device(DEVICE_CPU), ReaderReadBatchOp);
+
 class ReaderNumRecordsProducedOp : public ReaderVerbSyncOpKernel {
  public:
   using ReaderVerbSyncOpKernel::ReaderVerbSyncOpKernel;
