@@ -166,6 +166,7 @@ protected:
   std::size_t record_count_;
 };
 
+template <typename T>
 class DenseReaderOp : public ReaderOpKernel {
   public:
     explicit DenseReaderOp(OpKernelConstruction* context)
@@ -173,13 +174,13 @@ class DenseReaderOp : public ReaderOpKernel {
 
       Env* env = context->env();
       SetReaderFactory([this, env]() {
-          return new DenseReader(name(), env);
+          return new T(name(), env);
         });
     }
   };
 
 REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU),
-                        DenseReaderOp);
+                        DenseReaderOp<DenseReader>);
 
 class BaseReader : public DenseReader {
 public:
@@ -204,5 +205,8 @@ public:
     return Status::OK();
   }
 };
+
+REGISTER_KERNEL_BUILDER(Name("BaseReader").Device(DEVICE_CPU),
+                        DenseReaderOp<BaseReader>);
 
 } // namespace tensorflow
