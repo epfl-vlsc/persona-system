@@ -51,12 +51,15 @@ namespace tensorflow {
       Status OnWorkStartedLocked() override {
         line_number_ = 0;
         num_produced_ = 0;
+        ReadOnlyMemoryRegion *raw_mmap = nullptr;
         Status status = env_->NewReadOnlyMemoryRegionFromFile(current_work(),
-            &mmap_fastq_);
+            &raw_mmap);
         if (!status.ok()) {
           LOG(INFO) << "ERROR: problem creating mmap file in fastqreader";
           return status;
         }
+
+        mmap_fastq_ = std::shared_ptr<ReadOnlyMemoryRegion>(raw_mmap);
 
         mmap_data_ = reinterpret_cast<const char*>(mmap_fastq_->data());
         bytes_ = 0;
@@ -66,7 +69,6 @@ namespace tensorflow {
       }
 
       Status OnWorkFinishedLocked() override {
-        delete mmap_fastq_;
         return Status::OK();
       }
 
@@ -138,7 +140,7 @@ namespace tensorflow {
       }
       enum { kBufferSize = 256 << 10 /* 256 kB */ };
       Env* const env_;
-      ReadOnlyMemoryRegion* mmap_fastq_;
+      std::shared_ptr<ReadOnlyMemoryRegion> mmap_fastq_;
       const char* mmap_data_;
       uint64 bytes_;
       int64 line_number_ = 0;
