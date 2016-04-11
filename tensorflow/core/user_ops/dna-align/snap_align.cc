@@ -23,35 +23,32 @@ namespace tensorflow {
         explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
         ~SnapAlignOp() override {
-            //    if (genome_index_) genome_index_->Unref();
+          if (index_resource_) index_resource_->Unref();
+          if (options_resource_) options_resource_->Unref();
         }
 
         void Compute(OpKernelContext* ctx) override {
 
-            GenomeIndexResource* index_resource;
-            AlignerOptionsResource* options_resource;
-
-            OP_REQUIRES_OK(ctx,
-                GetResourceFromContext(ctx, "options_handle", &options_resource));
-            OP_REQUIRES_OK(ctx,
-                GetResourceFromContext(ctx, "genome_handle", &index_resource));
-
-            OP_REQUIRES_OK(ctx,
-                snap_wrapper::init());
-
             if (base_aligner_ == nullptr) {
+                OP_REQUIRES_OK(ctx,
+                    GetResourceFromContext(ctx, "options_handle", &options_resource_));
+                OP_REQUIRES_OK(ctx,
+                    GetResourceFromContext(ctx, "genome_handle", &index_resource_));
+
+                OP_REQUIRES_OK(ctx,
+                    snap_wrapper::init());
                 LOG(INFO) << "SNAP Kernel creating BaseAligner";
 
-                base_aligner_ = snap_wrapper::createAligner(index_resource->get_index(), options_resource->value());
+                base_aligner_ = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
 
-                AlignerOptions* options = options_resource->value();
+                AlignerOptions* options = options_resource_->value();
 
                 if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
                     num_secondary_alignments_ = 0;
                 }
                 else {
                     num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine,
-                        options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource->get_index()->getSeedLength());
+                        options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource_->get_index()->getSeedLength());
                 }
             }
 
@@ -66,6 +63,8 @@ namespace tensorflow {
             alignments.reserve(num_reads);
             input_reads.reserve(num_reads);
 
+            //LOG(INFO) << "shape is: " << reads->shape().DebugString();
+            //LOG(INFO) << "processing " << num_reads << " reads.";
             for (size_t i = 0; i < num_reads; i++) {
                 SnapProto::AlignmentDef alignment;
                 SnapProto::ReadDef read_proto;
@@ -73,7 +72,9 @@ namespace tensorflow {
                     LOG(INFO) << "SnapAlignOp: failed to parse read from protobuf";
                 }
 
-                read_proto = alignment.read();
+                alignments.push_back(alignment);
+                SnapProto::AlignmentDef& al = alignments.back();
+                read_proto = al.read();
                 Read* snap_read = new Read();
                 snap_read->init(
                     read_proto.meta().c_str(),
@@ -84,7 +85,6 @@ namespace tensorflow {
                 );
 
                 input_reads.push_back(snap_read);
-                alignments.push_back(alignment);
             }
 
             vector<vector<SingleAlignmentResult>> alignment_results;
@@ -98,7 +98,7 @@ namespace tensorflow {
 
             bool first_is_primary;
             for (size_t i = 0; i < input_reads.size(); i++) {
-                Status status = snap_wrapper::alignSingle(base_aligner_, options_resource->value(), input_reads[i],
+                Status status = snap_wrapper::alignSingle(base_aligner_, options_resource_->value(), input_reads[i],
                     &alignment_results[i], num_secondary_alignments_, first_is_primary);
 
                 alignments[i].set_firstisprimary(first_is_primary);
@@ -139,6 +139,8 @@ namespace tensorflow {
 
         BaseAligner* base_aligner_ = nullptr;
         int num_secondary_alignments_ = 0;
+        GenomeIndexResource* index_resource_ = nullptr;
+        AlignerOptionsResource* options_resource_ = nullptr;
 
     };
 

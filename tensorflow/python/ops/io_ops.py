@@ -298,9 +298,21 @@ class WriterBase(object):
     Args:
       value: The value to write to the file.
       name: A name for the operation (optional).
+      meta: Metadata handles the writer interface may need.
 
     """
     return gen_io_ops.writer_write(self._writer_ref, value, meta, name=name)
+
+  def write_batch(self, value, meta, name=None):
+    """Instructs the Writer to write values across dim 0 of value.
+
+    Args:
+      value: The value to write to the file.
+      name: A name for the operation (optional).
+      meta: Metadata handles the writer interface may need.
+
+    """
+    return gen_io_ops.writer_write_batch(self._writer_ref, value, meta, name=name)
 
   def done(self, name=None):
     """Instructs the Writer to complete writing a file. 
@@ -324,7 +336,7 @@ class WriterBase(object):
       An int64 Tensor.
 
     """
-    return gen_io_ops._writer_num_records_produced(self._writer_ref, name=name)
+    return gen_io_ops.writer_num_records_produced(self._writer_ref, name=name)
 
   def serialize_state(self, name=None):
     """Produce a string tensor that encodes the state of a writer.
@@ -415,6 +427,29 @@ class ReaderBase(object):
       queue_ref = queue.queue_ref
     return gen_io_ops._reader_read(self._reader_ref, queue_ref, name=name)
 
+  def read_batch(self, queue, batch_size, name=None):
+    """Returns the next record batch (key, value pair) produced by a reader.
+
+    Will dequeue a work unit from queue if necessary (e.g. when the
+    Reader needs to start reading from a new file since it has
+    finished with the previous file).
+
+    Args:
+      queue: A Queue or a mutable string Tensor representing a handle
+        to a Queue, with string work items.
+      name: A name for the operation (optional).
+
+    Returns:
+      A tuple of Tensors (key, value).
+      key: A string scalar Tensor.
+      value: A string 1D Tensor.
+    """
+    if isinstance(queue, ops.Tensor):
+      queue_ref = queue
+    else:
+      queue_ref = queue.queue_ref
+    return gen_io_ops.reader_read_batch(self._reader_ref, queue_ref, batch_size, name=name)
+
   def num_records_produced(self, name=None):
     """Returns the number of records this reader has produced.
 
@@ -490,6 +525,7 @@ class ReaderBase(object):
 
 
 ops.NoGradient("ReaderRead")
+ops.NoGradient("ReaderReadBatch")
 ops.NoGradient("ReaderNumRecordsProduced")
 ops.NoGradient("ReaderNumWorkUnitsCompleted")
 ops.NoGradient("ReaderSerializeState")
@@ -637,6 +673,14 @@ def _ReaderReadShape(op):
       tensor_shape.scalar())
   return [tensor_shape.scalar(), tensor_shape.scalar()]
 
+@ops.RegisterShape("ReaderReadBatch")
+def _ReaderReadBatchShape(op):
+  """Shape function for the ReaderBase.Read op."""
+  unused_handle_shape = op.inputs[0].get_shape().merge_with(
+      tensor_shape.scalar())
+  unused_queue_shape = op.inputs[1].get_shape().merge_with(
+      tensor_shape.scalar())
+  return [tensor_shape.scalar(), tensor_shape.vector(op.get_attr("batch_size"))]
 
 @ops.RegisterShape("ReaderReset")
 def _ReaderResetShape(op):
@@ -671,6 +715,7 @@ def _MatchingFilesShape(op):
 
 
 @ops.RegisterShape("WriterWrite")
+@ops.RegisterShape("WriterWriteBatch")
 def _WriterWriteShape(op):
   """Shape function for the WriterBase.Write op."""
   return []
@@ -679,3 +724,10 @@ def _WriterWriteShape(op):
 def _WriterDoneShape(op):
   """Shape function for the WriterBase.Done op."""
   return []
+
+@ops.RegisterShape("WriterNumRecordsProduced")
+def _WriterScalarShape(op):
+  """Shape function for ops that transform a reader to a scalar."""
+  unused_handle_shape = op.inputs[0].get_shape().merge_with(
+      tensor_shape.scalar())
+  return [tensor_shape.scalar()]

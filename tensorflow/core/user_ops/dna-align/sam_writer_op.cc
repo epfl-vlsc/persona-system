@@ -94,8 +94,8 @@ out_file: The file to write results to.
                 options_shared_name = options_handle.flat<string>()(1);
                 genome_container = genome_handle.flat<string>()(0);
                 genome_shared_name = genome_handle.flat<string>()(1);
-                LOG(INFO) << options_container << " | " << options_shared_name
-                    << " | " << genome_container << " | " << genome_shared_name;
+                /*LOG(INFO) << options_container << " | " << options_shared_name
+                    << " | " << genome_container << " | " << genome_shared_name;*/
 
                 AlignerOptionsResource* options;
                 status = context->resource_manager()->Lookup(options_container,
@@ -136,7 +136,11 @@ out_file: The file to write results to.
             DataSupplier::ExpansionFactor = aligner_options_->expansionFactor;
 
             const FileFormat* format;
-            format = FileFormat::SAM[false];
+            if (aligner_options_->useM)
+              format = FileFormat::SAM[true];
+            else
+              format = FileFormat::SAM[false];
+
             format->setupReaderContext(aligner_options_, &reader_context_);
 
             writer_supplier_ = format->getWriterSupplier(aligner_options_, reader_context_.genome);
@@ -158,7 +162,6 @@ out_file: The file to write results to.
             if (!genome_index_) {
                 LOG(INFO) << "WTF genome index is null!";
             }
-
             // `value` is a serialized AlignmentDef protobuf message
             // get submessage ReadDef, write each SingleResult to file
 
@@ -187,10 +190,10 @@ out_file: The file to write results to.
             }
 
             // debugging
-            LOG(INFO) << "Preparing " << alignment.results_size() << " results for writing to file."
+            /*LOG(INFO) << "Preparing " << alignment.results_size() << " results for writing to file."
                 << " for read " << read->meta() << "  " << read->bases();
             string isp = alignment.firstisprimary() ? "true" : "false";
-            LOG(INFO) << "firstIsPrimary is " << isp;
+            LOG(INFO) << "firstIsPrimary is " << isp;*/
 
             if (alignment.results_size() == 0) {
                 LOG(INFO) << "There were 0 results in this read";
@@ -202,8 +205,8 @@ out_file: The file to write results to.
                 snap_results[j].location = GenomeLocation(single_result.genomelocation());
                 snap_results[j].direction = (Direction)single_result.direction();
                 snap_results[j].mapq = single_result.mapq();
-                LOG(INFO) << " result: location " << snap_results[j].location <<
-                    " direction: " << snap_results[j].direction << " score " << snap_results[j].score;
+                /*LOG(INFO) << " result: location " << snap_results[j].location <<
+                    " direction: " << snap_results[j].direction << " score " << snap_results[j].score;*/
             }
 
             record_number_++;

@@ -80,6 +80,29 @@ class WriterWriteOp : public WriterVerbAsyncOpKernel {
 
 REGISTER_KERNEL_BUILDER(Name("WriterWrite").Device(DEVICE_CPU), WriterWriteOp);
 
+class WriterWriteBatchOp : public WriterVerbAsyncOpKernel {
+ public:
+  using WriterVerbAsyncOpKernel::WriterVerbAsyncOpKernel;
+
+  void ComputeWithWriter(OpKernelContext* context,
+                         WriterInterface* writer) override {
+
+    const Tensor* value;
+    OP_REQUIRES_OK(context, context->input("value", &value));
+
+    auto reads_flat = value->flat<string>();
+    size_t num_reads = reads_flat.size();
+
+    for (int i = 0; i < num_reads; i++) {
+      writer->Write(&reads_flat(i), context);
+    }
+    //auto value_scalar = value->scalar<string>();
+
+  }
+};
+
+REGISTER_KERNEL_BUILDER(Name("WriterWriteBatch").Device(DEVICE_CPU), WriterWriteBatchOp);
+
 class WriterNumRecordsProducedOp : public WriterVerbSyncOpKernel {
  public:
   using WriterVerbSyncOpKernel::WriterVerbSyncOpKernel;
