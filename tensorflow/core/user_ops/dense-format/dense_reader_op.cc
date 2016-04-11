@@ -21,11 +21,12 @@
 #include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/framework/op.h"
-#include "tensorflow/core/user_ops/dense-format/format.h"
+#include "format.h"
 #include "decompress.h"
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/bzip2.hpp>
+#include <boost/iostreams/device/mapped_file.hpp>
 
 namespace tensorflow {
 
@@ -33,9 +34,44 @@ class DenseReader : public ReaderBase {
 public:
   DenseReader(const string& node_name, Env* env)
     : ReaderBase(strings::StrCat("DenseReader '", node_name, "'")),
-      env_(env) {};
+      env_(env), ordinal_start_(0), current_idx_(0), record_count_(0) {};
 
   Status OnWorkStartedLocked() override {
+    using namespace std;
+    namespace bios = boost::iostreams;
+
+    bios::mapped_file_source input_dense_file;
+    input_dense_file.open(current_work());
+
+    if (!input_dense_file.is_open()) {
+      return errors::Unavailable("Cannot create mapped file of '", current_work(), "'");
+    }
+
+    const size_t file_size = input_dense_file.size();
+
+    if (file_size < sizeof(format::FileHeader)) {
+      return errors::ResourceExhausted("Dense file '", current_work(), "' is not large enough for file header. Actual size ",
+                                       file_size, " bytes is less than necessary size of ",
+                                       sizeof(format::FileHeader), " bytes");
+    }
+
+    const char* file_data = input_dense_file.data();
+    const format::FileHeader *file_header = reinterpret_cast<const format::FileHeader*>(file_data);
+    const char* payload_start = file_data + file_header->segment_start;
+    const size_t payload_size = file_size - file_header->segment_start;
+
+    Status status;
+    if (static_cast<format::CompressionType>(file_header->compression_type) == format::CompressionType::BZIP2) {
+      status = decompressBZIP2(payload_start, payload_size, output_);
+    } else {
+      status = copySegment(payload_start, payload_size, output_);
+    }
+    TF_RETURN_IF_ERROR(status);
+
+    // 2. do math on the file size
+    
+    // 3. read in the rest of the file size, but use boost stuff (memory mapping) instead of slow system calls and unneeded buffering
+
     return Status::OK();
   }
 
