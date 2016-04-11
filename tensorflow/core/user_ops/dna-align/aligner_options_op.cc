@@ -65,7 +65,6 @@ namespace tensorflow {
                 cinfo_.resource_manager()->LookupOrCreate<AlignerOptionsResource>(
                     cinfo_.container(), cinfo_.name(), &options, creator));
 
-            //core::ScopedUnref unref_me(queue);
             auto h = options_handle_.AccessTensor(ctx)->flat<string>();
             h(0) = cinfo_.container();
             h(1) = cinfo_.name();

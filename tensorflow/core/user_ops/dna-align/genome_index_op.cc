@@ -65,7 +65,6 @@ namespace tensorflow {
                 cinfo_.resource_manager()->LookupOrCreate<GenomeIndexResource>(
                     cinfo_.container(), cinfo_.name(), &genome_index, creator));
 
-            //core::ScopedUnref unref_me(queue);
             auto h = genome_handle_.AccessTensor(ctx)->flat<string>();
             h(0) = cinfo_.container();
             h(1) = cinfo_.name();

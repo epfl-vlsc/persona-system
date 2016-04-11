@@ -23,7 +23,7 @@ namespace snap_wrapper {
         // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
         return GenomeIndex::loadFromDirectory(const_cast<char*>(path), false, false);
     }
-    
+
     BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options) {
         return new BaseAligner(
             index,
@@ -43,10 +43,10 @@ namespace snap_wrapper {
     }
 
     bool passesReadFilter(Read* read, AlignerOptions* options) {
-      return read->getDataLength() >= options->minReadLength && read->countOfNs() <= options->maxDist;
+        return read->getDataLength() >= options->minReadLength && read->countOfNs() <= options->maxDist;
     }
 
-    tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read, 
+    tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read,
         std::vector<SingleAlignmentResult>* results, int num_secondary_alignments, bool& first_is_primary) {
         if (!passesReadFilter(read, options)) {
             SingleAlignmentResult result;
@@ -76,20 +76,19 @@ namespace snap_wrapper {
         );
 
         LOG(INFO) << "Primary result: location " << primaryResult.location <<
-          " direction: " << primaryResult.direction << " score " << primaryResult.score;
+            " direction: " << primaryResult.direction << " score " << primaryResult.score;
         LOG(INFO) << "secondaryResultsCount is " << secondaryResultsCount;
 
         if (options->passFilter(read, primaryResult.status, false, false)) {
-            LOG(INFO) << "pushing back primary result";
             results->push_back(primaryResult);
             first_is_primary = true;
-        } else {
+        }
+        else {
             first_is_primary = false;
         }
 
         for (int i = 0; i < secondaryResultsCount; ++i) {
             if (options->passFilter(read, secondaryResults[i].status, false, true)) {
-                LOG(INFO) << "pushing back secondary result";
                 results->push_back(secondaryResults[i]);
             }
         }
