@@ -94,8 +94,8 @@ out_file: The file to write results to.
                 options_shared_name = options_handle.flat<string>()(1);
                 genome_container = genome_handle.flat<string>()(0);
                 genome_shared_name = genome_handle.flat<string>()(1);
-                LOG(INFO) << options_container << " | " << options_shared_name
-                    << " | " << genome_container << " | " << genome_shared_name;
+                /*LOG(INFO) << options_container << " | " << options_shared_name
+                    << " | " << genome_container << " | " << genome_shared_name;*/
 
                 AlignerOptionsResource* options;
                 status = context->resource_manager()->Lookup(options_container,
@@ -136,7 +136,11 @@ out_file: The file to write results to.
             DataSupplier::ExpansionFactor = aligner_options_->expansionFactor;
 
             const FileFormat* format;
-            format = FileFormat::SAM[false];
+            if (aligner_options_->useM)
+              format = FileFormat::SAM[true];
+            else
+              format = FileFormat::SAM[false];
+
             format->setupReaderContext(aligner_options_, &reader_context_);
 
             writer_supplier_ = format->getWriterSupplier(aligner_options_, reader_context_.genome);
@@ -158,11 +162,11 @@ out_file: The file to write results to.
             if (!genome_index_) {
                 LOG(INFO) << "WTF genome index is null!";
             }
-
+            LOG(INFO) << "write is being called!";
             // `value` is a serialized AlignmentDef protobuf message
             // get submessage ReadDef, write each SingleResult to file
 
-            SnapProto::AlignmentDef alignment;
+            /*SnapProto::AlignmentDef alignment;
             if (!alignment.ParseFromString(value)) {
                 return errors::Internal("Failed to parse AlignmentDef",
                     " from string in SamWriter WriteLocked()");
@@ -190,9 +194,9 @@ out_file: The file to write results to.
             LOG(INFO) << "Preparing " << alignment.results_size() << " results for writing to file."
                 << " for read " << read->meta() << "  " << read->bases();
             string isp = alignment.firstisprimary() ? "true" : "false";
-            LOG(INFO) << "firstIsPrimary is " << isp;
+            LOG(INFO) << "firstIsPrimary is " << isp;*/
 
-            if (alignment.results_size() == 0) {
+            /*if (alignment.results_size() == 0) {
                 LOG(INFO) << "There were 0 results in this read";
             }
 
@@ -208,7 +212,7 @@ out_file: The file to write results to.
 
             record_number_++;
             read_writer_->writeReads(reader_context_, &snap_read, snap_results, alignment.results_size(), alignment.firstisprimary());
-            delete[] snap_results;
+            delete[] snap_results;*/
             return Status::OK();
         }
 

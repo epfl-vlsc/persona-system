@@ -60,6 +60,7 @@ namespace tensorflow {
             }
 
             delete[] argv;
+            //LOG(INFO) << "useM is = " << value_->useM;
         }
 
         string DebugString() override {

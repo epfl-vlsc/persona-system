@@ -75,9 +75,9 @@ namespace snap_wrapper {
             secondaryResults
         );
 
-        LOG(INFO) << "Primary result: location " << primaryResult.location <<
+        /*LOG(INFO) << "Primary result: location " << primaryResult.location <<
             " direction: " << primaryResult.direction << " score " << primaryResult.score;
-        LOG(INFO) << "secondaryResultsCount is " << secondaryResultsCount;
+        LOG(INFO) << "secondaryResultsCount is " << secondaryResultsCount;*/
 
         if (options->passFilter(read, primaryResult.status, false, false)) {
             results->push_back(primaryResult);

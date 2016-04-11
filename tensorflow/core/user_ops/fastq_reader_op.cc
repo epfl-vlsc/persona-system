@@ -19,7 +19,6 @@ limitations under the License.
 #include "tensorflow/core/kernels/reader_base.h"
 #include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/framework/op.h"
@@ -46,19 +45,28 @@ namespace tensorflow {
       FastqReader(const string& node_name, Env* env)
         : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
         env_(env),
-        line_number_(0) {}
+        line_number_(0),
+        num_produced_(0){}
 
       Status OnWorkStartedLocked() override {
         line_number_ = 0;
-        RandomAccessFile* file = nullptr;
+        num_produced_ = 0;
+        Status status = env_->NewReadOnlyMemoryRegionFromFile(current_work(),
+            &mmap_fastq_);
+        if (!status.ok()) {
+          LOG(INFO) << "ERROR: problem creating mmap file in fastqreader";
+          return status;
+        }
+
+        mmap_data_ = reinterpret_cast<const char*>(mmap_fastq_->data());
+        bytes_ = 0;
+        
         LOG(INFO) << "Opening file: " << current_work() << std::endl;
-        TF_RETURN_IF_ERROR(env_->NewRandomAccessFile(current_work(), &file));
-        input_buffer_.reset(new io::InputBuffer(file, kBufferSize));
         return Status::OK();
       }
 
       Status OnWorkFinishedLocked() override {
-        input_buffer_.reset(nullptr);
+        delete mmap_fastq_;
         return Status::OK();
       }
 
@@ -71,7 +79,7 @@ namespace tensorflow {
         Status status;
         for (int i = 0; i < 4; i++)
         {
-          status = input_buffer_->ReadLine(&lines[i]);
+          status = ReadLine_(&lines[i]);
           ++line_number_;
           if (errors::IsOutOfRange(status)) {
             LOG(INFO) << "I is out of range! file: " 
@@ -82,6 +90,7 @@ namespace tensorflow {
         }
 
         if (status.ok()) {
+          lines[0].erase(0, 1);  // remove the '@' from meta data
           SnapProto::AlignmentDef alignment;
           SnapProto::ReadDef* read = alignment.mutable_read();
           read->set_bases(lines[1]);
@@ -91,6 +100,7 @@ namespace tensorflow {
           alignment.SerializeToString(value);
           *key = strings::StrCat(current_work(), ":", line_number_);
           *produced = true;
+          num_produced_++;
           return status;
         } else {
           LOG(INFO) << "Something bad happened in fastq reader: "
@@ -102,15 +112,37 @@ namespace tensorflow {
 
       Status ResetLocked() override {
         line_number_ = 0;
-        input_buffer_.reset(nullptr);
+        num_produced_ = 0;
         return ReaderBase::ResetLocked();
       }
 
     private:
+
+      Status ReadLine_(string* result) {
+        if (bytes_ >= mmap_fastq_->length())
+          return errors::OutOfRange("eof");
+        const char* orig = mmap_data_;
+        while (*mmap_data_ != '\n' && bytes_ < mmap_fastq_->length()) {
+          // EOF is treated like end of line
+          bytes_++;
+          mmap_data_++;
+        }
+        if (mmap_data_ == orig)
+          result->assign("\n");
+        else
+          result->assign(orig, (size_t)(mmap_data_ - orig));
+        // advance past the newline character
+        mmap_data_++;
+        bytes_++;
+        return Status::OK();
+      }
       enum { kBufferSize = 256 << 10 /* 256 kB */ };
       Env* const env_;
+      ReadOnlyMemoryRegion* mmap_fastq_;
+      const char* mmap_data_;
+      uint64 bytes_;
       int64 line_number_ = 0;
-      std::unique_ptr<io::InputBuffer> input_buffer_;
+      int64 num_produced_ = 0;
   };
 
   class FastqReaderOp : public ReaderOpKernel {
