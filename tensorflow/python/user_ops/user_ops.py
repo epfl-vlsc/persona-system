@@ -80,6 +80,12 @@ def _DenseAggregatorShape(op): # pylint: disable=invalid-name
       raise ValueError("Flat shapes on DenseAggregators must be equal.")
   return [input_flat_shape]
 
+def DenseAggregator(bases, qualities, metadata):
+  return gen_user_ops.dense_aggregator(bases=bases,
+                                       qualities=qualities,
+                                       metadata=metadata)
+ops.NoGradient("DenseAggregator")
+
 class SAMWriter(io_ops.WriterBase):
 
     def __init__(self, name=None, out_file=None):
