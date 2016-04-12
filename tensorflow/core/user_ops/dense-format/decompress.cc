@@ -4,6 +4,8 @@
 
 namespace tensorflow {
 
+  //auto decompressBZIP2 = decompressSegment<boost::iostreams::bzip2_decompressor>;
+
 template <typename T>
 Status decompressSegment(const char* segment,
                          const std::size_t segment_size,
@@ -24,6 +26,11 @@ Status decompressSegment(const char* segment,
   os.reset();
   return Status::OK();
 }
+
+template
+Status decompressSegment<boost::iostreams::bzip2_decompressor>(const char* segment,
+                                                                const std::size_t segment_size,
+                                                                std::vector<char> &output);
 
 Status copySegment(const char* segment,
                    const std::size_t segment_size,
