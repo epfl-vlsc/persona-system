@@ -31,6 +31,35 @@
 
 namespace tensorflow {
 
+#define REGISTER_DENSE_READER(_name_)                   \
+  REGISTER_OP(_name_)                                   \
+    .Output("reader_handle: Ref(string)")         \
+    .Attr("container: string = ''")               \
+    .Attr("shared_name: string = ''")             \
+    .SetIsStateful()
+
+  REGISTER_DENSE_READER("DenseReader")
+    .Doc(R"doc(
+    A Reader that outputs the records from the DenseFormat in our custom file.
+    Only outputs a single type. To use with the aligner, a downstream aggregator node is needed.
+
+    reader_handle: The handle to reference the Reader.
+    container: If non-empty, this reader is placed in the given container.
+    Otherwise, a default container is used.
+    shared_name: a name for a shared resource
+    )doc");
+
+  REGISTER_DENSE_READER("BaseReader")
+    .Doc(R"doc(
+    A Reader that outputs the records from *bases* the DenseFormat in our custom file.
+    Only outputs a single type. To use with the aligner, a downstream aggregator node is needed.
+
+    reader_handle: The handle to reference the Reader.
+    container: If non-empty, this reader is placed in the given container.
+    Otherwise, a default container is used.
+    shared_name: a name for a shared resource
+    )doc");
+
 class DenseReader : public ReaderBase {
 public:
   DenseReader(const string& node_name, Env* env)
@@ -166,22 +195,6 @@ protected:
   std::size_t record_count_;
 };
 
-template <typename T>
-class DenseReaderOp : public ReaderOpKernel {
-  public:
-    explicit DenseReaderOp(OpKernelConstruction* context)
-      : ReaderOpKernel(context) {
-
-      Env* env = context->env();
-      SetReaderFactory([this, env]() {
-          return new T(name(), env);
-        });
-    }
-  };
-
-REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU),
-                        DenseReaderOp<DenseReader>);
-
 class BaseReader : public DenseReader {
 public:
   BaseReader(const string& node_name, Env *env) :
@@ -205,6 +218,22 @@ public:
     return Status::OK();
   }
 };
+
+template <typename T>
+class DenseReaderOp : public ReaderOpKernel {
+public:
+  explicit DenseReaderOp(OpKernelConstruction* context)
+    : ReaderOpKernel(context) {
+
+    Env* env = context->env();
+    SetReaderFactory([this, env]() {
+        return new T(name(), env);
+      });
+  }
+};
+
+REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU),
+                        DenseReaderOp<DenseReader>);
 
 REGISTER_KERNEL_BUILDER(Name("BaseReader").Device(DEVICE_CPU),
                         DenseReaderOp<BaseReader>);
