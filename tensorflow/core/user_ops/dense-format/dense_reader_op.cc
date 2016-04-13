@@ -203,11 +203,14 @@ public:
 
   Status ReadLocked(string* key, string* value, bool* produced,
                     bool* at_end) override {
+    using namespace std;
+    using namespace format;
     const char* record;
     size_t record_length;
 
     if (GetCurrentRecord(&record, &record_length)) {
-      *value = string(record, record_length);
+      auto bases = reinterpret_cast<const BinaryBaseRecord*>(record);
+      TF_RETURN_IF_ERROR(bases->toString(record_length, value));
       *key = strings::StrCat(current_work(), ":", current_idx_, "-", ordinal_start_+current_idx_);
       *produced = true;
       AdvanceRecord();
