@@ -169,7 +169,7 @@ protected:
   bool GetCurrentRecord(const char** record, std::size_t *record_length) {
     if (current_idx_ < record_count_) {
       *record = current_record_;
-      *record_length = records_->relative_index[current_idx_++];
+      *record_length = records_->relative_index[current_idx_];
       return true;
     } else {
       return false;
