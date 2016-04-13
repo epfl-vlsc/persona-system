@@ -47,7 +47,6 @@ ops.NoGradient("FASTQDecoder")
 
 class DenseReader(io_ops.ReaderBase):
     def __init__(self, name=None):
-      import ipdb; ipdb.set_trace()
       rr = gen_user_ops.dense_reader(name=name)
       super(DenseReader, self).__init__(rr)
 ops.NoGradient("DenseReader")
