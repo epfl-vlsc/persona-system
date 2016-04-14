@@ -138,7 +138,7 @@ public:
     output_.clear();
     current_idx_ = 0;
     record_count_ = 0;
-    current_record = nullptr;
+    current_record_ = nullptr;
     records_ = nullptr;
     return Status::OK();
   }
