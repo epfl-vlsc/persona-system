@@ -135,13 +135,17 @@ public:
   }
 
   Status OnWorkFinishedLocked() override {
+    output_.clear();
     current_idx_ = 0;
+    record_count_ = 0;
+    current_record = nullptr;
+    records_ = nullptr;
     return Status::OK();
   }
 
   Status ResetLocked() override {
-    current_idx_ = 0;
-    current_record_ = output_.data() + record_count_;
+    // These methods basically do the same thing
+    TF_RETURN_IF_ERROR(OnWorkFinishedLocked());
     return ReaderBase::ResetLocked();
   }
 
