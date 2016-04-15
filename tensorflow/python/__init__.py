@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-# pylint: disable=wildcard-import,g-bad-import-order
 """Import core names of TensorFlow.
 
 Programs that want to build TensorFlow Ops and Graphs without having to import
@@ -32,7 +31,8 @@ import inspect
 import sys
 import traceback
 
-# pylint: disable=g-import-not-at-top
+# go/tf-wildcard-import
+# pylint: disable=wildcard-import,g-bad-import-order,g-import-not-at-top
 
 # pywrap_tensorflow is a SWIG generated python library that dynamically loads
 # _pywrap_tensorflow.so. The default mode for loading keeps all the symbol
@@ -106,8 +106,10 @@ from tensorflow.python.ops import histogram_ops
 from tensorflow.python.ops import io_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import script_ops
+from tensorflow.python.ops import session_ops
 from tensorflow.python.ops import sparse_ops
 from tensorflow.python.ops import state_ops
+from tensorflow.python.ops import string_ops
 
 
 # Don't export modules except for the few we really want
@@ -120,15 +122,14 @@ _whitelist = set([app, compat, contrib, errors, flags, gfile, image,
 __all__ = make_all(__name__,
                    [framework_lib, array_ops, client_lib, constant_op,
                     control_flow_ops, functional_ops, histogram_ops, io_ops,
-                    math_ops, nn, script_ops, sparse_ops, state_ops, train])
+                    math_ops, nn, script_ops, session_ops, sparse_ops,
+                    state_ops, string_ops, train])
 
 # Symbols whitelisted for export without documentation.
 # TODO(cwhipkey): review these and move to contrib, expose through
 # documentation, or remove.
 __all__.extend([
     'AttrValue',
-    'ClusterDef',
-    'ClusterSpec',
     'ConfigProto',
     'Event',
     'GPUOptions',
@@ -137,9 +138,7 @@ __all__.extend([
     'GRAPH_DEF_VERSION_MIN_PRODUCER',
     'GraphDef',
     'GraphOptions',
-    'GrpcServer',
     'HistogramProto',
-    'JobDef',
     'LogMessage',
     'NameAttrList',
     'NodeDef',
@@ -147,7 +146,6 @@ __all__.extend([
     'PaddingFIFOQueue',
     'RunOptions',
     'RunMetadata',
-    'ServerDef',
     'SessionLog',
     'Summary',
     'arg_max',
@@ -172,7 +170,6 @@ __all__.extend([
     'sparse_matmul',
     'sparse_segment_mean_grad',
     'sparse_segment_sqrt_n_grad',
-    'string_to_hash_bucket',
     'unique_with_counts',
     'user_ops',
 ])
