@@ -45,6 +45,20 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
+class DenseReader(io_ops.ReaderBase):
+    def __init__(self, name=None):
+      rr = gen_user_ops.dense_reader(name=name)
+      super(DenseReader, self).__init__(rr)
+ops.NoGradient("DenseReader")
+ops.RegisterShape("DenseReader")(common_shapes.scalar_shape)
+
+class BaseReader(io_ops.ReaderBase):
+    def __init__(self, name=None):
+        rr = gen_user_ops.base_reader(name=name)
+        super(BaseReader, self).__init__(rr)
+ops.NoGradient("BaseReader")
+ops.RegisterShape("BaseReader")(common_shapes.scalar_shape)
+
 @ops.RegisterShape("FASTQDecoder")
 def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
   """Shape function for the FASTQDecoder op."""
@@ -56,6 +70,20 @@ def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
       raise ValueError(
           "Shape of a default must be a length-0 or length-1 vector.")
   return [input_shape] * len(op.outputs)
+
+@ops.RegisterShape("DenseAggregator")
+def _DenseAggregatorShape(op): # pylint: disable=invalid-name
+  input_flat_shape = op.inputs[0].get_shape()
+  for other in op.inputs[1:]:
+    if other.get_shape() != input_flat_shape:
+      raise ValueError("Flat shapes on DenseAggregators must be equal.")
+  return [input_flat_shape]
+
+def DenseAggregator(bases, qualities, metadata):
+  return gen_user_ops.dense_aggregator(bases=bases,
+                                       qualities=qualities,
+                                       metadata=metadata)
+ops.NoGradient("DenseAggregator")
 
 class SAMWriter(io_ops.WriterBase):
 

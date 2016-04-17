@@ -172,6 +172,7 @@ cc_library(
         "lib/strings/strcat.h",
         "lib/strings/stringprintf.h",
         "platform/env.h",
+        "platform/file_system.h",
         "platform/host_info.h",  # TODO(josh11b): make internal
         "platform/init_main.h",
         "platform/logging.h",
@@ -244,6 +245,7 @@ tf_cuda_library(
         "framework/register_types.h",
         "framework/resource_mgr.h",
         "framework/selective_registration.h",
+        "framework/session_state.h",
         "framework/tensor.h",
         "framework/tensor_shape.h",
         "framework/tensor_slice.h",
@@ -266,6 +268,7 @@ tf_cuda_library(
         "util/saved_tensor_slice_util.h",
         "util/sparse/group_iterator.h",
         "util/sparse/sparse_tensor.h",
+        "util/stat_summarizer.h",
         "util/tensor_format.h",
         "util/tensor_slice_reader.h",
         "util/tensor_slice_reader_cache.h",
@@ -319,6 +322,7 @@ cc_library(
             "//tensorflow/core/user_ops/dna-align:sam_writer",
             "//tensorflow/core/user_ops/dna-align:sam_writer_async",
             "//tensorflow/core/user_ops/dna-align:snap_align",
+            "//tensorflow/core/user_ops/dense-format:dense_format",
            ],
     alwayslink = 1,
 )
@@ -383,7 +387,10 @@ cc_library(
 
 cc_library(
     name = "math_grad",
-    srcs = ["ops/math_grad.cc"],
+    srcs = [
+        "ops/math_grad.cc",
+        "ops/random_grad.cc",
+    ],
     linkstatic = 1,  # Needed since alwayslink is broken in bazel b/27630669
     visibility = ["//visibility:public"],
     deps = [
@@ -544,7 +551,6 @@ tf_cuda_library(
 
 # Android-specific BUILD targets
 load("//tensorflow:tensorflow.bzl", "tf_android_core_proto_sources")
-load("//tensorflow:tensorflow.bzl", "tf_android_core_proto_sources_relative")
 load("//tensorflow:tensorflow.bzl", "tf_android_core_proto_headers")
 
 # List of protos we want on android
@@ -591,8 +597,6 @@ filegroup(
             "lib/png/*.cc",
             "util/events_writer.cc",
             "util/events_writer.h",
-            "util/reporter.cc",
-            "util/reporter.h",
             # Exclude all protobuf/google headers except protobuf_android.h
             "platform/google/cord_coding.h",
             "platform/google/dynamic_annotations.h",
@@ -604,8 +608,6 @@ filegroup(
             "platform/google/*.cc",
             "platform/google/test_benchmark.cc",
             "platform/google/test_benchmark.h",
-            "platform/test_benchmark.h",
-            "platform/default/test_benchmark.cc",
             "user_ops/**/*.cu.cc",
             "common_runtime/gpu/*.cc",
             "common_runtime/gpu_device_factory.cc",
@@ -614,25 +616,11 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
-# Config setting for determining if we are building for Android.
-config_setting(
-    name = "android",
-    values = {
-        "crosstool_top": "//external:android/crosstool",
-    },
-)
-
-ANDROID_TF_COPTS = [
-    "-mfpu=neon",
-    "-std=c++11",
-    "-DMIN_LOG_LEVEL=0",
-    "-DTF_LEAN_BINARY",
-]
-
 ANDROID_TF_LITE_HDRS = [
     "framework/tensor.h",
     "platform/default/integral_types.h",
     "platform/env.h",
+    "platform/file_system.h",
     "platform/logging.h",
     "platform/platform.h",
     "platform/types.h",
@@ -647,21 +635,18 @@ ANDROID_TF_LITE_HDRS = [
 # build errors. If not building this as part of an android_binary,
 # a command such as the following must be used:
 # bazel build -c opt tensorflow/core:android_tensorflow_lib \
-# --crosstool_top=//third_party/java/android/android_ndk_linux/toolchains:everything \
+# --crosstool_top=//external:android/crosstool \
 # --cpu=armeabi-v7a \
 # --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
 cc_library(
     name = "android_tensorflow_lib_lite",
     srcs =
         select({
-            ":android": ["//tensorflow/core:android_srcs"],
+            "//tensorflow:android": ["//tensorflow/core:android_srcs"],
             "//conditions:default": [],
         }),
     hdrs = ANDROID_TF_LITE_HDRS,
-    copts = select({
-        ":android": ANDROID_TF_COPTS + ["-Os"],
-        "//conditions:default": [],
-    }),
+    copts = tf_copts() + ["-Os"],
     tags = [
         "manual",
         "notap",
@@ -680,17 +665,12 @@ cc_library(
 cc_library(
     name = "android_tensorflow_lib",
     srcs = select({
-        ":android": [
+        "//tensorflow:android": [
             ":android_op_registrations_and_gradients",
-            "//tensorflow/core/kernels:android_core_ops",
-            "//tensorflow/core/kernels:android_extended_ops",
         ],
         "//conditions:default": [],
     }),
-    copts = select({
-        ":android": ANDROID_TF_COPTS + ["-O2"],
-        "//conditions:default": [],
-    }),
+    copts = tf_copts(),
     tags = [
         "manual",
         "notap",
@@ -700,6 +680,7 @@ cc_library(
         "@re2//:re2",
         ":android_tensorflow_lib_lite",
         ":protos_cc",
+        "//tensorflow/core/kernels:android_tensorflow_kernels",
         "//third_party/eigen3",
     ],
     alwayslink = 1,
@@ -797,6 +778,7 @@ cc_library(
     deps = [
         ":protos_all_cc",
         "//tensorflow/core/platform/default/build_config:platformlib",
+        "//third_party/eigen3",
     ],
 )
 
@@ -845,6 +827,7 @@ tf_cuda_library(
 
 cc_header_only_library(
     name = "framework_headers_lib",
+    visibility = ["//visibility:public"],
     deps = [
         ":framework",
     ],
@@ -877,6 +860,7 @@ filegroup(
         "framework/partial_tensor_shape.h",
         "framework/rendezvous.h",
         "framework/selective_registration.h",
+        "framework/session_state.h",
         "framework/tensor.h",
         "framework/tensor_reference.h",
         "framework/tensor_shape.h",
@@ -905,6 +889,7 @@ filegroup(
         "platform/default/protobuf.h",
         "platform/default/thread_annotations.h",
         "platform/env.h",
+        "platform/file_system.h",
         "platform/host_info.h",
         "platform/logging.h",
         "platform/macros.h",
@@ -1237,6 +1222,7 @@ tf_cc_test(
     name = "common_runtime/constant_folding_test",
     size = "small",
     linkstatic = tf_kernel_tests_linkstatic(),
+    tags = tf_cuda_tests_tags(),
     deps = [
         ":core",
         ":core_cpu",
@@ -1244,6 +1230,7 @@ tf_cc_test(
         ":direct_session_internal",
         ":framework",
         ":framework_internal",
+        ":gpu_runtime",
         ":lib",
         ":lib_internal",
         ":ops",
@@ -1253,6 +1240,7 @@ tf_cc_test(
         ":testlib",
         "//tensorflow/cc:cc_ops",
         "//tensorflow/core/kernels:bcast_ops",
+        "//tensorflow/core/kernels:cast_op",
         "//tensorflow/core/kernels:identity_op",
         "//tensorflow/core/kernels:matmul_op",
         "//third_party/eigen3",
@@ -1285,6 +1273,7 @@ tf_cc_test(
         "//tensorflow/core/kernels:matmul_op",
         "//tensorflow/core/kernels:ops_util",
         "//tensorflow/core/kernels:queue_ops",
+        "//tensorflow/core/kernels:session_ops",
         "//tensorflow/core/kernels:variable_ops",
         "//third_party/eigen3",
     ],
@@ -1390,6 +1379,7 @@ tf_cc_test(
         ":testlib",
         "//tensorflow/cc:cc_ops",
         "//tensorflow/core/kernels:matmul_op",
+        "//tensorflow/core/kernels:ops_util",
     ],
 )
 

@@ -52,7 +52,11 @@ class UnaryOpTest(tf.test.TestCase):
     np_ans = np_func(x)
     with self.test_session(use_gpu=False):
       inx = tf.convert_to_tensor(x)
-      y = tf_func(inx)
+      if x.dtype in (np.float32, np.float64):
+        y = 1.1 * tf_func(inx)
+        np_ans *= 1.1
+      else:
+        y = tf_func(inx)
       tf_cpu = y.eval()
       self.assertShapeEqual(np_ans, y)
       self.assertAllClose(np_ans, tf_cpu)
@@ -264,7 +268,10 @@ class BinaryOpTest(tf.test.TestCase):
     with self.test_session():
       inx = tf.convert_to_tensor(x)
       iny = tf.convert_to_tensor(y)
-      out = tf_func(inx, iny)
+      if x.dtype in (np.float32, np.float64):
+        out = 1.1 * tf_func(inx, iny)
+      else:
+        out = tf_func(inx, iny)
       xs = list(x.shape)
       jacob_t, jacob_n = tf.test.compute_gradient(inx,
                                                   xs,
@@ -282,7 +289,10 @@ class BinaryOpTest(tf.test.TestCase):
     with self.test_session():
       inx = tf.convert_to_tensor(x)
       iny = tf.convert_to_tensor(y)
-      out = tf_func(inx, iny)
+      if x.dtype in (np.float32, np.float64):
+        out = 1.1 * tf_func(inx, iny)
+      else:
+        out = tf_func(inx, iny)
       ys = list(np.shape(y))
       jacob_t, jacob_n = tf.test.compute_gradient(iny,
                                                   ys,
@@ -308,14 +318,17 @@ class BinaryOpTest(tf.test.TestCase):
   def _compareBoth(self, x, y, np_func, tf_func):
     self._compareCpu(x, y, np_func, tf_func)
     if x.dtype in (np.float32, np.float64):
-      if tf_func not in (_FLOORDIV, tf.floordiv):
+      if tf_func not in (_FLOORDIV, tf.floordiv, tf.igamma, tf.igammac):
         self._compareGradientX(x, y, np_func, tf_func)
+        self._compareGradientY(x, y, np_func, tf_func)
+      if tf_func in (tf.igamma, tf.igammac):
+        # These methods only support gradients in the second parameter
         self._compareGradientY(x, y, np_func, tf_func)
       self._compareGpu(x, y, np_func, tf_func)
 
   def testFloatBasic(self):
-    x = np.linspace(-10, 10, 6).reshape(1, 3, 2).astype(np.float32)
-    y = np.linspace(20, -20, 6).reshape(1, 3, 2).astype(np.float32)
+    x = np.linspace(-5, 20, 15).reshape(1, 3, 5).astype(np.float32)
+    y = np.linspace(20, -5, 15).reshape(1, 3, 5).astype(np.float32)
     self._compareBoth(x, y, np.add, tf.add)
     self._compareBoth(x, y, np.subtract, tf.sub)
     self._compareBoth(x, y, np.multiply, tf.mul)
@@ -326,6 +339,14 @@ class BinaryOpTest(tf.test.TestCase):
     self._compareBoth(x, y, np.multiply, _MUL)
     self._compareBoth(x, y + 0.1, np.true_divide, _TRUEDIV)
     self._compareBoth(x, y + 0.1, np.floor_divide, _FLOORDIV)
+    try:
+      from scipy import special  # pylint: disable=g-import-not-at-top
+      a_pos_small = np.linspace(0.1, 2, 15).reshape(1, 3, 5).astype(np.float32)
+      x_pos_small = np.linspace(0.1, 10, 15).reshape(1, 3, 5).astype(np.float32)
+      self._compareBoth(a_pos_small, x_pos_small, special.gammainc, tf.igamma)
+      self._compareBoth(a_pos_small, x_pos_small, special.gammaincc, tf.igammac)
+    except ImportError as e:
+      tf.logging.warn("Cannot test special functions: %s" % str(e))
 
   def testFloatDifferentShapes(self):
     x = np.array([1, 2, 3, 4]).reshape(2, 2).astype(np.float32)
@@ -343,8 +364,8 @@ class BinaryOpTest(tf.test.TestCase):
                         reshape(2, 1).astype(np.float32))
 
   def testDoubleBasic(self):
-    x = np.linspace(-10, 10, 6).reshape(1, 3, 2).astype(np.float64)
-    y = np.linspace(20, -20, 6).reshape(1, 3, 2).astype(np.float64)
+    x = np.linspace(-5, 20, 15).reshape(1, 3, 5).astype(np.float64)
+    y = np.linspace(20, -5, 15).reshape(1, 3, 5).astype(np.float64)
     self._compareBoth(x, y, np.add, tf.add)
     self._compareBoth(x, y, np.subtract, tf.sub)
     self._compareBoth(x, y, np.multiply, tf.mul)
@@ -355,6 +376,14 @@ class BinaryOpTest(tf.test.TestCase):
     self._compareBoth(x, y, np.multiply, _MUL)
     self._compareBoth(x, y + 0.1, np.true_divide, _TRUEDIV)
     self._compareBoth(x, y + 0.1, np.floor_divide, _FLOORDIV)
+    try:
+      from scipy import special  # pylint: disable=g-import-not-at-top
+      a_pos_small = np.linspace(0.1, 2, 15).reshape(1, 3, 5).astype(np.float32)
+      x_pos_small = np.linspace(0.1, 10, 15).reshape(1, 3, 5).astype(np.float32)
+      self._compareBoth(a_pos_small, x_pos_small, special.gammainc, tf.igamma)
+      self._compareBoth(a_pos_small, x_pos_small, special.gammaincc, tf.igammac)
+    except ImportError as e:
+      tf.logging.warn("Cannot test special functions: %s" % str(e))
 
   def testInt8Basic(self):
     x = np.arange(1, 13, 2).reshape(1, 3, 2).astype(np.int8)

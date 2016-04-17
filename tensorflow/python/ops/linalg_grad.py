@@ -68,3 +68,29 @@ def _MatrixDeterminantGrad(op, grad):
   c = op.outputs[0]
   ainv = linalg_ops.matrix_inverse(a)
   return grad * c * array_ops.transpose(ainv)
+
+
+@ops.RegisterGradient("Cholesky")
+def _cholesky_grad(op, grad):
+  """Gradient for Cholesky."""
+  return linalg_ops.cholesky_grad( op.outputs[0] , grad )
+
+
+@ops.RegisterGradient("MatrixSolve")
+def _MatrixSolveGrad(op, grad):
+  """Gradients for MatrixSolve."""
+  a = op.inputs[0]
+  c = op.outputs[0]
+  grad_b = linalg_ops.matrix_solve(a, grad, adjoint=True)
+  grad_a = -math_ops.matmul(grad_b, c, transpose_b=True)
+  return (grad_a, grad_b)
+
+
+@ops.RegisterGradient("BatchMatrixSolve")
+def _BatchMatrixSolveGrad(op, grad):
+  """Gradient for BatchMatrixSolve."""
+  a = op.inputs[0]
+  c = op.outputs[0]
+  grad_b = linalg_ops.batch_matrix_solve(a, grad, adjoint=True)
+  grad_a = -math_ops.batch_matmul(grad_b, c, adj_y=True)
+  return (grad_a, grad_b)
