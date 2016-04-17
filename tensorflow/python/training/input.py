@@ -469,7 +469,8 @@ def _which_queue(dynamic_pad):
 def batch_pdq(tensor_list, batch_size, num_threads=1, capacity=32, num_threads_dq=1,
           enqueue_many=False, shapes=None, dynamic_pad=False,
           shared_name=None, name=None):
-  """Creates batches of tensors in `tensor_list`.
+  """Creates batches of tensors in `tensor_list`. Can dequeue multiple 
+  batches at a time.
 
   This function is implemented using a queue. A `QueueRunner` for the
   queue is added to the current `Graph`'s `QUEUE_RUNNER` collection.
@@ -526,7 +527,7 @@ def batch_pdq(tensor_list, batch_size, num_threads=1, capacity=32, num_threads_d
     ValueError: If the `shapes` are not specified, and cannot be
       inferred from the elements of `tensor_list`.
   """
-  with ops.op_scope(tensor_list, name, "batch") as name:
+  with ops.op_scope(tensor_list, name, "batch_pdq") as name:
     tensor_list = _validate(tensor_list)
     types = _dtypes([tensor_list])
     shapes = _shapes([tensor_list], shapes, enqueue_many)

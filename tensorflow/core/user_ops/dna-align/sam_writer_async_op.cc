@@ -7,7 +7,7 @@
 #include <vector>
 #include "tensorflow/core/framework/writer_op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
-#include "tensorflow/core/kernels/writer_base.h"
+#include "tensorflow/core/kernels/writer_async_base.h"
 #include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Read.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
@@ -15,6 +15,7 @@
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
 #include "tensorflow/core/user_ops/dna-align/aligner_options_resource.h"
 #include "tensorflow/core/user_ops/dna-align/genome_index_resource.h"
+#include "tensorflow/core/user_ops/dna-align/SnapAlignerWrapper.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/lib/strings/strcat.h"
@@ -23,7 +24,7 @@
 
 namespace tensorflow {
 
-REGISTER_OP("SamWriter")
+REGISTER_OP("SamAsyncWriter")
     .Output("writer_handle: Ref(string)")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
@@ -41,18 +42,20 @@ writer_handle: The handle to reference the Writer.
 out_file: The file to write results to.
 )doc");
 
-class SamWriter : public WriterBase {
+class SamAsyncWriter : public WriterAsyncBase {
   public:
 
-    SamWriter(const string& node_name, Env* env, const string& work)
-      : WriterBase(strings::StrCat("SamWriter'", node_name, "'"), work),
+    SamAsyncWriter(const string& node_name, Env* env, const string& work,
+        int num_buffers, uint64 buffer_size)
+      : WriterAsyncBase(strings::StrCat("SamAsyncWriter'", node_name, "'"), work,
+          num_buffers, buffer_size),
       env_(env) {}
 
-    ~SamWriter() {
+    ~SamAsyncWriter() {
       delete aligner_options_;
     }
 
-    Status OnWorkStartedLocked(OpKernelContext* context) override {
+    Status OnWorkStartedLocked(OpKernelContext* context, WritableFile** file) override {
       record_number_ = 0;
       if (!genome_index_) {
 
@@ -61,6 +64,10 @@ class SamWriter : public WriterBase {
         string options_shared_name;
         string genome_shared_name;
 
+        // a little confusing -- the passed context comes from a WriterWriteOp
+        // WriterWriteOp has `meta_handles` as an input
+        // no other way to give the reader interface access to a shared 
+        // session resource
         OpMutableInputList meta_list;
         Status status = context->mutable_input_list("meta_handles", &meta_list);
         if (!status.ok()) {
@@ -70,13 +77,13 @@ class SamWriter : public WriterBase {
         Tensor options_handle = meta_list.at(0, false);
         if (options_handle.NumElements() != 2) {
           return errors::InvalidArgument(
-              "Metadata handle for SamWriter must have 2 elements ",
+              "Metadata handle for SamAsyncWriter must have 2 elements ",
               options_handle.shape().DebugString());
         }
         Tensor genome_handle = meta_list.at(1, false);
         if (genome_handle.NumElements() != 2) {
           return errors::InvalidArgument(
-              "Metadata genome handle for SamWriter must have 2 elements ",
+              "Metadata genome handle for SamAsyncWriter must have 2 elements ",
               genome_handle.shape().DebugString());
         }
         options_container = options_handle.flat<string>()(0);
@@ -116,6 +123,7 @@ class SamWriter : public WriterBase {
       //TF_RETURN_IF_ERROR(env_->NewWritableFile(current_work(), &out_file_));
       //LOG(INFO) << "Opening file " << current_work(); 
 
+      // use the SNAP infrastructure to just write the header for the file
       memset(&reader_context_, 0, sizeof(reader_context_));
       reader_context_.clipping = aligner_options_->clipping;
       reader_context_.defaultReadGroup = aligner_options_->defaultReadGroup;
@@ -124,7 +132,6 @@ class SamWriter : public WriterBase {
       reader_context_.ignoreSupplementaryAlignments = aligner_options_->ignoreSecondaryAlignments;
       DataSupplier::ExpansionFactor = aligner_options_->expansionFactor;
 
-      const FileFormat* format;
       if (aligner_options_->useM)
         format = FileFormat::SAM[true];
       else
@@ -132,24 +139,32 @@ class SamWriter : public WriterBase {
 
       format->setupReaderContext(aligner_options_, &reader_context_);
 
-      writer_supplier_ = format->getWriterSupplier(aligner_options_, reader_context_.genome);
-      read_writer_ = writer_supplier_->getWriter();
-      read_writer_->writeHeader(reader_context_, aligner_options_->sortOutput, 1, (const char**)argv_,
+      ReadWriterSupplier* writer_supplier = format->getWriterSupplier(aligner_options_, reader_context_.genome);
+      ReadWriter* read_writer = writer_supplier->getWriter();
+      read_writer->writeHeader(reader_context_, aligner_options_->sortOutput, 1, (const char**)argv_,
           "version", aligner_options_->rgLineContents, aligner_options_->outputFile.omitSQLines);
+      read_writer->close();
+      delete read_writer;
+      writer_supplier->close();
+      delete writer_supplier;
 
-      return Status::OK();
+      // now open the file for the async writer
+      Status status = context->env()->NewAppendableFile(current_work(), file);
+      if (!status.ok()) {
+        LOG(INFO) << "Failed to create appendable file in sam writer async";
+        context->SetStatus(status);
+      }
+      return status;
     }
 
     Status OnWorkFinishedLocked() override {
-      //out_file_->Close();
-      read_writer_->close();
-      writer_supplier_->close();
       return Status::OK();
     }
 
-    Status WriteLocked(const string& value) override {
+    Status WriteUnlocked(const string& value, char* buffer, 
+        uint64 buffer_size, uint64* used) override {
       if (!genome_index_) {
-        LOG(INFO) << "WTF genome index is null!";
+        LOG(INFO) << " genome index is null!";
       }
       // `value` is a serialized AlignmentDef protobuf message
       // get submessage ReadDef, write each SingleResult to file
@@ -157,7 +172,7 @@ class SamWriter : public WriterBase {
       SnapProto::AlignmentDef alignment;
       if (!alignment.ParseFromString(value)) {
         return errors::Internal("Failed to parse AlignmentDef",
-            " from string in SamWriter WriteLocked()");
+            " from string in SamAsyncWriter WriteLocked()");
       }
 
       const SnapProto::ReadDef* read = &alignment.read();
@@ -175,7 +190,7 @@ class SamWriter : public WriterBase {
         snap_results = new SingleAlignmentResult[alignment.results_size()];
       }
       else {
-        return errors::Internal("SamWriter Error: Alignment had no results!");
+        return errors::Internal("SamAsyncWriter Error: Alignment had no results!");
       }
 
       // debugging
@@ -199,9 +214,12 @@ class SamWriter : public WriterBase {
       }
 
       record_number_++;
-      read_writer_->writeReads(reader_context_, &snap_read, snap_results, alignment.results_size(), alignment.firstisprimary());
+      Status status = snap_wrapper::writeRead(reader_context_, &snap_read, 
+          snap_results, alignment.results_size(), 
+          alignment.firstisprimary(), buffer, buffer_size, used, format, lvc_,
+          reader_context_.genome);
       delete[] snap_results;
-      return Status::OK();
+      return status;
     }
 
   private:
@@ -211,28 +229,36 @@ class SamWriter : public WriterBase {
     GenomeIndexResource* genome_index_ = nullptr;
     AlignerOptions* aligner_options_ = nullptr;
     ReaderContext reader_context_;
-    ReadWriterSupplier *writer_supplier_;
-    ReadWriter* read_writer_;
+    const FileFormat* format;
     char** argv_;
+    LandauVishkinWithCigar lvc_;
 
 };
 
-class SamWriterOp : public WriterOpKernel {
+class SamAsyncWriterOp : public WriterOpKernel {
   public:
-    explicit SamWriterOp(OpKernelConstruction* context)
+    explicit SamAsyncWriterOp(OpKernelConstruction* context)
       : WriterOpKernel(context) {
 
         string out_file;
+        int num_buffers;
+        int64 buffer_size;
+
         OP_REQUIRES_OK(context,
             context->GetAttr("out_file", &out_file));
+        OP_REQUIRES_OK(context,
+            context->GetAttr("num_buffers", &num_buffers));
+        OP_REQUIRES_OK(context,
+            context->GetAttr("buffer_size", &buffer_size));
         Env* env = context->env();
-        SetWriterFactory([this, out_file, env]() {
-            return new SamWriter(name(), env, out_file);
+        SetWriterFactory([this, out_file, env, num_buffers, buffer_size]() {
+            return new SamAsyncWriter(name(), env, out_file, num_buffers,
+              buffer_size);
             });
       }
 };
 
-REGISTER_KERNEL_BUILDER(Name("SamWriter").Device(DEVICE_CPU),
-    SamWriterOp);
+REGISTER_KERNEL_BUILDER(Name("SamAsyncWriter").Device(DEVICE_CPU),
+    SamAsyncWriterOp);
 
 }  // namespace tensorflow
