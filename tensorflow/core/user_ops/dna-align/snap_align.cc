@@ -28,6 +28,7 @@ namespace tensorflow {
         }
 
         void Compute(OpKernelContext* ctx) override {
+            LOG(INFO) << "SnapAlign started";
 
             if (base_aligner_ == nullptr) {
                 OP_REQUIRES_OK(ctx,
@@ -63,13 +64,11 @@ namespace tensorflow {
             alignments.reserve(num_reads);
             input_reads.reserve(num_reads);
 
-            //LOG(INFO) << "shape is: " << reads->shape().DebugString();
-            //LOG(INFO) << "snap aligner op processing " << num_reads << " reads.";
             for (size_t i = 0; i < num_reads; i++) {
                 SnapProto::AlignmentDef alignment;
                 SnapProto::ReadDef read_proto;
                 if (!alignment.ParseFromString(reads_flat(i))) {
-                    LOG(INFO) << "SnapAlignOp: failed to parse read from protobuf";
+                    LOG(INFO) << "SnapAlign: failed to parse read from protobuf";
                 }
 
                 alignments.push_back(alignment);
