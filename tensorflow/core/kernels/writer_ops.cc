@@ -92,6 +92,9 @@ class WriterWriteBatchOp : public WriterVerbAsyncOpKernel {
 
     auto reads_flat = value->flat<string>();
     size_t num_reads = reads_flat.size();
+    
+    //LOG(INFO) << "WriteBatchOp " << name() << " writing " <<
+    //  num_reads << " reads.";
 
     for (int i = 0; i < num_reads; i++) {
       writer->Write(&reads_flat(i), context);

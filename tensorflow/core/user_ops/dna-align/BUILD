@@ -32,7 +32,12 @@ cc_library(
     name = "snap_align",
     hdrs = ["SnapAlignerWrapper.h"],
     includes = ["."],
-    srcs = glob(["*.cc"], exclude = ["sam_writer_op.cc", "sam_writer.cc"],),
+    srcs = glob(["*.cc"], 
+           exclude = [
+                      "sam_writer_op.cc", 
+                      "sam_writer_async_op.cc", 
+                      "sam_writer.cc"],
+               ),
     copts = tf_copts(),
     #linkopts = [
         #"-Wl,-Bsymbolic",
@@ -59,3 +64,14 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "sam_writer_async",
+    srcs = ["sam_writer_async_op.cc"],
+    includes = ["."],
+    copts = tf_copts(),
+    linkstatic = 1,
+    visibility = ["//visibility:public"],
+    deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:writer_async_base",
+            ":snap_protos_cc", ":snap_lib"],
+    alwayslink = 1,
+)

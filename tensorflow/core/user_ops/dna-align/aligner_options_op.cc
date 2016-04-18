@@ -2,9 +2,6 @@
 // Stuart Byma
 // Op providing SNAP AlignerOptions
 
-#ifndef TENSORFLOW_KERNELS_ALIGNEROPTIONSOP_H_
-#define TENSORFLOW_KERNELS_ALIGNEROPTIONSOP_H_
-
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -96,5 +93,3 @@ shared_name: If non-empty, this options will be shared under the given name
 
     REGISTER_KERNEL_BUILDER(Name("AlignerOptions").Device(DEVICE_CPU), AlignerOptionsOp);
 }  // namespace tensorflow
-
-#endif  // TENSORFLOW_KERNELS_QUEUE_OP_H_

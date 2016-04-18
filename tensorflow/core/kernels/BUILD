@@ -168,6 +168,16 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "writer_async_base",
+    srcs = ["writer_async_base.cc"],
+    hdrs = ["writer_async_base.h"],
+    deps = [
+        ":writer_base_proto_cc",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+    ],
+)
 tf_proto_library(
     name = "reader_base_proto",
     srcs = ["reader_base.proto"],

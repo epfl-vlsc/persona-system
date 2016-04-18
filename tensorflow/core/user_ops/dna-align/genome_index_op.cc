@@ -2,9 +2,6 @@
 // Stuart Byma
 // Op providing SNAP genome index and genome
 
-#ifndef TENSORFLOW_KERNELS_GENOMEINDEXOP_H_
-#define TENSORFLOW_KERNELS_GENOMEINDEXOP_H_
-
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -96,5 +93,3 @@ namespace tensorflow {
 
     REGISTER_KERNEL_BUILDER(Name("GenomeIndex").Device(DEVICE_CPU), GenomeIndexOp);
 }  // namespace tensorflow
-
-#endif  // TENSORFLOW_KERNELS_QUEUE_OP_H_

@@ -320,6 +320,7 @@ cc_library(
     deps = [":framework", "//tensorflow/core/kernels:reader_base",
             "//tensorflow/core/user_ops/dna-align:snap_protos_cc",
             "//tensorflow/core/user_ops/dna-align:sam_writer",
+            "//tensorflow/core/user_ops/dna-align:sam_writer_async",
             "//tensorflow/core/user_ops/dna-align:snap_align",
             "//tensorflow/core/user_ops/dense-format:dense_format",
            ],
