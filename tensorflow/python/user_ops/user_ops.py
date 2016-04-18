@@ -96,6 +96,18 @@ class SAMWriter(io_ops.WriterBase):
 ops.NoGradient("SAMWriter")
 ops.RegisterShape("SAMWriter")(common_shapes.scalar_shape)
 
+class SAMAsyncWriter(io_ops.WriterBase):
+
+    def __init__(self, name=None, out_file=None, num_buffers=16, buffer_size=1048576):
+        if out_file is None:
+            out_file = name + '_out.txt'
+        ww = gen_user_ops.sam_async_writer(name=name, out_file=out_file, 
+            num_buffers=num_buffers, buffer_size=buffer_size)
+        super(SAMAsyncWriter, self).__init__(ww)
+
+ops.NoGradient("SAMAsyncWriter")
+ops.RegisterShape("SAMAsyncWriter")(common_shapes.scalar_shape)
+
 def GenomeIndex(filePath):
 
     return gen_user_ops.genome_index(genome_location=filePath);

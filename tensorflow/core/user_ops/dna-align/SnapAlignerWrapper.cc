@@ -107,6 +107,8 @@ namespace snap_wrapper {
 
     // buffer size is basicaly guaranteed to be large enough for however
     // many results may be present
+    //LOG(INFO) << "SnapWrapper writing read! buffer_size=" << 
+    //  buffer_size << ", nResults=" << nResults;
     uint64 used = 0;
 
     for (int i = 0; i < nResults; i++) {
@@ -162,9 +164,9 @@ namespace snap_wrapper {
           finalLocation = results[whichResult].location + cumulativeAddFrontClipping;
         }
       } // while formatting doesn't work
-
+      //LOG(INFO) << "Formatting was successful, used " << used_local << " bytes";
       used += used_local;
-      if (used <= buffer_size) {
+      if (used > buffer_size) {
         return tensorflow::errors::Internal("Buffer overflow in Snapwrapper read writer?");
       }
 

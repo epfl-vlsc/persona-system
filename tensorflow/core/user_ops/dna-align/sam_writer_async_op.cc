@@ -34,6 +34,8 @@ REGISTER_OP("SamAsyncWriter")
         .Attr("options_container: string = ''")
         .Attr("options_shared_name: string = ''")*/
     .Attr("out_file: string")
+    .Attr("num_buffers: int")
+    .Attr("buffer_size: int64")
     .SetIsStateful()
     .Doc(R"doc(
 A writer that writes aligned reads to stdout to test.

@@ -111,6 +111,7 @@ void WriterAsyncBase::Write(const string* value,
           else {
             char* buffer = ready_buf->GetBuffer();
             StringPiece to_write(buffer, ready_buf->Used());
+            //LOG(INFO) << "Appending data in writer thread: " << to_write;
             Status status = outfile_->Append(to_write);
             if (!status.ok()) {
               LOG(INFO) << "WRITER THREAD GOT IO ERROR! EXITING!!!";

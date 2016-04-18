@@ -64,7 +64,7 @@ namespace tensorflow {
             input_reads.reserve(num_reads);
 
             //LOG(INFO) << "shape is: " << reads->shape().DebugString();
-            //LOG(INFO) << "processing " << num_reads << " reads.";
+            //LOG(INFO) << "snap aligner op processing " << num_reads << " reads.";
             for (size_t i = 0; i < num_reads; i++) {
                 SnapProto::AlignmentDef alignment;
                 SnapProto::ReadDef read_proto;
