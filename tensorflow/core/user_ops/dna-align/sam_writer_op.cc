@@ -124,8 +124,8 @@ out_file: The file to write results to.
                 argv_[0] = new char[128]();
                 strcpy(argv_[0], "TFBioFLow!");
             }
-            //TF_RETURN_IF_ERROR(env_->NewWritableFile(current_work(), &out_file_));
-            //LOG(INFO) << "Opening file " << current_work(); 
+
+            LOG(INFO) << "SAM Writer: Opening file " << current_work(); 
 
             memset(&reader_context_, 0, sizeof(reader_context_));
             reader_context_.clipping = aligner_options_->clipping;
@@ -135,16 +135,24 @@ out_file: The file to write results to.
             reader_context_.ignoreSupplementaryAlignments = aligner_options_->ignoreSecondaryAlignments;
             DataSupplier::ExpansionFactor = aligner_options_->expansionFactor;
 
-            const FileFormat* format;
-            if (aligner_options_->useM)
-              format = FileFormat::SAM[true];
-            else
-              format = FileFormat::SAM[false];
+            LOG(INFO) << "SAM Writer: Picking format";
+
+            const FileFormat* format = FileFormat::SAM[aligner_options_->useM];
+
+            LOG(INFO) << "SAM Writer: Setting up context";
 
             format->setupReaderContext(aligner_options_, &reader_context_);
 
+            LOG(INFO) << "SAM Writer: Initializing writer supplier";
+
             writer_supplier_ = format->getWriterSupplier(aligner_options_, reader_context_.genome);
+
+            LOG(INFO) << "SAM Writer: Initializing read writer";
+
             read_writer_ = writer_supplier_->getWriter();
+
+            LOG(INFO) << "SAM Writer: Writing header";
+
             read_writer_->writeHeader(reader_context_, aligner_options_->sortOutput, 1, (const char**)argv_,
                 "version", aligner_options_->rgLineContents, aligner_options_->outputFile.omitSQLines);
 
@@ -152,9 +160,15 @@ out_file: The file to write results to.
         }
 
         Status OnWorkFinishedLocked() override {
-            //out_file_->Close();
-            read_writer_->close();
-            writer_supplier_->close();
+            LOG(INFO) << "Closing SAM writer";
+
+            if (writer_supplier_ != nullptr) {
+                writer_supplier_->close();
+            }
+            if (read_writer_ != nullptr) {
+                read_writer_->close();
+            }
+
             return Status::OK();
         }
 
@@ -165,11 +179,15 @@ out_file: The file to write results to.
             // `value` is a serialized AlignmentDef protobuf message
             // get submessage ReadDef, write each SingleResult to file
 
+            LOG(INFO) << "SAM Writer: Writing";
+
             SnapProto::AlignmentDef alignment;
             if (!alignment.ParseFromString(value)) {
                 return errors::Internal("Failed to parse AlignmentDef",
                     " from string in SamWriter WriteLocked()");
             }
+
+            LOG(INFO) << "SAM Writer: Inflating read from proto";
 
             const SnapProto::ReadDef* read = &alignment.read();
             Read snap_read;
@@ -181,42 +199,49 @@ out_file: The file to write results to.
                 read->length()
             );
 
-            SingleAlignmentResult* snap_results;
-            if (alignment.results_size() > 0) {
-                snap_results = new SingleAlignmentResult[alignment.results_size()];
-            }
-            else {
+            LOG(INFO) << "SAM Writer: Checking results size";
+
+            if (alignment.results_size() == 0) {
                 return errors::Internal("SamWriter Error: Alignment had no results!");
             }
 
-            // debugging
-            /*LOG(INFO) << "Preparing " << alignment.results_size() << " results for writing to file."
-                << " for read " << read->meta() << "  " << read->bases();
-            string isp = alignment.firstisprimary() ? "true" : "false";
-            LOG(INFO) << "firstIsPrimary is " << isp;*/
+            SingleAlignmentResult* snap_results = new SingleAlignmentResult[alignment.results_size()];
 
             if (alignment.results_size() == 0) {
                 LOG(INFO) << "There were 0 results in this read";
             }
 
             for (int j = 0; j < alignment.results_size(); j++) {
+                LOG(INFO) << "SAM Writer: Inflating result " << j;
+
                 const SnapProto::SingleResultDef& single_result = alignment.results(j);
                 snap_results[j].status = (AlignmentResult)single_result.result();
                 snap_results[j].location = GenomeLocation(single_result.genomelocation());
                 snap_results[j].direction = (Direction)single_result.direction();
                 snap_results[j].mapq = single_result.mapq();
-                /*LOG(INFO) << " result: location " << snap_results[j].location <<
-                    " direction: " << snap_results[j].direction << " score " << snap_results[j].score;*/
+
+                LOG(INFO) << "SAM Writer: read: status = " << snap_results[j].status << ", location = " << snap_results[j].location
+                    << ", direction = " << snap_results[j].direction << ", mapq = " << snap_results[j].mapq;
             }
 
+            LOG(INFO) << "SAM Writer: Actually writing";
+
             record_number_++;
-            read_writer_->writeReads(reader_context_, &snap_read, snap_results, alignment.results_size(), alignment.firstisprimary());
+            bool result = read_writer_->writeReads(reader_context_, &snap_read, snap_results, alignment.results_size(), alignment.firstisprimary());
+            if (!result) {
+                LOG(FATAL) << "SAM Writer: NOOOOO";
+            }
+
+            LOG(INFO) << "SAM Writer: Freeing memory";
+
             delete[] snap_results;
+
+            LOG(INFO) << "SAM Writer: Exiting";
+
             return Status::OK();
         }
 
     private:
-        //WritableFile* out_file_ = nullptr;
         Env* const env_;
         int64 record_number_;
         GenomeIndexResource* genome_index_ = nullptr;
