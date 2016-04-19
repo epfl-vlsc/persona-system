@@ -29,6 +29,7 @@ namespace tensorflow {
         .Output("reader_handle: Ref(string)")
         .Attr("container: string = ''")
         .Attr("shared_name: string = ''")
+        .Attr("add_record_name: bool = false")
         .SetIsStateful()
         .Doc(R"doc(
     A Reader that outputs the read sequences in a FASTQ file. Does not output
@@ -42,11 +43,12 @@ namespace tensorflow {
 
     class FastqReader : public ReaderBase {
     public:
-        FastqReader(const string& node_name, Env* env)
+      FastqReader(const string& node_name, Env* env, const bool add_record_name)
             : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
             env_(env),
             line_number_(0),
-            num_produced_(0) {}
+              num_produced_(0),
+              add_record_name_(add_record_name) {}
 
         Status OnWorkStartedLocked() override {
             line_number_ = 0;
@@ -157,16 +159,20 @@ namespace tensorflow {
         uint64 bytes_;
         int64 line_number_ = 0;
         int64 num_produced_ = 0;
+        bool add_record_name_ = false;
     };
 
     class FastqReaderOp : public ReaderOpKernel {
     public:
         explicit FastqReaderOp(OpKernelConstruction* context)
             : ReaderOpKernel(context) {
+          bool add_record_name = false;
 
             Env* env = context->env();
-            SetReaderFactory([this, env]() {
-                return new FastqReader(name(), env);
+            OP_REQUIRES_OK(context,
+                           context->GetAttr("add_record_name", &add_record_name));
+            SetReaderFactory([this, env, add_record_name]() {
+                return new FastqReader(name(), env, add_record_name);
             });
         }
     };

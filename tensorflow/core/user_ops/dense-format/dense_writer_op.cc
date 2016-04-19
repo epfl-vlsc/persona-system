@@ -5,6 +5,7 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
 
 namespace tensorflow {
 
@@ -37,7 +38,14 @@ public:
 
   Status WriteLocked(const string& value)
   {
-    
+    SnapProto::AlignmentDef alignment;
+    SnapProto::ReadDef read_proto;
+
+    if (!alignment.ParseFromString(value)) {
+      LOG(ERROR) << "DenseWriter: failed to parse read from protobuf";
+      return errors::InvalidArgument("Unable to parse SnapProto alignment def from string: ", value);
+    }
+    read_proto = alignment.read();
   }
 
   Status OnWorkStartedLocked(OpKernelContext* context)
@@ -52,6 +60,7 @@ public:
 private:
   Env* const env_;
   size_t records_per_chunk_;
+  size_t num_records_;
   string metadata_out_path_;
   string record_name_;
   string record_out_dir_;
