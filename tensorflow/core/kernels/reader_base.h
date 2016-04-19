@@ -56,6 +56,11 @@ class ReaderBase : public ReaderInterface {
 
   // Descendants may optionally implement these -------------------------------
 
+  virtual Status ReadBatchLocked(
+      std::function<string*(int)> batch_loader, 
+      int num_requested, int* num_produced, bool* at_end) {
+    return errors::Internal("Not implemented!!");
+  }
   // Called when work starts / finishes.
   virtual Status OnWorkStartedLocked() { return Status::OK(); }
   virtual Status OnWorkFinishedLocked() { return Status::OK(); }
@@ -96,6 +101,9 @@ class ReaderBase : public ReaderInterface {
   // and call the methods above to do the work.
   void Read(QueueInterface* queue, string* key, string* value,
             OpKernelContext* context) override;
+  void ReadBatch(QueueInterface* queue, 
+    std::function<string*(int)> batch_loader, 
+    int batch_size, string* key, OpKernelContext* context) override;
   Status Reset() override;
   int64 NumRecordsProduced() override;
   int64 NumWorkUnitsCompleted() override;
