@@ -124,9 +124,13 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
 
     auto key_scalar = key->scalar<string>();
     auto value_vector = value->flat<string>();
-    for (int i = 0; i < batch_size_; i++) {
+    reader->ReadBatch(queue, [&value_vector](int index) -> string* {
+        return &value_vector(index); },
+        batch_size_, &key_scalar(), context);
+
+    /*for (int i = 0; i < batch_size_; i++) {
       reader->Read(queue, &key_scalar(), &value_vector(i), context);
-    }
+    }*/
   }
  private:
   int batch_size_ = 1;

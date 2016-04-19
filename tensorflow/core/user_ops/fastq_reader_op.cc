@@ -25,60 +25,61 @@ limitations under the License.
 
 namespace tensorflow {
 
-  REGISTER_OP("FastqReader")
-    .Output("reader_handle: Ref(string)")
-    .Attr("container: string = ''")
-    .Attr("shared_name: string = ''")
-    .SetIsStateful()
-    .Doc(R"doc(
-    A Reader that outputs the read sequences in a FASTQ file. Does not output
-    score values or metadata. 
+REGISTER_OP("FastqReader")
+  .Output("reader_handle: Ref(string)")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
+  .SetIsStateful()
+  .Doc(R"doc(
+  A Reader that outputs the read sequences in a FASTQ file. 
 
-    reader_handle: The handle to reference the Reader.
-    skip_header_lines: Number of lines to skip from the beginning of every file.
-    container: If non-empty, this reader is placed in the given container.
-    Otherwise, a default container is used.
-    )doc");
+  reader_handle: The handle to reference the Reader.
+  skip_header_lines: Number of lines to skip from the beginning of every file.
+  container: If non-empty, this reader is placed in the given container.
+  Otherwise, a default container is used.
+  )doc");
 
-  class FastqReader : public ReaderBase {
-    public:
-      FastqReader(const string& node_name, Env* env)
-        : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
-        env_(env),
-        line_number_(0),
-        num_produced_(0){}
+class FastqReader : public ReaderBase {
+  public:
+    FastqReader(const string& node_name, Env* env)
+      : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
+      env_(env),
+      line_number_(0),
+      num_produced_(0){}
 
-      Status OnWorkStartedLocked() override {
-        line_number_ = 0;
-        num_produced_ = 0;
-        ReadOnlyMemoryRegion *raw_mmap = nullptr;
-        Status status = env_->NewReadOnlyMemoryRegionFromFile(current_work(),
-            &raw_mmap);
-        if (!status.ok()) {
-          LOG(INFO) << "ERROR: problem creating mmap file in fastqreader";
-          return status;
-        }
-
-        mmap_fastq_ = std::shared_ptr<ReadOnlyMemoryRegion>(raw_mmap);
-
-        mmap_data_ = reinterpret_cast<const char*>(mmap_fastq_->data());
-        bytes_ = 0;
-        
-        LOG(INFO) << "Opening file: " << current_work() << std::endl;
-        return Status::OK();
+    Status OnWorkStartedLocked() override {
+      line_number_ = 0;
+      num_produced_ = 0;
+      ReadOnlyMemoryRegion *raw_mmap = nullptr;
+      Status status = env_->NewReadOnlyMemoryRegionFromFile(current_work(),
+          &raw_mmap);
+      if (!status.ok()) {
+        LOG(INFO) << "ERROR: problem creating mmap file in fastqreader";
+        return status;
       }
 
-      Status OnWorkFinishedLocked() override {
-        return Status::OK();
-      }
+      mmap_fastq_ = std::shared_ptr<ReadOnlyMemoryRegion>(raw_mmap);
 
-      Status ReadLocked(string* key, string* value, bool* produced,
-          bool* at_end) override {
+      mmap_data_ = reinterpret_cast<const char*>(mmap_fastq_->data());
+      bytes_ = 0;
+      
+      LOG(INFO) << "Opening file: " << current_work() << std::endl;
+      return Status::OK();
+    }
 
-        //LOG(INFO) << "Reading from file " << current_work() << " !\n";
+    Status OnWorkFinishedLocked() override {
+      return Status::OK();
+    }
 
-        string lines[4];
-        Status status;
+    Status ReadBatchLocked(
+      std::function<string*(int)> batch_loader, 
+      int num_requested, int* num_produced, bool* at_end) override {
+
+      *num_produced = 0;
+      string lines[4];
+      Status status;
+      for (int j = 0; j < num_requested; j++) {
+
         for (int i = 0; i < 4; i++)
         {
           status = ReadLine_(&lines[i]);
@@ -87,6 +88,7 @@ namespace tensorflow {
             LOG(INFO) << "I is out of range! file: " 
               << current_work() << " line number: " << line_number_ << std::endl;
             *at_end = true;
+            // caller will move to next file, everything still OK
             return Status::OK();
           }
         }
@@ -99,67 +101,107 @@ namespace tensorflow {
           read->set_meta(lines[0]);
           read->set_length(lines[1].length());
           read->set_qualities(lines[3]);
+          string* value = batch_loader(j);
           alignment.SerializeToString(value);
-          *key = strings::StrCat(current_work(), ":", line_number_);
-          *produced = true;
+          (*num_produced)++;
           num_produced_++;
-          return status;
         } else {
-          LOG(INFO) << "Something bad happened in fastq reader: "
-            << status.ToString() << std::endl;
+          LOG(INFO) << "Something bad happened in fastq reader read batch: "
+            << status.ToString();
           return status;
         }
-
       }
+      return Status::OK();
+    }
+      
 
-      Status ResetLocked() override {
-        line_number_ = 0;
-        num_produced_ = 0;
-        return ReaderBase::ResetLocked();
-      }
+    Status ReadLocked(string* key, string* value, bool* produced,
+        bool* at_end) override {
 
-    private:
+      //LOG(INFO) << "Reading from file " << current_work() << " !\n";
 
-      Status ReadLine_(string* result) {
-        if (bytes_ >= mmap_fastq_->length())
-          return errors::OutOfRange("eof");
-        const char* orig = mmap_data_;
-        while (*mmap_data_ != '\n' && bytes_ < mmap_fastq_->length()) {
-          // EOF is treated like end of line
-          bytes_++;
-          mmap_data_++;
+      string lines[4];
+      Status status;
+      for (int i = 0; i < 4; i++)
+      {
+        status = ReadLine_(&lines[i]);
+        ++line_number_;
+        if (errors::IsOutOfRange(status)) {
+          LOG(INFO) << "I is out of range! file: " 
+            << current_work() << " line number: " << line_number_ << std::endl;
+          *at_end = true;
+          return Status::OK();
         }
-        if (mmap_data_ == orig)
-          result->assign("\n");
-        else
-          result->assign(orig, (size_t)(mmap_data_ - orig));
-        // advance past the newline character
-        mmap_data_++;
+      }
+
+      if (status.ok()) {
+        lines[0].erase(0, 1);  // remove the '@' from meta data
+        SnapProto::AlignmentDef alignment;
+        SnapProto::ReadDef* read = alignment.mutable_read();
+        read->set_bases(lines[1]);
+        read->set_meta(lines[0]);
+        read->set_length(lines[1].length());
+        read->set_qualities(lines[3]);
+        alignment.SerializeToString(value);
+        *key = strings::StrCat(current_work(), ":", line_number_);
+        *produced = true;
+        num_produced_++;
+        return status;
+      } else {
+        LOG(INFO) << "Something bad happened in fastq reader: "
+          << status.ToString() << std::endl;
+        return status;
+      }
+
+    }
+
+    Status ResetLocked() override {
+      line_number_ = 0;
+      num_produced_ = 0;
+      return ReaderBase::ResetLocked();
+    }
+
+  private:
+
+    Status ReadLine_(string* result) {
+      if (bytes_ >= mmap_fastq_->length())
+        return errors::OutOfRange("eof");
+      const char* orig = mmap_data_;
+      while (*mmap_data_ != '\n' && bytes_ < mmap_fastq_->length()) {
+        // EOF is treated like end of line
         bytes_++;
-        return Status::OK();
+        mmap_data_++;
       }
-      enum { kBufferSize = 256 << 10 /* 256 kB */ };
-      Env* const env_;
-      std::shared_ptr<ReadOnlyMemoryRegion> mmap_fastq_;
-      const char* mmap_data_;
-      uint64 bytes_;
-      int64 line_number_ = 0;
-      int64 num_produced_ = 0;
-  };
+      if (mmap_data_ == orig)
+        result->assign("\n");
+      else
+        result->assign(orig, (size_t)(mmap_data_ - orig));
+      // advance past the newline character
+      mmap_data_++;
+      bytes_++;
+      return Status::OK();
+    }
+    Env* const env_;
+    std::shared_ptr<ReadOnlyMemoryRegion> mmap_fastq_;
+    const char* mmap_data_;
+    uint64 bytes_;
+    int64 line_number_ = 0;
+    int64 num_produced_ = 0;
+};
 
-  class FastqReaderOp : public ReaderOpKernel {
-    public:
-      explicit FastqReaderOp(OpKernelConstruction* context)
-        : ReaderOpKernel(context) {
+class FastqReaderOp : public ReaderOpKernel {
+  public:
+    explicit FastqReaderOp(OpKernelConstruction* context)
+      : ReaderOpKernel(context) {
 
-          Env* env = context->env();
-          SetReaderFactory([this, env]() {
-              return new FastqReader(name(), env);
-              });
-        }
-  };
+        Env* env = context->env();
+        SetReaderFactory([this, env]() {
+            return new FastqReader(name(), env);
+            });
+      }
+};
 
-  REGISTER_KERNEL_BUILDER(Name("FastqReader").Device(DEVICE_CPU),
-      FastqReaderOp);
+REGISTER_KERNEL_BUILDER(Name("FastqReader").Device(DEVICE_CPU),
+    FastqReaderOp);
 
 }  // namespace tensorflow

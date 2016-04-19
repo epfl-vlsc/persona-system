@@ -74,6 +74,60 @@ Status ReaderBase::RestoreStateLocked(const string& state) {
   return errors::Unimplemented("Reader RestoreState");
 }
 
+void ReaderBase::ReadBatch(QueueInterface* queue, 
+    std::function<string*(int)> batch_loader, 
+    int batch_size, string* key, OpKernelContext* context) {
+  mutex_lock lock(mu_);
+
+  *key = strings::StrCat(work_, ":", num_records_produced_);
+
+  int num_requested = batch_size;
+  while (true) {
+    if (!work_in_progress()) {
+      GetNextWorkLocked(queue, context);
+      if (!context->status().ok()) {
+        if (num_requested < batch_size)  // partial batch processed
+          context->SetStatus(Status::OK());
+        return;
+      }
+    }
+
+    int num_produced = 0;
+    bool at_end = false;
+    Status status = ReadBatchLocked(batch_loader, num_requested, 
+        &num_produced, &at_end);
+
+    if (!at_end && status.ok() && num_produced==0) {
+      status = errors::Internal(
+          "ReadBatchLocked() for ", name(),
+          " must set *at_end=true, *num_produced=true, or return an error.");
+    }
+    if (!status.ok() && num_produced != 0) {
+      status = errors::Internal("ReadBatchLocked() for ", name(),
+                                " set *num_produced!=0 *and* returned an error: ",
+                                status.ToString());
+    }
+    if (status.ok() && at_end) {
+      status = OnWorkFinishedLocked();
+      work_finished_ = work_started_;
+    }
+    if (!status.ok()) {
+      context->SetStatus(status);
+      return;
+    }
+    if (num_produced == num_requested) {
+      num_records_produced_ += num_produced;
+      return;
+    } else if (num_produced > num_requested) {
+      status = errors::Internal("ReadBatchLocked() for ", name(),
+          " produced more records than requested.");
+    } else {
+      num_records_produced_ += num_produced;
+      num_requested -= num_produced;
+    }
+  }
+}
+
 void ReaderBase::Read(QueueInterface* queue, string* key, string* value,
                       OpKernelContext* context) {
   mutex_lock lock(mu_);

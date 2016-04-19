@@ -43,6 +43,15 @@ class ReaderInterface;
 // All descendants of this class must be thread-safe.
 class ReaderInterface : public ResourceBase {
  public:
+  // Read `batch_size` records. `batch_loader` returns a pointer
+  // to string for a given batch index. 
+  // Set status on *context with OutOfRange if the current work
+  // is complete and the queue is done. In this case, a full
+  // batch may not be processed, but partial batches are still valid.
+  virtual void ReadBatch(QueueInterface* queue, 
+    std::function<string*(int)> batch_loader, 
+    int batch_size, string* key, OpKernelContext* context) = 0;
+
   // Read a single record into *key / *value.  May get more work from
   // *queue if the current work is complete.  Sets the status on
   // *context with an OutOfRange Status if the current work is
