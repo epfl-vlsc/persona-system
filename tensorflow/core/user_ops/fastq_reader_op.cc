@@ -104,6 +104,9 @@ namespace tensorflow {
                 read->set_meta(lines[0]);
                 read->set_length(lines[1].length());
                 read->set_qualities(lines[3]);
+                if (add_record_name_) {
+                  read->set_record_name(current_work());
+                }
 
                 LOG(INFO) << "Serializing alignment";
 
@@ -166,7 +169,7 @@ namespace tensorflow {
     public:
         explicit FastqReaderOp(OpKernelConstruction* context)
             : ReaderOpKernel(context) {
-          bool add_record_name = false;
+            bool add_record_name = false;
 
             Env* env = context->env();
             OP_REQUIRES_OK(context,
