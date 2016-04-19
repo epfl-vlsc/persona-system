@@ -66,5 +66,71 @@ BinaryBases::getBase(const size_t position, char* base) const
   return Status::OK();
 }
 
+Status
+BinaryBaseRecord::IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases)
+{
+  size_t base_idx = 0;
+  BinaryBases bb;
+  for (size_t i = 0; i < fastq_base_size; i++) {
+    TF_RETURN_IF_ERROR(bb.setBase(fastq_base[i], base_idx++));
+    if (base_idx == bb.compression) {
+      bases.push_back(bb); // this should be a copy, by C++ default behavior
+      bb.bases = 0;
+      base_idx = 0;
+    }
+  }
+
+  bb.terminate(base_idx);
+  bases.push_back(bb);
+}
+
+Status BinaryBases::setBase(const char base, size_t position) {
+  BaseAlphabet b;
+  switch (base) {
+  case 'a':
+  case 'A':
+    b = BaseAlphabet::A;
+    break;
+  case 'c':
+  case 'C':
+    b = BaseAlphabet::C;
+    break;
+  case 'g':
+  case 'G':
+    b = BaseAlphabet::G;
+    break;
+  case 't':
+  case 'T':
+    b = BaseAlphabet::T;
+    break;
+  case 'n':
+  case 'N':
+    b = BaseAlphabet::N;
+    break;
+  default:
+    return errors::InvalidArgument("Unable to convert the following base character: ", string(&base, 1));
+  }
+
+  return setBaseAtPosition(b, position);
+}
+
+Status BinaryBases::terminate(const size_t position) {
+  return setBaseAtPosition(BaseAlphabet::END, position);
+}
+
+Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t position) {
+  assert(position < compression);
+  if (position < compression) {
+    uint64_t packed_base = 0x7ull & static_cast<uint64_t>(base);// get the lower bits only!
+    size_t packed_shift = base_width * position;
+    uint64_t clear_mask = 0x7ull << packed_shift;
+    bases &= ~clear_mask;
+    bases |= packed_base << packed_shift;
+    return Status::OK();
+  } else {
+    return errors::InvalidArgument("Unable to set base position of ", position, "\nMaximum position: ", compression-1);
+  }
+}
+
 } // namespace format
 } // namespace tensorflow

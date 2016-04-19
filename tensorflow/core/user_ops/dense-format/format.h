@@ -63,12 +63,18 @@ namespace format {
 
     Status getBase(const std::size_t position, char* base) const;
 
+    Status setBase(const char base, std::size_t position);
+
+    Status terminate(std::size_t position);
+
     uint64_t bases;
 
     static const std::size_t compression = 21; //sizeof(uint64_t) * 2; // 4 bits = 2 per byte
 
   protected:
     static const std::size_t base_width = 3;
+
+    Status setBaseAtPosition(const BaseAlphabet base, const std::size_t position);
   };
 
   struct __attribute__((packed)) BinaryBaseRecord {
@@ -77,12 +83,14 @@ namespace format {
     std::size_t
     intoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<uint64_t> &bases);
     */
-    Status
-      toString(const std::size_t record_size_in_bytes, std::string *output) const;
+    Status toString(const std::size_t record_size_in_bytes, std::string *output) const;
 
     BinaryBases bases[]; // relative length stored in the RecordTable.relative_index
+
+    static Status
+    IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases);
   };
-  
+
 } // namespace format
 } // namespace tensorflow
 

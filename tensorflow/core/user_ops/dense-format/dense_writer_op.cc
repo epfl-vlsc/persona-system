@@ -8,6 +8,7 @@
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
+#include "format.h"
 
 namespace tensorflow {
 
@@ -32,32 +33,44 @@ namespace {
 
   class DenseSegmentFileBuffer {
   public:
-    void addRecord(const string &record) {
+    Status addRecord(const string &record) {
       record_buffer_.insert(record_buffer_.end(), record.begin(), record.end());
-      PushBackRelativeIndex(record);
+      PushBackRelativeIndex(record.length());
+      return Status::OK();
     }
 
     void clearBuffer() {
-      // They should keep their size
+      // They should keep their size of the allocated buffer underneath
       record_buffer_.clear();
       relative_index_.clear();
     }
 
   protected:
-    void PushBackRelativeIndex(const string &record) {
-      relative_index_.push_back(static_cast<uint8_t>(record.length()));
+    void PushBackRelativeIndex(const size_t length) {
+      relative_index_.push_back(static_cast<uint8_t>(length));
     }
 
+  private:
     vector<char> record_buffer_;
     vector<uint8_t> relative_index_;
   };
 
   class BaseSegmentFileBuffer : public DenseSegmentFileBuffer {
   public:
-    void addRecord(const string &record) {
-      // TODO actual conversion here!
-      PushBackRelativeIndex(record);
+    Status addRecord(const string &record) {
+      const size_t old_buffer_size = base_buffer_.size();
+      TF_RETURN_IF_ERROR(format::BinaryBaseRecord::IntoBases(
+                                                             record.c_str(),
+                                                             record.length(),
+                                                             base_buffer_));
+      const size_t new_bases = base_buffer_.size() - old_buffer_size;
+      if (new_bases < 1) {
+        return errors::InvalidArgument("Appending base record '", record, "' to BaseSegmentFileBuffer resulted in no new bases");
+      }
+      PushBackRelativeIndex(new_bases * sizeof(format::BinaryBases));
     }
+  private:
+    vector<format::BinaryBases> base_buffer_;
   };
 }
 
