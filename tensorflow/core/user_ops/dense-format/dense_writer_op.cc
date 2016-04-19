@@ -1,3 +1,5 @@
+#include <vector>
+#include <cstdint>
 #include "tensorflow/core/framework/writer_op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/kernels/writer_base.h"
@@ -26,6 +28,39 @@ Takes a record from the FASTQ reader, splits it into separate, inner redaers, an
 
 using namespace std;
 
+namespace {
+
+  class DenseSegmentFileBuffer {
+  public:
+    void addRecord(const string &record) {
+      record_buffer_.insert(record_buffer_.end(), record.begin(), record.end());
+      PushBackRelativeIndex(record);
+    }
+
+    void clearBuffer() {
+      // They should keep their size
+      record_buffer_.clear();
+      relative_index_.clear();
+    }
+
+  protected:
+    void PushBackRelativeIndex(const string &record) {
+      relative_index_.push_back(static_cast<uint8_t>(record.length()));
+    }
+
+    vector<char> record_buffer_;
+    vector<uint8_t> relative_index_;
+  };
+
+  class BaseSegmentFileBuffer : public DenseSegmentFileBuffer {
+  public:
+    void addRecord(const string &record) {
+      // TODO actual conversion here!
+      PushBackRelativeIndex(record);
+    }
+  };
+}
+
 class DenseWriter : public WriterBase {
 public:
 
@@ -34,7 +69,7 @@ public:
     : WriterBase(strings::StrCat("DenseWriter'", node_name, "'"), record_name),
       env_(env), records_per_chunk_(records_per_chunk),
       metadata_out_path_(metadata_out_path), record_name_(record_name),
-      record_out_dir_(record_out_dir) {}
+      record_out_dir_(record_out_dir), num_records_(0) {}
 
   Status WriteLocked(const string& value)
   {
@@ -46,10 +81,18 @@ public:
       return errors::InvalidArgument("Unable to parse SnapProto alignment def from string: ", value);
     }
     read_proto = alignment.read();
+    metadata_buffer_.addRecord(read_proto.meta());
+    qualities_buffer_.addRecord(read_proto.qualities());
+    bases_buffer_.addRecord(read_proto.bases());
+
+    if (++num_records_ == records_per_chunk_) {
+      // TODO actually write out the records
+    }
   }
 
   Status OnWorkStartedLocked(OpKernelContext* context)
   {
+
   }
 
   Status OnWorkFinishedLocked()
@@ -58,12 +101,20 @@ public:
   }
 
 private:
+
   Env* const env_;
   size_t records_per_chunk_;
   size_t num_records_;
   string metadata_out_path_;
   string record_name_;
   string record_out_dir_;
+
+  // TODO need to add fields to keep state about the records written out already
+  // For the json
+
+  DenseSegmentFileBuffer qualities_buffer_;
+  DenseSegmentFileBuffer metadata_buffer_;
+  BaseSegmentFileBuffer bases_buffer_;
 };
 
 class DenseWriterOp : public WriterOpKernel {
