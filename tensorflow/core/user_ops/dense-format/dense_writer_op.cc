@@ -5,6 +5,7 @@
 #include <utility>
 #include "tensorflow/core/framework/writer_op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
+#include "tensorflow/core/kernels/ops_util.h"
 #include "tensorflow/core/kernels/writer_base.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/lib/core/errors.h"
@@ -179,14 +180,12 @@ public:
   Status OnWorkStartedLocked(OpKernelContext* context)
   {
     if (!thread_pool_) {
-      /*
       // Set up a threadpool. Only need to do it the first time
       thread_pool_ = move(unique_ptr<thread::ThreadPool>(
                       new thread::ThreadPool(context->env(),
                                              strings::StrCat("dense_writer_", SanitizeThreadSuffix(context->op_kernel().name())),
                                              parallelism_ * 3)
                                                          )); // 3 for bases, qualities, and metadata writing
-      */
     }
   }
 
