@@ -35,38 +35,46 @@ Takes a record from the FASTQ reader, splits it into separate, inner redaers, an
 using namespace std;
 
 namespace {
+  typedef shared_ptr<vector<uint8_t>> IndexBufferPtr;
 
   class IndexBuffer {
   public:
-    void clear() { relative_index_->clear(); }
     void AddRecord(const size_t length) {
       relative_index_->push_back(static_cast<uint8_t>(length));
     }
+
+    void setNewBuffer(IndexBufferPtr relative_index) {
+      relative_index_ = relative_index;
+    }
   private:
-    shared_ptr<vector<uint8_t>> relative_index_;
+    IndexBufferPtr relative_index_;
   };
 
   class DenseSegmentFileBuffer {
   public:
+    typedef shared_ptr<vector<char>> DataBufferPtr;
+
     Status addRecord(const string &record) {
       record_buffer_->insert(record_buffer_->end(), record.begin(), record.end());
       relative_index_.AddRecord(record.length());
       return Status::OK();
     }
 
-    void clearBuffer() {
+    void setNewBuffers(DataBufferPtr record_buffer, IndexBufferPtr index_buffer) {
       // They should keep their size of the allocated buffer underneath
-      record_buffer_->clear();
-      relative_index_.clear();
+      record_buffer_ = record_buffer;
+      relative_index_.setNewBuffer(index_buffer);
     }
 
   private:
-    shared_ptr<vector<char>> record_buffer_;
+    DataBufferPtr record_buffer_;
     IndexBuffer relative_index_;
   };
 
   class BaseSegmentFileBuffer {
   public:
+    typedef shared_ptr<vector<format::BinaryBases>> DataBufferPtr;
+
     Status addRecord(const string &record) {
       const size_t old_buffer_size = base_buffer_->size();
       TF_RETURN_IF_ERROR(format::BinaryBaseRecord::IntoBases(record.c_str(),
@@ -81,15 +89,22 @@ namespace {
       relative_index_.AddRecord(new_bases * sizeof(format::BinaryBases));
     }
 
+    void setNewBuffers(DataBufferPtr base_buffer, IndexBufferPtr index_buffer) {
+      // They should keep their size of the allocated buffer underneath
+      base_buffer_ = base_buffer;
+      relative_index_.setNewBuffer(index_buffer);
+    }
+
   private:
-    shared_ptr<vector<format::BinaryBases>> base_buffer_;
+    DataBufferPtr base_buffer_;
     IndexBuffer relative_index_;
   };
 
   template <typename T>
   struct SegmentLoan {
-    typedef pair<shared_ptr<T>, function<void()>> DataLoan;
-    typedef pair<shared_ptr<uint8_t>, function<void()>> IndexLoan;
+    typedef shared_ptr<vector<T>> DataBufferPtr;
+    typedef pair<DataBufferPtr, function<void()>> DataLoan;
+    typedef pair<IndexBufferPtr, function<void()>> IndexLoan;
 
     SegmentLoan(
                 DataLoan data_loan_,
@@ -113,9 +128,9 @@ namespace {
       index_loan_releaser = index_loan_.second;
     }
 
-    shared_ptr<T> data_loan;
+    DataBufferPtr data_loan;
     function<void()> data_loan_releaser;
-    shared_ptr<uint8_t> index_loan;
+    IndexBufferPtr index_loan;
     function<void()> index_loan_releaser;
   };
 }
