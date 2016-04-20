@@ -9,6 +9,7 @@
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/object_pool.h"
+#include "tensorflow/core/lib/core/threadpool.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
@@ -133,7 +134,7 @@ namespace {
     IndexBufferPtr index_loan;
     function<void()> index_loan_releaser;
   };
-}
+} // namespace
 
 class DenseWriter : public WriterBase {
 public:
@@ -145,13 +146,10 @@ public:
       env_(env), records_per_chunk_(records_per_chunk),
       metadata_out_path_(metadata_out_path), record_name_(record_name),
       record_out_dir_(record_out_dir), num_records_(0), parallelism_(parallelism),
-
-      // Allocation for the buffer pools. This is a bit tricky
       char_buffer_pool_(parallelism * 2, []() { return new vector<char>(); }),
       bases_buffer_pool_(parallelism * 3, []() { return new vector<format::BinaryBases>(); }),
-      rel_index_buffer_pool_(parallelism, []() { return new vector<uint8_t>(); })
-  {
-  }
+      rel_index_buffer_pool_(parallelism, []() { return new vector<uint8_t>(); }),
+      thread_pool_(nullptr) {}
 
   Status WriteLocked(const string& value)
   {
@@ -180,7 +178,16 @@ public:
 
   Status OnWorkStartedLocked(OpKernelContext* context)
   {
-    
+    if (!thread_pool_) {
+      /*
+      // Set up a threadpool. Only need to do it the first time
+      thread_pool_ = move(unique_ptr<thread::ThreadPool>(
+                      new thread::ThreadPool(context->env(),
+                                             strings::StrCat("dense_writer_", SanitizeThreadSuffix(context->op_kernel().name())),
+                                             parallelism_ * 3)
+                                                         )); // 3 for bases, qualities, and metadata writing
+      */
+    }
   }
 
   Status OnWorkFinishedLocked()
@@ -205,6 +212,7 @@ private:
 
   Status WriteChunkFiles()
   {
+    // TODO need to fire this off!
     num_records_ = 0;
   }
 
@@ -230,6 +238,8 @@ private:
   ObjectPool<vector<char>> char_buffer_pool_;
   ObjectPool<vector<uint8_t>> rel_index_buffer_pool_;
   ObjectPool<vector<format::BinaryBases>> bases_buffer_pool_;
+
+  std::unique_ptr<thread::ThreadPool> thread_pool_;
 };
 
 class DenseWriterOp : public WriterOpKernel {
@@ -264,7 +274,6 @@ public:
   }
 };
 
-REGISTER_KERNEL_BUILDER(Name("DenseWriter").Device(DEVICE_CPU),
-                        DenseWriterOp);
+REGISTER_KERNEL_BUILDER(Name("DenseWriter").Device(DEVICE_CPU), DenseWriterOp);
 
 }  // namespace tensorflow
