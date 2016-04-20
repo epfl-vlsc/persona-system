@@ -25,6 +25,9 @@ namespace format {
     uint8_t relative_index[];
   };
 
+  const uint8_t current_major = 0;
+  const uint8_t current_minor = 1;
+
   struct __attribute__((packed)) FileHeader {
     uint8_t version_major;
     uint8_t version_minor;
@@ -35,12 +38,17 @@ namespace format {
     uint64_t first_ordinal;
     uint64_t last_ordinal;
     char string_id[32]; // FIXME: just make it static for now
+
+    FileHeader() {
+      // At least assign these basic fields
+      version_major = current_major;
+      version_minor = current_minor;
+    }
   };
 
   enum CompressionType {
     UNCOMPRESSED = 0,
-    BZIP2 = 1,
-    GZIP = 2
+    BZIP2 = 1
   };
 
   enum RecordType {
