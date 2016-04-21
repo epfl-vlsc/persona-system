@@ -149,6 +149,28 @@ public:
     return ReaderBase::ResetLocked();
   }
 
+  Status ReadBatchLocked(std::function<string*(int)> batch_loader,
+                         int num_requested, int* num_produced, bool* at_end) override
+  {
+    using namespace std;
+
+    const char* record;
+    size_t record_length;
+    int num_prod = 0;
+    for (; num_prod < num_requested; num_prod++) {
+      if (GetCurrentRecord(&record, &record_length)) {
+        auto value = batch_loader(num_prod);
+        *value = string(record, record_length);
+      } else {
+        *at_end = true;
+        break;
+      }
+    }
+
+    *num_produced = num_prod;
+    return Status::OK();
+  }
+
   Status ReadLocked(string* key, string* value, bool* produced,
                     bool* at_end) override {
     using namespace std;
@@ -222,6 +244,30 @@ public:
       *at_end = true;
     }
 
+    return Status::OK();
+  }
+
+  Status ReadBatchLocked(std::function<string*(int)> batch_loader,
+                         int num_requested, int* num_produced, bool* at_end) override
+  {
+    using namespace std;
+    using namespace format;
+
+    const char* record;
+    size_t record_length;
+    int num_prod = 0;
+    for (; num_prod < num_requested; num_prod++) {
+      if (GetCurrentRecord(&record, &record_length)) {
+        auto bases = reinterpret_cast<const BinaryBaseRecord*>(record);
+        auto value = batch_loader(num_prod);
+        TF_RETURN_IF_ERROR(bases->toString(record_length, value));
+      } else {
+        *at_end = true;
+        break;
+      }
+    }
+
+    *num_produced = num_prod;
     return Status::OK();
   }
 };
