@@ -142,6 +142,7 @@ cc_library(
         "lib/core/arena.h",
         "lib/core/bits.h",
         "lib/core/casts.h",
+        "lib/core/object_pool.h",
         "lib/core/coding.h",
         "lib/core/command_line_flags.h",  # TODO(vrv): Delete.
         "lib/core/errors.h",

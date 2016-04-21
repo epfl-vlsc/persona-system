@@ -8,6 +8,7 @@ message ReadDef {
     int32 length = 2;
     string qualities = 3;
     string meta = 4;
+    string record_name = 5;
 }
 
 message SingleResultDef {
