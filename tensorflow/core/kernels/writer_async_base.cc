@@ -65,6 +65,9 @@ void WriterAsyncBase::Done(OpKernelContext* context) {
     finish_ = false;
 
   finish_ = true;
+
+  while (!buf_pool_->IsAvailableEmpty())
+    finish_ = true;
   /*if (!work_in_progess()) {
     context->SetStatus(errors::Internal("Tried to call Done",
                   " on Writer with no work in progress"));
@@ -117,7 +120,22 @@ void WriterAsyncBase::Write(const string* value,
               LOG(INFO) << "WRITER THREAD GOT IO ERROR! EXITING!!!";
               break;
             }
-            buf_pool_->BufferEmpty(ready_buf);
+            // reset the buffer and make available
+            ready_buf->Reset();
+            buf_pool_->BufferAvailable(ready_buf);
+          }
+        }
+        // write all remaining data to disk
+        while (ready_buf = buf_pool_->GetNextAvailable()) {
+          char* buffer = ready_buf->GetBuffer();
+          if (ready_buf->Used() == 0)
+            continue;
+          StringPiece to_write(buffer, ready_buf->Used());
+          //LOG(INFO) << "Appending data in writer thread: " << to_write;
+          Status status = outfile_->Append(to_write);
+          if (!status.ok()) {
+            LOG(INFO) << "WRITER THREAD GOT IO ERROR! EXITING!!!";
+            break;
           }
         }
         LOG(INFO) << "Writer thread is ending...";
@@ -127,30 +145,61 @@ void WriterAsyncBase::Write(const string* value,
     }
   } // mutex lock
 
-  // find a free buffer or block
+  // find an available buffer with space
   BufferPool::Buffer* buf;
-  while (!(buf = buf_pool_->GetNextEmpty())) {;;}
+  while (!(buf = buf_pool_->GetNextAvailable())) {;;}
 
   uint64 used = 0;
-  Status status = WriteUnlocked(*value, buf->GetBuffer(), 
-      buf->GetBufferSize(), &used);
- 
-  if (used == 0) {
-    LOG(INFO) << "result used 0 bytes of buffer!!!";
+  Status status = WriteUnlocked(*value, buf->GetCurrentBuffer(), 
+      buf->GetCurrentBufferSize(), &used);
+
+  int count = 0;
+  while (errors::IsResourceExhausted(status)) {
+    
+    if (count > buf_pool_->NumBuffers()*2) {
+      LOG(INFO) << "failed to write after checking all buffers twice"
+        << ", buffer too small." <<
+        " You should increase the buffer size.";
+      context->SetStatus(status);
+      buf_pool_->BufferAvailable(buf);
+      return;
+    }
+    // buffer was too full. Hand off for write and get a fresh one
+    /*LOG(INFO) << "Resource was exhausted, only " << buf->GetCurrentBufferSize()
+      << " bytes left, moving to new buffer";*/
+    buf_pool_->BufferReady(buf);
+    while (!(buf = buf_pool_->GetNextAvailable())) {;;}
+    /*LOG(INFO) << "calling again with cur buf size = " << 
+      buf->GetCurrentBufferSize() << " bytes";*/
+    status = WriteUnlocked(*value, buf->GetCurrentBuffer(), 
+        buf->GetCurrentBufferSize(), &used);
+    count++;
+
+  }
+
+  if (status.ok() && used == 0) {
+    //LOG(INFO) << "result used 0 bytes of buffer!!!";
+    // the users writer basically ignored this value
+    // forget about it
+    buf_pool_->BufferAvailable(buf);
+    return;
   }
 
   if (!status.ok()) {
-    buf_pool_->BufferEmpty(buf); // recycle the buffer
+    buf_pool_->BufferAvailable(buf); // recycle the buffer
     LOG(INFO) << "WriteUnlocked status was not OK!!";
     context->SetStatus(errors::Internal(
                   "WriteUnlocked failed to write value"));
     return;
   }
-
+  
+  // update the amount of the buffer used
+  /*LOG(INFO) << "Setting used = " << used << " on buffer with "
+    << buf->GetCurrentBufferSize() << " bytes remaining";*/
   buf->SetUsed(used);
-  buf_pool_->BufferReady(buf); // all OK, set buf to ready
+  buf_pool_->BufferAvailable(buf); // all OK, return buf to pool
 
-  ++num_records_produced_; 
+  ++num_records_produced_;
   return;
 }
 

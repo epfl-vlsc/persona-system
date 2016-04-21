@@ -172,9 +172,16 @@ class SamAsyncWriter : public WriterAsyncBase {
       // get submessage ReadDef, write each SingleResult to file
 
       SnapProto::AlignmentDef alignment;
+      if (value.empty()) {
+        LOG(INFO) << "Empty string in writer, probably incomplete batch";
+        return Status::OK();
+      }
+
       if (!alignment.ParseFromString(value)) {
-        return errors::Internal("Failed to parse AlignmentDef",
-            " from string in SamAsyncWriter WriteLocked()");
+        /*LOG(INFO) << "Failed to parse AlignmentDef" <<
+            " from string in SamAsyncWriter WriteLocked(), skipping";*/
+        // ignore this one, probably an incomplete batch
+        return Status::OK();
       }
 
       const SnapProto::ReadDef* read = &alignment.read();

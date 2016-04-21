@@ -50,7 +50,8 @@ class ReaderInterface : public ResourceBase {
   // batch may not be processed, but partial batches are still valid.
   virtual void ReadBatch(QueueInterface* queue, 
     std::function<string*(int)> batch_loader, 
-    int batch_size, string* key, OpKernelContext* context) = 0;
+    int batch_size, string* key, OpKernelContext* context,
+    int* produced) = 0;
 
   // Read a single record into *key / *value.  May get more work from
   // *queue if the current work is complete.  Sets the status on

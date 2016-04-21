@@ -105,8 +105,6 @@ namespace snap_wrapper {
       uint64* buffer_used, const FileFormat* format,
       LandauVishkinWithCigar& lvc, const Genome* genome) {
 
-    // buffer size is basicaly guaranteed to be large enough for however
-    // many results may be present
     //LOG(INFO) << "SnapWrapper writing read! buffer_size=" << 
     //  buffer_size << ", nResults=" << nResults;
     uint64 used = 0;
@@ -119,6 +117,7 @@ namespace snap_wrapper {
 
     GenomeLocation finalLocation;
 
+    // this is adapted from SNAP, some things are a little arcane
     for (int whichResult = 0; whichResult < nResults; whichResult++) {
       int addFrontClipping = 0;
       read->setAdditionalFrontClipping(0);
@@ -136,9 +135,10 @@ namespace snap_wrapper {
         nAdjustments++;
 
         if (0 == addFrontClipping) {
-          LOG(INFO) << "ERROR: 0 == addFrontClipping, blew buffer?";
-          //blewBuffer = true;
-          return tensorflow::errors::Internal("buffer issue in snap read writer"); 
+          // *this* is how SNAP notifies you there wasn't enough 
+          // space in the buffer. Much intuitive, very logic, wow. 
+          // caller will call again with fresh buffer
+          return tensorflow::errors::ResourceExhausted("buffer too full in SNAP writeRead"); 
         }
 
         // redo if read modified (e.g. to add soft clipping, or move alignment for a leading I.
@@ -167,6 +167,7 @@ namespace snap_wrapper {
       //LOG(INFO) << "Formatting was successful, used " << used_local << " bytes";
       used += used_local;
       if (used > buffer_size) {
+        // shouldn't happen, but of course is error
         return tensorflow::errors::Internal("Buffer overflow in Snapwrapper read writer?");
       }
 

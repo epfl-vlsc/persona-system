@@ -28,7 +28,7 @@ namespace tensorflow {
         }
 
         void Compute(OpKernelContext* ctx) override {
-            LOG(INFO) << "SnapAlign started";
+            //LOG(INFO) << "SnapAlign started";
 
             if (base_aligner_ == nullptr) {
                 OP_REQUIRES_OK(ctx,
@@ -67,13 +67,20 @@ namespace tensorflow {
             for (size_t i = 0; i < num_reads; i++) {
                 SnapProto::AlignmentDef alignment;
                 SnapProto::ReadDef read_proto;
+                if (reads_flat(i) == "a") {
+                    //LOG(INFO) << "string was empty, is this a partial batch?";
+                    continue;
+                }
                 if (!alignment.ParseFromString(reads_flat(i))) {
-                    LOG(INFO) << "SnapAlign: failed to parse read from protobuf";
+                    LOG(INFO) << "SnapAlign: failed to parse read from protobuf, skipping ...";
+                    continue;
                 }
 
                 alignments.push_back(alignment);
                 SnapProto::AlignmentDef& al = alignments.back();
                 read_proto = al.read();
+                /*if (!read_proto.has_bases()) 
+                  LOG(INFO) << "Read proto did not have bases. Is this a partial batch?";*/
                 Read* snap_read = new Read();
                 snap_read->init(
                     read_proto.meta().c_str(),
@@ -86,17 +93,18 @@ namespace tensorflow {
                 input_reads.push_back(snap_read);
             }
 
+            size_t num_actual_reads = input_reads.size();
             vector<vector<SingleAlignmentResult>> alignment_results;
-            alignment_results.reserve(num_reads);
+            alignment_results.reserve(num_actual_reads);
 
-            for (size_t i = 0; i < num_reads; i++) {
+            for (size_t i = 0; i < num_actual_reads; i++) {
                 // push back empty result vector for each read
                 vector<SingleAlignmentResult> res;
                 alignment_results.push_back(res);
             }
 
             bool first_is_primary;
-            for (size_t i = 0; i < input_reads.size(); i++) {
+            for (size_t i = 0; i < num_actual_reads; i++) {
                 Status status = snap_wrapper::alignSingle(base_aligner_, options_resource_->value(), input_reads[i],
                     &alignment_results[i], num_secondary_alignments_, first_is_primary);
 
@@ -115,7 +123,7 @@ namespace tensorflow {
             OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({ (int64)num_reads }), &out));
 
             auto out_t = out->flat<string>();
-            for (size_t i = 0; i < num_reads; i++) {
+            for (size_t i = 0; i < num_actual_reads; i++) {
                 SnapProto::AlignmentDef* alignment = &alignments[i];
 
                 for (auto result : alignment_results[i]) {
@@ -124,6 +132,10 @@ namespace tensorflow {
                 }
 
                 alignment->SerializeToString(&out_t(i));
+            }
+            //LOG(INFO) << "actual: " << num_actual_reads << " total: " << num_reads;
+            for (size_t i = num_actual_reads; i < num_reads; i++) {
+              out_t(i) = "a";
             }
         }
 

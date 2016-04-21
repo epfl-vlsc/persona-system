@@ -56,6 +56,12 @@ class ReaderBase : public ReaderInterface {
 
   // Descendants may optionally implement these -------------------------------
 
+  // batch loader lambda provides a pointer to string for a given
+  // batch index. num_produced must be set <= num_requested. If at_end,
+  // it is legal to have produced some values < num_requested and 
+  // return Status::OK(). 
+  // A key for this batch is created by ReaderBase::ReadBatch(), 
+  // which calls this method. 
   virtual Status ReadBatchLocked(
       std::function<string*(int)> batch_loader, 
       int num_requested, int* num_produced, bool* at_end) {
@@ -103,7 +109,8 @@ class ReaderBase : public ReaderInterface {
             OpKernelContext* context) override;
   void ReadBatch(QueueInterface* queue, 
     std::function<string*(int)> batch_loader, 
-    int batch_size, string* key, OpKernelContext* context) override;
+    int batch_size, string* key, OpKernelContext* context,
+    int* produced) override;
   Status Reset() override;
   int64 NumRecordsProduced() override;
   int64 NumWorkUnitsCompleted() override;

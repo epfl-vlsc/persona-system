@@ -76,19 +76,27 @@ Status ReaderBase::RestoreStateLocked(const string& state) {
 
 void ReaderBase::ReadBatch(QueueInterface* queue, 
     std::function<string*(int)> batch_loader, 
-    int batch_size, string* key, OpKernelContext* context) {
+    int batch_size, string* key, OpKernelContext* context,
+    int* produced) {
   mutex_lock lock(mu_);
 
   *key = strings::StrCat(work_, ":", num_records_produced_);
 
   int num_requested = batch_size;
+  int total_produced = 0;
   while (true) {
     if (!work_in_progress()) {
-      GetNextWorkLocked(queue, context);
-      if (!context->status().ok()) {
-        if (num_requested < batch_size)  // partial batch processed
-          context->SetStatus(Status::OK());
+      if (queue->size() == 0 && total_produced < batch_size && total_produced > 0) {
+        // return the partial batch before the queue empty error is triggered
+        LOG(INFO) << "partial batch processed: " << total_produced << " reads.";
+        *produced = total_produced;
         return;
+      }
+      else {
+        GetNextWorkLocked(queue, context);
+        if (!context->status().ok()) {
+          return;
+        }
       }
     }
 
@@ -108,21 +116,27 @@ void ReaderBase::ReadBatch(QueueInterface* queue,
                                 status.ToString());
     }
     if (status.ok() && at_end) {
+      LOG(INFO) << "work finished";
       status = OnWorkFinishedLocked();
       work_finished_ = work_started_;
     }
     if (!status.ok()) {
+      LOG(INFO) << " something fucked up";
       context->SetStatus(status);
       return;
     }
     if (num_produced == num_requested) {
       num_records_produced_ += num_produced;
+      *produced = num_produced + total_produced;
       return;
     } else if (num_produced > num_requested) {
       status = errors::Internal("ReadBatchLocked() for ", name(),
           " produced more records than requested.");
-    } else {
+      context->SetStatus(status);
+      return;
+    } else {  // num_produced < num_requested
       num_records_produced_ += num_produced;
+      total_produced += num_produced;
       num_requested -= num_produced;
     }
   }

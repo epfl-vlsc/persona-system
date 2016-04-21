@@ -2,8 +2,8 @@
 // Stuart Byma
 // Mostly copied from reader_base.h
 
-#ifndef TENSORFLOW_KERNELS_Writer_BASE_H_
-#define TENSORFLOW_KERNELS_WRITER_BASE_H_
+#ifndef TENSORFLOW_KERNELS_WRITER_ASYNC_BASE_H_
+#define TENSORFLOW_KERNELS_WRITER_ASYNC_BASE_H_
 
 #include <memory>
 #include <string>
@@ -17,12 +17,20 @@
 namespace tensorflow {
 
 using namespace std;
+
+// a small class to manage sharing a pool of buffers
+// between different threads. available_ buffers have 
+// space to be written into, while ready_ buffers 
+// are full to be consumed. 
 class BufferPool {
   public:
     class Buffer {
+      // a mutable buffer wrapper
       public:
         Buffer(uint64 buffer_size) : buffer_size_(buffer_size) {
           buf_ = new char[buffer_size];
+          cur_buf_ = buf_;
+          used_ = 0;  // this is an important line of code
         }
 
         ~Buffer() {
@@ -30,12 +38,25 @@ class BufferPool {
         }
 
         char* GetBuffer() { return buf_; }
+        char* GetCurrentBuffer() { return cur_buf_; }
         const uint64 GetBufferSize() { return buffer_size_; }
+        const uint64 GetCurrentBufferSize() { return buffer_size_ - used_; }
+
         uint64 Used() { return used_; }
-        void SetUsed(uint64 used) { used_ = used; }
+        void SetUsed(uint64 used) { 
+          used_ += used; 
+          cur_buf_ += used;
+          if (cur_buf_ - buf_ > buffer_size_)
+            LOG(INFO) << "BUFFER WAS EXCEEDED WTFFF!!";
+        }
+        void Reset() {
+          used_ = 0;
+          cur_buf_ = buf_;
+        }
 
       private:
         char* buf_ = nullptr;
+        char* cur_buf_ = nullptr;
         const uint64 buffer_size_;
         uint64 used_; // amount of current buffer used
     };
@@ -47,7 +68,7 @@ class BufferPool {
       for (int i = 0; i < num_buffers; i++) {
         Buffer* buf = new Buffer(buffer_size);
         buffers_.push_back(buf);
-        empty_.push(buf);
+        available_.push(buf);
       }
     }
 
@@ -58,16 +79,6 @@ class BufferPool {
       }
     }
 
-    Buffer* GetNextEmpty() {
-      Buffer* ret;
-      mutex_lock lock(mu_);
-      if (empty_.empty())
-        return nullptr;
-      ret = empty_.front();
-      empty_.pop();
-      return ret;
-    }
-
     Buffer* GetNextReady() {
       mutex_lock lock(ready_mu_);
       if (ready_.empty())
@@ -75,6 +86,17 @@ class BufferPool {
       else {
         Buffer* ret = ready_.front();
         ready_.pop();
+        return ret;
+      }
+    }
+    
+    Buffer* GetNextAvailable() {
+      mutex_lock lock(mu_);
+      if (available_.empty())
+        return nullptr;
+      else {
+        Buffer* ret = available_.front();
+        available_.pop();
         return ret;
       }
     }
@@ -89,19 +111,27 @@ class BufferPool {
       }
     }
 
-    void BufferEmpty(Buffer* buf) {
+    void BufferAvailable(Buffer* buf) {
       mutex_lock lock(mu_);
       if (IsMemberBuffer(buf)) {
-        empty_.push(buf);
+        available_.push(buf);
       } else {
-        LOG(INFO) << "Bufferpool Error: tried to BufferEmpty a"
+        LOG(INFO) << "Bufferpool Error: tried to BufferAvailable a"
           << "a non member buffer";
       }
     }
 
     bool IsReadyEmpty() {
+      mutex_lock lock(ready_mu_);
       return ready_.empty();
     }
+    
+    bool IsAvailableEmpty() {
+      mutex_lock lock(mu_);
+      return available_.empty();
+    }
+    
+    int NumBuffers() { return num_buffers_; }
 
   private:
     bool IsMemberBuffer(Buffer* buf) {
@@ -116,7 +146,7 @@ class BufferPool {
     const int num_buffers_;
     vector<Buffer*> buffers_;
     queue<Buffer*> ready_;
-    queue<Buffer*> empty_;
+    queue<Buffer*> available_;
 };
 
 // Default implementation of WriterInterface.

@@ -124,9 +124,18 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
 
     auto key_scalar = key->scalar<string>();
     auto value_vector = value->flat<string>();
+    int produced = 0;
     reader->ReadBatch(queue, [&value_vector](int index) -> string* {
         return &value_vector(index); },
-        batch_size_, &key_scalar(), context);
+        batch_size_, &key_scalar(), context, &produced);
+
+    LOG(INFO) << "Produced was " << produced;
+    if (produced < batch_size_ && produced != 0) {
+      LOG(INFO) << "filling rest with blank strings!";
+      for (int i = produced; i < batch_size_; i++) 
+        value_vector(i) = "a";
+      context->SetStatus(Status::OK());
+    }
 
     /*for (int i = 0; i < batch_size_; i++) {
       reader->Read(queue, &key_scalar(), &value_vector(i), context);
