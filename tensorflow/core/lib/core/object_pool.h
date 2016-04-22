@@ -43,7 +43,21 @@ public:
   };
 
   explicit ObjectPool(size_t max_elements, std::function<T*()> object_constructor) :
-            max_elements_(max_elements), object_constructor_(object_constructor) {}
+    max_elements_(max_elements), object_constructor_(object_constructor), run_(true) {}
+
+  ~ObjectPool() {
+    /*
+    using namespace std;
+    mutex_lock rl(ready_mu_);
+    mutex_lock el(empty_mu_);
+    */
+    max_elements_ = 0; // so they don't try to make any more
+    empty_objects_.clear();
+    ready_objects_.clear();
+    run_ = false;
+    ready_cv_.notify_all();
+    empty_cv_.notify_all();
+  }
 
   ObjectLoan GetReady(bool block = true) noexcept
   {
@@ -51,7 +65,7 @@ public:
     mutex_lock l(ready_mu_);
     if (ready_objects_.empty() && block) {
       ready_cv_.wait(l, [this]() {
-          !ready_objects_.empty();
+          !ready_objects_.empty() && run_;
         });
     }
 
@@ -80,7 +94,7 @@ public:
     // If we're still out of objects and we want to block, try to wait for one
     if (empty_objects_.empty() && block) {
       empty_cv_.wait(l, [this]() {
-          !empty_objects_.empty();
+          !empty_objects_.empty() && run_;
         });
     }
 
@@ -124,6 +138,7 @@ private:
   std::deque<PtrT> empty_objects_;
   std::function<T*()> object_constructor_;
   size_t max_elements_;
+  volatile bool run_;
 };
 
 } // namespace tensorflow 
