@@ -16,56 +16,127 @@ namespace tensorflow {
 template <typename T>
 class ObjectPool {
 public:
+  typedef std::shared_ptr<T> PtrT;
+  typedef std::function<void()> Releaser;
+
+  class ObjectLoan
+  {
+  private:
+    PtrT object_;
+
+    Releaser release_empty_;
+    Releaser release_ready_;
+
+  public:
+  ObjectLoan(PtrT &object, Releaser &release_empty, Releaser &release_ready) :
+    object_(object), release_empty_{std::move(release_empty)},
+      release_ready_{std::move(release_ready)} {}
+
+    T& operator*() const {
+      return *object_;
+    }
+
+    T* operator->() const {
+      return object_.get();
+    }
+
+    T* get() const {
+      return object_.get();
+    }
+
+    void ReleaseEmpty() { object_.reset(); ReturnEmpty(object_); }
+    void ReleaseReady() { object_.reset(); ReturnReady(object_); }
+  };
+
   explicit ObjectPool(size_t max_elements, std::function<T*()> object_constructor) :
             max_elements_(max_elements), object_constructor_(object_constructor) {}
 
-  std::pair<std::shared_ptr<T>, std::function<void()>> GetObject(bool block = true) noexcept
+  ObjectLoan GetReady(bool block = true) noexcept
   {
     using namespace std;
-    mutex_lock l(mu_);
-    if (!ready_objects_.empty()) {
-      auto ptr = ready_objects_.pop_front();
-      return make_pair(ptr, [this, ptr]() {
-          ReleaseObject(ptr);
-        });
-    } else if (all_objects_.size() < max_elements_) {
-      auto ptr = shared_ptr<T>(object_constructor_());
-      // We can at least check if the constructor returns NULL
-      // We can't verify if the memory is valid or anything
-      if (ptr != nullptr) {
-        all_objects_.push_back(ptr);
-        return make_pair(ptr, [this, ptr]() {
-            ReleaseObject(ptr);
-          });
-      }
-    } else if (block) {
-      cv_.wait(l, [this]() {
+    mutex_lock l(ready_mu_);
+    if (ready_objects_.empty() && block) {
+      ready_cv_.wait(l, [this]() {
           !ready_objects_.empty();
         });
+    }
+
+    if (!ready_objects_.empty()) {
       auto ptr = ready_objects_.pop_front();
-      return make_pair(ptr, [this, ptr]() {
-          ReleaseObject(ptr);
+      auto return_empty = [this, ptr]() {
+        ReturnEmpty(ptr);
+      };
+      return ObjectLoan(ptr, return_empty, [](){});
+    }
+
+    return ObjectLoan(nullptr, [](){}, [](){});
+  }
+
+  ObjectLoan GetEmpty(bool block = true) noexcept
+  {
+    using namespace std;
+    mutex_lock l(empty_mu_);
+    // First, try to construct a new one if there are none available
+    if (empty_objects_.empty() && all_objects_.size() < max_elements_) {
+      auto raw_ptr = object_constructor_();
+      if (raw_ptr != nullptr) {
+        auto ptr = PtrT(raw_ptr);
+        all_objects_.push_back(ptr);
+        empty_objects_.push_back(ptr);
+      }
+    }
+
+    // If we're still out of objects and we want to block, try to wait for one
+    if (empty_objects_.empty() && block) {
+      empty_cv_.wait(l, [this]() {
+          !empty_objects_.empty();
         });
     }
-    return make_pair(nullptr, []() {});
+
+    if (!empty_objects_.empty()) {
+      auto ptr = empty_objects_.pop_front();
+      auto return_empty = [this, ptr]() {
+        ReturnEmpty(ptr);
+      };
+      auto return_full = [this, ptr]() {
+        ReturnReady(ptr);
+      };
+      return ObjectLoan(ptr, return_empty, return_full);
+    }
+
+    return ObjectLoan(nullptr, [](){}, [](){});
   }
 
 private:
   TF_DISALLOW_COPY_AND_ASSIGN(ObjectPool);
 
-  void ReleaseObject(std::shared_ptr<T> object) noexcept
+  // TODO need to use different condition variables
+
+  void ReturnEmpty(PtrT object) noexcept
   {
-    mutex_lock l(mu_);
+    mutex_lock l(empty_mu_);
+    // TODO for now, just assume that object is in all_objects_
+    // because the only way to access this is via the function
+    empty_objects_.push_back(object);
+    empty_cv_.notify_one();
+  }
+
+  void ReturnReady(PtrT object) noexcept
+  {
+    mutex_lock l(ready_mu_);
     // TODO for now, just assume that object is in all_objects_
     // because the only way to access this is via the function
     ready_objects_.push_back(object);
-    cv_.notify_one();
+    ready_cv_.notify_one();
   }
 
-  mutable std::mutex mu_;
-  mutable std::condition_variable cv_;
-  std::vector<std::shared_ptr<T>> all_objects_;
-  std::deque<std::shared_ptr<T>> ready_objects_;
+  mutable std::mutex ready_mu_;
+  mutable std::mutex empty_mu_;
+  mutable std::condition_variable ready_cv_;
+  mutable std::condition_variable empty_cv_;
+  std::vector<PtrT> all_objects_;
+  std::deque<PtrT> ready_objects_;
+  std::deque<PtrT> empty_objects_;
   std::function<T*()> object_constructor_;
   size_t max_elements_;
 };
