@@ -59,7 +59,12 @@ Status WriterAsyncBase::RestoreStateLocked(const string& state) {
 
 void WriterAsyncBase::Done(OpKernelContext* context) {
   mutex_lock lock(mu_);
-  LOG(INFO) << "Called done, emtpying buffer pool...";
+  LOG(INFO) << name_ << ": Called done, emtpying buffer pool...";
+
+  if (!initialized_) {
+      LOG(INFO) << name_ << ": Was not initialized; exiting.";
+      return;
+  }
 
   while (!buf_pool_->IsReadyEmpty())
     finish_ = false;
@@ -138,7 +143,7 @@ void WriterAsyncBase::Write(const string* value,
             break;
           }
         }
-        LOG(INFO) << "Writer thread is ending...";
+        LOG(INFO) << name_ << ": Writer thread is ending...";
       };
 
       thread_pool_->Schedule(writer);
