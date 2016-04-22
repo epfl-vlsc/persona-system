@@ -17,20 +17,14 @@ template <typename T>
 class ObjectPool {
 public:
   typedef std::shared_ptr<T> PtrT;
-  typedef std::function<void()> Releaser;
 
   class ObjectLoan
   {
   private:
     PtrT object_;
 
-    Releaser release_empty_;
-    Releaser release_ready_;
-
   public:
-  ObjectLoan(PtrT &object, Releaser &release_empty, Releaser &release_ready) :
-    object_(object), release_empty_{std::move(release_empty)},
-      release_ready_{std::move(release_ready)} {}
+  ObjectLoan(PtrT &object) : object_(object) {}
 
     T& operator*() const {
       return *object_;
@@ -63,13 +57,10 @@ public:
 
     if (!ready_objects_.empty()) {
       auto ptr = ready_objects_.pop_front();
-      auto return_empty = [this, ptr]() {
-        ReturnEmpty(ptr);
-      };
-      return ObjectLoan(ptr, return_empty, [](){});
+      return ObjectLoan(ptr);
     }
 
-    return ObjectLoan(nullptr, [](){}, [](){});
+    return ObjectLoan(nullptr);
   }
 
   ObjectLoan GetEmpty(bool block = true) noexcept
@@ -95,16 +86,10 @@ public:
 
     if (!empty_objects_.empty()) {
       auto ptr = empty_objects_.pop_front();
-      auto return_empty = [this, ptr]() {
-        ReturnEmpty(ptr);
-      };
-      auto return_full = [this, ptr]() {
-        ReturnReady(ptr);
-      };
-      return ObjectLoan(ptr, return_empty, return_full);
+      return ObjectLoan(ptr);
     }
 
-    return ObjectLoan(nullptr, [](){}, [](){});
+    return ObjectLoan(nullptr);
   }
 
 private:
