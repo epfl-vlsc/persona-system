@@ -46,11 +46,9 @@ public:
     max_elements_(max_elements), object_constructor_(object_constructor), run_(true) {}
 
   ~ObjectPool() {
-    /*
     using namespace std;
     mutex_lock rl(ready_mu_);
     mutex_lock el(empty_mu_);
-    */
     max_elements_ = 0; // so they don't try to make any more
     empty_objects_.clear();
     ready_objects_.clear();
