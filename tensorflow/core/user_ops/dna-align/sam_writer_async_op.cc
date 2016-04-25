@@ -172,10 +172,10 @@ class SamAsyncWriter : public WriterAsyncBase {
       // get submessage ReadDef, write each SingleResult to file
 
       SnapProto::AlignmentDef alignment;
-      if (value.empty()) {
+      /*if (value.empty()) {
         LOG(INFO) << "Empty string in writer, probably incomplete batch";
         return Status::OK();
-      }
+      }*/
 
       if (!alignment.ParseFromString(value)) {
         /*LOG(INFO) << "Failed to parse AlignmentDef" <<

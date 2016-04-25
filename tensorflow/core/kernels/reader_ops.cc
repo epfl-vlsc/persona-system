@@ -129,7 +129,7 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
         return &value_vector(index); },
         batch_size_, &key_scalar(), context, &produced);
 
-    LOG(INFO) << "Produced was " << produced;
+    //LOG(INFO) << "Produced was " << produced;
     if (produced < batch_size_ && produced != 0) {
       LOG(INFO) << "filling rest with blank strings!";
       for (int i = produced; i < batch_size_; i++) 
