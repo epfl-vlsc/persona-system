@@ -82,6 +82,7 @@ class ReaderReadOp : public ReaderVerbAsyncOpKernel {
     OP_REQUIRES_OK(context,
                    GetResourceFromContext(context, "queue_handle", &queue));
     core::ScopedUnref unref_me(queue);
+    reader->Initialize(queue, context);
     Tensor* key = nullptr;
     OP_REQUIRES_OK(context,
                    context->allocate_output("key", TensorShape({}), &key));
@@ -112,6 +113,7 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
     OP_REQUIRES_OK(context,
                    GetResourceFromContext(context, "queue_handle", &queue));
     core::ScopedUnref unref_me(queue);
+    reader->Initialize(queue, context);
     Tensor* key = nullptr;
     OP_REQUIRES_OK(context,
                    context->allocate_output("key", TensorShape({}), &key));

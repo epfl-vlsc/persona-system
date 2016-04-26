@@ -24,7 +24,7 @@ public:
     PtrT object_;
 
   public:
-  ObjectLoan(PtrT &object) : object_(object) {}
+    ObjectLoan(PtrT &object) : object_(object) {}
 
     T& operator*() const {
       return *object_;
@@ -38,8 +38,19 @@ public:
       return object_.get();
     }
 
-    void ReleaseEmpty() { object_.reset(); ReturnEmpty(object_); }
-    void ReleaseReady() { object_.reset(); ReturnReady(object_); }
+    void ReleaseEmpty() {
+      if (get()) {
+        ReturnEmpty(object_);
+      }
+      object_.reset();
+    }
+
+    void ReleaseReady() {
+      if (get()) {
+        ReturnReady(object_);
+      }
+      object_.reset();
+    }
   };
 
   explicit ObjectPool(size_t max_elements, std::function<T*()> object_constructor) :
@@ -63,7 +74,7 @@ public:
     mutex_lock l(ready_mu_);
     if (ready_objects_.empty() && block) {
       ready_cv_.wait(l, [this]() {
-          !ready_objects_.empty() && run_;
+          ready_objects_.empty() && run_;
         });
     }
 
@@ -92,7 +103,7 @@ public:
     // If we're still out of objects and we want to block, try to wait for one
     if (empty_objects_.empty() && block) {
       empty_cv_.wait(l, [this]() {
-          !empty_objects_.empty() && run_;
+          empty_objects_.empty() && run_;
         });
     }
 
@@ -106,8 +117,6 @@ public:
 
 private:
   TF_DISALLOW_COPY_AND_ASSIGN(ObjectPool);
-
-  // TODO need to use different condition variables
 
   void ReturnEmpty(PtrT object) noexcept
   {

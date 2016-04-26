@@ -76,8 +76,15 @@ class ReaderInterface : public ResourceBase {
 
   string DebugString() override { return "a reader"; }
 
+  // Initialization, primarily used for the Async Reader initialization
+  Status Initialize(QueueInterface *queue, OpKernelContext *context);
+
  protected:
   virtual ~ReaderInterface() {}
+
+  virtual Status InitializeOnce(QueueInterface *queue, OpKernelContext *context);
+ private:
+  bool needs_init_ = true;
 };
 
 }  // namespace tensorflow

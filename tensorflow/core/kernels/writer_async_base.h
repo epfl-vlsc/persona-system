@@ -223,6 +223,7 @@ class WriterAsyncBase : public WriterInterface {
   WritableFile* outfile_;
   bool initialized_ = false;
   int64 num_records_produced_ = 0;
+  int64 work_finished_ = 0;
   string work_;
   uint64 buffer_size_;
   BufferPool* buf_pool_;
