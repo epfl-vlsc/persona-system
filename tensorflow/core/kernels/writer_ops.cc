@@ -69,42 +69,17 @@ class WriterWriteOp : public WriterVerbAsyncOpKernel {
   void ComputeWithWriter(OpKernelContext* context,
                          WriterInterface* writer) override {
 
-    const Tensor* value;
-    OP_REQUIRES_OK(context, context->input("value", &value));
-    
-    auto value_scalar = value->scalar<string>();
+    OpInputList values;
+    OP_REQUIRES_OK(context, context->input_list("values", &values));
+    const Tensor* key;
+    OP_REQUIRES_OK(context, context->input("key", &key));
+    auto key_scalar = key->scalar<string>();
 
-    writer->Write(&value_scalar(), context);
+    writer->Write(&values, key_scalar(), context);
   }
 };
 
 REGISTER_KERNEL_BUILDER(Name("WriterWrite").Device(DEVICE_CPU), WriterWriteOp);
-
-class WriterWriteBatchOp : public WriterVerbAsyncOpKernel {
- public:
-  using WriterVerbAsyncOpKernel::WriterVerbAsyncOpKernel;
-
-  void ComputeWithWriter(OpKernelContext* context,
-                         WriterInterface* writer) override {
-
-    const Tensor* value;
-    OP_REQUIRES_OK(context, context->input("value", &value));
-
-    auto reads_flat = value->flat<string>();
-    size_t num_reads = reads_flat.size();
-    
-    //LOG(INFO) << "WriteBatchOp " << name() << " writing " <<
-    //  num_reads << " reads.";
-
-    for (int i = 0; i < num_reads; i++) {
-      writer->Write(&reads_flat(i), context);
-    }
-    //auto value_scalar = value->scalar<string>();
-
-  }
-};
-
-REGISTER_KERNEL_BUILDER(Name("WriterWriteBatch").Device(DEVICE_CPU), WriterWriteBatchOp);
 
 class WriterNumRecordsProducedOp : public WriterVerbSyncOpKernel {
  public:

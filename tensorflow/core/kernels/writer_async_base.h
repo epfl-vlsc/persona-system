@@ -11,6 +11,7 @@
 #include <queue>
 #include "tensorflow/core/lib/core/threadpool.h"
 #include "tensorflow/core/framework/writer_interface.h"
+#include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/kernels/writer_base.pb.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
 
@@ -163,17 +164,21 @@ class WriterAsyncBase : public WriterInterface {
 
   // Implement this function in descendants -----------------------------------
 
-  // Format and write the value to a buffer, which is in turn written
+  // Format and write the values to a buffer, which is in turn written
   // asynchronously to the file. Must set amount of buffer used
   // in bytes.
+  // Should verify shape and type of tensors in `values`
   // Async does not guarantee ordering of writes
   // Usage:
   //    Should return a valid status. OK on successful write to file.
-  virtual Status WriteUnlocked(const string& value, char* buffer, uint64 buffer_size, uint64* used) = 0;
+  virtual Status WriteUnlocked(OpInputList* values, string& key, 
+      char* buffer, uint64 buffer_size, uint64* used) = 0;
 
   // Called when work starts / finishes.
   // Should set and initialize `file`
-  virtual Status OnWorkStartedLocked(OpKernelContext* context, WritableFile** file) = 0; 
+  virtual Status OnWorkStartedLocked(OpKernelContext* context, 
+      WritableFile** file) = 0; 
+
   virtual Status OnWorkFinishedLocked()  = 0;
 
   // do we still need to reset writer kernels?
@@ -211,7 +216,7 @@ class WriterAsyncBase : public WriterInterface {
   // Implementations of WriterInterface methods.  These ensure thread-safety
   // and call the methods above to do the work.
   void Done(OpKernelContext* context) override;
-  void Write(const string* value,
+  void Write(OpInputList* values, string key,
             OpKernelContext* context) override;
   int64 NumRecordsProduced() override;
   Status SerializeState(string* state) override;

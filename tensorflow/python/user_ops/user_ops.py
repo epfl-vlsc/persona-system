@@ -32,8 +32,9 @@ def my_fact():
 
 class FASTQReader(io_ops.ReaderBase):
 
-    def __init__(self, name=None):
-        rr = gen_user_ops.fastq_reader(name=name)
+    def __init__(self, batch_size, name=None):
+        rr = gen_user_ops.fastq_reader(batch_size=batch_size,
+                name=name)
         super(FASTQReader, self).__init__(rr)
 
 ops.NoGradient("FASTQReader")

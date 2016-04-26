@@ -32,12 +32,11 @@ class WriterInterface;
 // All descendants of this class must be thread-safe.
 class WriterInterface : public ResourceBase {
  public:
-  // Read a single record into *key / *value.  May get more work from
-  // *queue if the current work is complete.  Sets the status on
-  // *context with an OutOfRange Status if the current work is
-  // complete and the queue is done (closed and empty).
-  // This method may block.
-  virtual void Write(const string* value, OpKernelContext* context) = 0;
+
+  // Using the list of tensors `values`, format data
+  // and write to file using associated key.
+  virtual void Write(OpInputList* values, string key, 
+      OpKernelContext* context) = 0;
 
   // close any open files,etc. Normally called at end of session 
   virtual void Done(OpKernelContext* context) = 0;

@@ -49,9 +49,11 @@ class ReaderInterface : public ResourceBase {
   // is complete and the queue is done. In this case, a full
   // batch may not be processed, but partial batches are still valid.
   virtual void ReadBatch(QueueInterface* queue, 
-    std::function<string*(int)> batch_loader, 
-    int batch_size, string* key, OpKernelContext* context,
+    Tensor* batch_tensor, string* key, OpKernelContext* context,
     int* produced) = 0;
+
+  virtual TensorShape GetRequiredShape() = 0;
+  virtual DataType GetRequiredType() = 0;
 
   // Read a single record into *key / *value.  May get more work from
   // *queue if the current work is complete.  Sets the status on

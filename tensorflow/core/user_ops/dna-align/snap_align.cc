@@ -13,155 +13,136 @@
 #include "snap_proto.pb.h"
 #include "SnapAlignerWrapper.h"
 #include "genome_index_resource.h"
+#include "snap_read_decode.h"
+#include "snap_results_decode.h"
 #include "aligner_options_resource.h"
 
 namespace tensorflow {
-    using namespace std;
+using namespace std;
 
-    class SnapAlignOp : public OpKernel {
-    public:
-        explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
+class SnapAlignOp : public OpKernel {
+  public:
+    explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
-        ~SnapAlignOp() override {
-          if (index_resource_) index_resource_->Unref();
-          if (options_resource_) options_resource_->Unref();
+    ~SnapAlignOp() override {
+      if (index_resource_) index_resource_->Unref();
+      if (options_resource_) options_resource_->Unref();
+    }
+
+    void Compute(OpKernelContext* ctx) override {
+      //LOG(INFO) << "SnapAlign started";
+
+      if (base_aligner_ == nullptr) {
+        OP_REQUIRES_OK(ctx,
+            GetResourceFromContext(ctx, "options_handle", &options_resource_));
+        OP_REQUIRES_OK(ctx,
+            GetResourceFromContext(ctx, "genome_handle", &index_resource_));
+
+        OP_REQUIRES_OK(ctx,
+            snap_wrapper::init());
+        LOG(INFO) << "SNAP Kernel creating BaseAligner";
+
+        base_aligner_ = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
+
+        AlignerOptions* options = options_resource_->value();
+
+        if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+          num_secondary_alignments_ = 0;
+        }
+        else {
+          num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine,
+              options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource_->get_index()->getSeedLength());
+        }
+      }
+
+      const Tensor* reads;
+      OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
+
+      SnapReadDecode read_batch(reads);
+      size_t num_reads = read_batch.size();
+
+      vector<Read*> input_reads;
+      input_reads.reserve(num_reads);
+
+      for (size_t i = 0; i < num_reads; i++) {
+        if (read_batch.bases_len(i) == 0) {
+          //LOG(INFO) << "string was empty, is this a partial batch?";
+          continue;
         }
 
-        void Compute(OpKernelContext* ctx) override {
-            //LOG(INFO) << "SnapAlign started";
+        Read* snap_read = new Read();
+        snap_read->init(
+            read_batch.metadata(i),  // id
+            read_batch.metadata_len(i), // id len
+            read_batch.bases(i),  // data (bases)
+            read_batch.qualities(i),  // qualities
+            read_batch.bases_len(i)  // data len
+            );
 
-            if (base_aligner_ == nullptr) {
-                OP_REQUIRES_OK(ctx,
-                    GetResourceFromContext(ctx, "options_handle", &options_resource_));
-                OP_REQUIRES_OK(ctx,
-                    GetResourceFromContext(ctx, "genome_handle", &index_resource_));
+        input_reads.push_back(snap_read);
+      }
 
-                OP_REQUIRES_OK(ctx,
-                    snap_wrapper::init());
-                LOG(INFO) << "SNAP Kernel creating BaseAligner";
+      size_t num_actual_reads = input_reads.size();
+      vector<SingleAlignmentResult> alignment_results;
 
-                base_aligner_ = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
+      Tensor* out = nullptr;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, 
+            SnapResultsDecode::get_results_shape(num_reads, 
+              num_secondary_alignments_), &out));
 
-                AlignerOptions* options = options_resource_->value();
+      MutableSnapResultsDecode results(out);
 
-                if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
-                    num_secondary_alignments_ = 0;
-                }
-                else {
-                    num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine,
-                        options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource_->get_index()->getSeedLength());
-                }
-            }
+      OP_REQUIRES_OK(ctx, ctx->set_output("reads_out", *reads));
+      //forward_ref_input_to_ref_output(0, 1);
 
-            const Tensor* reads;
-            OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
+      bool first_is_primary;
+      for (size_t i = 0; i < num_actual_reads; i++) {
+        Status status = snap_wrapper::alignSingle(base_aligner_, options_resource_->value(), input_reads[i],
+            &alignment_results, num_secondary_alignments_, first_is_primary);
 
-            auto reads_flat = reads->flat<string>();
-            size_t num_reads = reads_flat.size();
-
-            vector<Read*> input_reads;
-            vector<SnapProto::AlignmentDef> alignments;
-            alignments.reserve(num_reads);
-            input_reads.reserve(num_reads);
-
-            for (size_t i = 0; i < num_reads; i++) {
-                SnapProto::AlignmentDef alignment;
-                SnapProto::ReadDef read_proto;
-                if (reads_flat(i) == "a") {
-                    //LOG(INFO) << "string was empty, is this a partial batch?";
-                    continue;
-                }
-                if (!alignment.ParseFromString(reads_flat(i))) {
-                    LOG(INFO) << "SnapAlign: failed to parse read from protobuf, skipping ...";
-                    continue;
-                }
-
-                alignments.push_back(alignment);
-                SnapProto::AlignmentDef& al = alignments.back();
-                read_proto = al.read();
-                /*if (!read_proto.has_bases()) 
-                  LOG(INFO) << "Read proto did not have bases. Is this a partial batch?";*/
-                Read* snap_read = new Read();
-                snap_read->init(
-                    read_proto.meta().c_str(),
-                    read_proto.meta().length(),
-                    read_proto.bases().c_str(),
-                    read_proto.qualities().c_str(),
-                    read_proto.length()
-                );
-
-                input_reads.push_back(snap_read);
-            }
-
-            size_t num_actual_reads = input_reads.size();
-            vector<vector<SingleAlignmentResult>> alignment_results;
-            alignment_results.reserve(num_actual_reads);
-
-            for (size_t i = 0; i < num_actual_reads; i++) {
-                // push back empty result vector for each read
-                vector<SingleAlignmentResult> res;
-                alignment_results.push_back(res);
-            }
-
-            bool first_is_primary;
-            for (size_t i = 0; i < num_actual_reads; i++) {
-                Status status = snap_wrapper::alignSingle(base_aligner_, options_resource_->value(), input_reads[i],
-                    &alignment_results[i], num_secondary_alignments_, first_is_primary);
-
-                alignments[i].set_firstisprimary(first_is_primary);
-
-                // TODO(solal): Smart pointers would probably make this unnecessary, but I'm not knowledgeable enough in C++ to do that
-                delete input_reads[i];
-
-                if (!status.ok()) {
-                    LOG(INFO) << "SnapAlignOp: alignSingle failed!!";
-                }
-            }
-
-            // shape of output tensor is [num_reads] 
-            Tensor* out = nullptr;
-            OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({ (int64)num_reads }), &out));
-
-            auto out_t = out->flat<string>();
-            for (size_t i = 0; i < num_actual_reads; i++) {
-                SnapProto::AlignmentDef* alignment = &alignments[i];
-
-                for (auto result : alignment_results[i]) {
-                    SnapProto::SingleResultDef* result_proto = alignment->add_results();
-                    populateSingleResultProto_(result_proto, result);
-                }
-
-                alignment->SerializeToString(&out_t(i));
-            }
-            //LOG(INFO) << "actual: " << num_actual_reads << " total: " << num_reads;
-            for (size_t i = num_actual_reads; i < num_reads; i++) {
-              out_t(i) = "a";
-            }
+        results.set_first_is_primary(i, first_is_primary);
+        results.set_num_results(i, alignment_results.size()); 
+        for (int j = 0; j < alignment_results.size(); j++) {
+          SingleAlignmentResult result = alignment_results[i];
+          results.set_result_type(i, j, (int64)result.status); // cast from enum
+          results.set_genome_location(i, j, GenomeLocationAsInt64(result.location));
+          results.set_score(i, j, result.score);
+          results.set_mapq(i, j, result.mapq);
+          results.set_direction(i, j, result.direction);
         }
+        alignment_results.clear();
 
-    private:
-        void populateSingleResultProto_(SnapProto::SingleResultDef* result_proto, SingleAlignmentResult result) {
-            result_proto->set_result((SnapProto::SingleResultDef::AlignmentResult)result.status);
-            result_proto->set_genomelocation(GenomeLocationAsInt64(result.location));
-            result_proto->set_score(result.score);
-            result_proto->set_mapq(result.mapq);
-            result_proto->set_direction(result.direction);
+        // TODO(solal): Smart pointers would probably make this unnecessary, but I'm not knowledgeable enough in C++ to do that
+        delete input_reads[i];
+
+        if (!status.ok()) {
+          LOG(INFO) << "SnapAlignOp: alignSingle failed!!";
         }
+      }
 
-        BaseAligner* base_aligner_ = nullptr;
-        int num_secondary_alignments_ = 0;
-        GenomeIndexResource* index_resource_ = nullptr;
-        AlignerOptionsResource* options_resource_ = nullptr;
+      //LOG(INFO) << "actual: " << num_actual_reads << " total: " << num_reads;
+      for (size_t i = num_actual_reads; i < num_reads; i++) {
+        // for uneven batches, set the num of results to 0
+        results.set_num_results(i, 0);
+      }
+    }
 
-    };
+  private:
+    BaseAligner* base_aligner_ = nullptr;
+    int num_secondary_alignments_ = 0;
+    GenomeIndexResource* index_resource_ = nullptr;
+    AlignerOptionsResource* options_resource_ = nullptr;
+
+};
 
 
-    REGISTER_OP("SnapAlign")
-        .Input("genome_handle: Ref(string)")
-        .Input("options_handle: Ref(string)")
-        .Input("read: string")
-        .Output("output: string")
-        .Doc(R"doc(
+  REGISTER_OP("SnapAlign")
+      .Input("genome_handle: Ref(string)")
+      .Input("options_handle: Ref(string)")
+      .Input("read: string")
+      .Output("output: int64")
+      .Output("reads_out: string")
+      .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
 generation of alignment candidates.
