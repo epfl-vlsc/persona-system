@@ -91,7 +91,7 @@ void WriterAsyncBase::Done(OpKernelContext* context) {
   return;
 }
 
-void WriterAsyncBase::Write(const string* value,
+void WriterAsyncBase::Write(OpInputList* values, string key,
                       OpKernelContext* context) {
 
   {
@@ -131,7 +131,7 @@ void WriterAsyncBase::Write(const string* value,
           }
         }
         // write all remaining data to disk
-        while (ready_buf = buf_pool_->GetNextAvailable()) {
+        while ((ready_buf = buf_pool_->GetNextAvailable())) {
           char* buffer = ready_buf->GetBuffer();
           if (ready_buf->Used() == 0)
             continue;
@@ -155,7 +155,7 @@ void WriterAsyncBase::Write(const string* value,
   while (!(buf = buf_pool_->GetNextAvailable())) {;;}
 
   uint64 used = 0;
-  Status status = WriteUnlocked(*value, buf->GetCurrentBuffer(), 
+  Status status = WriteUnlocked(values, key, buf->GetCurrentBuffer(), 
       buf->GetCurrentBufferSize(), &used);
 
   int count = 0;
@@ -176,7 +176,7 @@ void WriterAsyncBase::Write(const string* value,
     while (!(buf = buf_pool_->GetNextAvailable())) {;;}
     /*LOG(INFO) << "calling again with cur buf size = " << 
       buf->GetCurrentBufferSize() << " bytes";*/
-    status = WriteUnlocked(*value, buf->GetCurrentBuffer(), 
+    status = WriteUnlocked(values, key, buf->GetCurrentBuffer(), 
         buf->GetCurrentBufferSize(), &used);
     count++;
 

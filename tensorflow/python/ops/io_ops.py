@@ -293,27 +293,17 @@ class WriterBase(object):
     """Op that implements the writer."""
     return self._writer_ref
 
-  def write(self, value, meta, name=None):
-    """Instructs the Writer to write a value to file.
+  def write(self, values, meta, key, name=None):
+    """Instructs the Writer to write values to file.
 
     Args:
-      value: The value to write to the file.
+      values: List of tensors needed by the writer to 
+      write to file.
       name: A name for the operation (optional).
       meta: Metadata handles the writer interface may need.
 
     """
-    return gen_io_ops.writer_write(self._writer_ref, value, meta, name=name)
-
-  def write_batch(self, value, meta, name=None):
-    """Instructs the Writer to write values across dim 0 of value.
-
-    Args:
-      value: The value to write to the file.
-      name: A name for the operation (optional).
-      meta: Metadata handles the writer interface may need.
-
-    """
-    return gen_io_ops.writer_write_batch(self._writer_ref, value, meta, name=name)
+    return gen_io_ops.writer_write(self._writer_ref, values, key, meta, name=name)
 
   def done(self, name=None):
     """Instructs the Writer to complete writing a file. 

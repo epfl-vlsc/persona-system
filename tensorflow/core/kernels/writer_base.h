@@ -31,7 +31,7 @@ class WriterBase : public WriterInterface {
   // that serializes all Writer calls.
   // Usage:
   //    Should return a valid status. OK on successful write to file.
-  virtual Status WriteLocked(const string& value) = 0;
+  virtual Status WriteLocked(OpInputList* values, string& key) = 0;
 
   // Called when work starts / finishes.
   virtual Status OnWorkStartedLocked(OpKernelContext* context) = 0; 
@@ -72,7 +72,7 @@ class WriterBase : public WriterInterface {
   // Implementations of WriterInterface methods.  These ensure thread-safety
   // and call the methods above to do the work.
   void Done(OpKernelContext* context) override;
-  void Write(const string* value,
+  void Write(OpInputList* value, string key,
             OpKernelContext* context) override;
   int64 NumRecordsProduced() override;
   Status SerializeState(string* state) override;

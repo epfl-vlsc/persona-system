@@ -116,26 +116,24 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
     OP_REQUIRES_OK(context,
                    context->allocate_output("key", TensorShape({}), &key));
 
+    LOG(INFO) << "reader supplied shape is: " << reader->GetRequiredShape().DebugString();
     Tensor* value = nullptr;
     OP_REQUIRES_OK(context,
-                   context->allocate_output("value", TensorShape({batch_size_}), &value));
+                   context->allocate_output("value", reader->GetRequiredShape(), &value));
 
     //LOG(INFO) << "reading a batch of size " << batch_size_;
 
-    auto key_scalar = key->scalar<string>();
-    auto value_vector = value->flat<string>();
     int produced = 0;
-    reader->ReadBatch(queue, [&value_vector](int index) -> string* {
-        return &value_vector(index); },
-        batch_size_, &key_scalar(), context, &produced);
+    auto key_scalar = key->scalar<string>();
+    reader->ReadBatch(queue, value, &key_scalar(), context, &produced);
 
-    //LOG(INFO) << "Produced was " << produced;
-    if (produced < batch_size_ && produced != 0) {
+    LOG(INFO) << "Produced was " << produced;
+    /*if (produced < batch_size_ && produced != 0) {
       LOG(INFO) << "filling rest with blank strings!";
       for (int i = produced; i < batch_size_; i++) 
         value_vector(i) = "a";
       context->SetStatus(Status::OK());
-    }
+    }*/
 
     /*for (int i = 0; i < batch_size_; i++) {
       reader->Read(queue, &key_scalar(), &value_vector(i), context);

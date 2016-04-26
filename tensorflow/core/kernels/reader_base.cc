@@ -75,40 +75,28 @@ Status ReaderBase::RestoreStateLocked(const string& state) {
 }
 
 void ReaderBase::ReadBatch(QueueInterface* queue, 
-    std::function<string*(int)> batch_loader, 
-    int batch_size, string* key, OpKernelContext* context,
+    Tensor* batch_tensor, string* key, OpKernelContext* context,
     int* produced) {
   mutex_lock lock(mu_);
 
   *key = strings::StrCat(work_, ":", num_records_produced_);
 
-  int num_requested = batch_size;
-  int total_produced = 0;
   while (true) {
     if (!work_in_progress()) {
-      if (queue->size() == 0 && total_produced < batch_size && total_produced > 0) {
-        // return the partial batch before the queue empty error is triggered
-        LOG(INFO) << "partial batch processed: " << total_produced << " reads.";
-        *produced = total_produced;
+      GetNextWorkLocked(queue, context);
+      if (!context->status().ok()) {
         return;
-      }
-      else {
-        GetNextWorkLocked(queue, context);
-        if (!context->status().ok()) {
-          return;
-        }
       }
     }
 
     int num_produced = 0;
     bool at_end = false;
-    Status status = ReadBatchLocked(batch_loader, num_requested, 
-        &num_produced, &at_end);
+    Status status = ReadBatchLocked(batch_tensor, &num_produced, &at_end);
 
     if (!at_end && status.ok() && num_produced==0) {
       status = errors::Internal(
           "ReadBatchLocked() for ", name(),
-          " must set *at_end=true, *num_produced=true, or return an error.");
+          " must set *at_end=true, *num_produced > 0, or return an error.");
     }
     if (!status.ok() && num_produced != 0) {
       status = errors::Internal("ReadBatchLocked() for ", name(),
@@ -125,20 +113,11 @@ void ReaderBase::ReadBatch(QueueInterface* queue,
       context->SetStatus(status);
       return;
     }
-    if (num_produced == num_requested) {
+    if (num_produced > 0) {
       num_records_produced_ += num_produced;
-      *produced = num_produced + total_produced;
+      *produced = num_produced;
       return;
-    } else if (num_produced > num_requested) {
-      status = errors::Internal("ReadBatchLocked() for ", name(),
-          " produced more records than requested.");
-      context->SetStatus(status);
-      return;
-    } else {  // num_produced < num_requested
-      num_records_produced_ += num_produced;
-      total_produced += num_produced;
-      num_requested -= num_produced;
-    }
+    } 
   }
 }
 
