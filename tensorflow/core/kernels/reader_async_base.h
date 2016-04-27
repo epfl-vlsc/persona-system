@@ -30,11 +30,16 @@ public:
                  std::size_t offset, std::size_t length);
     InputChunk();
 
-    void GetChunk(const void** data, std::size_t *length);
+    void GetChunk(const void** data, std::size_t *length) const;
+
+    void SetFileName(std::string &s);
+
+    const std::string& GetFileName() const;
 
   private:
     const void* data_;
     std::size_t length_;
+    std::string filename;
     std::shared_ptr<ReadOnlyMemoryRegion> base_file_;
   };
 

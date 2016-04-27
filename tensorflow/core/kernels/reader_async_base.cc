@@ -21,10 +21,18 @@ ReaderAsyncBase::InputChunk::InputChunk(std::shared_ptr<ReadOnlyMemoryRegion> &f
 
 ReaderAsyncBase::InputChunk::InputChunk() : data_(nullptr), length_(0), base_file_(nullptr) {}
 
-void ReaderAsyncBase::InputChunk::GetChunk(const void** data, std::size_t *length)
+void ReaderAsyncBase::InputChunk::GetChunk(const void** data, std::size_t *length) const
 {
   *data = data_;
   *length = length_;
+}
+
+void ReaderAsyncBase::InputChunk::SetFileName(std::string &s) {
+  filename = s;
+}
+
+const std::string& ReaderAsyncBase::InputChunk::GetFileName() const {
+  return filename;
 }
 
 ReaderAsyncBase::ReaderAsyncBase(int parallel_fill, int buffer_factor) :
