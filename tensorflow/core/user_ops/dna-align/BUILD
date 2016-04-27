@@ -29,14 +29,28 @@ cc_library(
 )
 
 cc_library(
+    name = "snap_tensor_decoders",
+    srcs = ["snap_read_decode.cc",
+            "snap_results_decode.cc"],
+    hdrs = ["snap_read_decode.h",
+            "snap_results_decode.h"],
+    includes = ["."],
+    copts = tf_copts(),
+    linkstatic = 1,
+    deps = ["//tensorflow/core:framework"],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "snap_align",
     hdrs = ["SnapAlignerWrapper.h"],
     includes = ["."],
     srcs = glob(["*.cc"], 
            exclude = [
-                      "sam_writer_op.cc", 
                       "sam_writer_async_op.cc", 
-                      "sam_writer.cc"],
+                      "snap_read_decode.cc",
+                      "snap_results_decode.cc"
+                      ],
                ),
     copts = tf_copts(),
     #linkopts = [
@@ -48,20 +62,9 @@ cc_library(
     deps = [
             "//tensorflow/core:framework",
             ":snap_protos_cc",
+            ":snap_tensor_decoders",
             ":snap_lib"],
     alwayslink=1,
-)
-
-cc_library(
-    name = "sam_writer",
-    srcs = ["sam_writer_op.cc"],
-    includes = ["."],
-    copts = tf_copts(),
-    linkstatic = 1,
-    visibility = ["//visibility:public"],
-    deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:writer_base",
-            ":snap_protos_cc", ":snap_lib"],
-    alwayslink = 1,
 )
 
 cc_library(
@@ -72,6 +75,6 @@ cc_library(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:writer_async_base",
-            ":snap_protos_cc", ":snap_lib"],
+            ":snap_protos_cc", ":snap_tensor_decoders", ":snap_lib"],
     alwayslink = 1,
 )

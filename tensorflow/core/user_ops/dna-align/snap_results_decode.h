@@ -1,9 +1,9 @@
 
-#ifndef TENSORFLOW_USER_OPS_SNAP_READ_DECODE_H_
-#define TENSORFLOW_USER_OPS_SNAP_READ_DECODE_H_
+#ifndef TENSORFLOW_USER_OPS_SNAP_RESULTS_DECODE_H_
+#define TENSORFLOW_USER_OPS_SNAP_RESULTS_DECODE_H_
 
-#include "Read.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/framework/types.pb.h"
 
@@ -15,124 +15,101 @@ namespace tensorflow {
 // is special and holds whether the first result is primary, and the 
 // number of results. 
 // To the user however, results are still 0-indexed
-class SnapResultsDecode {
+class MutableSnapResultsDecode {
 
   public:
-    SnapesultsDecode(Tensor* results_tensor) {
-      if (results_tensor->dims() != 3) {
-        LOG(INFO) << "Error: trying to create results decoder with tensor"
-          << " not of dim 2";
-      }
-      if (results_tensor->dtype() != DT_INT64) {
-        LOG(INFO) << "Error: trying to create results decoder with non "
-          << "string type tensor.";
-      }
-      results_tensor_ = results_tensor;
-      num_results_ = results_tensor->dim_size(0);
-    }
+    MutableSnapResultsDecode(Tensor* results_tensor);
 
     // helper to get appropriate shape for given batch size and 
     // secondary results size
     static TensorShape get_results_shape(int batch_size,
         int num_secondary_results) {
-      return TensorShape({batch_size, num_secondary_results+1, 5});
+      return TensorShape({batch_size, num_secondary_results+2, 5});
     }
 
     // set whether or not first result is primary
-    void set_first_is_primary(int batch_index, bool value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, 0, kFirstIsPrimary) = (int64) value;
-    }
-    
-    bool first_is_primary(int batch_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, 0, kFirstIsPrimary) != 0;
-    }
-   
+    void set_first_is_primary(int batch_index, bool value);
+
+    bool first_is_primary(int batch_index);
     // set the number of results for the result in the given
     // batch index
-    void set_num_results(int batch_index, int value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, 0, kNumResults) = value;
-    }
+    void set_num_results(int batch_index, int value);
 
-    int64 num_results(int batch_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, 0, kNumResults);
-    }
+    int64 num_results(int batch_index);
 
-    int64 result_type(int batch_index, int result_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, result_index+1, kResultType);
-    }
-    
-    void set_result_type(int batch_index, int result_index, int64 value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, result_index+1, kResultType) = value;
-    }
-    
-    int64 genome_location(int batch_index, int result_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, result_index+1, kGenomeLocation);
-    }
-    
-    void set_genome_location(int batch_index, int result_index, int64 value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, result_index+1, kGenomeLocation) = value;
-    }
-    
-    int64 score(int batch_index, int result_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, result_index+1, kScore);
-    }
-    
-    void set_score(int batch_index, int result_index, int64 value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, result_index+1, kScore) = value;
-    }
-    
-    int64 mapq(int batch_index, int result_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, result_index+1, kMapq);
-    }
-    
-    void set_mapq(int batch_index, int result_index, int64 value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, result_index+1, kMapq) = value;
-    }
-    
-    int64 mapq(int batch_index, int result_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, result_index+1, kMapq);
-    }
-    
-    void set_mapq(int batch_index, int result_index, int64 value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, result_index+1, kMapq) = value;
-    }
-    
-    int64 direction(int batch_index, int result_index) {
-      auto results = results_tensor_->tensor<string, 3>();
-      return results(batch_index, result_index+1, kDirection);
-    }
-    
-    void set_direction(int batch_index, int result_index, int64 value) {
-      auto results = results_tensor_->tensor<string, 3>();
-      results(batch_index, result_index+1, kDirection) = value;
-    }
+    int64 result_type(int batch_index, int result_index);
+
+    void set_result_type(int batch_index, int result_index, int64 value);
+
+    int64 genome_location(int batch_index, int result_index);
+
+    void set_genome_location(int batch_index, int result_index, int64 value);
+
+    int64 score(int batch_index, int result_index);
+
+    void set_score(int batch_index, int result_index, int64 value);
+
+    int64 mapq(int batch_index, int result_index);
+    void set_mapq(int batch_index, int result_index, int64 value);
+
+    int64 direction(int batch_index, int result_index);
+
+    void set_direction(int batch_index, int result_index, int64 value);
+
+    size_t size() { return num_results_; }
 
   private:
-    const int kFirstIsPrimary = 0;
-    const int kNumResults = 1;
-    const int kResultType = 0;
-    const int kGenomeLocation = 1;
-    const int kScore = 2;
-    const int kMapq = 3;
-    const int kDirection = 4;
+    static const int kFirstIsPrimary = 0;
+    static const int kNumResults = 1;
+    static const int kResultType = 0;
+    static const int kGenomeLocation = 1;
+    static const int kScore = 2;
+    static const int kMapq = 3;
+    static const int kDirection = 4;
     Tensor* results_tensor_;
     int num_results_;
 };
 
+// immutable version
+class SnapResultsDecode {
+
+  public:
+    SnapResultsDecode(const Tensor* results_tensor);
+
+    // helper to get appropriate shape for given batch size and 
+    // secondary results size
+    static TensorShape get_results_shape(int batch_size,
+        int num_secondary_results) {
+      return TensorShape({batch_size, num_secondary_results+2, 5});
+    }
+
+    bool first_is_primary(int batch_index);
+
+    int64 num_results(int batch_index);
+
+    int64 result_type(int batch_index, int result_index);
+
+    int64 genome_location(int batch_index, int result_index);
+
+    int64 score(int batch_index, int result_index);
+
+    int64 mapq(int batch_index, int result_index);
+
+    int64 direction(int batch_index, int result_index);
+
+    size_t size() { return num_results_; }
+
+  private:
+    static const int kFirstIsPrimary = 0;
+    static const int kNumResults = 1;
+    static const int kResultType = 0;
+    static const int kGenomeLocation = 1;
+    static const int kScore = 2;
+    static const int kMapq = 3;
+    static const int kDirection = 4;
+    const Tensor* results_tensor_;
+    int num_results_;
+};
 }
 
 

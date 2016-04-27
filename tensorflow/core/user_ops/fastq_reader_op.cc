@@ -18,6 +18,7 @@ limitations under the License.
 #include "tensorflow/core/framework/reader_op_kernel.h"
 #include "tensorflow/core/kernels/reader_base.h"
 #include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
+#include "tensorflow/core/user_ops/dna-align/snap_read_decode.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/env.h"
@@ -29,6 +30,7 @@ REGISTER_OP("FastqReader")
   .Output("reader_handle: Ref(string)")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Attr("batch_size: int")
   .SetIsStateful()
   .Doc(R"doc(
   A Reader that outputs the read sequences in a FASTQ file. 
@@ -41,9 +43,10 @@ REGISTER_OP("FastqReader")
 
 class FastqReader : public ReaderBase {
   public:
-    FastqReader(const string& node_name, Env* env)
+    FastqReader(const string& node_name, Env* env, int batch_size)
       : ReaderBase(strings::StrCat("FastqReader '", node_name, "'")),
       env_(env),
+      batch_size_(batch_size),
       line_number_(0),
       num_produced_(0){}
 
@@ -70,15 +73,22 @@ class FastqReader : public ReaderBase {
     Status OnWorkFinishedLocked() override {
       return Status::OK();
     }
+    
+    TensorShape GetUserRequiredShape() override {
+      return TensorShape({batch_size_, 3});
+    }
 
-    Status ReadBatchLocked(
-      std::function<string*(int)> batch_loader, 
-      int num_requested, int* num_produced, bool* at_end) override {
+    DataType GetUserRequiredType() override {
+      return DT_STRING;
+    }
 
-      *num_produced = 0;
+    Status ReadBatchLocked(Tensor* tensor_batch, 
+        int* num_produced, bool* at_end) override {
+
       string lines[4];
       Status status;
-      for (int j = 0; j < num_requested; j++) {
+      MutableSnapReadDecode reads(tensor_batch);
+      for (int j = 0; j < reads.size(); j++) {
 
         for (int i = 0; i < 4; i++)
         {
@@ -88,6 +98,11 @@ class FastqReader : public ReaderBase {
             LOG(INFO) << "I is out of range! file: " 
               << current_work() << " line number: " << line_number_ << std::endl;
             *at_end = true;
+            // fill the rest with blanks, partial batch
+            LOG(INFO) << "filling the rest (" << reads.size()-j << ")  with blanks!";
+            string blank = "";
+            for (int k = j; k < reads.size(); k++)
+              reads.set_bases(k, blank);
             // caller will move to next file, everything still OK
             return Status::OK();
           }
@@ -95,16 +110,12 @@ class FastqReader : public ReaderBase {
 
         if (status.ok()) {
           lines[0].erase(0, 1);  // remove the '@' from meta data
-          SnapProto::AlignmentDef alignment;
-          SnapProto::ReadDef* read = alignment.mutable_read();
-          read->set_bases(lines[1]);
-          read->set_meta(lines[0]);
-          read->set_length(lines[1].length());
-          read->set_qualities(lines[3]);
-          string* value = batch_loader(j);
-          alignment.SerializeToString(value);
+          reads.set_bases(j, lines[1]);
+          reads.set_metadata(j, lines[0]);
+          reads.set_qualities(j, lines[3]);
           (*num_produced)++;
           num_produced_++;
+          //LOG(INFO) << "num produced is now: " << num_produced_;
         } else {
           LOG(INFO) << "Something bad happened in fastq reader read batch: "
             << status.ToString();
@@ -182,6 +193,7 @@ class FastqReader : public ReaderBase {
       return Status::OK();
     }
     Env* const env_;
+    int batch_size_;
     std::shared_ptr<ReadOnlyMemoryRegion> mmap_fastq_;
     const char* mmap_data_;
     uint64 bytes_;
@@ -193,10 +205,13 @@ class FastqReaderOp : public ReaderOpKernel {
   public:
     explicit FastqReaderOp(OpKernelConstruction* context)
       : ReaderOpKernel(context) {
-
+ 
+        int batch_size;
+        OP_REQUIRES_OK(context, context->GetAttr("batch_size", 
+              &batch_size));
         Env* env = context->env();
-        SetReaderFactory([this, env]() {
-            return new FastqReader(name(), env);
+        SetReaderFactory([this, env, batch_size]() {
+            return new FastqReader(name(), env, batch_size);
             });
       }
 };

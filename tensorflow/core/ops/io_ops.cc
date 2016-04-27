@@ -250,32 +250,19 @@ shared_name: If non-empty, this reader is named in the given bucket
 
 REGISTER_OP("WriterWrite")
     .Attr("N: int")
+    .Attr("T: list(type)")
     .Input("writer_handle: Ref(string)")
-    .Input("value: string")
+    .Input("values: T")
+    .Input("key: string")
     .Input("meta_handles: Ref(N * string)")
     .Doc(R"doc(
 Write value to file.
 
-writer_handle: Handle to a Reader.
+writer_handle: Handle to a Writer.
 meta_handles: handles to shared resources that the writer
 interface may need to access.
-value: A scalar.
-N: number of metadata handles.
-)doc");
-
-REGISTER_OP("WriterWriteBatch")
-    .Attr("N: int")
-    .Input("writer_handle: Ref(string)")
-    .Input("value: string")
-    .Input("meta_handles: Ref(N * string)")
-    .Doc(R"doc(
-Write value to file. Value is expected to be a 1D string 
-type tensor with >= one entry
-
-writer_handle: Handle to a writer.
-meta_handles: handles to shared resources that the writer
-interface may need to access.
-value: A scalar.
+values: A list of tensors that will be handed to the
+user-level writer interface.
 N: number of metadata handles.
 )doc");
 
@@ -348,7 +335,6 @@ value: A scalar.
 REGISTER_OP("ReaderReadBatch")
     .Input("reader_handle: Ref(string)")
     .Input("queue_handle: Ref(string)")
-    .Attr("batch_size: int")
     .Output("key: string")
     .Output("value: string")
     .Doc(R"doc(

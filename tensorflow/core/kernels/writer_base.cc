@@ -63,7 +63,7 @@ void WriterBase::Done(OpKernelContext* context) {
   return;
 }
 
-void WriterBase::Write(const string* value,
+void WriterBase::Write(OpInputList* values, string key,
                       OpKernelContext* context) {
   mutex_lock lock(mu_);
 
@@ -76,7 +76,7 @@ void WriterBase::Write(const string* value,
     }
   }
 
-  Status status = WriteLocked(*value);
+  Status status = WriteLocked(values, key);
   
   if (!status.ok()) {
     context->SetStatus(errors::Internal(

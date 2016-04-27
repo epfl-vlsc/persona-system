@@ -2,56 +2,67 @@
 #ifndef TENSORFLOW_USER_OPS_SNAP_READ_DECODE_H_
 #define TENSORFLOW_USER_OPS_SNAP_READ_DECODE_H_
 
-#include "Read.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/framework/types.pb.h"
+#include <string>
 
 namespace tensorflow {
 
 class SnapReadDecode {
 
   public:
-    SnapReadDecode(Tensor* read_tensor) {
-      if (read_tensor->dims() != 2) {
-        LOG(INFO) << "Error: trying to create read decoder with tensor"
-          << " not of dim 2";
-      }
-      if (read_tensor->dtype() != DT_STRING) {
-        LOG(INFO) << "Error: trying to create read decoder with non "
-          << "string type tensor.";
-      }
-      read_tensor_ = read_tensor;
-    }
+    SnapReadDecode(const Tensor* read_tensor);
 
-    char* bases(int batch_index) {
-      auto reads = read_tensor_->matrix<string>();
-      return reads(batch_index, kBases).c_str();
-    }
-    char* qualities(int batch_index) {
-      auto reads = read_tensor_->matrix<string>();
-      return reads(batch_index, kQualities).c_str();
-    }
-    char* metadata(int batch_index) {
-      auto reads = read_tensor_->matrix<string>();
-      return reads(batch_index, kMetadata).c_str();
-    }
-    int metadata_len(int batch_index) {
-      auto reads = read_tensor_->matrix<string>();
-      return reads(batch_index, kMetadata).length();
-    }
-    int bases_len(int batch_index) {
-      auto reads = read_tensor_->matrix<string>();
-      return reads(batch_index, kBases).length();
-    }
+    const char* bases(int batch_index);
+
+    const char* qualities(int batch_index);
+
+    const char* metadata(int batch_index);
+
+    int metadata_len(int batch_index);
+
+    int bases_len(int batch_index);
+   
+    size_t size() { return read_tensor_->dim_size(0); }
+
   private:
-    const int kBases = 0;
-    const int kQualities = 1;
-    const int kMetadata = 2;
-    Tensor* read_tensor_;
+    static const int kBases = 0;
+    static const int kQualities = 1;
+    static const int kMetadata = 2;
+    const Tensor* read_tensor_;
 };
 
-}
+class MutableSnapReadDecode {
+  
+  public:
+    MutableSnapReadDecode(Tensor* read_tensor);
 
+    const char* bases(int batch_index);
+
+    void set_bases(int batch_index, std::string& bases);
+
+    const char* qualities(int batch_index);
+
+    void set_qualities(int batch_index, std::string& quals);
+
+    const char* metadata(int batch_index);
+
+    void set_metadata(int batch_index, std::string& meta);
+
+    int metadata_len(int batch_index);
+
+    int bases_len(int batch_index);
+
+    size_t size() { return read_tensor_->dim_size(0); }
+
+  private:
+    static const int kBases = 0;
+    static const int kQualities = 1;
+    static const int kMetadata = 2;
+    Tensor* read_tensor_;
+};
+}
 
 #endif
