@@ -22,9 +22,23 @@ public:
   {
   private:
     PtrT object_;
+    ObjectPool *op_;
 
   public:
-    ObjectLoan(PtrT &object) : object_(object) {}
+    ObjectLoan(ObjectPool *op) : object_(nullptr), op_(op) {}
+    ObjectLoan(PtrT &object, ObjectPool *op) : object_(object), op_(op) {}
+
+    ObjectLoan(ObjectLoan &&other) : object_(other.object_), op_(other.op_) {
+        other.object_.reset();
+    }
+
+    ObjectLoan&& operator=(ObjectLoan &&other) {
+      if (&other != this) {
+        object_ = other.object_;
+        other.object_.reset();
+        op_ = other.op_;
+      }
+    }
 
     T& operator*() const {
       return *object_;
@@ -40,14 +54,14 @@ public:
 
     void ReleaseEmpty() {
       if (get()) {
-        ReturnEmpty(object_);
+        op_->ReturnEmpty(object_);
       }
       object_.reset();
     }
 
     void ReleaseReady() {
       if (get()) {
-        ReturnReady(object_);
+        op_->ReturnReady(object_);
       }
       object_.reset();
     }
@@ -72,8 +86,8 @@ public:
     using namespace std;
     mutex_lock rl(ready_mu_);
     mutex_lock el(empty_mu_);
-    empty_objects_.insert(empty_objects.end(), ready_objects_.begin(), ready_objects_.end());
-    ready_objects.clear();
+    empty_objects_.insert(empty_objects_.end(), ready_objects_.begin(), ready_objects_.end());
+    ready_objects_.clear();
     ready_cv_.notify_all();
     empty_cv_.notify_all();
   }
@@ -84,16 +98,17 @@ public:
     mutex_lock l(ready_mu_);
     if (ready_objects_.empty() && block) {
       ready_cv_.wait(l, [this]() {
-          ready_objects_.empty() && run_;
+          return ready_objects_.empty() && run_;
         });
     }
 
     if (!ready_objects_.empty()) {
-      auto ptr = ready_objects_.pop_front();
-      return ObjectLoan(ptr);
+      auto ptr = ready_objects_.front();
+      ready_objects_.pop_front();
+      return ObjectLoan(ptr, this);
     }
 
-    return ObjectLoan(nullptr);
+    return ObjectLoan(this);
   }
 
   ObjectLoan GetEmpty(bool block = true) noexcept
@@ -113,16 +128,17 @@ public:
     // If we're still out of objects and we want to block, try to wait for one
     if (empty_objects_.empty() && block) {
       empty_cv_.wait(l, [this]() {
-          empty_objects_.empty() && run_;
+          return empty_objects_.empty() && run_;
         });
     }
 
     if (!empty_objects_.empty()) {
-      auto ptr = empty_objects_.pop_front();
-      return ObjectLoan(ptr);
+      auto ptr = empty_objects_.front();
+      empty_objects_.pop_front();
+      return ObjectLoan(ptr, this);
     }
 
-    return ObjectLoan(nullptr);
+    return ObjectLoan(this);
   }
 
 private:
@@ -146,8 +162,8 @@ private:
     ready_cv_.notify_one();
   }
 
-  mutable std::mutex ready_mu_;
-  mutable std::mutex empty_mu_;
+  mutable mutex ready_mu_;
+  mutable mutex empty_mu_;
   mutable std::condition_variable ready_cv_;
   mutable std::condition_variable empty_cv_;
   std::vector<PtrT> all_objects_;

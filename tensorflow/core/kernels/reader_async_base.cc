@@ -12,21 +12,25 @@ ReaderAsyncBase::InputChunk::InputChunk(std::shared_ptr<ReadOnlyMemoryRegion> &f
                                         std::size_t offset, std::size_t length) :
   base_file_(file_region), length_(length)
 {
-  data_ = file_region->data + offset;
-  if (offset+length >= file_region->length) {
-    // TODO print some log warning here!
+  data_ = file_region->data() + offset;
+  if (offset+length >= file_region->length()) {
+    LOG(ERROR) << "desired input chunk is larger than memory region!\nRequested end: " <<
+      offset+length << ", actual end: " << file_region->length();
   }
 }
 
-ReaderAsyncBase::InputChunk::GetChunk(const void** data, std::size_t *length)
+ReaderAsyncBase::InputChunk::InputChunk() : data_(nullptr), length_(0), base_file_(nullptr) {}
+
+void ReaderAsyncBase::InputChunk::GetChunk(const void** data, std::size_t *length)
 {
   *data = data_;
   *length = length_;
 }
 
 ReaderAsyncBase::ReaderAsyncBase(int parallel_fill, int buffer_factor) :
-  buffer_pool_(parallel_fill * buffer_factor, []{ return new vector<char>()}),
-  num_threads_(parallel_fill+1) // +1 for the background thread that fills the work chunks
+  buffer_pool_(parallel_fill * buffer_factor, []{ return new std::vector<char>(); }),
+  num_threads_(parallel_fill+1), // +1 for the background thread that fills the work chunks
+  current_loan_(&buffer_pool_)
 {
   if (parallel_fill < 1) {
     LOG(ERROR) << "Attempting to use inadequate parallel fill: " << parallel_fill << std::endl;
@@ -55,13 +59,16 @@ Status ReaderAsyncBase::GetNextInputChunk(InputChunk *next_chunk)
     mutex_lock cql(chunk_queue_mu_);
     if (chunk_queue_.empty()) {
       chunk_queue_cv_.wait(cql, [this]() {
-          chunk_queue_cv_.empty() && run_;
+          return chunk_queue_.empty() && run_;
         });
     }
 
     if (run_) { // need to double check: could have been aborted
-      *next_chunk = std::move(chunk_queue_cv_.pop_front());
+      *next_chunk = chunk_queue_.front();
+      chunk_queue_.pop_front();
       return Status::OK();
+    } else {
+      return errors::Cancelled("Can't get next input chunk. ReaderAsyncBase is not running");
     }
   }
 
@@ -72,31 +79,32 @@ Status ReaderAsyncBase::ReadLocked(string *key, string *value, bool *produced) {
   return errors::Internal("Not implemented!!");
 }
 
-Status ReaderAsyncBase::ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool* at_end) {
+Status ReaderAsyncBase::ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced) {
   return errors::Internal("Not implemented!!");
 }
 
 // All the overridden functions from ReaderInterface
 
 void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
-          OpKernelContext* context) override
+          OpKernelContext* context)
 {
   mutex_lock l(mu_);
   Status status;
   if (!run_) {
-    context->setStatus(errors::Unavailable("ReaderAsyncBase::Read - run_ is not active when Read is called"));
+    context->SetStatus(errors::Unavailable("ReaderAsyncBase::Read - run_ is not active when Read is called"));
     return;
   }
 
   if (current_loan_.get() == nullptr) {
     status = GetNextLoan();
     if (!status.ok()) {
-      context->setStatus(status);
+      context->SetStatus(status);
       return;
     }
   }
 
   bool produced = false;
+  // TODO fix this into a do-while loop to deal with the blow control issues
   while (!produced) {
     status = ReadLocked(key, value, &produced);
     if (status.ok()) {
@@ -121,32 +129,31 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
       return;
     }
   }
-
 }
 
-TensorShape ReaderAsyncBase::GetRequiredShape() override {
+TensorShape ReaderAsyncBase::GetRequiredShape() {
   return TensorShape({0});
 }
 
-DataType ReaderAsyncBase::GetRequiredType() override {
+DataType ReaderAsyncBase::GetRequiredType() {
   return DT_STRING;
 }
 
 void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
                 Tensor* batch_tensor, string* key, OpKernelContext* context,
-                int* produced) override
+                int* produced)
 {
   mutex_lock l(mu_);
   Status status;
   if (!run_) {
-    context->setStatus(errors::Unavailable("ReaderAsyncBase::Read - run_ is not active when Read is called"));
+    context->SetStatus(errors::Unavailable("ReaderAsyncBase::Read - run_ is not active when Read is called"));
     return;
   }
 
   if (current_loan_.get() == nullptr) {
     status = GetNextLoan();
     if (!status.ok()) {
-      context->setStatus(status);
+      context->SetStatus(status);
       return;
     }
   }
@@ -176,7 +183,7 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
       }
     }
 
-  } while (status.ok() && num_produced <= 0)
+  } while (status.ok() && num_produced <= 0);
 
   if (status.ok()) {
     *produced = num_produced;
@@ -188,11 +195,10 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
 Status ReaderAsyncBase::GetNextLoan()
 {
   if (chunking_done_ && chunks_produced_ == chunks_consumed_) {
-    *exhausted = true;
     return errors::ResourceExhausted("GetNextLoan(): No more chunks are available");
   }
   current_loan_.ReleaseEmpty();
-  current_loan_ = object_pool_.GetReady();
+  current_loan_ = buffer_pool_.GetReady();
   if (current_loan_.get() == nullptr) {
     return errors::Internal("GetNextLoan(): unable to get valid ready object from pool");
   }
@@ -208,7 +214,7 @@ void ReaderAsyncBase::BufferFillerThread(OpKernelContext *context)
   {
     s = GetNextInputChunk(&work);
     if (!s.ok()) {
-      if (IsResourceExhausted(s)) {
+      if (errors::IsResourceExhausted(s)) {
         chunking_done_ = true;
         break; // we're done
       } else {
@@ -226,8 +232,8 @@ void ReaderAsyncBase::BufferFillerThread(OpKernelContext *context)
       continue;
     }
 
-    s = FillBuffer(&work, &empty_buf);
-    if (!s.is_ok()) {
+    s = FillBuffer(&work, *empty_buf);
+    if (!s.ok()) {
       empty_buf.ReleaseEmpty();
       LOG(ERROR) << "FillBuffer failed for for BufferFillerThread";
       context->SetStatus(s);
@@ -251,7 +257,7 @@ bool ReaderAsyncBase::GetCurrentBuffer(const std::vector<char> **buf)
   }
 }
 
-Status ReaderAsyncBase::Reset() override
+Status ReaderAsyncBase::Reset()
 {
   mutex_lock l(mu_);
   return ResetLocked();
@@ -266,67 +272,45 @@ Status ReaderAsyncBase::ResetLocked()
   chunks_consumed_ = 0;
   chunking_done_ = false;
   if (!chunk_queue_.empty()) {
-    LOG(WARN) << "Calling ResetLocked() on AsyncReaderBase with " << chunk_queue_.size() << " elements still in the queue!";
+    LOG(WARNING) << "Calling ResetLocked() on AsyncReaderBase with " << chunk_queue_.size() << " elements still in the queue!";
     chunk_queue_.clear();
   }
   chunk_queue_cv_.notify_all();
 
-  object_pool_.clear();
-  current_loan_ = decltype(object_pool_)::ObjectLoan(nullptr);
+  buffer_pool_.clear();
+  current_loan_ = decltype(buffer_pool_)::ObjectLoan(&buffer_pool_);
 
   return Status::OK();
 }
 
-int64 ReaderAsyncBase::NumRecordsProduced() override
+int64 ReaderAsyncBase::NumRecordsProduced()
 {
   mutex_lock l(mu_);
   return num_records_produced_;
 }
 
-int64 ReaderAsyncBase::NumWorkUnitsCompleted() override
+int64 ReaderAsyncBase::NumWorkUnitsCompleted()
 {
   mutex_lock l(mu_);
   return work_finished_;
 }
 
 // Just.....no. Not right now :)
-Status ReaderAsyncBase::SerializeState(string* state) override
+Status ReaderAsyncBase::SerializeState(string* state)
 { return errors::Unimplemented("Async Reader SerializeState"); }
-Status ReaderAsyncBase::RestoreState(const string& state) override
+Status ReaderAsyncBase::RestoreState(const string& state)
 { return errors::Unimplemented("Async Reader RestoreState"); }
 
-virtual Status ReadBatchLocked(std::function<string*(int)> batch_loader,
+Status ReadBatchLocked(std::function<string*(int)> batch_loader,
                                 int num_requested,
                                 int *num_produced) {
   return errors::Unimplemented("Async Reader ReadBatchLocked"); 
 }
 
-Status ReaderAsyncBase::Initialize(OpKernelContext *context)
-{
-  using namespace thread;
-  if (!initialized_) {
-    if (num_threads_ < 2) {
-      return errors::Internal("Threadpool for ReaderAsyncBase must have at least 2 threads to make progress!");
-    }
-
-    thread_pool_ = unique_ptr<ThreadPool>(new ThreadPool(context->env(), "reader_async_thread_", num_threads_));
-    int buffer_filling_threads = num_threads_-1;
-    auto thread_closure = [this, context] { BufferFillerThread(context); };
-    for (int i = 0; i < buffer_filling_threads; i++) {
-      thread_pool_->Schedule(thread_closure);
-    }
-    initialized_ = true;
-  } else {
-    // TODO log a warning here
-  }
-
-  return Status::OK();
-}
-
 void ReaderAsyncBase::EnqueueThread(QueueInterface *queue, OpKernelContext *context)
 {
   core::ScopedUnref unref_queue(queue);
-  core::ScopedUnref unref_ctx(context);
+  //core::ScopedUnref unref_ctx(context);
 
   Notification n;
   auto callback = [this, context, &n](const QueueInterface::Tuple& tuple) {
@@ -346,7 +330,6 @@ void ReaderAsyncBase::EnqueueThread(QueueInterface *queue, OpKernelContext *cont
         if (!chunk_status.ok()) {
           context->SetStatus(chunk_status);
         }
-        ++work_started_; // TODO what to do with this?
       }
     }
     n.Notify();
@@ -364,16 +347,26 @@ void ReaderAsyncBase::EnqueueThread(QueueInterface *queue, OpKernelContext *cont
     LOG(INFO) << "context status is not okay" << std::endl;
 }
 
-Status ReaderAsyncBase::InitializeOnce(QueueInterface *queue, OpKernelContext *context) override
+Status ReaderAsyncBase::InitializeOnce(QueueInterface *queue, OpKernelContext *context)
 {
-  queue->Ref();
-  context->Ref(); // TODO is this necessary?
+  using thread::ThreadPool;
+  if (num_threads_ < 2) {
+    return errors::Internal("Threadpool for ReaderAsyncBase must have at least 2 threads to make progress!");
+  }
 
+  thread_pool_ = std::unique_ptr<ThreadPool>(new ThreadPool(context->env(), "reader_async_thread_", num_threads_));
+  int buffer_filling_threads = num_threads_-1;
+  auto thread_closure = [this, context] { BufferFillerThread(context); };
+  for (int i = 0; i < buffer_filling_threads; i++) {
+    thread_pool_->Schedule(thread_closure);
+  }
+
+  queue->Ref();
   auto enqueue_thread = [this, queue, context] {
     EnqueueThread(queue, context);
   };
-
   thread_pool_->Schedule(std::move(enqueue_thread));
+
   return Status::OK();
 }
 

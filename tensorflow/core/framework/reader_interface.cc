@@ -5,12 +5,12 @@ namespace tensorflow {
   {
     if (needs_init_) {
       needs_init_ = false;
-      return InitializeOnce(queue);
+      return InitializeOnce(queue, context);
     }
     return Status::OK();
   }
 
-  virtual Status ReaderInterface::InitializeOnce(QueueInterface *queue, OpKernelContext *context)
+  Status ReaderInterface::InitializeOnce(QueueInterface *queue, OpKernelContext *context)
   {
     return Status::OK();
   }

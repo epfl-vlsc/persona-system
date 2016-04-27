@@ -14,8 +14,8 @@
 #include <utility>
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/lib/core/threadpool.h"
+#include "tensorflow/core/lib/core/object_pool.h"
 #include "tensorflow/core/framework/reader_interface.h"
-#include "tensorflow/core/kernels/reader_base.pb.h"
 #include "tensorflow/core/platform/env.h"
 
 namespace tensorflow {
@@ -28,6 +28,7 @@ public:
   public:
     InputChunk(std::shared_ptr<ReadOnlyMemoryRegion> &file_region,
                  std::size_t offset, std::size_t length);
+    InputChunk();
 
     void GetChunk(const void** data, std::size_t *length);
 
@@ -42,7 +43,7 @@ public:
   // Fill the buffer from the next Chunk in the queue
   // by calling GetNextChunk
   // The buffer will be empty before the call is made.
-  virtual Status FillBuffer(InputChunk *chunk, vector<char> &buffer) = 0;
+  virtual Status FillBuffer(InputChunk *chunk, std::vector<char> &buffer) = 0;
 
 /*
   For the given filename, insert one or more InputChunks into the queue
@@ -80,8 +81,6 @@ private:
                          Tensor* batch_tensor, string* key, OpKernelContext* context,
                          int* produced) override;
 
-  TensorShape GetRequiredShape() override;
-  DataType GetRequiredType() override;
 
   Status Reset() override;
   int64 NumRecordsProduced() override;
@@ -94,7 +93,7 @@ private:
   Status GetNextLoan();
   Status GetNextInputChunk(InputChunk *next_chunk);
 
-  void BufferFillerThread();
+  void BufferFillerThread(OpKernelContext *context);
   void EnqueueThread(QueueInterface *queue, OpKernelContext *context);
 
   volatile bool run_ = true;
@@ -102,7 +101,7 @@ private:
   int num_threads_;
   std::unique_ptr<thread::ThreadPool> thread_pool_;
   ObjectPool<std::vector<char>> buffer_pool_;
-  ObjectPool<std::vector<char>>::ObjectLoan current_loan_(nullptr);
+  decltype(buffer_pool_)::ObjectLoan current_loan_;
 
   // Member variables for mutating the Chunk queue
   std::deque<InputChunk> chunk_queue_;
@@ -125,4 +124,4 @@ private:
 
 } // namespace tensorflow {
 
-#endif TENSORFLOW_KERNELS_READER_ASYNC_BASE_H_
+#endif // TENSORFLOW_KERNELS_READER_ASYNC_BASE_H_

@@ -178,6 +178,7 @@ cc_library(
         "//tensorflow/core:lib",
     ],
 )
+
 tf_proto_library(
     name = "reader_base_proto",
     srcs = ["reader_base.proto"],
@@ -192,6 +193,16 @@ cc_library(
     hdrs = ["reader_base.h"],
     deps = [
         ":reader_base_proto_cc",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+    ],
+)
+
+cc_library(
+    name = "reader_async_base",
+    srcs = ["reader_async_base.cc"],
+    hdrs = ["reader_async_base.h"],
+    deps = [
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
     ],
