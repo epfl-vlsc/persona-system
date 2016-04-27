@@ -102,9 +102,7 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
   using ReaderVerbAsyncOpKernel::ReaderVerbAsyncOpKernel;
 
   ReaderReadBatchOp(OpKernelConstruction* context)
-    : ReaderVerbAsyncOpKernel(context) {
-    OP_REQUIRES_OK(context, context->GetAttr("batch_size", &batch_size_));
-  }
+    : ReaderVerbAsyncOpKernel(context) {}
 
   void ComputeWithReader(OpKernelContext* context,
                          ReaderInterface* reader) override {
@@ -116,7 +114,7 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
     OP_REQUIRES_OK(context,
                    context->allocate_output("key", TensorShape({}), &key));
 
-    LOG(INFO) << "reader supplied shape is: " << reader->GetRequiredShape().DebugString();
+    //LOG(INFO) << "reader supplied shape is: " << reader->GetRequiredShape().DebugString();
     Tensor* value = nullptr;
     OP_REQUIRES_OK(context,
                    context->allocate_output("value", reader->GetRequiredShape(), &value));
@@ -127,7 +125,7 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
     auto key_scalar = key->scalar<string>();
     reader->ReadBatch(queue, value, &key_scalar(), context, &produced);
 
-    LOG(INFO) << "Produced was " << produced;
+    //LOG(INFO) << "Produced was " << produced;
     /*if (produced < batch_size_ && produced != 0) {
       LOG(INFO) << "filling rest with blank strings!";
       for (int i = produced; i < batch_size_; i++) 
@@ -139,8 +137,6 @@ class ReaderReadBatchOp : public ReaderVerbAsyncOpKernel {
       reader->Read(queue, &key_scalar(), &value_vector(i), context);
     }*/
   }
- private:
-  int batch_size_ = 1;
 };
 
 REGISTER_KERNEL_BUILDER(Name("ReaderReadBatch").Device(DEVICE_CPU), ReaderReadBatchOp);

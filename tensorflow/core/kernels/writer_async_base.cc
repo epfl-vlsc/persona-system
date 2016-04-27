@@ -176,6 +176,7 @@ void WriterAsyncBase::Write(OpInputList* values, string key,
     while (!(buf = buf_pool_->GetNextAvailable())) {;;}
     /*LOG(INFO) << "calling again with cur buf size = " << 
       buf->GetCurrentBufferSize() << " bytes";*/
+    used = 0; 
     status = WriteUnlocked(values, key, buf->GetCurrentBuffer(), 
         buf->GetCurrentBufferSize(), &used);
     count++;
