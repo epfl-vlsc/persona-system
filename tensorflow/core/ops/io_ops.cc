@@ -335,7 +335,6 @@ value: A scalar.
 REGISTER_OP("ReaderReadBatch")
     .Input("reader_handle: Ref(string)")
     .Input("queue_handle: Ref(string)")
-    .Attr("batch_size: int")
     .Output("key: string")
     .Output("value: string")
     .Doc(R"doc(

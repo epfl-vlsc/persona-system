@@ -171,17 +171,21 @@ class SamAsyncWriter : public WriterAsyncBase {
         LOG(INFO) << " genome index is null!";
       }
       if (values->size() != 2) { // reads and results
+        LOG(INFO) << "values size was not 2!!!";
         return errors::Internal("Error: SamAsyncWriter: values contained ",
             values->size(), " tensors and not 2.");
       }
-      if ((*values)[0].dtype() != DT_STRING || 
-          (*values)[1].dtype() != DT_INT64) {
+      //LOG(INFO) << "shape of reads is: " << (*values)[0].shape().DebugString();
+      //LOG(INFO) << "shape of results is: " << (*values)[1].shape().DebugString();
+      if ((*values)[1].dtype() != DT_STRING || 
+          (*values)[0].dtype() != DT_INT64) {
+        LOG(INFO) << "type mismatch in values for reads/results!!!";
         return errors::Internal("Error: SamAsyncWriter: values types were ",
             (*values)[0].dtype(), " and ", (*values)[0].dtype());
       }
-  
-      SnapReadDecode reads(&(*values)[0]);
-      SnapResultsDecode results(&(*values)[1]);
+ 
+      SnapReadDecode reads(&(*values)[1]);
+      SnapResultsDecode results(&(*values)[0]);
 
       if (reads.size() != results.size()) {
         return errors::Internal("Error: SamAsyncWriter: reads and results ",
@@ -209,29 +213,33 @@ class SamAsyncWriter : public WriterAsyncBase {
         }
 
         // debugging
-        LOG(INFO) << "Preparing " << results.num_results(i) << " results for writing to file."
+        /*LOG(INFO) << "Preparing " << results.num_results(i) << " results for writing to file."
           << " for read " << reads.metadata(i) << "  " << reads.bases(i);
           string isp = results.first_is_primary(i) ? "true" : "false";
-          LOG(INFO) << "firstIsPrimary is " << isp;
+          LOG(INFO) << "firstIsPrimary is " << isp;*/
 
         for (int j = 0; j < results.num_results(i); j++) {
           snap_results[j].status = (AlignmentResult)results.result_type(i, j);
           snap_results[j].location = GenomeLocation(results.genome_location(i, j));
           snap_results[j].direction = (Direction)results.direction(i, j);
           snap_results[j].mapq = results.mapq(i, j);
-          LOG(INFO) << " result: location " << snap_results[j].location <<
-            " direction: " << snap_results[j].direction << " score " << snap_results[j].score;
+          /*LOG(INFO) << " result: location " << snap_results[j].location <<
+            " direction: " << snap_results[j].direction << " score " << snap_results[j].score;*/
         }
 
         record_number_++;
+        //LOG(INFO) << "Record number is: " << record_number_;
         uint64 bytes_used = 0;
         status = snap_wrapper::writeRead(reader_context_, &snap_read, 
             snap_results, results.num_results(i), 
             results.first_is_primary(i), buffer, buffer_size, &bytes_used, format, lvc_,
             reader_context_.genome);
 
-        if (!status.ok())
+        if (!status.ok()) {
+          /*LOG(INFO) << "snap writeRead status was not OK: " << status.ToString() 
+            << "after already processing " << i << " reads/results";*/
           return status;
+        }
 
         (*used) += bytes_used;
         buffer_size -= bytes_used;

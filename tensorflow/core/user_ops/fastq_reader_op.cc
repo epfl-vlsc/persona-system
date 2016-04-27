@@ -99,7 +99,7 @@ class FastqReader : public ReaderBase {
               << current_work() << " line number: " << line_number_ << std::endl;
             *at_end = true;
             // fill the rest with blanks, partial batch
-            LOG(INFO) << "filling the rest with blanks!";
+            LOG(INFO) << "filling the rest (" << reads.size()-j << ")  with blanks!";
             string blank = "";
             for (int k = j; k < reads.size(); k++)
               reads.set_bases(k, blank);
@@ -115,6 +115,7 @@ class FastqReader : public ReaderBase {
           reads.set_qualities(j, lines[3]);
           (*num_produced)++;
           num_produced_++;
+          //LOG(INFO) << "num produced is now: " << num_produced_;
         } else {
           LOG(INFO) << "Something bad happened in fastq reader read batch: "
             << status.ToString();

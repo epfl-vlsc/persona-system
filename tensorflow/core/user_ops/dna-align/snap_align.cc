@@ -57,7 +57,8 @@ class SnapAlignOp : public OpKernel {
 
       const Tensor* reads;
       OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
-
+      
+      //LOG(INFO) << "reads shape is: " << reads->shape().DebugString();
       SnapReadDecode read_batch(reads);
       size_t num_reads = read_batch.size();
 
@@ -66,10 +67,13 @@ class SnapAlignOp : public OpKernel {
 
       for (size_t i = 0; i < num_reads; i++) {
         if (read_batch.bases_len(i) == 0) {
-          //LOG(INFO) << "string was empty, is this a partial batch?";
+          LOG(INFO) << "string was empty, is this a partial batch?";
           continue;
         }
-
+        /*LOG(INFO) << "Read from decoder:";
+        LOG(INFO) << "Meta: " << read_batch.metadata(i) <<  "\nBases: " << read_batch.bases(i)
+          << "\nQual: " << read_batch.qualities(i) << "\nbase len: " << read_batch.bases_len(i);*/
+      
         Read* snap_read = new Read();
         snap_read->init(
             read_batch.metadata(i),  // id
@@ -95,15 +99,19 @@ class SnapAlignOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->set_output("reads_out", *reads));
       //forward_ref_input_to_ref_output(0, 1);
 
+      //LOG(INFO) << "num actual reads is " << num_actual_reads;
       bool first_is_primary;
       for (size_t i = 0; i < num_actual_reads; i++) {
         Status status = snap_wrapper::alignSingle(base_aligner_, options_resource_->value(), input_reads[i],
             &alignment_results, num_secondary_alignments_, first_is_primary);
 
+        //LOG(INFO) << "Result for read " << input_reads[i]->getData();
         results.set_first_is_primary(i, first_is_primary);
         results.set_num_results(i, alignment_results.size()); 
         for (int j = 0; j < alignment_results.size(); j++) {
-          SingleAlignmentResult result = alignment_results[i];
+          SingleAlignmentResult result = alignment_results[j];
+          /*LOG(INFO) << "Type/status: " << result.status << "Location: " << GenomeLocationAsInt64(result.location)
+            << " score: " << result.score << " mapq: " << result.mapq << " direction: " << result.direction;*/
           results.set_result_type(i, j, (int64)result.status); // cast from enum
           results.set_genome_location(i, j, GenomeLocationAsInt64(result.location));
           results.set_score(i, j, result.score);
@@ -123,6 +131,7 @@ class SnapAlignOp : public OpKernel {
       //LOG(INFO) << "actual: " << num_actual_reads << " total: " << num_reads;
       for (size_t i = num_actual_reads; i < num_reads; i++) {
         // for uneven batches, set the num of results to 0
+        LOG(INFO) << "setting 0 for uneven batch";
         results.set_num_results(i, 0);
       }
     }

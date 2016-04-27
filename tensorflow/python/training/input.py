@@ -539,7 +539,10 @@ def batch_pdq(tensor_list, batch_size, num_threads=1, capacity=32, num_dq_ops=1,
         "queue/%s/fraction_of_%d_full" % (queue.name, capacity),
         math_ops.cast(queue.size(), dtypes.float32) * (1. / capacity))
 
-    dequeued = [queue.dequeue_many(batch_size, name=name)] * num_dq_ops
+    if batch_size == 1:
+      dequeued = [queue.dequeue(name=name)] * num_dq_ops
+    else:
+      dequeued = [queue.dequeue_many(batch_size, name=name)] * num_dq_ops
     return dequeued
 
 
@@ -706,7 +709,10 @@ def batch_join_pdq(tensor_list_list, batch_size, num_dq_ops=1, capacity=32,
         "queue/%s/fraction_of_%d_full" % (queue.name, capacity),
         math_ops.cast(queue.size(), dtypes.float32) * (1. / capacity))
 
-    dequeued = [queue.dequeue_many(batch_size, name=name+"_%d"%i) for i in range(num_dq_ops)]
+    if batch_size == 1:
+      dequeued = [queue.dequeue(name=name+"_%d"%i) for i in range(num_dq_ops)]
+    else:
+      dequeued = [queue.dequeue_many(batch_size, name=name+"_%d"%i) for i in range(num_dq_ops)]
     return dequeued
 
 # TODO(josh11b): Add a thread_multiplier or num_threads (that has to be

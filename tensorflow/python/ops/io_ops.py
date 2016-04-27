@@ -293,7 +293,7 @@ class WriterBase(object):
     """Op that implements the writer."""
     return self._writer_ref
 
-  def write(self, values, meta, key, name=None):
+  def write(self, values, key, meta, name=None):
     """Instructs the Writer to write values to file.
 
     Args:
@@ -418,8 +418,10 @@ class ReaderBase(object):
       queue_ref = queue.queue_ref
     return gen_io_ops._reader_read(self._reader_ref, queue_ref, name=name)
 
-  def read_batch(self, queue, batch_size, name=None):
+  def read_batch(self, queue, name=None):
     """Returns the next record batch (key, value pair) produced by a reader.
+    Depends on the reader interface to give the approprate batch size 
+    (tensor shape).
 
     Will dequeue a work unit from queue if necessary (e.g. when the
     Reader needs to start reading from a new file since it has
@@ -439,7 +441,7 @@ class ReaderBase(object):
       queue_ref = queue
     else:
       queue_ref = queue.queue_ref
-    return gen_io_ops.reader_read_batch(self._reader_ref, queue_ref, batch_size, name=name)
+    return gen_io_ops.reader_read_batch(self._reader_ref, queue_ref, name=name)
 
   def num_records_produced(self, name=None):
     """Returns the number of records this reader has produced.
@@ -671,7 +673,8 @@ def _ReaderReadBatchShape(op):
       tensor_shape.scalar())
   unused_queue_shape = op.inputs[1].get_shape().merge_with(
       tensor_shape.scalar())
-  return [tensor_shape.scalar(), tensor_shape.vector(op.get_attr("batch_size"))]
+  #return [tensor_shape.scalar(), tensor_shape.vector(op.get_attr("batch_size"))]
+  return [tensor_shape.scalar(), tensor_shape.unknown_shape()]
 
 @ops.RegisterShape("ReaderReset")
 def _ReaderResetShape(op):
