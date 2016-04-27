@@ -56,9 +56,9 @@ public:
  */
   virtual Status ChunkWorkItem(const string &filename) = 0;
 
-  virtual Status ReadLocked(string *key, string *value, bool *produced) = 0;
+  virtual Status ReadLocked(string *key, string *value, bool *produced, bool *done_with_buffer);
 
-  virtual Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced);
+  virtual Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool *done_with_buffer);
 
   virtual Status ResetLocked();
 
@@ -103,6 +103,7 @@ private:
 
   volatile bool run_ = true;
   bool initialized_ = false;
+  bool read_in_progress_ = false;
   int num_threads_;
   std::unique_ptr<thread::ThreadPool> thread_pool_;
   ObjectPool<std::vector<char>> buffer_pool_;

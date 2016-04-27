@@ -83,11 +83,11 @@ Status ReaderAsyncBase::GetNextInputChunk(InputChunk *next_chunk)
   return errors::ResourceExhausted("reader_async_base has been shutdown: GetNextInputChunk");
 }
 
-Status ReaderAsyncBase::ReadLocked(string *key, string *value, bool *produced) {
+Status ReaderAsyncBase::ReadLocked(string *key, string *value, bool *produced, bool *done_with_buffer) {
   return errors::Internal("Not implemented!!");
 }
 
-Status ReaderAsyncBase::ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced) {
+Status ReaderAsyncBase::ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool *done_with_buffer) {
   return errors::Internal("Not implemented!!");
 }
 
@@ -103,7 +103,7 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
     return;
   }
 
-  if (current_loan_.get() == nullptr) {
+  if (!read_in_progress_) {
     status = GetNextLoan();
     if (!status.ok()) {
       context->SetStatus(status);
@@ -112,9 +112,9 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
   }
 
   bool produced = false;
-  // TODO fix this into a do-while loop to deal with the blow control issues
+  bool done_with_buffer;
   do {
-    status = ReadLocked(key, value, &produced);
+    status = ReadLocked(key, value, &produced, &done_with_buffer);
     if (status.ok()) {
       if (!produced) {
         status = errors::Internal("ReadLocked() returned OK, but not produced");
@@ -128,10 +128,11 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
     }
   } while (!produced && status.ok());
 
-  if (!status.ok()) {
-    context->SetStatus(status);
-  } else {
+  if (status.ok()) {
     num_records_produced_++;
+    read_in_progress_ = !done_with_buffer;
+  } else {
+    context->SetStatus(status);
   }
 }
 
@@ -154,7 +155,7 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
     return;
   }
 
-  if (current_loan_.get() == nullptr) {
+  if (!read_in_progress_) {
     status = GetNextLoan();
     if (!status.ok()) {
       context->SetStatus(status);
@@ -163,9 +164,10 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
   }
 
   int num_produced;
+  bool done_with_buffer;
   do {
     num_produced = 0;
-    status = ReadBatchLocked(batch_tensor, key, &num_produced);
+    status = ReadBatchLocked(batch_tensor, key, &num_produced, &done_with_buffer);
 
     if (num_produced < 0) {
       status = errors::Internal("ReaderAsyncBase::ReadBatch: produced a negative number of reads: ", num_produced);
@@ -174,6 +176,8 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
         if (num_produced > batch_tensor->NumElements()) {
           status = errors::Internal("ReaderAsyncBase::ReadBatch: Status is ok, but produced more elements than possible! (produce: ",
                                     num_produced, ", max: ", batch_tensor->NumElements(), ")");
+        } else if (!done_with_buffer) {
+          read_in_progress_ = !done_with_buffer;
         }
       } else {
         status = errors::Internal("ReaderAsyncBase::ReadBatch: Status is ok, but didn't produce anything");
@@ -186,7 +190,6 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
         status = GetNextLoan();
       }
     }
-
   } while (status.ok() && num_produced <= 0);
 
   if (status.ok()) {
@@ -308,12 +311,6 @@ Status ReaderAsyncBase::SerializeState(string* state)
 { return errors::Unimplemented("Async Reader SerializeState"); }
 Status ReaderAsyncBase::RestoreState(const string& state)
 { return errors::Unimplemented("Async Reader RestoreState"); }
-
-Status ReadBatchLocked(std::function<string*(int)> batch_loader,
-                                int num_requested,
-                                int *num_produced) {
-  return errors::Unimplemented("Async Reader ReadBatchLocked"); 
-}
 
 void ReaderAsyncBase::EnqueueThread(QueueInterface *queue, OpKernelContext *context)
 {
