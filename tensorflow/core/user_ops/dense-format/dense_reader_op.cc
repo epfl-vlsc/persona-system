@@ -134,21 +134,6 @@ public:
     return Status::OK();
   }
 
-  Status OnWorkFinishedLocked() override {
-    output_.clear();
-    current_idx_ = 0;
-    record_count_ = 0;
-    current_record_ = nullptr;
-    records_ = nullptr;
-    return Status::OK();
-  }
-
-  Status ResetLocked() override {
-    // These methods basically do the same thing
-    TF_RETURN_IF_ERROR(OnWorkFinishedLocked());
-    return ReaderBase::ResetLocked();
-  }
-
   Status ReadBatchLocked(std::function<string*(int)> batch_loader,
                          int num_requested, int* num_produced, bool* at_end) override
   {
@@ -168,25 +153,6 @@ public:
     }
 
     *num_produced = num_prod;
-    return Status::OK();
-  }
-
-  Status ReadLocked(string* key, string* value, bool* produced,
-                    bool* at_end) override {
-    using namespace std;
-
-    const char* record;
-    size_t record_length;
-
-    if (GetCurrentRecord(&record, &record_length)) {
-      *value = string(record, record_length);
-      *key = strings::StrCat(current_work(), ":", current_idx_, "-", ordinal_start_+current_idx_);
-      *produced = true;
-      AdvanceRecord();
-    } else {
-      *at_end = true;
-    }
-
     return Status::OK();
   }
 
