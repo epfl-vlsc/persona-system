@@ -123,7 +123,7 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
   if (!status.ok()) {
     context->SetStatus(status);
   } else {
-    num_records_produced++;
+    num_records_produced_++;
   }
 }
 
@@ -183,7 +183,7 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
 
   if (status.ok()) {
     *produced = num_produced;
-    num_records_produced += num_produced;
+    num_records_produced_ += num_produced;
   } else {
     context->SetStatus(status);
   }
