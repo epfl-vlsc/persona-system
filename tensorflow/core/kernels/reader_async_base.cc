@@ -259,12 +259,21 @@ Status ReaderAsyncBase::Reset() override
 
 Status ReaderAsyncBase::ResetLocked()
 {
+  mutex_lock l(mu_), cql(chunk_queue_mu_);
   work_finished_ = 0;
   num_records_produced_ = 0;
   chunks_produced_ = 0;
   chunks_consumed_ = 0;
   chunking_done_ = false;
-  // TODO what to do about run_ and initialized_ ?
+  if (!chunk_queue_.empty()) {
+    LOG(WARN) << "Calling ResetLocked() on AsyncReaderBase with " << chunk_queue_.size() << " elements still in the queue!";
+    chunk_queue_.clear();
+  }
+  chunk_queue_cv_.notify_all();
+
+  object_pool_.clear();
+  current_loan_ = decltype(object_pool_)::ObjectLoan(nullptr);
+
   return Status::OK();
 }
 

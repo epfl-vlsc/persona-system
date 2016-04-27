@@ -68,6 +68,16 @@ public:
     empty_cv_.notify_all();
   }
 
+  void clear() {
+    using namespace std;
+    mutex_lock rl(ready_mu_);
+    mutex_lock el(empty_mu_);
+    empty_objects_.insert(empty_objects.end(), ready_objects_.begin(), ready_objects_.end());
+    ready_objects.clear();
+    ready_cv_.notify_all();
+    empty_cv_.notify_all();
+  }
+
   ObjectLoan GetReady(bool block = true) noexcept
   {
     using namespace std;
