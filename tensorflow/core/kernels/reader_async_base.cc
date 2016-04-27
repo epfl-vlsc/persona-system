@@ -105,29 +105,23 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
 
   bool produced = false;
   // TODO fix this into a do-while loop to deal with the blow control issues
-  while (!produced) {
+  do {
     status = ReadLocked(key, value, &produced);
     if (status.ok()) {
       if (!produced) {
-        context->SetStatus(errors::Internal("ReadLocked() returned OK, but not produced"));
-        return;
+        status = errors::Internal("ReadLocked() returned OK, but not produced");
       }
-    } else {
-      if (errors::IsResourceExhausted(status)) {
-        if (produced) {
-          context->SetStatus(errors::Internal("ReadLocked() returned error, but produced output"));
-          return;
-        } else {
-          status = GetNextLoan();
-          if (status.ok()) {
-            continue;
-          }
-        }
+    } else if (errors::IsResourceExhausted(status)) {
+      if (produced) {
+        status = errors::Internal("ReadLocked() returned error, but produced output");
+      } else {
+        status = GetNextLoan();
       }
-
-      context->SetStatus(status);
-      return;
     }
+  } while (!produced && status.ok());
+
+  if (!status.ok()) {
+    context->SetStatus(status);
   }
 }
 
