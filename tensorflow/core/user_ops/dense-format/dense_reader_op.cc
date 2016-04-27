@@ -17,7 +17,7 @@
 #include <memory>
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/framework/reader_op_kernel.h"
-#include "tensorflow/core/kernels/reader_base.h"
+#include "tensorflow/core/kernels/reader_async_base.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/platform/env.h"
@@ -33,10 +33,13 @@ namespace tensorflow {
 
 #define REGISTER_DENSE_READER(_name_)                   \
   REGISTER_OP(_name_)                                   \
-    .Output("reader_handle: Ref(string)")         \
-    .Attr("container: string = ''")               \
-    .Attr("shared_name: string = ''")             \
-    .SetIsStateful()
+  .Output("reader_handle: Ref(string)")                 \
+  .Attr("container: string = ''")                       \
+  .Attr("shared_name: string = ''")                     \
+  .Attr("batch_size: int")                              \
+  .Attr("parallel: int")                                \
+  .Attr("buffer: int")                                  \
+  .SetIsStateful()
 
   REGISTER_DENSE_READER("DenseReader")
     .Doc(R"doc(
@@ -60,12 +63,28 @@ namespace tensorflow {
     shared_name: a name for a shared resource
     )doc");
 
-class DenseReader : public ReaderBase {
+using namespace std;
+
+class DenseReader : public ReaderAsyncBase {
 public:
-  DenseReader(const string& node_name, Env* env)
-    : ReaderBase(strings::StrCat("DenseReader '", node_name, "'")),
-      env_(env), ordinal_start_(0), current_idx_(0), records_(nullptr), record_count_(0),
-      current_record_(nullptr) {};
+  DenseReader(Env* env, int batch_size, int parallel, int buffer)
+    : ReaderAsyncBase(parallel, buffer),
+      env_(env), data_buf_(nullptr) {};
+
+  Status FillBuffer(InputChunk *chunk, std::vector<char> &buffer)
+  {
+    
+  }
+
+  Status ChunkWorkItem(const string &filename)
+  {
+    
+  }
+
+  Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced) override
+  {
+    
+  }
 
   Status OnWorkStartedLocked() override {
     using namespace std;
@@ -176,15 +195,7 @@ protected:
 
 private:
   Env* const env_;
-  std::vector<char> output_;
-  const format::RecordTable* records_;
-  const char* current_record_;
-
-  // Some indices for keeping track of our ordinals
-protected:
-  std::uint64_t ordinal_start_;
-  std::uint64_t current_idx_;
-  std::size_t record_count_;
+  const vector<char> *data_buf_;
 };
 
 class BaseReader : public DenseReader {
@@ -192,6 +203,10 @@ public:
   BaseReader(const string& node_name, Env *env) :
     DenseReader(node_name, env) {}
 
+
+  Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced) override {
+    
+  }
 
   Status ReadLocked(string* key, string* value, bool* produced,
                     bool* at_end) override {
@@ -244,9 +259,18 @@ public:
   explicit DenseReaderOp(OpKernelConstruction* context)
     : ReaderOpKernel(context) {
 
+    int batch_size;
+    OP_REQUIRES_OK(context, context->GetAttr("batch_size", 
+                                             &batch_size));
+    int parallel;
+    OP_REQUIRES_OK(context, context->GetAttr("parallel", 
+                                             &parallel));
+    int buffer;
+    OP_REQUIRES_OK(context, context->GetAttr("buffer", 
+                                             &buffer));
     Env* env = context->env();
     SetReaderFactory([this, env]() {
-        return new T(name(), env);
+        return new T(env, batch_size, parallel, buffer);
       });
   }
 };
