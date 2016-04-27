@@ -68,6 +68,14 @@ Status ReaderAsyncBase::GetNextInputChunk(InputChunk *next_chunk)
   return errors::ResourceExhausted("reader_async_base has been shutdown: GetNextInputChunk");
 }
 
+Status ReaderAsyncBase::ReadLocked(string *key, string *value, bool *produced) {
+  return errors::Internal("Not implemented!!");
+}
+
+Status ReaderAsyncBase::ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool* at_end) {
+  return errors::Internal("Not implemented!!");
+}
+
 // All the overridden functions from ReaderInterface
 
 void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
@@ -116,10 +124,17 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
 
 }
 
+TensorShape ReaderAsyncBase::GetRequiredShape() override {
+  return TensorShape({0});
+}
+
+DataType ReaderAsyncBase::GetRequiredType() override {
+  return DT_STRING;
+}
+
 void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
-               std::function<string*(int)> batch_loader,
-               int batch_size, string* key, OpKernelContext* context,
-               int* produced) override
+                Tensor* batch_tensor, string* key, OpKernelContext* context,
+                int* produced) override
 {
   mutex_lock l(mu_);
   Status status;
@@ -136,28 +151,38 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
     }
   }
 
-  int num_produced, total_num_produced = 0;
-  while (true) {
+  int num_produced;
+  do {
     num_produced = 0;
-    status = ReadBatchLocked(batch_loader, key, batch_size, &num_produced);
-    if (status.ok()) {
-      break;
-    } else {
-      if (errors::IsResourceExhausted(status)) {
-        total_num_produced += num_produced;
-        batch_size -= num_produced;
-        status = GetNextLoan();
-        if (status.ok()) {
-          total_num_produced += num_produced;
-          batch_size -= num_produced;
-          continue;
+    status = ReadBatchLocked(batch_tensor, key, &num_produced);
+
+    if (num_produced < 0) {
+      status = errors::Internal("ReaderAsyncBase::ReadBatch: produced a negative number of reads: ", num_produced);
+    } else if (status.ok()) {
+      if (num_produced > 0) {
+        if (num_produced > batch_tensor->NumElements()) {
+          status = errors::Internal("ReaderAsyncBase::ReadBatch: Status is ok, but produced more elements than possible! (produce: ",
+                                    num_produced, ", max: ", batch_tensor->NumElements(), ")");
         }
+      } else {
+        status = errors::Internal("ReaderAsyncBase::ReadBatch: Status is ok, but didn't produce anything");
       }
-      context->SetStatus(status);
-      return;
+    } else if (errors::IsResourceExhausted(status)) {
+      if (num_produced > 0) {
+        status = errors::Internal("ReaderAsyncBase::ReadBatch: resource exhausted, but produced ",
+                                  num_produced, " elements!");
+      } else {
+        status = GetNextLoan();
+      }
     }
+
+  } while (status.ok() && num_produced <= 0)
+
+  if (status.ok()) {
+    *produced = num_produced;
+  } else {
+    context->SetStatus(status);
   }
-  *produecd = total_num_produced;
 }
 
 Status ReaderAsyncBase::GetNextLoan()

@@ -52,8 +52,7 @@ public:
 
   virtual Status ReadLocked(string *key, string *value, bool *produced) = 0;
 
-  virtual Status ReadBatchLocked(std::function<string*(int)> batch_loader,
-                                 string *key, int num_requested, int *num_produced);
+  virtual Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced);
 
   virtual Status ResetLocked();
 
@@ -62,16 +61,28 @@ protected:
 
   bool GetCurrentBuffer(const std::vector<char> **buf);
 
+  virtual TensorShape GetRequiredShape() override;
+  virtual DataType GetRequiredType() override;
+
 private:
 
   // Implementations of ReaderInterface methods.  These ensure thread-safety
   // and call the methods above to do the work.
   void Read(QueueInterface* queue, string* key, string* value,
             OpKernelContext* context) override;
+
+  // Read `batch_size` records. `batch_loader` returns a pointer
+  // to string for a given batch index. 
+  // Set status on *context with OutOfRange if the current work
+  // is complete and the queue is done. In this case, a full
+  // batch may not be processed, but partial batches are still valid.
   void ReadBatch(QueueInterface* queue,
-                 std::function<string*(int)> batch_loader,
-                 int batch_size, string* key, OpKernelContext* context,
-                 int* produced) override;
+                         Tensor* batch_tensor, string* key, OpKernelContext* context,
+                         int* produced) override;
+
+  TensorShape GetRequiredShape() override;
+  DataType GetRequiredType() override;
+
   Status Reset() override;
   int64 NumRecordsProduced() override;
   int64 NumWorkUnitsCompleted() override;

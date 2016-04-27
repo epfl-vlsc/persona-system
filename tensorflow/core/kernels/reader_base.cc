@@ -117,7 +117,7 @@ void ReaderBase::ReadBatch(QueueInterface* queue,
       num_records_produced_ += num_produced;
       *produced = num_produced;
       return;
-    } 
+    }
   }
 }
 
