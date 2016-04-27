@@ -783,7 +783,9 @@ tf_kernel_libraries(
     deps = [
         ":ops_util",
         ":reader_base",
+        ":reader_async_base",
         ":writer_base",
+        ":writer_async_base",
         ":save_restore_tensor",
         "//tensorflow/core:framework",
         "//tensorflow/core:io_ops_op_lib",
