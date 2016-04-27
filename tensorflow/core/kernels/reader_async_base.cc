@@ -122,6 +122,8 @@ void ReaderAsyncBase::Read(QueueInterface* queue, string* key, string* value,
 
   if (!status.ok()) {
     context->SetStatus(status);
+  } else {
+    num_records_produced++;
   }
 }
 
@@ -181,6 +183,7 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
 
   if (status.ok()) {
     *produced = num_produced;
+    num_records_produced += num_produced;
   } else {
     context->SetStatus(status);
   }
@@ -188,8 +191,11 @@ void ReaderAsyncBase::ReadBatch(QueueInterface* queue,
 
 Status ReaderAsyncBase::GetNextLoan()
 {
-  if (chunking_done_ && chunks_produced_ == chunks_consumed_) {
-    return errors::ResourceExhausted("GetNextLoan(): No more chunks are available");
+  {
+    mutex_lock l(chunk_queue_mu_);
+    if (chunking_done_ && chunks_produced_ == chunks_consumed_) {
+      return errors::ResourceExhausted("GetNextLoan(): No more chunks are available");
+    }
   }
   current_loan_.ReleaseEmpty();
   current_loan_ = buffer_pool_.GetReady();

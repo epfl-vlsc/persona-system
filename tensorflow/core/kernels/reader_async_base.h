@@ -105,7 +105,7 @@ private:
 
   // Member variables for mutating the Chunk queue
   std::deque<InputChunk> chunk_queue_;
-// TODO may need to be a std mutex?
+  // TODO may need to be a std mutex?
   mutable mutex chunk_queue_mu_;
   mutable std::condition_variable chunk_queue_cv_;
 
