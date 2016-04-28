@@ -2,7 +2,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/user_ops/dna-align/snap_proto.pb.h"
+#include "tensorflow/core/user_ops/dna-align/snap_read_decode.h"
 
 namespace tensorflow {
 
@@ -40,28 +40,22 @@ public:
                                         qualities->DebugString(), "\nMetadata: ",
                                         metadata->DebugString()));
 
-    auto flat_bases = bases->flat<string>();
-    auto flat_qualities = qualities->flat<string>();
-    auto flat_metadata = metadata->flat<string>();
-
+    auto flat_bases = bases->vec<string>();
+    auto flat_qualities = qualities->vec<string>();
+    auto flat_metadata = metadata->vec<string>();
 
     Tensor* output_tensor = nullptr;
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(0, bases->shape(), &output_tensor));
-    auto out_flat = output_tensor->flat<string>();
+    OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({bases->dim_size(0), 3}), &output_tensor));
+
     //OP_REQUIRES(ctx, output_tensor->CopyFrom(*read, read->shape()),
     //            errors::InvalidArgument("DecodeFastq copy failed, input shape was ", 
     //                                    read->shape().DebugString()));
+    MutableSnapReadDecode reads(output_tensor);
 
-    string s;
-    for (size_t i = 0; i < flat_bases.size(); ++i) {
-      SnapProto::AlignmentDef alignment;
-      SnapProto::ReadDef* read = alignment.mutable_read();
-      read->set_bases(flat_bases(i));
-      read->set_meta(flat_metadata(i));
-      read->set_length(flat_bases(i).length());
-      read->set_qualities(flat_qualities(i));
-      alignment.SerializeToString(&s);
-      out_flat(i) = s;
+    for (size_t i = 0; i < reads.size(); ++i) {
+      reads.set_bases(i, flat_bases(i));
+      reads.set_metadata(i, flat_metadata(i));
+      reads.set_qualities(i, flat_qualities(i));
     }
   }
 };

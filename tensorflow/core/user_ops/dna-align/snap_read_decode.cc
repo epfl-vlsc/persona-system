@@ -54,7 +54,7 @@ const char* MutableSnapReadDecode::bases(int batch_index) {
   auto reads = read_tensor_->matrix<string>();
   return reads(batch_index, kBases).c_str();
 }
-void MutableSnapReadDecode::set_bases(int batch_index, string& bases) {
+void MutableSnapReadDecode::set_bases(int batch_index, const string& bases) {
   auto reads = read_tensor_->matrix<string>();
   reads(batch_index, kBases) = bases;
 }
@@ -62,7 +62,7 @@ const char* MutableSnapReadDecode::qualities(int batch_index) {
   auto reads = read_tensor_->matrix<string>();
   return reads(batch_index, kQualities).c_str();
 }
-void MutableSnapReadDecode::set_qualities(int batch_index, string& quals) {
+void MutableSnapReadDecode::set_qualities(int batch_index, const string& quals) {
   auto reads = read_tensor_->matrix<string>();
   reads(batch_index, kQualities) = quals;
 }
@@ -70,7 +70,7 @@ const char* MutableSnapReadDecode::metadata(int batch_index) {
   auto reads = read_tensor_->matrix<string>();
   return reads(batch_index, kMetadata).c_str();
 }
-void MutableSnapReadDecode::set_metadata(int batch_index, string& meta) {
+void MutableSnapReadDecode::set_metadata(int batch_index, const string& meta) {
   auto reads = read_tensor_->matrix<string>();
   reads(batch_index, kMetadata) = meta;
 }
