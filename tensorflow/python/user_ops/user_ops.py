@@ -53,13 +53,6 @@ class DenseReader(io_ops.ReaderBase):
 ops.NoGradient("DenseReader")
 ops.RegisterShape("DenseReader")(common_shapes.scalar_shape)
 
-class BaseReader(io_ops.ReaderBase):
-    def __init__(self, name=None):
-        rr = gen_user_ops.base_reader(name=name)
-        super(BaseReader, self).__init__(rr)
-ops.NoGradient("BaseReader")
-ops.RegisterShape("BaseReader")(common_shapes.scalar_shape)
-
 @ops.RegisterShape("FASTQDecoder")
 def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
   """Shape function for the FASTQDecoder op."""

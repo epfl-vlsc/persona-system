@@ -24,6 +24,7 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/io/inputbuffer.h"
 #include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/framework/op.h"
 #include "format.h"
 #include "decompress.h"
@@ -71,18 +72,84 @@ class DenseReader : public ReaderAsyncBase {
 public:
   DenseReader(Env* env, int batch_size, int parallel, int buffer)
     : ReaderAsyncBase(parallel, buffer),
-      env_(env), data_buf_(nullptr) {};
+      env_(env), data_buf_(nullptr), batch_size_(batch_size)
+  {
+    if (batch_size_ < 1) {
+      LOG(ERROR) << "batch size is non-positive!: " << batch_size_;
+    }
+  }
+  TensorShape GetRequiredShape() override
+  {
+    // Just an array of the strings of individual reads
+    return TensorShape({batch_size_});
+  }
 
   Status FillBuffer(InputChunk *chunk, std::vector<char> &buffer)
   {
+    using namespace format;
+    using namespace errors;
+
     buffer.clear();
     const void *data = nullptr;
     size_t length = 0;
     chunk->GetChunk(&data, &length);
+    if (length < sizeof(FileHeader)) {
+      return Internal("DenseReader::FillBuffer: needed min length ", sizeof(FileHeader),
+                      ", but only received ", length);
+    }
+    auto char_data = reinterpret_cast<const char*>(data);
     auto filename = chunk->GetFileName();
     copy(filename.begin(), filename.end(), back_inserter(buffer));
-    buffer.push_back(':');
-    TF_RETURN_IF_ERROR(decompressBZIP2(static_cast<const char*>(data), length, buffer));
+    buffer.push_back('\0');
+    auto file_header = reinterpret_cast<const FileHeader*>(data);
+    auto record_type = static_cast<RecordType>(file_header->record_type);
+    switch (record_type) {
+    default:
+      return Internal("Invalid record type", file_header->record_type);
+    case RecordType::BASES:
+    case RecordType::QUALITIES:
+    case RecordType::COMMENTS:
+      break;
+    }
+
+    buffer.insert(buffer.end(), char_data, char_data + file_header->segment_start);
+
+    auto payload_start = char_data + file_header->segment_start;
+    auto payload_size = length - file_header->segment_start;
+    size_t data_start_idx = buffer.size();
+
+    Status status;
+    if (static_cast<CompressionType>(file_header->compression_type) == CompressionType::BZIP2) {
+      status = decompressBZIP2(payload_start, payload_size, buffer);
+    } else {
+      status = copySegment(payload_start, payload_size, buffer);
+    }
+    TF_RETURN_IF_ERROR(status);
+
+    const uint64_t index_size = file_header->last_ordinal - file_header->first_ordinal;
+    if (buffer.size() - data_start_idx < index_size * 2) {
+      return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", buffer.size() - data_start_idx);
+    } else if (index_size > batch_size_) {
+      return Internal("FillBuffer: decompressed a chunk with ", index_size, " elements, but maximum batch size is ", batch_size_);
+    }
+
+    auto records = reinterpret_cast<const RecordTable*>(&buffer[data_start_idx]);
+    size_t data_size = 0;
+    for (uint64_t i = 0; i < index_size; ++i) {
+      data_size += records->relative_index[i];
+    }
+
+    const size_t expected_size = buffer.size() - (data_start_idx + index_size);
+    if (data_size != expected_size) {
+      if (data_size < expected_size) {
+        return errors::OutOfRange("Expected a file size of ", expected_size, " bytes, but only found",
+                                  data_size, " bytes in ", filename);
+      } else {
+        return errors::OutOfRange("Expected a file size of ", expected_size, " bytes, but only found",
+                                  data_size, " bytes in ", filename);
+      }
+    }
+
     return Status::OK();
   }
 
@@ -97,207 +164,106 @@ public:
     return EnqueueNextChunk(std::move(chunk));
   }
 
+  Status ParseFileNameAndData(const vector<char>& buffer, string *filename, const char** data, size_t *size)
+  {
+    string filename_tmp(&buffer[0]); // goes up until NULL termination
+    *filename = move(filename_tmp);
+    *data = &buffer[filename->size()+1]; // size() does not include null termination, so +1 to skip over it
+    *size = buffer.size() - filename->size()+1;
+    return Status::OK();
+  }
+
+  Status ReadStandardRecord(string *result, const char* record, const size_t length) {
+    *result = string(record, length);
+    return Status::OK();
+  }
+
+  Status ReadBaseRecord(string *result, const char* record, const size_t length) {
+    auto bases = reinterpret_cast<const format::BinaryBaseRecord*>(record);
+    return bases->toString(length, result);
+  }
+
   Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool *done_with_buffer) override
   {
-    
-  }
-
-#if 0
-  Status OnWorkStartedLocked() {
-    using namespace std;
-
-    if (!records_) {
-      // ReadOnlyMemoryRegion *mapped_file = nullptr;
-      // TF_RETURN_IF_ERROR(env_->NewReadOnlyMemoryRegionFromFile(current_work(), &mapped_file));
-      // std::unique_ptr<ReadOnlyMemoryRegion> close_for_sure(mapped_file);
-
-      // const uint64_t file_size = mapped_file->length();
-
-      if (file_size < sizeof(format::FileHeader)) {
-        return errors::ResourceExhausted("Dense file '", current_work(), "' is not large enough for file header. Actual size ",
-                                         file_size, " bytes is less than necessary size of ",
-                                         sizeof(format::FileHeader), " bytes");
-      }
-
-      auto file_data = reinterpret_cast<const char*>(mapped_file->data());
-      auto file_header = reinterpret_cast<const format::FileHeader*>(file_data);
-      auto payload_start = reinterpret_cast<const char*>(file_data + file_header->segment_start);
-      const size_t payload_size = file_size - file_header->segment_start;
-
-      Status status;
-      if (static_cast<format::CompressionType>(file_header->compression_type) == format::CompressionType::BZIP2) {
-        status = decompressBZIP2(payload_start, payload_size, output_);
-      } else {
-        status = copySegment(payload_start, payload_size, output_);
-      }
-      TF_RETURN_IF_ERROR(status);
-
-      // 2. do math on the file size
-      const uint64_t num_records = file_header->last_ordinal - file_header->first_ordinal; // FIXME off-by-1?
-      const auto output_size = output_.size();
-      if (output_size < num_records) {
-        output_.clear();
-        return errors::InvalidArgument("Mapped file '", current_work(), "' is smaller than the stated index entries");
-      }
-
-      auto data = output_.data();
-      auto records = reinterpret_cast<const format::RecordTable*>(data);
-      size_t data_size = 0;
-      for (uint64_t i = 0; i < num_records; ++i) {
-        data_size += records->relative_index[i];
-      }
-
-      const size_t expected_size = output_size - num_records;
-      if (data_size != expected_size) {
-        if (data_size < expected_size) {
-          output_.clear();
-          return errors::OutOfRange("Expected a file size of ", expected_size, " bytes, but only found",
-                                    data_size, " bytes in ", current_work());
-        } else {
-          LOG(WARNING) << current_work() << " has an extra " << data_size - expected_size << " bytes in uncompressed format";
-        }
-      }
-
-      records_ = records;
-      record_count_ = num_records;
-      ordinal_start_ = file_header->first_ordinal;
-      // skip the record table. If no records, ReadLocked will catch it
-      current_record_ = data + num_records;
+    using namespace format;
+    using namespace errors;
+    const vector<char>* current_buf = nullptr;
+    if (!GetCurrentBuffer(&current_buf)) {
+      return errors::Unavailable("DenseReader::ReadBatchLocked:: Unable to get current buffer");
     }
 
-    current_idx_ = 0;
+    string filename;
+    const char *data;
+    size_t data_len;
+    TF_RETURN_IF_ERROR(ParseFileNameAndData(*current_buf, &filename, &data, &data_len));
 
+    auto file_header = reinterpret_cast<const FileHeader*>(data);
+    auto payload_start = data + file_header->segment_start;
+    auto records = reinterpret_cast<const RecordTable*>(payload_start);
+    auto record_type = static_cast<RecordType>(file_header->record_type);
+    uint64_t index_len = file_header->last_ordinal - file_header->first_ordinal;
+
+    auto batch_vec = batch_tensor->vec<string>();
+
+    string parsed;
+    const char* current_record = payload_start + index_len;
+    uint8_t current_record_len;
+    for (uint64_t i = 0; i < index_len; i++) {
+      current_record_len = records->relative_index[i];
+      if (record_type == RecordType::BASES) {
+        TF_RETURN_IF_ERROR(ReadBaseRecord(&parsed, current_record, current_record_len));
+      } else {
+        TF_RETURN_IF_ERROR(ReadStandardRecord(&parsed, current_record, current_record_len));
+      }
+      current_record += current_record_len;
+      batch_vec(i) = parsed;
+    }
+
+    if (index_len < batch_size_) {
+      uint64_t padding_elems = batch_size_ - index_len;
+      LOG(DEBUG) << "Inserting " << padding_elems << " padding elements in batch";
+      for (uint64_t i = index_len; i < batch_size_; i++) {
+        batch_vec(i) = "";
+      }
+    }
+
+    *key = filename;
+
+    *num_produced = index_len;
+    *done_with_buffer = true;
     return Status::OK();
   }
-
-  Status ReadBatchLocked(std::function<string*(int)> batch_loader,
-                         int num_requested, int* num_produced, bool* at_end) override
-  {
-    using namespace std;
-
-    const char* record;
-    size_t record_length;
-    int num_prod = 0;
-    for (; num_prod < num_requested; num_prod++) {
-      if (GetCurrentRecord(&record, &record_length)) {
-        auto value = batch_loader(num_prod);
-        *value = string(record, record_length);
-      } else {
-        *at_end = true;
-        break;
-      }
-    }
-
-    *num_produced = num_prod;
-    return Status::OK();
-  }
-
-protected:
-
-  bool GetCurrentRecord(const char** record, std::size_t *record_length) {
-    if (current_idx_ < record_count_) {
-      *record = current_record_;
-      *record_length = records_->relative_index[current_idx_];
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  void AdvanceRecord() {
-    if (current_idx_ < record_count_) {
-      current_record_ += records_->relative_index[current_idx_++];
-    }
-  }
-#endif 
 
 private:
   Env* const env_;
   const vector<char> *data_buf_;
+  const int batch_size_;
 };
 
-class BaseReader : public DenseReader {
-public:
-  BaseReader(Env* env, int batch_size, int parallel, int buffer) :
-    DenseReader(env, batch_size, parallel, buffer) {}
-
-
-  Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool *at_end) override {
-    
-  }
-#if 0
-  Status oldreadlocked(string* key, string* value, bool* produced,
-                    bool* at_end) override {
-    using namespace std;
-    using namespace format;
-    const char* record;
-    size_t record_length;
-
-    if (GetCurrentRecord(&record, &record_length)) {
-      auto bases = reinterpret_cast<const BinaryBaseRecord*>(record);
-      TF_RETURN_IF_ERROR(bases->toString(record_length, value));
-      *key = strings::StrCat(current_work(), ":", current_idx_, "-", ordinal_start_+current_idx_);
-      *produced = true;
-      AdvanceRecord();
-    } else {
-      *at_end = true;
-    }
-
-    return Status::OK();
-  }
-
-  Status oldreadlockbatched(std::function<string*(int)> batch_loader,
-                         int num_requested, int* num_produced, bool* at_end)
-  {
-    using namespace std;
-    using namespace format;
-
-    const char* record;
-    size_t record_length;
-    int num_prod = 0;
-    for (; num_prod < num_requested; num_prod++) {
-      if (GetCurrentRecord(&record, &record_length)) {
-        auto bases = reinterpret_cast<const BinaryBaseRecord*>(record);
-        auto value = batch_loader(num_prod);
-        TF_RETURN_IF_ERROR(bases->toString(record_length, value));
-      } else {
-        *at_end = true;
-        break;
-      }
-    }
-
-    *num_produced = num_prod;
-    return Status::OK();
-  }
-#endif 
-};
-
-template <typename T>
 class DenseReaderOp : public ReaderOpKernel {
 public:
   explicit DenseReaderOp(OpKernelConstruction* context)
     : ReaderOpKernel(context) {
-
+    using namespace errors;
     int batch_size;
     OP_REQUIRES_OK(context, context->GetAttr("batch_size",
                                              &batch_size));
+    OP_REQUIRES(context, batch_size > 0, InvalidArgument("DenseReaderOp: batch_size must be >0 - ", batch_size));
     int parallel;
     OP_REQUIRES_OK(context, context->GetAttr("parallel",
                                              &parallel));
+    OP_REQUIRES(context, parallel > 0, InvalidArgument("DenseReaderOp: parallel must be >0 - ", parallel));
     int buffer;
     OP_REQUIRES_OK(context, context->GetAttr("buffer",
                                              &buffer));
+    OP_REQUIRES(context, buffer > 0, InvalidArgument("DenseReaderOp: buffer must be >0 - ", buffer));
     Env* env = context->env();
     SetReaderFactory([this, env, batch_size, parallel, buffer]() {
-        return new T(env, batch_size, parallel, buffer);
+        return new DenseReader(env, batch_size, parallel, buffer);
       });
   }
 };
 
-REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU),
-                        DenseReaderOp<DenseReader>);
-
-REGISTER_KERNEL_BUILDER(Name("BaseReader").Device(DEVICE_CPU),
-                        DenseReaderOp<BaseReader>);
+REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReaderOp);
 
 } // namespace tensorflow
