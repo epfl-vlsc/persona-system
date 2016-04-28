@@ -27,7 +27,7 @@ void ReaderAsyncBase::InputChunk::GetChunk(const void** data, std::size_t *lengt
   *length = length_;
 }
 
-void ReaderAsyncBase::InputChunk::SetFileName(std::string &s) {
+void ReaderAsyncBase::InputChunk::SetFileName(const std::string &s) {
   filename = s;
 }
 

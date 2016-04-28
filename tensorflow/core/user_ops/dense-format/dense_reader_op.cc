@@ -15,6 +15,9 @@
 
 #include <vector>
 #include <memory>
+#include <cstdint>
+#include <algorithm>
+#include <iterator>
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/framework/reader_op_kernel.h"
 #include "tensorflow/core/kernels/reader_async_base.h"
@@ -27,7 +30,6 @@
 
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/filter/bzip2.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
 
 namespace tensorflow {
 
@@ -73,28 +75,43 @@ public:
 
   Status FillBuffer(InputChunk *chunk, std::vector<char> &buffer)
   {
-    
+    buffer.clear();
+    const void *data = nullptr;
+    size_t length = 0;
+    chunk->GetChunk(&data, &length);
+    auto filename = chunk->GetFileName();
+    copy(filename.begin(), filename.end(), back_inserter(buffer));
+    buffer.push_back(':');
+    TF_RETURN_IF_ERROR(decompressBZIP2(static_cast<const char*>(data), length, buffer));
+    return Status::OK();
   }
 
   Status ChunkWorkItem(const string &filename)
   {
-    
+    using namespace std;
+    ReadOnlyMemoryRegion *mapped_file = nullptr;
+    TF_RETURN_IF_ERROR(env_->NewReadOnlyMemoryRegionFromFile(filename, &mapped_file));
+    shared_ptr<ReadOnlyMemoryRegion> file_resource(mapped_file);
+    InputChunk chunk(file_resource, 0, mapped_file->length());
+    chunk.SetFileName(filename);
+    return EnqueueNextChunk(std::move(chunk));
   }
 
-  Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced) override
+  Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool *done_with_buffer) override
   {
     
   }
 
-  Status OnWorkStartedLocked() override {
+#if 0
+  Status OnWorkStartedLocked() {
     using namespace std;
 
     if (!records_) {
-      ReadOnlyMemoryRegion *mapped_file = nullptr;
-      TF_RETURN_IF_ERROR(env_->NewReadOnlyMemoryRegionFromFile(current_work(), &mapped_file));
-      std::unique_ptr<ReadOnlyMemoryRegion> close_for_sure(mapped_file);
+      // ReadOnlyMemoryRegion *mapped_file = nullptr;
+      // TF_RETURN_IF_ERROR(env_->NewReadOnlyMemoryRegionFromFile(current_work(), &mapped_file));
+      // std::unique_ptr<ReadOnlyMemoryRegion> close_for_sure(mapped_file);
 
-      const uint64_t file_size = mapped_file->length();
+      // const uint64_t file_size = mapped_file->length();
 
       if (file_size < sizeof(format::FileHeader)) {
         return errors::ResourceExhausted("Dense file '", current_work(), "' is not large enough for file header. Actual size ",
@@ -192,6 +209,7 @@ protected:
       current_record_ += records_->relative_index[current_idx_++];
     }
   }
+#endif 
 
 private:
   Env* const env_;
@@ -200,15 +218,15 @@ private:
 
 class BaseReader : public DenseReader {
 public:
-  BaseReader(const string& node_name, Env *env) :
-    DenseReader(node_name, env) {}
+  BaseReader(Env* env, int batch_size, int parallel, int buffer) :
+    DenseReader(env, batch_size, parallel, buffer) {}
 
 
-  Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced) override {
+  Status ReadBatchLocked(Tensor* batch_tensor, string *key, int* num_produced, bool *at_end) override {
     
   }
-
-  Status ReadLocked(string* key, string* value, bool* produced,
+#if 0
+  Status oldreadlocked(string* key, string* value, bool* produced,
                     bool* at_end) override {
     using namespace std;
     using namespace format;
@@ -228,8 +246,8 @@ public:
     return Status::OK();
   }
 
-  Status ReadBatchLocked(std::function<string*(int)> batch_loader,
-                         int num_requested, int* num_produced, bool* at_end) override
+  Status oldreadlockbatched(std::function<string*(int)> batch_loader,
+                         int num_requested, int* num_produced, bool* at_end)
   {
     using namespace std;
     using namespace format;
@@ -251,6 +269,7 @@ public:
     *num_produced = num_prod;
     return Status::OK();
   }
+#endif 
 };
 
 template <typename T>
@@ -260,16 +279,16 @@ public:
     : ReaderOpKernel(context) {
 
     int batch_size;
-    OP_REQUIRES_OK(context, context->GetAttr("batch_size", 
+    OP_REQUIRES_OK(context, context->GetAttr("batch_size",
                                              &batch_size));
     int parallel;
-    OP_REQUIRES_OK(context, context->GetAttr("parallel", 
+    OP_REQUIRES_OK(context, context->GetAttr("parallel",
                                              &parallel));
     int buffer;
-    OP_REQUIRES_OK(context, context->GetAttr("buffer", 
+    OP_REQUIRES_OK(context, context->GetAttr("buffer",
                                              &buffer));
     Env* env = context->env();
-    SetReaderFactory([this, env]() {
+    SetReaderFactory([this, env, batch_size, parallel, buffer]() {
         return new T(env, batch_size, parallel, buffer);
       });
   }

@@ -32,7 +32,7 @@ public:
 
     void GetChunk(const void** data, std::size_t *length) const;
 
-    void SetFileName(std::string &s);
+    void SetFileName(const std::string &s);
 
     const std::string& GetFileName() const;
 
