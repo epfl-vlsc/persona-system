@@ -24,6 +24,7 @@ limitations under the License.
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
+const int DEBUG = -1;
 const int INFO = 0;            // base_logging::INFO;
 const int WARNING = 1;         // base_logging::WARNING;
 const int ERROR = 2;           // base_logging::ERROR;
@@ -54,6 +55,8 @@ class LogMessageFatal : public LogMessage {
   ~LogMessageFatal() TF_ATTRIBUTE_NORETURN;
 };
 
+#define _TF_LOG_DEBUG                                                    \
+  ::tensorflow::internal::LogMessage(__FILE__, __LINE__, tensorflow::DEBUG)
 #define _TF_LOG_INFO \
   ::tensorflow::internal::LogMessage(__FILE__, __LINE__, tensorflow::INFO)
 #define _TF_LOG_WARNING \
