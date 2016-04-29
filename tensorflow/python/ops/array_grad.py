@@ -176,6 +176,14 @@ def _BatchMatrixDiagPartGrad(_, grad):
   return array_ops.batch_matrix_diag(grad)
 
 
+@ops.RegisterGradient("BatchMatrixBandPart")
+def _BatchMatrixBandPartGrad(op, grad):
+  num_lower = op.inputs[1]
+  num_upper = op.inputs[2]
+  return (array_ops.batch_matrix_band_part(grad, num_lower, num_upper), None,
+          None)
+
+
 # Edit Distance has no gradient (but can be used to eval seq2seq or CTC).
 ops.NoGradient("EditDistance")
 
@@ -323,6 +331,22 @@ def _ReverseSequenceGrad(op, grad):
 def _ReverseGrad(op, grad):
   reverse_dims = op.inputs[1]
   return array_ops.reverse(grad, reverse_dims), None
+
+
+@ops.RegisterGradient("SpaceToBatch")
+def _SpaceToBatchGrad(op, grad):
+  # Its gradient is the opposite op: BatchToSpace.
+  block_size = op.get_attr("block_size")
+  return [array_ops.batch_to_space(grad, op.inputs[1], block_size=block_size),
+          None]
+
+
+@ops.RegisterGradient("BatchToSpace")
+def _BatchToSpaceGrad(op, grad):
+  # Its gradient is the opposite op: SpaceToBatch.
+  block_size = op.get_attr("block_size")
+  return [array_ops.space_to_batch(grad, op.inputs[1], block_size=block_size),
+          None]
 
 
 @ops.RegisterGradient("SpaceToDepth")

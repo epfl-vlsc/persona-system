@@ -23,6 +23,7 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/device_factory.h"
 #include "tensorflow/core/common_runtime/executor.h"
 #include "tensorflow/core/common_runtime/function.h"
+#include "tensorflow/core/common_runtime/gpu/gpu_tracer.h"
 #include "tensorflow/core/common_runtime/graph_optimizer.h"
 #include "tensorflow/core/common_runtime/memory_types.h"
 #include "tensorflow/core/common_runtime/session_factory.h"
@@ -30,6 +31,7 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/step_stats_collector.h"
 #include "tensorflow/core/framework/function.h"
 #include "tensorflow/core/framework/graph.pb.h"
+#include "tensorflow/core/framework/graph.pb_text.h"
 #include "tensorflow/core/framework/graph_def_util.h"
 #include "tensorflow/core/framework/log_memory.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -319,11 +321,16 @@ Status DirectSession::Run(const RunOptions& run_options,
     LogMemory::RecordStep(args.step_id, run_state_args.handle);
   }
 
+  std::unique_ptr<GPUTracer> tracer;
   if (run_options.trace_level() == RunOptions::FULL_TRACE ||
       options_.config.graph_options().build_cost_model()) {
     args.stats_collector = new StepStatsCollector(
         run_metadata->mutable_step_stats(), &cost_models_);
     run_state.collector = args.stats_collector;
+    if (tracer && run_options.trace_level() == RunOptions::FULL_TRACE) {
+      tracer.reset(CreateGPUTracer());
+      tracer->Start();
+    }
   }
 
   for (const auto& item : executors_and_keys->items) {
@@ -333,6 +340,10 @@ Status DirectSession::Run(const RunOptions& run_options,
   WaitForNotification(&run_state, run_options.timeout_in_ms() > 0
                                       ? run_options.timeout_in_ms()
                                       : operation_timeout_in_ms_);
+  if (tracer) {
+    tracer->Stop();
+    tracer->Collect(args.stats_collector);
+  }
 
   {
     mutex_lock l(run_state.mu_);
@@ -714,8 +725,9 @@ Status DirectSession::GetOrCreateExecutors(
 
     ek->items.resize(ek->items.size() + 1);
     auto* item = &(ek->items.back());
-    item->flib = NewFunctionLibraryRuntime(device, runner, graph_def_version,
-                                           fdefs, optimizer_opts);
+    item->flib =
+        NewFunctionLibraryRuntime(device_mgr_.get(), device, runner,
+                                  graph_def_version, fdefs, optimizer_opts);
 
     LocalExecutorParams params;
     params.device = device;
@@ -745,7 +757,8 @@ Status DirectSession::GetOrCreateExecutors(
     };
 
     optimizer.Optimize(lib, device, &partition_graph);
-    s = ValidateMemoryTypes(DeviceType(device->device_type()), partition_graph);
+    s = EnsureMemoryTypes(DeviceType(device->device_type()), device->name(),
+                          partition_graph);
     if (!s.ok()) {
       break;
     }
@@ -897,7 +910,7 @@ Status DirectSession::CreateGraphs(gtl::ArraySlice<string> feeds,
     const string& partition_name = partition.first;
 
     GraphDef* graph_def = &partition.second;
-    VLOG(2) << "Created " << graph_def->DebugString() << " for "
+    VLOG(2) << "Created " << ProtoDebugString(*graph_def) << " for "
             << partition_name;
 
     // Give the device an opportunity to rewrite its subgraph.

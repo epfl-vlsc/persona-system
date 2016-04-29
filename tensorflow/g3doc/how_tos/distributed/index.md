@@ -239,21 +239,19 @@ def main(_):
                              global_step=global_step,
                              save_model_secs=600)
 
-    # The supervisor takes care of session initialization and restoring from
-    # a checkpoint.
-    sess = sv.prepare_or_wait_for_session(server.target)
+    # The supervisor takes care of session initialization, restoring from
+    # a checkpoint, and closing when done or an error occurs.
+    with sv.managed_session(server.target) as sess:
+      # Loop until the supervisor shuts down or 1000000 steps have completed.
+      step = 0
+      while not sv.should_stop() and step < 1000000:
+        # Run a training step asynchronously.
+        # See `tf.train.SyncReplicasOptimizer` for additional details on how to
+        # perform *synchronous* training.
+        _, step = sess.run([train_op, global_step])
 
-    # Start queue runners for the input pipelines (if any).
-    sv.start_queue_runners(sess)
-
-    # Loop until the supervisor shuts down (or 1000000 steps have completed).
-    step = 0
-    while not sv.should_stop() and step < 1000000:
-      # Run a training step asynchronously.
-      # See `tf.train.SyncReplicasOptimizer` for additional details on how to
-      # perform *synchronous* training.
-      _, step = sess.run([train_op, global_step])
-
+    # Ask for all the services to stop.
+    sv.stop()
 
 if __name__ == "__main__":
   tf.app.run()

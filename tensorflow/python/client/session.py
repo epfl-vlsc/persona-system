@@ -28,7 +28,7 @@ from tensorflow.python import pywrap_tensorflow as tf_session
 from tensorflow.python.framework import errors
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import session_ops
-from tensorflow.python.platform import logging
+from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.util import compat
 
 
@@ -300,6 +300,9 @@ class BaseSession(SessionInterface):
       the value should be a
       [`SparseTensorValue`](../../api_docs/python/sparse_ops.md#SparseTensorValue).
 
+    Each value in `feed_dict` must be convertible to a numpy array of the dtype
+    of the corresponding key.
+
     The optional `options` argument expects a [`RunOptions`] proto. The options
     allow controlling the behavior of this particular step (e.g. turning tracing
     on).
@@ -545,7 +548,18 @@ class BaseSession(SessionInterface):
             raise TypeError('The value of a feed cannot be a tf.Tensor object. '
                             'Acceptable feed values include Python scalars, '
                             'strings, lists, or numpy ndarrays.')
-          np_val = np.array(subfeed_val, dtype=subfeed_t.dtype.as_numpy_dtype)
+
+          subfeed_dtype = subfeed_t.dtype.as_numpy_dtype
+          if isinstance(subfeed_val,
+                        int) and subfeed_dtype(subfeed_val) != subfeed_val:
+            raise TypeError(
+                'Type of feed value ' + str(subfeed_val) + ' is not'
+                ' compatible with Tensor type ' + str(subfeed_dtype) + '.'
+                ' Try explicitly setting the type of the feed tensor'
+                ' to a larger type (e.g. int64).')
+
+          np_val = np.array(subfeed_val, dtype=subfeed_dtype)
+
           if not subfeed_t.get_shape().is_compatible_with(np_val.shape):
             raise ValueError(
                 'Cannot feed value of shape %r for Tensor %r, '

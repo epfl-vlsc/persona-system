@@ -45,12 +45,18 @@ package(default_visibility = ["//tensorflow:internal"])
 
 licenses(["notice"])  # Apache 2.0
 
-load("//tensorflow:tensorflow.bzl", "tf_copts")
-load("//tensorflow:tensorflow.bzl", "tf_cc_test")
-load("//tensorflow:tensorflow.bzl", "tf_cc_tests")
-load("//tensorflow:tensorflow.bzl", "tf_cuda_library")
-load("//tensorflow:tensorflow.bzl", "tf_gen_op_libs")
-load("//tensorflow:tensorflow.bzl", "cc_header_only_library")
+load(
+    "//tensorflow:tensorflow.bzl",
+    "tf_copts",
+    "tf_cc_test",
+    "tf_cc_tests",
+    "tf_cuda_library",
+    "tf_gen_op_libs",
+    "tf_generate_proto_text_sources",
+    "tf_genrule_cmd_append_to_srcs",
+    "tf_proto_text_protos_relative",
+    "cc_header_only_library",
+)
 
 # For platform specific build config
 load(
@@ -85,7 +91,7 @@ tf_proto_library(
     cc_api_version = 2,
     go_api_version = 2,
     java_api_version = 2,
-    py_api_version = 2,
+    py_api_version = 0,
     visibility = ["//visibility:public"],
 )
 
@@ -132,6 +138,23 @@ tf_proto_library_cc(
     cc_stubby_versions = ["2"],
     visibility = [
         "//tensorflow:internal",
+    ],
+)
+
+proto_text_hdrs_and_srcs = tf_generate_proto_text_sources(
+    name = "proto_text_srcs_all",
+    srcs = tf_proto_text_protos_relative(),
+    srcs_relative_dir = "tensorflow/core/",
+)
+
+cc_library(
+    name = "proto_text",
+    srcs = proto_text_hdrs_and_srcs.srcs,
+    hdrs = proto_text_hdrs_and_srcs.hdrs,
+    deps = [
+        ":lib",
+        ":lib_internal",
+        ":protos_all_cc",
     ],
 )
 
@@ -261,7 +284,10 @@ tf_cuda_library(
         "util/cuda_kernel_helper.h",
         "util/device_name_utils.h",
         "util/events_writer.h",
+        "util/example_proto_helper.h",
         "util/guarded_philox_random.h",
+        "util/memmapped_file_system.h",
+        "util/memmapped_file_system_writer.h",
         "util/mirror_pad_mode.h",
         "util/padding.h",
         "util/port.h",
@@ -522,6 +548,7 @@ cc_library(
         ":framework",
         ":framework_internal",
         ":lib",
+        ":proto_text",
         ":protos_all_cc",
         ":tensor_testutil",
         ":test",
@@ -549,8 +576,11 @@ tf_cuda_library(
 # Public Android targets
 
 # Android-specific BUILD targets
-load("//tensorflow:tensorflow.bzl", "tf_android_core_proto_sources")
-load("//tensorflow:tensorflow.bzl", "tf_android_core_proto_headers")
+load(
+    "//tensorflow:tensorflow.bzl",
+    "tf_android_core_proto_headers",
+    "tf_android_core_proto_sources",
+)
 
 # List of protos we want on android
 filegroup(
@@ -564,8 +594,10 @@ filegroup(
 filegroup(
     name = "android_srcs",
     srcs = [
+        ":proto_text_srcs_all",
         "//tensorflow/core/kernels:android_srcs",
         "//tensorflow/core/util/ctc:android_srcs",
+        "common_runtime/gpu/gpu_tracer.cc",
     ] + glob(
         [
             "client/**/*.cc",
@@ -624,7 +656,7 @@ ANDROID_TF_LITE_HDRS = [
     "platform/platform.h",
     "platform/types.h",
     "public/session.h",
-]
+] + proto_text_hdrs_and_srcs.hdrs
 
 # Native library support for Android applications.
 # Does not contain operators, use :android_tensorflow_lib if you want full
@@ -641,7 +673,9 @@ cc_library(
     name = "android_tensorflow_lib_lite",
     srcs =
         select({
-            "//tensorflow:android": ["//tensorflow/core:android_srcs"],
+            "//tensorflow:android": [
+                "//tensorflow/core:android_srcs",
+            ],
             "//conditions:default": [],
         }),
     hdrs = ANDROID_TF_LITE_HDRS,
@@ -719,6 +753,7 @@ cc_library(
         ":framework_internal",
         ":lib",
         ":lib_internal",
+        ":proto_text",
         ":protos_all_cc",
         ":stream_executor",
     ],
@@ -765,8 +800,10 @@ cc_library(
         "lib/random/random_distributions.h",
         "lib/random/weighted_picker.h",
         "lib/strings/ordered_code.h",
+        "lib/strings/proto_text_util.h",
         "lib/strings/regexp.h",
         "lib/strings/scanner.h",
+        "lib/wav/wav_io.h",
         "platform/denormal.h",
         "platform/platform.h",
         "platform/tensor_coding.h",
@@ -817,6 +854,7 @@ tf_cuda_library(
     deps = [
         ":lib",
         ":lib_internal",
+        ":proto_text",
         ":protos_all_cc",
         "//tensorflow/core/kernels:bounds_check",
         "//third_party/eigen3",
@@ -964,6 +1002,7 @@ tf_cuda_library(
         ":functional_ops_op_lib",
         ":lib",
         ":lib_internal",
+        ":proto_text",
         ":protos_all_cc",
         "//tensorflow/core/kernels:required",
         "//third_party/eigen3",
@@ -980,11 +1019,51 @@ tf_cuda_library(
     deps = [
         ":core_cpu_internal",
         ":framework",
+        ":gpu_tracer",
         ":lib",
         ":lib_internal",
+        ":proto_text",
         ":protos_all_cc",
     ],
     alwayslink = 1,
+)
+
+tf_cuda_library(
+    name = "cupti_wrapper",
+    srcs = [
+        "common_runtime/gpu/cupti_wrapper.cc",
+    ],
+    hdrs = [
+        "common_runtime/gpu/cupti_wrapper.h",
+    ],
+    copts = tf_copts(),
+    cuda_deps = [
+        ":stream_executor",
+        "//third_party/gpus/cuda:cuda_headers",
+        "//third_party/gpus/cuda:cupti_headers",
+    ],
+    data = ["//third_party/gpus/cuda:cupti_dsos"],
+)
+
+tf_cuda_library(
+    name = "gpu_tracer",
+    srcs = [
+        "common_runtime/gpu/gpu_tracer.cc",
+    ],
+    hdrs = [
+        "common_runtime/gpu/gpu_tracer.h",
+    ],
+    copts = tf_copts(),
+    cuda_deps = [
+        ":cupti_wrapper",
+        "//third_party/gpus/cuda:cuda_headers",
+        "//third_party/gpus/cuda:cupti_headers",
+    ],
+    deps = [
+        ":core_cpu_internal",
+        ":lib",
+        ":protos_all_cc",
+    ],
 )
 
 tf_cuda_library(
@@ -1153,6 +1232,7 @@ tf_cc_tests(
             "common_runtime/gpu/*_test.cc",
             # Run by tests below
             "common_runtime/constant_folding_test.cc",
+            "common_runtime/memory_types_test.cc",
             "common_runtime/direct_session*_test.cc",
             "common_runtime/function_test.cc",
             "common_runtime/gpu/gpu_allocator_retry_test.cc",
@@ -1197,6 +1277,7 @@ tf_cc_tests(
             # Run by tests below
             "common_runtime/gpu/gpu_allocator_retry_test.cc",
             "common_runtime/gpu/gpu_stream_util_test.cc",
+            "common_runtime/gpu/gpu_tracer_test.cc",
         ],
     ),
     deps = [
@@ -1214,6 +1295,31 @@ tf_cc_tests(
         ":testlib",
         "//tensorflow/cc:cc_ops",
         "//tensorflow/core/kernels:ops_util",
+    ],
+)
+
+tf_cc_test(
+    name = "common_runtime/memory_types_test",
+    size = "small",
+    linkstatic = tf_kernel_tests_linkstatic(),
+    tags = tf_cuda_tests_tags(),
+    deps = [
+        ":core",
+        ":core_cpu",
+        ":core_cpu_internal",
+        ":framework",
+        ":framework_internal",
+        ":gpu_runtime",
+        ":lib",
+        ":lib_internal",
+        ":ops",
+        ":protos_all_cc",
+        ":test",
+        ":test_main",
+        ":testlib",
+        "//tensorflow/cc:cc_ops",
+        "//tensorflow/core/kernels:cast_op",
+        "//third_party/eigen3",
     ],
 )
 
@@ -1240,6 +1346,7 @@ tf_cc_test(
         "//tensorflow/cc:cc_ops",
         "//tensorflow/core/kernels:bcast_ops",
         "//tensorflow/core/kernels:cast_op",
+        "//tensorflow/core/kernels:concat_op",
         "//tensorflow/core/kernels:identity_op",
         "//tensorflow/core/kernels:matmul_op",
         "//third_party/eigen3",
@@ -1463,6 +1570,33 @@ tf_cc_test(
         "//tensorflow/core/kernels:shape_ops",
         "//tensorflow/core/kernels:tile_ops",
         "//third_party/eigen3",
+    ],
+)
+
+tf_cc_test(
+    name = "common_runtime/gpu/gpu_tracer_test",
+    size = "small",
+    args = ["--heap_check=local"],
+    linkstatic = tf_kernel_tests_linkstatic(),
+    tags = tf_cuda_tests_tags() + ["nomac"],
+    deps = [
+        ":all_kernels",
+        ":core_cpu",
+        ":core_cpu_internal",
+        ":direct_session",
+        ":direct_session_internal",
+        ":framework",
+        ":framework_internal",
+        ":gpu_runtime",
+        ":gpu_tracer",
+        ":lib",
+        ":lib_internal",
+        ":protos_all_cc",
+        ":test",
+        ":test_main",
+        ":testlib",
+        "//tensorflow/cc:cc_ops",
+        "//tensorflow/core/kernels:ops_util",
     ],
 )
 

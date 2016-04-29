@@ -364,6 +364,11 @@ class Tensor {
   gtl::InlinedVector<int64, 5> ComputeFlatInnerDims(int64 num_out_dims) const;
   gtl::InlinedVector<int64, 5> ComputeFlatOuterDims(int64 num_out_dims) const;
 
+  // TODO(rmlarsen): These shouldn't hardcode '4' so that it lines up with
+  // TensorShape's InlineVector.
+  gtl::InlinedVector<int64, 4> ComputeFlatInnerDims(int64 num_out_dims) const;
+  gtl::InlinedVector<int64, 4> ComputeFlatOuterDims(int64 num_out_dims) const;
+
   TensorShape shape_;
   TensorBuffer* buf_;
 
@@ -372,6 +377,7 @@ class Tensor {
   friend class TensorReference;       // For access to buf_
   friend class VariableOp;            // For access to set_shape
   friend class AutoReloadVariableOp;  // For access to set_shape
+  friend class TensorTestHelper;      // For access to set_shape
 
   // Creates a tensor with the input datatype, shape and buf.
   //

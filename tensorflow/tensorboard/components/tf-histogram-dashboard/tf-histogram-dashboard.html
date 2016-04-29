@@ -1,11 +1,8 @@
 <link rel="import" href="../polymer/polymer.html">
-<link rel="import" href="../tf-event-dashboard/tf-tooltip-coordinator.html">
 <link rel="import" href="../tf-event-dashboard/tf-run-selector.html">
 <link rel="import" href="../tf-event-dashboard/tf-x-type-selector.html">
 <link rel="import" href="../tf-event-dashboard/tf-color-scale.html">
-<link rel="import" href="../tf-dashboard-common/tf-dashboard-layout.html">
-<link rel="import" href="../tf-dashboard-common/dashboard-style.html">
-<link rel="import" href="../tf-dashboard-common/tf-no-data-warning.html">
+<link rel="import" href="../tf-dashboard-common/tf-dashboard.html">
 <link rel="import" href="../tf-categorizer/tf-categorizer.html">
 <link rel="import" href="../tf-event-dashboard/tf-chart.html">
 <link rel="import" href="../tf-collapsable-pane/tf-collapsable-pane.html">
@@ -38,14 +35,6 @@ The #center div contains tf-charts embedded inside tf-collapsable-panes.
         out-color-scale="{{colorScale}}"
         out-class-scale="{{classScale}}"
       ></tf-color-scale>
-
-      <tf-tooltip-coordinator
-        id="tooltipCoordinator"
-        out-tooltip-updater="{{tooltipUpdater}}"
-        out-tooltip-map="{{tooltipMap}}"
-        out-x-value="{{tooltipXValue}}"
-        out-closest-run="{{closestRun}}"
-      ></tf-tooltip-coordinator>
     </div>
 
     <tf-dashboard-layout>
@@ -69,10 +58,6 @@ The #center div contains tf-charts embedded inside tf-collapsable-panes.
             runs="[[runs]]"
             class-scale="[[classScale]]"
             out-selected="{{selectedRuns}}"
-            tooltips="[[tooltipMap]]"
-            closest-run="[[closestRun]]"
-            x-value="[[tooltipXValue]]"
-            x-type="[[xType]]"
           ></tf-run-selector>
           </div>
       </div>
@@ -101,7 +86,6 @@ The #center div contains tf-charts embedded inside tf-collapsable-panes.
                           color-scale="[[colorScale]]"
                           on-keyup="toggleSelected"
                           tabindex="2"
-                          tooltip-updater="[[tooltipUpdater]]"
                         ></tf-chart>
                         <paper-icon-button
                           class="expand-button"
@@ -125,7 +109,10 @@ The #center div contains tf-charts embedded inside tf-collapsable-panes.
   <script>
     Polymer({
       is: "tf-histogram-dashboard",
-      behaviors: [TF.Backend.Behavior],
+      behaviors: [
+        TF.Dashboard.ReloadBehavior("tf-chart"),
+        TF.Backend.Behavior,
+      ],
       properties: {
         _visibleTags: {
           type: Array,

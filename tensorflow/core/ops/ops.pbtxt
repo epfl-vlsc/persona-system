@@ -26,6 +26,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -55,6 +56,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_UINT8
@@ -152,6 +154,10 @@ op {
     }
   }
   summary: "Deprecated. Disallowed in GraphDef version >= 2."
+  deprecation {
+    version: 2
+    explanation: "Use AdjustContrastv2 instead"
+  }
 }
 op {
   name: "AdjustContrastv2"
@@ -922,6 +928,7 @@ op {
   }
   summary: "Asserts that the given condition is true."
   description: "If `condition` evaluates to false, print the list of tensors in `data`.\n`summarize` determines how many entries of the tensors to print."
+  is_stateful: true
 }
 op {
   name: "Assign"
@@ -1069,6 +1076,41 @@ op {
   }
   summary: "Update \'ref\' by subtracting \'value\' from it."
   description: "This operation outputs \"ref\" after the update is done.\nThis makes it easier to chain operations that need to use the reset value."
+}
+op {
+  name: "AudioSummary"
+  input_arg {
+    name: "tag"
+    description: "Scalar. Used to build the `tag` attribute of the summary values."
+    type: DT_STRING
+  }
+  input_arg {
+    name: "tensor"
+    description: "2-D of shape `[batch_size, frames]`."
+    type: DT_FLOAT
+  }
+  output_arg {
+    name: "summary"
+    description: "Scalar. Serialized `Summary` protocol buffer."
+    type: DT_STRING
+  }
+  attr {
+    name: "sample_rate"
+    type: "float"
+    description: "The sample rate of the signal in hertz."
+  }
+  attr {
+    name: "max_outputs"
+    type: "int"
+    default_value {
+      i: 3
+    }
+    description: "Max number of batch elements to generate audio for."
+    has_minimum: true
+    minimum: 1
+  }
+  summary: "Outputs a `Summary` protocol buffer with audio."
+  description: "The summary has up to `max_outputs` summary values containing audio. The\naudio is built from `tensor` which must be 3-D with shape `[batch_size,\nframes, channels]` or 2-D with shape `[batch_size, frames]`. The values are\nassumed to be in the range of `[-1.0, 1.0]` with a sample rate of `sample_rate`.\n\nThe `tag` argument is a scalar `Tensor` of type `string`.  It is used to\nbuild the `tag` of the summary values:\n\n*  If `max_outputs` is 1, the summary value tag is \'*tag*/audio\'.\n*  If `max_outputs` is greater than 1, the summary value tags are\n   generated sequentially as \'*tag*/audio/0\', \'*tag*/audio/1\', etc."
 }
 op {
   name: "AvgPool"
@@ -1366,6 +1408,35 @@ op {
   description: "Multiplies all slices of `Tensor` `x` and `y` (each slice can be\nviewed as an element of a batch), and arranges the individual results\nin a single output tensor of the same batch size. Each of the\nindividual slices can optionally be adjointed (to adjoint a matrix\nmeans to transpose and conjugate it) before multiplication by setting\nthe `adj_x` or `adj_y` flag to `True`, which are by default `False`.\n\nThe input tensors `x` and `y` are 3-D or higher with shape `[..., r_x, c_x]`\nand `[..., r_y, c_y]`.\n\nThe output tensor is 3-D or higher with shape `[..., r_o, c_o]`, where:\n\n    r_o = c_x if adj_x else r_x\n    c_o = r_y if adj_y else c_y\n\nIt is computed as:\n\n    out[..., :, :] = matrix(x[..., :, :]) * matrix(y[..., :, :])"
 }
 op {
+  name: "BatchMatrixBandPart"
+  input_arg {
+    name: "input"
+    description: "Rank `k` tensor."
+    type_attr: "T"
+  }
+  input_arg {
+    name: "num_lower"
+    description: "0-D tensor. Number of subdiagonals to keep. If negative, keep entire\nlower triangle."
+    type: DT_INT64
+  }
+  input_arg {
+    name: "num_upper"
+    description: "0-D tensor. Number of superdiagonals to keep. If negative, keep\nentire upper triangle."
+    type: DT_INT64
+  }
+  output_arg {
+    name: "band"
+    description: "Rank `k` tensor of the same shape as input. The extracted banded tensor."
+    type_attr: "T"
+  }
+  attr {
+    name: "T"
+    type: "type"
+  }
+  summary: "Copy a tensor setting everything outside a central band in each innermost matrix"
+  description: "to zero.\n\nThe `band` part is computed as follows:\nAssume `input` has `k` dimensions `[I, J, K, ..., M, N]`, then the output is a\ntensor with the same shape where\n\n`band[i, j, k, ..., m, n] = in_band(m, n) * input[i, j, k, ..., m, n]`.\n\nThe indicator function \'in_band(m, n)` is one if\n`(num_lower < 0 || (m-n) <= num_lower)) &&\n(num_upper < 0 || (n-m) <= num_upper)`, and zero otherwise.\n\nFor example:\n\n```prettyprint\n# if \'input\' is [[ 0,  1,  2, 3]\n                 [-1,  0,  1, 2]\n                 [-2, -1,  0, 1]\n                 [-3, -2, -1, 0]],\n\ntf.batch_matrix_band_part(input, 1, -1) ==> [[ 0,  1,  2, 3]\n                                             [-1,  0,  1, 2]\n                                             [ 0, -1,  0, 1]\n                                             [ 0,  0, -1, 0]],\n\ntf.batch_matrix_band_part(input, 2, 1) ==> [[ 0,  1,  0, 0]\n                                            [-1,  0,  1, 0]\n                                            [-2, -1,  0, 1]\n                                            [ 0, -2, -1, 0]]\n```\n\nUseful special cases:\n\n```prettyprint\n tf.batch_matrix_band_part(input, 0, -1) ==> Upper triangular part.\n tf.batch_matrix_band_part(input, -1, 0) ==> Lower triangular part.\n tf.batch_matrix_band_part(input, 0, 0) ==> Diagonal.\n```"
+}
+op {
   name: "BatchMatrixDeterminant"
   input_arg {
     name: "input"
@@ -1441,17 +1512,24 @@ op {
     type_attr: "T"
   }
   attr {
+    name: "adjoint"
+    type: "bool"
+    default_value {
+      b: false
+    }
+  }
+  attr {
     name: "T"
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
-  summary: "Calculates the inverse of square invertible matrices."
-  description: "The input is a tensor of shape `[..., M, M]` whose inner-most 2 dimensions\nform square matrices. The output is a tensor of the same shape as the input\ncontaining the inverse for all input submatrices `[..., :, :]`.\n\nThe op uses the Cholesky decomposition if the matrices are symmetric positive\ndefinite and LU decomposition with partial pivoting otherwise.\n\nIf a matrix is not invertible there is no guarantee what the op does. It\nmay detect the condition and raise an exception or it may simply return a\ngarbage result."
+  summary: "Calculates the inverse of square invertible matrices or their adjoints"
+  description: "(conjugate transposes).\n\nThe input is a tensor of shape `[..., M, M]` whose inner-most 2 dimensions\nform square matrices. The output is a tensor of the same shape as the input\ncontaining the inverse for all input submatrices `[..., :, :]`.\n\nThe op uses LU decomposition with partial pivoting to compute the inverses.\n\nIf a matrix is not invertible there is no guarantee what the op does. It\nmay detect the condition and raise an exception or it may simply return a\ngarbage result."
 }
 op {
   name: "BatchMatrixSolve"
@@ -1483,8 +1561,8 @@ op {
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
@@ -1517,8 +1595,8 @@ op {
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
@@ -1570,8 +1648,8 @@ op {
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
@@ -1643,6 +1721,10 @@ op {
   }
   summary: "Batch normalization."
   description: "This op is deprecated. Prefer `tf.nn.batch_normalization`."
+  deprecation {
+    version: 9
+    explanation: "Use tf.nn.batch_normalization()"
+  }
 }
 op {
   name: "BatchNormWithGlobalNormalizationGrad"
@@ -1730,6 +1812,10 @@ op {
   }
   summary: "Gradients for batch normalization."
   description: "This op is deprecated. See `tf.nn.batch_normalization`."
+  deprecation {
+    version: 9
+    explanation: "Use tf.nn.batch_normalization()"
+  }
 }
 op {
   name: "BatchSelfAdjointEig"
@@ -1755,6 +1841,34 @@ op {
   }
   summary: "Calculates the Eigen Decomposition of a batch of square self-adjoint matrices."
   description: "The input is a tensor of shape `[..., M, M]` whose inner-most 2 dimensions\nform square matrices, with the same constraints as the single matrix\nSelfAdjointEig.\n\nThe result is a \'[..., M+1, M] matrix with [..., 0,:] containing the\neigenvalues, and subsequent [...,1:, :] containing the eigenvectors."
+}
+op {
+  name: "BatchToSpace"
+  input_arg {
+    name: "input"
+    description: "4-D tensor with shape\n`[batch*block_size*block_size, height_pad/block_size, width_pad/block_size,\n  depth]`. Note that the batch size of the input tensor must be divisible by\n`block_size * block_size`."
+    type_attr: "T"
+  }
+  input_arg {
+    name: "crops"
+    description: "2-D tensor of non-negative integers with shape `[2, 2]`. It specifies\nhow many elements to crop from the intermediate result across the spatial\ndimensions as follows:\n\n    crops = [[crop_top, crop_bottom], [crop_left, crop_right]]"
+    type: DT_INT32
+  }
+  output_arg {
+    name: "output"
+    description: "4-D with shape `[batch, height, width, depth]`, where:\n\n      height = height_pad - crop_top - crop_bottom\n      width = width_pad - crop_left - crop_right\n\nThe attr `block_size` must be greater than one. It indicates the block size."
+    type_attr: "T"
+  }
+  attr {
+    name: "T"
+    type: "type"
+  }
+  attr {
+    name: "block_size"
+    type: "int"
+  }
+  summary: "BatchToSpace for 4-D tensors of type T."
+  description: "Rearranges (permutes) data from batch into blocks of spatial data, followed by\ncropping. This is the reverse transformation of SpaceToBatch. More specifically,\nthis op outputs a copy of the input tensor where values from the `batch`\ndimension are moved in spatial blocks to the `height` and `width` dimensions,\nfollowed by cropping along the `height` and `width` dimensions."
 }
 op {
   name: "BiasAdd"
@@ -2172,6 +2286,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -2231,6 +2346,36 @@ op {
   }
   summary: "Calculates the Cholesky decomposition of a square matrix."
   description: "The input has to be symmetric and positive definite. Only the lower-triangular\npart of the input will be used for this operation. The upper-triangular part\nwill not be read.\n\nThe result is the lower-triangular matrix of the Cholesky decomposition of the\ninput."
+}
+op {
+  name: "CholeskyGrad"
+  input_arg {
+    name: "l"
+    description: "Output of Cholesky algorithm l = chol(A). Shape is `[M, M]`. Algorithm depends only on lower triangular part of this matrix."
+    type_attr: "T"
+  }
+  input_arg {
+    name: "grad"
+    description: "df/dl where f is some scalar function. Shape is `[M, M]\'. Algorithm depends only on lower triangular part of this matrix."
+    type_attr: "T"
+  }
+  output_arg {
+    name: "output"
+    description: "Symmetrized version of df/dA . Shape is `[M, M]\'"
+    type_attr: "T"
+  }
+  attr {
+    name: "T"
+    type: "type"
+    allowed_values {
+      list {
+        type: DT_FLOAT
+        type: DT_DOUBLE
+      }
+    }
+  }
+  summary: "Calculates the reverse mode backpropagated gradient of the Cholesky algorithm."
+  description: "For an explanation see \"Differentiation of the Cholesky algorithm\" by Iain Murray http://arxiv.org/abs/1602.07527."
 }
 op {
   name: "Complex"
@@ -2626,6 +2771,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -3182,6 +3328,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -3212,6 +3359,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_UINT8
@@ -3603,6 +3751,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_UINT8
@@ -3636,6 +3785,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -3661,6 +3811,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -3705,6 +3856,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -4084,6 +4236,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -4679,6 +4832,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -4720,6 +4874,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -4742,6 +4897,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -4764,6 +4920,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -5079,6 +5236,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -5168,6 +5326,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -5473,21 +5632,28 @@ op {
   }
   output_arg {
     name: "output"
-    description: "Shape is `[M, M]` containing the matrix inverse of the input."
+    description: "Shape is `[M, M]`. If `adjoint` is `False` then `output` contains the\nmatrix inverse of `input`. If `adjoint` is `True` then `output` contains the\nmatrix inverse of the adjoint of `input`."
     type_attr: "T"
+  }
+  attr {
+    name: "adjoint"
+    type: "bool"
+    default_value {
+      b: false
+    }
   }
   attr {
     name: "T"
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
-  summary: "Calculates the inverse of a square invertible matrix."
-  description: "The op uses the Cholesky decomposition if the matrix is symmetric positive\ndefinite and LU decomposition with partial pivoting otherwise.\n\nIf the matrix is not invertible there is no guarantee what the op does. It\nmay detect the condition and raise an exception or it may simply return a\ngarbage result."
+  summary: "Calculates the inverse of a square invertible matrix or its adjoint (conjugate"
+  description: "transpose).\n\nThe op uses LU decomposition with partial pivoting to compute the inverse.\n\nIf the matrix is not invertible there is no guarantee what the op does. It\nmay detect the condition and raise an exception or it may simply return a\ngarbage result."
 }
 op {
   name: "MatrixSolve"
@@ -5519,8 +5685,8 @@ op {
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
@@ -5552,8 +5718,8 @@ op {
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
@@ -5605,8 +5771,8 @@ op {
     type: "type"
     allowed_values {
       list {
-        type: DT_FLOAT
         type: DT_DOUBLE
+        type: DT_FLOAT
       }
     }
   }
@@ -5915,6 +6081,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -6097,6 +6264,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -6224,6 +6392,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_UINT8
@@ -6253,6 +6422,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -6346,6 +6516,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_UINT8
@@ -6865,6 +7036,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -6929,6 +7101,7 @@ op {
   }
   summary: "Prints a list of tensors."
   description: "Passes `input` through to `output` and prints `data` when evaluating."
+  is_stateful: true
 }
 op {
   name: "Prod"
@@ -7011,6 +7184,7 @@ op {
     minimum: 1
   }
   summary: "Invokes a python function to compute func(input)->output."
+  is_stateful: true
 }
 op {
   name: "QueueClose"
@@ -7096,7 +7270,43 @@ op {
     description: "If the queue has fewer than n elements, this operation\nwill block for up to timeout_ms milliseconds.\nNote: This option is not supported yet."
   }
   summary: "Dequeues n tuples of one or more tensors from the given queue."
-  description: "This operation concatenates queue-element component tensors along the\n0th dimension to make a single component tensor.  All of the components\nin the dequeued tuple will have size n in the 0th dimension.\n\nThis operation has k outputs, where k is the number of components in\nthe tuples stored in the given queue, and output i is the ith\ncomponent of the dequeued tuple.\n\nN.B. If the queue is empty, this operation will block until n elements\nhave been dequeued (or \'timeout_ms\' elapses, if specified)."
+  description: "If the queue is closed and there are fewer than n elements, then an\nOutOfRange error is returned.\n\nThis operation concatenates queue-element component tensors along the\n0th dimension to make a single component tensor.  All of the components\nin the dequeued tuple will have size n in the 0th dimension.\n\nThis operation has k outputs, where k is the number of components in\nthe tuples stored in the given queue, and output i is the ith\ncomponent of the dequeued tuple.\n\nN.B. If the queue is empty, this operation will block until n elements\nhave been dequeued (or \'timeout_ms\' elapses, if specified)."
+}
+op {
+  name: "QueueDequeueUpTo"
+  input_arg {
+    name: "handle"
+    description: "The handle to a queue."
+    type: DT_STRING
+    is_ref: true
+  }
+  input_arg {
+    name: "n"
+    description: "The number of tuples to dequeue."
+    type: DT_INT32
+  }
+  output_arg {
+    name: "components"
+    description: "One or more tensors that were dequeued as a tuple."
+    type_list_attr: "component_types"
+  }
+  attr {
+    name: "component_types"
+    type: "list(type)"
+    description: "The type of each component in a tuple."
+    has_minimum: true
+    minimum: 1
+  }
+  attr {
+    name: "timeout_ms"
+    type: "int"
+    default_value {
+      i: -1
+    }
+    description: "If the queue has fewer than n elements, this operation\nwill block for up to timeout_ms milliseconds.\nNote: This option is not supported yet."
+  }
+  summary: "Dequeues n tuples of one or more tensors from the given queue."
+  description: "This operation is not supported by all queues.  If a queue does not support\nDequeueUpTo, then an Unimplemented error is returned.\n\nIf the queue is closed and there are more than 0 but less than n elements\nremaining, then instead of returning an OutOfRange error like\nQueueDequeueMany, the remaining elements are returned immediately.  If the queue\nis closed and there are 0 elements left in the queue, then an OutOfRange\nerror is returned just like in QueueDequeueMany.  Otherwise the behavior\nis identical to QueueDequeueMany:\n\nThis operation concatenates queue-element component tensors along the\n0th dimension to make a single component tensor.  All of the components\nin the dequeued tuple will have size n in the 0th dimension.\n\nThis operation has k outputs, where k is the number of components in\nthe tuples stored in the given queue, and output i is the ith\ncomponent of the dequeued tuple."
 }
 op {
   name: "QueueEnqueue"
@@ -7238,6 +7448,10 @@ op {
   }
   summary: "Randomly crop `image`."
   description: "`size` is a 1-D int64 tensor with 2 elements representing the crop height and\nwidth.  The values must be non negative.\n\nThis Op picks a random location in `image` and crops a `height` by `width`\nrectangle from that location.  The random location is picked so the cropped\narea will fit inside the original image."
+  deprecation {
+    version: 8
+    explanation: "Random crop is now pure Python"
+  }
   is_stateful: true
 }
 op {
@@ -7386,6 +7600,7 @@ op {
     description: "The type of the output."
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -7439,6 +7654,7 @@ op {
     description: "The type of the output."
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -8475,6 +8691,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -9301,6 +9518,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -9327,6 +9545,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -9353,6 +9572,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -9543,6 +9763,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }
@@ -9680,6 +9901,33 @@ op {
     }
   }
   summary: "Computes softsign gradients for a softsign operation."
+}
+op {
+  name: "SpaceToBatch"
+  input_arg {
+    name: "input"
+    description: "4-D with shape `[batch, height, width, depth]`."
+    type_attr: "T"
+  }
+  input_arg {
+    name: "paddings"
+    description: "2-D tensor of non-negative integers with shape `[2, 2]`. It specifies\n  the padding of the input with zeros across the spatial dimensions as follows:\n\n      paddings = [[pad_top, pad_bottom], [pad_left, pad_right]]\n\n  The effective spatial dimensions of the zero-padded input tensor will be:\n\n      height_pad = pad_top + height + pad_bottom\n      width_pad = pad_left + width + pad_right\n\nThe attr `block_size` must be greater than one. It indicates the block size.\n\n  * Non-overlapping blocks of size `block_size x block size` in the height and\n    width dimensions are rearranged into the batch dimension at each location.\n  * The batch of the output tensor is `batch * block_size * block_size`.\n  * Both height_pad and width_pad must be divisible by block_size.\n\nThe shape of the output will be:\n\n    [batch*block_size*block_size, height_pad/block_size, width_pad/block_size,\n     depth]"
+    type: DT_INT32
+  }
+  output_arg {
+    name: "output"
+    type_attr: "T"
+  }
+  attr {
+    name: "T"
+    type: "type"
+  }
+  attr {
+    name: "block_size"
+    type: "int"
+  }
+  summary: "SpaceToBatch for 4-D tensors of type T."
+  description: "Zero-pads and then rearranges (permutes) blocks of spatial data into batch.\nMore specifically, this op outputs a copy of the input tensor where values from\nthe `height` and `width` dimensions are moved to the `batch` dimension. After\nthe zero-padding, both `height` and `width` of the input must be divisible by the\nblock size."
 }
 op {
   name: "SpaceToDepth"
@@ -10294,6 +10542,66 @@ op {
   description: "The inputs must be two-dimensional matrices and the inner dimension of \"a\" must\nmatch the outer dimension of \"b\". This op is optimized for the case where at\nleast one of \"a\" or \"b\" is sparse. The breakeven for using this versus a dense\nmatrix multiply on one platform was 30% zero values in the sparse matrix."
 }
 op {
+  name: "SparseReduceSum"
+  input_arg {
+    name: "input_indices"
+    description: "2-D.  `N x R` matrix with the indices of non-empty values in a\nSparseTensor, possibly not in canonical ordering."
+    type: DT_INT64
+  }
+  input_arg {
+    name: "input_values"
+    description: "1-D.  `N` non-empty values corresponding to `input_indices`."
+    type_attr: "T"
+  }
+  input_arg {
+    name: "input_shape"
+    description: "1-D.  Shape of the input SparseTensor."
+    type: DT_INT64
+  }
+  input_arg {
+    name: "reduction_axes"
+    description: "1-D.  Length-`K` vector containing the reduction axes."
+    type: DT_INT32
+  }
+  output_arg {
+    name: "output"
+    description: "`R-K`-D.  The reduced Tensor."
+    type_attr: "T"
+  }
+  attr {
+    name: "keep_dims"
+    type: "bool"
+    default_value {
+      b: false
+    }
+    description: "If true, retain reduced dimensions with length 1."
+  }
+  attr {
+    name: "T"
+    type: "type"
+    allowed_values {
+      list {
+        type: DT_FLOAT
+        type: DT_DOUBLE
+        type: DT_INT64
+        type: DT_INT32
+        type: DT_UINT8
+        type: DT_UINT16
+        type: DT_INT16
+        type: DT_INT8
+        type: DT_COMPLEX64
+        type: DT_COMPLEX128
+        type: DT_QINT8
+        type: DT_QUINT8
+        type: DT_QINT32
+        type: DT_HALF
+      }
+    }
+  }
+  summary: "Computes the sum of elements across dimensions of a SparseTensor."
+  description: "This Op takes a SparseTensor and is the sparse counterpart to\n`tf.reduce_sum()`.  In particular, this Op also returns a dense `Tensor`\ninstead of a sparse one.\n\nReduces `sp_input` along the dimensions given in `reduction_axes`.  Unless\n`keep_dims` is true, the rank of the tensor is reduced by 1 for each entry in\n`reduction_axes`. If `keep_dims` is true, the reduced dimensions are retained\nwith length 1.\n\nIf `reduction_axes` has no entries, all dimensions are reduced, and a tensor\nwith a single element is returned."
+}
+op {
   name: "SparseReorder"
   input_arg {
     name: "input_indices"
@@ -10616,6 +10924,67 @@ op {
   description: "If the `shape[split_dim]` is not an integer multiple of `num_split`. Slices\n`[0 : shape[split_dim] % num_split]` gets one extra dimension.\nFor example, if `split_dim = 1` and `num_split = 2` and the input is\n\n    input_tensor = shape = [2, 7]\n    [    a   d e  ]\n    [b c          ]\n\nGraphically the output tensors are:\n\n    output_tensor[0] = shape = [2, 4]\n    [    a  ]\n    [b c    ]\n\n    output_tensor[1] = shape = [2, 3]\n    [ d e  ]\n    [      ]"
 }
 op {
+  name: "SparseTensorDenseAdd"
+  input_arg {
+    name: "a_indices"
+    description: "2-D.  The `indices` of the `SparseTensor`, with shape `[nnz, ndims]`."
+    type_attr: "Tindices"
+  }
+  input_arg {
+    name: "a_values"
+    description: "1-D.  The `values` of the `SparseTensor`, with shape `[nnz]`."
+    type_attr: "T"
+  }
+  input_arg {
+    name: "a_shape"
+    description: "1-D.  The `shape` of the `SparseTensor`, with shape `[ndims]`."
+    type_attr: "Tindices"
+  }
+  input_arg {
+    name: "b"
+    description: "`ndims`-D Tensor.  With shape `a_shape`."
+    type_attr: "T"
+  }
+  output_arg {
+    name: "output"
+    type_attr: "T"
+  }
+  attr {
+    name: "T"
+    type: "type"
+    allowed_values {
+      list {
+        type: DT_FLOAT
+        type: DT_DOUBLE
+        type: DT_INT64
+        type: DT_INT32
+        type: DT_UINT8
+        type: DT_UINT16
+        type: DT_INT16
+        type: DT_INT8
+        type: DT_COMPLEX64
+        type: DT_COMPLEX128
+        type: DT_QINT8
+        type: DT_QUINT8
+        type: DT_QINT32
+        type: DT_HALF
+      }
+    }
+  }
+  attr {
+    name: "Tindices"
+    type: "type"
+    allowed_values {
+      list {
+        type: DT_INT32
+        type: DT_INT64
+      }
+    }
+  }
+  summary: "Adds up a `SparseTensor` and a dense `Tensor`, producing a dense `Tensor`."
+  description: "This Op does not require `a_indices` be sorted in standard lexicographic order."
+}
+op {
   name: "SparseTensorDenseMatMul"
   input_arg {
     name: "a_indices"
@@ -10762,6 +11131,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -10788,6 +11158,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -10818,6 +11189,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -11029,6 +11401,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -11193,6 +11566,7 @@ op {
     type: "type"
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
         type: DT_INT32
@@ -11663,6 +12037,10 @@ op {
   }
   summary: "Returns the gradient of `Tile`."
   description: "Since `Tile` takes an input and repeats the input `multiples` times\nalong each dimension, `TileGrad` takes in `multiples` and aggregates\neach repeated tile of `input` into `output`."
+  deprecation {
+    version: 3
+    explanation: "TileGrad has been replaced with reduce_sum"
+  }
 }
 op {
   name: "TopK"
@@ -11714,6 +12092,10 @@ op {
   }
   summary: "Finds values and indices of the `k` largest elements for the last dimension."
   description: "If the input is a vector (rank-1), finds the `k` largest entries in the vector\nand outputs their values and indices as vectors.  Thus `values[j]` is the\n`j`-th largest entry in `input`, and its index is `indices[j]`.\n\nFor matrices (resp. higher rank input), computes the top `k` entries in each\nrow (resp. vector along the last dimension).  Thus,\n\n    values.shape = indices.shape = input.shape[:-1] + [k]\n\nIf two elements are equal, the lower-index element appears first.\n\nIf `k` varies dynamically, use `TopKV2` below."
+  deprecation {
+    version: 7
+    explanation: "Use TopKV2 instead"
+  }
 }
 op {
   name: "TopKV2"
@@ -11820,6 +12202,7 @@ op {
     description: "The type of the output."
     allowed_values {
       list {
+        type: DT_HALF
         type: DT_FLOAT
         type: DT_DOUBLE
       }

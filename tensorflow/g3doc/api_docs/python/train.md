@@ -94,7 +94,7 @@ This must be called by the constructors of subclasses.
 
 - - -
 
-#### `tf.train.Optimizer.minimize(loss, global_step=None, var_list=None, gate_gradients=1, aggregation_method=None, colocate_gradients_with_ops=False, name=None)` {#Optimizer.minimize}
+#### `tf.train.Optimizer.minimize(loss, global_step=None, var_list=None, gate_gradients=1, aggregation_method=None, colocate_gradients_with_ops=False, name=None, grad_loss=None)` {#Optimizer.minimize}
 
 Add operations to minimize `loss` by updating `var_list`.
 
@@ -119,6 +119,7 @@ of using this function.
 *  <b>`colocate_gradients_with_ops`</b>: If True, try colocating gradients with
     the corresponding op.
 *  <b>`name`</b>: Optional name for the returned operation.
+*  <b>`grad_loss`</b>: Optional. A `Tensor` holding the gradient computed for `loss`.
 
 ##### Returns:
 
@@ -133,7 +134,7 @@ of using this function.
 
 - - -
 
-#### `tf.train.Optimizer.compute_gradients(loss, var_list=None, gate_gradients=1, aggregation_method=None, colocate_gradients_with_ops=False)` {#Optimizer.compute_gradients}
+#### `tf.train.Optimizer.compute_gradients(loss, var_list=None, gate_gradients=1, aggregation_method=None, colocate_gradients_with_ops=False, grad_loss=None)` {#Optimizer.compute_gradients}
 
 Compute gradients of `loss` for the variables in `var_list`.
 
@@ -156,6 +157,7 @@ given variable.
     Valid values are defined in the class `AggregationMethod`.
 *  <b>`colocate_gradients_with_ops`</b>: If True, try colocating gradients with
     the corresponding op.
+*  <b>`grad_loss`</b>: Optional. A `Tensor` holding the gradient computed for `loss`.
 
 ##### Returns:
 
@@ -1053,7 +1055,7 @@ Returns the `Variable` holding the average of `var`.
 
 - - -
 
-#### `tf.train.ExponentialMovingAverage.variables_to_restore()` {#ExponentialMovingAverage.variables_to_restore}
+#### `tf.train.ExponentialMovingAverage.variables_to_restore(moving_avg_variables=None)` {#ExponentialMovingAverage.variables_to_restore}
 
 Returns a map of names to `Variables` to restore.
 
@@ -1074,6 +1076,13 @@ Below is an example of such mapping:
   conv_4/conv2d_params/ExponentialMovingAverage: conv_4/conv2d_params,
   global_step: global_step
 ```
+
+##### Args:
+
+
+*  <b>`moving_avg_variables`</b>: a list of variables that require to use of the
+    moving variable name to be restored. If None, it will default to
+    variables.moving_average_variables() + variables.trainable_variables()
 
 ##### Returns:
 
@@ -1658,30 +1667,29 @@ with tf.Graph().as_default():
   ...add operations to the graph...
   # Create a Supervisor that will checkpoint the model in '/tmp/mydir'.
   sv = Supervisor(logdir='/tmp/mydir')
-  # Get a Tensorflow session.
-  sess = sv.prepare_or_wait_for_session(FLAGS.master)
-  # Use the session to train the graph.
-  while not sv.should_stop():
-    sess.run(<my_train_op>)
-  # Ask for all the services to stop.
-  sv.stop()
+  # Get a Tensorflow session managed by the supervisor.
+  with sv.managed_session(FLAGS.master) as sess:
+    # Use the session to train the graph.
+    while not sv.should_stop():
+      sess.run(<my_train_op>)
  ```
 
-After the call to `prepare_or_wait_for_session()`, all `Variables` in
-the `Graph` have been initialized.  In addition, a few services have
-been started to checkpoint the model and fetch summaries.
+Within the `with sv.managed_session()` block all variables in the graph have
+been initialized.  In addition, a few services have been started to
+checkpoint the model and add summaries to the event log.
 
-If the program crashes and you restart it, the call to
-`prepare_or_wait_for_session()` automatically reinitializes the Variables
-from most recent checkpoint.
+If the program crashes and is restarted, the managed session automatically
+reinitialize variables from the most recent checkpoint.
 
-If any of the services raises an exception, it will ask the
-Supervisor to stop.  In that case `should_stop()` will return True
-and you should stop your training loop.
+The supervisor is notified of any exception raised by one of the services.
+After an exception is raised, `should_stop()` returns `True`.  In that case
+the training loop should also stop.  This is why the training loop has to
+check for `sv.should_stop()`.
 
-Finish by calling `stop()` to cleanly wait for the services to complete.
-If a service thread raised an exception, it is re-raised in the `stop()`
-call so your program can easily report it.
+Exceptions that indicate that the training inputs have been exhausted,
+`tf.errors.OutOfRangeError`, also cause `sv.should_stop()` to return `True`
+but are not re-raised from the `with` block: they indicate a normal
+termination.
 
 #### Use for multiple replicas
 
@@ -1706,25 +1714,22 @@ with tf.Graph().as_default():
   # Indicate if you are the 'chief'
   sv = Supervisor(logdir='/shared_directory/...', is_chief=is_chief)
   # Get a Session in a TensorFlow server on the cluster.
-  sess = sv.prepare_or_wait_for_session(server.target)
-  # Use the session to train the graph.
-  while not sv.should_stop():
-    sess.run(<my_train_op>)
-  # Ask for all the services to stop.
-  sv.stop()
+  with sv.managed_session(server.target) as sess:
+    # Use the session to train the graph.
+    while not sv.should_stop():
+      sess.run(<my_train_op>)
 ```
 
-In the *chief* task, the `Supervisor` works exactly as in the first
-example above.  In the other tasks `prepare_or_wait_for_session()`
-waits for the Model to have been intialized before returning a
-session to the training code.
+In the *chief* task, the `Supervisor` works exactly as in the first example
+above.  In the other tasks `sv.managed_session()` waits for the Model to have
+been intialized before returning a session to the training code.  The
+non-chief tasks depend on the chief taks for initializing the model.
 
-If one of the tasks crashes and restarts,
-`prepare_or_wait_for_session()` checks if the Model is initialized.
-If yes, it just creates a session and returns it to the training
-code that proceeds normally.  If the model needs to be initialized,
-the chief task takes care of reinitializing it; the other tasks just
-wait for the model to have been initialized.
+If one of the tasks crashes and restarts, `managed_session()`
+checks if the Model is initialized.  If yes, it just creates a session and
+returns it to the training code that proceeds normally.  If the model needs
+to be initialized, the chief task takes care of reinitializing it; the other
+tasks just wait for the model to have been initialized.
 
 NOTE: This modified program still works fine as a single program.
 The single program marks itself as the chief.
@@ -1751,90 +1756,60 @@ following values for the --master flag:
 
 ##### Launching additional services
 
-`prepare_or_wait_for_session()` launches the Checkpoint and Summary
-services (threads).  If you need more services to run you can simply
-launch them after `prepare_or_wait_for_session()` returns.  The Supervisor
-uses a Coordinator to help multiple threads stop together, so pass that
-coordinator (`sv.coord`) to the threads you launch.
+`managed_session()` launches the Checkpoint and Summary services (threads).
+If you need more services to run you can simply launch them in the block
+controlled by `managed_session()`.
 
-Example: Start a QueueRunner to prefetch inputs.
-
-  ```python
-  ...build the model with a QueueRunner to prefetch inputs...
-  qr = QueueRunner(input_queue, [enqueue_op])
-  ...
-  sv = Supervisor(logdir='/tmp/mydir')
-  sess = sv.prepare_or_wait_for_session(FLAGS.master)
-  # Start the queue runner threads.
-  threads = qr.create_threads(sess, sv.coord, start=True)
-  # Catch OutOfRangeError, which signals that your input queue is exhausted.
-  try:
-    while not sv.should_stop():
-      sess.run(my_train_op)
-  except tf.errors.OutOfRangeError:
-    pass
-  # Wait for the QueueRunner and service threads to complete.
-  sv.stop(threads)
-  ```
-
-Note: Starting `QueueRunner` threads is very common, to the Supervisor
-provides a convenience method named `start_queue_runners()`.  If you use
-that method you do not have to keep track of the started threads and
-can just call `stop()` normally:
+Example: Start a thread to print losses.  We want this thread to run
+every 60 seconds, so we launch it with `sv.loop()`.
 
   ```python
-  ...build the model with a QueueRunner to prefetch inputs...
-  qr = QueueRunner(input_queue, [enqueue_op])
   ...
   sv = Supervisor(logdir='/tmp/mydir')
-  sess = sv.prepare_or_wait_for_session(FLAGS.master)
-  # Start the queue runner threads.
-  sv.start_queue_runners(sess, [qr])
-  # Catch OutOfRangeError, which signals that your input queue is exhausted.
-  try:
+  with sv.managed_session(FLAGS.master) as sess:
+    sv.loop(60, print_loss, (sess))
     while not sv.should_stop():
       sess.run(my_train_op)
-  except tf.errors.OutOfRangeError:
-    pass
-  # Wait for the QueueRunner and service threads to complete.
-  sv.stop()
   ```
 
 ##### Launching fewer services
 
-`prepare_or_wait_for_session()` launches the "summary" and "checkpoint"
-services (threads) which use either the optionally `summary_op`
-and `saver` passed to the constructor, or default ones created
-automatically by the `Supervisor`.  If you want to run your own summary
-and checkpointing logic, disable these services by passing `None` to the
-`summary_op` and `saver` parameters.
+`managed_session()` launches the "summary" and "checkpoint" threads which use
+either the optionally `summary_op` and `saver` passed to the constructor, or
+default ones created automatically by the supervisor.  If you want to run
+your own summary and checkpointing logic, disable these services by passing
+`None` to the `summary_op` and `saver` parameters.
 
 Example: Create summaries manually every 100 steps in the chief.
 
   ```python
   # Create a Supervisor with no automatic summaries.
   sv = Supervisor(logdir='/tmp/mydir', is_chief=is_chief, summary_op=None)
-  # As summary_op was None, prepare_or_wait_for_session() does not start the
+  # As summary_op was None, managed_session() does not start the
   # summary thread.
-  sess = sv.prepare_or_wait_for_session(FLAGS.master)
-  for step in xrange(1000000):
-    if is_chief and step % 100 == 0:
-      # Create the summary every 100 chief steps.
-      sv.summary_computed(sess, sess.run(my_summary_op))
-    else:
-      # Train normally
-      sess.run(my_train_op)
+  with sv.managed_session(FLAGS.master) as sess:
+    for step in xrange(1000000):
+      if sv.should_stop():
+        break
+      if is_chief and step % 100 == 0:
+        # Create the summary every 100 chief steps.
+        sv.summary_computed(sess, sess.run(my_summary_op))
+      else:
+        # Train normally
+        sess.run(my_train_op)
   ```
 
 ##### Custom model initialization
 
-`prepare_or_wait_for_session()` only supports initializing the model
-by running an `init_op`.  If you have special initialization needs,
-use `local_init_op`.
+`managed_session()` only supports initializing the model by running an
+`init_op` or restoring from the latest checkpoint.  If you have special
+initialization needs, see how to specify a `local_init_op` when creating the
+supervisor.  You can also use the `SessionManager` directly to create a
+session and check if it could be initialized automatically.
 
 - - -
 
-#### `tf.train.Supervisor.__init__(graph=None, ready_op=0, is_chief=True, init_op=0, init_feed_dict=None, local_init_op=0, logdir=None, summary_op=0, saver=0, global_step=0, save_summaries_secs=120, save_model_secs=600, recovery_wait_secs=30, checkpoint_basename='model.ckpt', session_manager=None)` {#Supervisor.__init__}
+#### `tf.train.Supervisor.__init__(graph=None, ready_op=0, is_chief=True, init_op=0, init_feed_dict=None, local_init_op=0, logdir=None, summary_op=0, saver=0, global_step=0, save_summaries_secs=120, save_model_secs=600, recovery_wait_secs=30, stop_grace_secs=120, checkpoint_basename='model.ckpt', session_manager=None, summary_writer=0, init_fn=None)` {#Supervisor.__init__}
 
 Create a `Supervisor`.
 
@@ -1857,7 +1832,7 @@ Create a `Supervisor`.
 *  <b>`init_op`</b>: `Operation`.  Used by chief supervisors to initialize the model
     when it can not be recovered.  Defaults to an `Operation` that
     initializes all variables.  If `None`, no initialization is done
-    automatically.
+    automatically unless you pass a value for `init_fn`, see below.
 *  <b>`init_feed_dict`</b>: A dictionary that maps `Tensor` objects to feed values.
     This feed dictionary will be used when `init_op` is evaluated.
 *  <b>`local_init_op`</b>: `Operation`. Used by all supervisors to run initializations
@@ -1889,14 +1864,85 @@ Create a `Supervisor`.
 *  <b>`recovery_wait_secs`</b>: Number of seconds between checks that the model
     is ready.  Used by supervisors when waiting for a chief supervisor
     to initialize or restore the model.  Defaults to 30 seconds.
+*  <b>`stop_grace_secs`</b>: Grace period, in seconds, given to running threads to
+    stop when `stop()` is called.  Defaults to 120 seconds.
 *  <b>`checkpoint_basename`</b>: The basename for checkpoint saving.
 *  <b>`session_manager`</b>: `SessionManager`, which manages Session creation and
     recovery. If it is `None`, a default `SessionManager` will be created
     with the set of arguments passed in for backwards compatibility.
+*  <b>`summary_writer`</b>: `SummaryWriter` to use or `USE_DEFAULT`.  Can be `None`
+    to indicate that no summaries should be written.
+*  <b>`init_fn`</b>: Optional callable used to initialize the model. Called
+    after the optional `init_op` is called.  The callable must accept one
+    argument, the session being initialized.
 
 ##### Returns:
 
   A `Supervisor`.
+
+
+- - -
+
+#### `tf.train.Supervisor.managed_session(master='', config=None, start_standard_services=True)` {#Supervisor.managed_session}
+
+Returns a context manager for a managed session.
+
+This context manager creates and automatically recovers a session.  It
+optionally starts the standard services that handle checkpoints and
+summaries.  It monitors exceptions raised from the `with` block or from the
+services and stops the supervisor as needed.
+
+The context manager is typically used as follows:
+
+```python
+def train():
+  sv = tf.train.Supervisor(...)
+  with sv.managed_session(<master>) as sess:
+    for step in xrange(..):
+      if sv.should_stop():
+        break
+      sess.run(<my training op>)
+      ...do other things needed at each training step...
+```
+
+An exception raised from the `with` block or one of the service threads is
+raised again when the block exits.  This is done after stopping all threads
+and closing the session.  For example, an `AbortedError` exception, raised
+in case of preemption of one of the workers in a distributed model, is
+raised again when the block exits.
+
+If you want to retry the training loop in case of preemption you can do it
+as follows:
+
+```python
+def main(...):
+  while True
+    try:
+      train()
+    except tf.errors.Aborted:
+      pass
+```
+
+As a special case, exceptions used for control flow, such as
+`OutOfRangeError` which reports that input queues are exhausted, are not
+raised again from the `with` block: they indicate a clean termination of
+the training loop and are considered normal termination.
+
+##### Args:
+
+
+*  <b>`master`</b>: name of the TensorFlow master to use.  See the `tf.Session`
+    constructor for how this is interpreted.
+*  <b>`config`</b>: Optional `ConfigProto` proto used to configure the session.
+    Passed as-is to create the session.
+*  <b>`start_standard_services`</b>: Whether to start the standard services,
+    such as checkpoint, summary and step counter.
+
+##### Returns:
+
+  A context manager that yields a `Session` restored from the latest
+  checkpoint or initialized from scratch if not checkpoint exists.  The
+  session is closed when the `with` block exits.
 
 
 - - -
@@ -1913,15 +1959,15 @@ manager to start the standard services.
 ##### Args:
 
 
-*  <b>`master`</b>: name of the TensorFlow `master` to use.  If not specified or
-    empty a 'Direct Session' is created.
+*  <b>`master`</b>: name of the TensorFlow master to use.  See the `tf.Session`
+    constructor for how this is interpreted.
 *  <b>`config`</b>: Optional ConfigProto proto used to configure the session,
     which is passed as-is to create the session.
 *  <b>`wait_for_checkpoint`</b>: Whether we should wait for the availability of a
     checkpoint before creating Session. Defaults to False.
 *  <b>`max_wait_secs`</b>: Maximum time to wait for the session to become available.
-*  <b>`start_standard_services`</b>: Whether to start the standard services,
-    such as checkpoint, summary and step counter.
+*  <b>`start_standard_services`</b>: Whether to start the standard services and the
+    queue runners.
 
 ##### Returns:
 
@@ -1938,7 +1984,7 @@ This starts services in the background.  The services started depend
 on the parameters to the constructor and may include:
 
   - A Summary thread computing summaries every save_summaries_secs.
-  - A Checkpoint thread saving the model every every save_model_secs.
+  - A Checkpoint thread saving the model every save_model_secs.
   - A StepCounter thread measure step time.
 
 ##### Args:
@@ -1958,6 +2004,30 @@ on the parameters to the constructor and may include:
 *  <b>`RuntimeError`</b>: If called with a non-chief Supervisor.
 *  <b>`ValueError`</b>: If not `logdir` was passed to the constructor as the
     services need a log directory.
+
+
+- - -
+
+#### `tf.train.Supervisor.start_queue_runners(sess, queue_runners=None)` {#Supervisor.start_queue_runners}
+
+Start threads for `QueueRunners`.
+
+Note that the queue runners collected in the graph key `QUEUE_RUNNERS`
+are already started automatically when you create a session with the
+supervisor, so unless you have non-collected queue runners to start
+you do not need to call this explicitely.
+
+##### Args:
+
+
+*  <b>`sess`</b>: A `Session`.
+*  <b>`queue_runners`</b>: A list of `QueueRunners`. If not specified, we'll use the
+    list of queue runners gathered in the graph under the key
+    `GraphKeys.QUEUE_RUNNERS`.
+
+##### Returns:
+
+  The list of threads started for the `QueueRunners`.
 
 
 - - -
@@ -1994,13 +2064,13 @@ This does not close the session.
 
 
 *  <b>`threads`</b>: Optional list of threads to join with the coordinator.  If
-    `None`, defaults to the threads running the standard services plus the
-    threads started for `QueueRunners` if `start_queue_runners()` was
-    called.  To wait on an additional set of threads, pass the list in this
-    parameter and they will be merged with the internal list of running
-    services.
+    `None`, defaults to the threads running the standard services, the
+    threads started for `QueueRunners`, and the threads started by the
+    `loop()` method.  To wait on additional threads, pass the
+    list in this parameter.
 *  <b>`close_summary_writer`</b>: Whether to close the `summary_writer`.  Defaults to
-    `True`.
+    `True` if the summary writer was created by the supervisor, `False`
+    otherwise.
 
 
 - - -
@@ -2093,15 +2163,15 @@ manager to start the standard services.
 ##### Args:
 
 
-*  <b>`master`</b>: name of the TensorFlow `master` to use.  If not specified or
-    empty a 'Direct Session' is created.
+*  <b>`master`</b>: name of the TensorFlow master to use.  See the `tf.Session`
+    constructor for how this is interpreted.
 *  <b>`config`</b>: Optional ConfigProto proto used to configure the session,
     which is passed as-is to create the session.
 *  <b>`wait_for_checkpoint`</b>: Whether we should wait for the availability of a
     checkpoint before creating Session. Defaults to False.
 *  <b>`max_wait_secs`</b>: Maximum time to wait for the session to become available.
-*  <b>`start_standard_services`</b>: Whether to start the standard services,
-    such as checkpoint, summary and step counter.
+*  <b>`start_standard_services`</b>: Whether to start the standard services and the
+    queue runners.
 
 ##### Returns:
 
@@ -2143,6 +2213,11 @@ See `Coordinator.should_stop()`.
 
 Start threads for `QueueRunners`.
 
+Note that the queue runners collected in the graph key `QUEUE_RUNNERS`
+are already started automatically when you create a session with the
+supervisor, so unless you have non-collected queue runners to start
+you do not need to call this explicitely.
+
 ##### Args:
 
 
@@ -2166,7 +2241,7 @@ This starts services in the background.  The services started depend
 on the parameters to the constructor and may include:
 
   - A Summary thread computing summaries every save_summaries_secs.
-  - A Checkpoint thread saving the model every every save_model_secs.
+  - A Checkpoint thread saving the model every save_model_secs.
   - A StepCounter thread measure step time.
 
 ##### Args:
@@ -2200,13 +2275,13 @@ This does not close the session.
 
 
 *  <b>`threads`</b>: Optional list of threads to join with the coordinator.  If
-    `None`, defaults to the threads running the standard services plus the
-    threads started for `QueueRunners` if `start_queue_runners()` was
-    called.  To wait on an additional set of threads, pass the list in this
-    parameter and they will be merged with the internal list of running
-    services.
+    `None`, defaults to the threads running the standard services, the
+    threads started for `QueueRunners`, and the threads started by the
+    `loop()` method.  To wait on additional threads, pass the
+    list in this parameter.
 *  <b>`close_summary_writer`</b>: Whether to close the `summary_writer`.  Defaults to
-    `True`.
+    `True` if the summary writer was created by the supervisor, `False`
+    otherwise.
 
 
 - - -
@@ -2390,25 +2465,6 @@ Return the SessionManager used by the Supervisor.
 
 - - -
 
-#### `tf.train.Supervisor.start_queue_runners(sess, queue_runners=None)` {#Supervisor.start_queue_runners}
-
-Start threads for `QueueRunners`.
-
-##### Args:
-
-
-*  <b>`sess`</b>: A `Session`.
-*  <b>`queue_runners`</b>: A list of `QueueRunners`. If not specified, we'll use the
-    list of queue runners gathered in the graph under the key
-    `GraphKeys.QUEUE_RUNNERS`.
-
-##### Returns:
-
-  The list of threads started for the `QueueRunners`.
-
-
-- - -
-
 #### `tf.train.Supervisor.summary_op` {#Supervisor.summary_op}
 
 Return the Summary Tensor used by the chief supervisor.
@@ -2503,7 +2559,7 @@ be initialized or restored.  Defaults to 30 seconds.
 
 - - -
 
-#### `tf.train.SessionManager.prepare_session(master, init_op, saver=None, checkpoint_dir=None, wait_for_checkpoint=False, max_wait_secs=7200, config=None, init_feed_dict=None)` {#SessionManager.prepare_session}
+#### `tf.train.SessionManager.prepare_session(master, init_op=None, saver=None, checkpoint_dir=None, wait_for_checkpoint=False, max_wait_secs=7200, config=None, init_feed_dict=None, init_fn=None)` {#SessionManager.prepare_session}
 
 Creates a `Session`. Makes sure the model is ready to be used.
 
@@ -2514,8 +2570,10 @@ no checkpoint files are available, and `wait_for_checkpoint` is
 `True`, then the process would check every `recovery_wait_secs`,
 up to `max_wait_secs`, for recovery to succeed.
 
-If the model cannot be recovered successfully, and an `init_op`
-is not `None`, the `init_op` is run to initialize the model.
+If the model cannot be recovered successfully then it is initialized by
+either running the provided `init_op`, or calling the provided `init_fn`.
+It is an error if the model cannot be recovered and neither an `init_op`
+or an `init_fn` are passed.
 
 This is a convenient function for the following, with a few error checks
 added:
@@ -2523,7 +2581,10 @@ added:
 ```python
 sess, initialized = self.recover_session(master)
 if not initialized:
-  sess.run(self.init_op)
+  if init_op:
+    sess.run(init_op, feed_dict=init_feed_dict)
+  if init_fn;
+    init_fn(sess)
 return sess
 ```
 
@@ -2531,14 +2592,18 @@ return sess
 
 
 *  <b>`master`</b>: `String` representation of the TensorFlow master to use.
-*  <b>`init_op`</b>: `Operation` used to to initialize the model.
+*  <b>`init_op`</b>: Optional `Operation` used to initialize the model.
 *  <b>`saver`</b>: A `Saver` object used to restore a model.
 *  <b>`checkpoint_dir`</b>: Path to the checkpoint files.
 *  <b>`wait_for_checkpoint`</b>: Whether to wait for checkpoint to become available.
 *  <b>`max_wait_secs`</b>: Maximum time to wait for checkpoints to become available.
 *  <b>`config`</b>: Optional `ConfigProto` proto used to configure the session.
-*  <b>`init_feed_dict`</b>: A dictionary that maps `Tensor` objects to feed values.
-    This feed dictionary will be used when `init_op` is evaluated.
+*  <b>`init_feed_dict`</b>: Optional dictionary that maps `Tensor` objects to feed
+    values.  This feed dictionary is passed to the session `run()` call when
+    running the init op.
+*  <b>`init_fn`</b>: Optional callable used to initialize the model. Called after the
+    optional `init_op` is called.  The callable must accept one argument,
+    the session being initialized.
 
 ##### Returns:
 
@@ -2836,6 +2901,44 @@ build the `tag` of the summary values:
 *  <b>`tensor`</b>: A 4-D `uint8` or `float32` `Tensor` of shape `[batch_size, height,
     width, channels]` where `channels` is 1, 3, or 4.
 *  <b>`max_images`</b>: Max number of batch elements to generate images for.
+*  <b>`collections`</b>: Optional list of ops.GraphKeys.  The collections to add the
+    summary to.  Defaults to [ops.GraphKeys.SUMMARIES]
+*  <b>`name`</b>: A name for the operation (optional).
+
+##### Returns:
+
+  A scalar `Tensor` of type `string`. The serialized `Summary` protocol
+  buffer.
+
+
+- - -
+
+### `tf.audio_summary(tag, tensor, sample_rate, max_outputs=3, collections=None, name=None)` {#audio_summary}
+
+Outputs a `Summary` protocol buffer with audio.
+
+The summary has up to `max_outputs` summary values containing audio. The
+audio is built from `tensor` which must be 3-D with shape `[batch_size,
+frames, channels]` or 2-D with shape `[batch_size, frames]`. The values are
+assumed to be in the range of `[-1.0, 1.0]` with a sample rate of
+`sample_rate`.
+
+The `tag` argument is a scalar `Tensor` of type `string`.  It is used to
+build the `tag` of the summary values:
+
+*  If `max_outputs` is 1, the summary value tag is '*tag*/audio'.
+*  If `max_outputs` is greater than 1, the summary value tags are
+   generated sequentially as '*tag*/audio/0', '*tag*/audio/1', etc.
+
+##### Args:
+
+
+*  <b>`tag`</b>: A scalar `Tensor` of type `string`. Used to build the `tag`
+    of the summary values.
+*  <b>`tensor`</b>: A 3-D `float32` `Tensor` of shape `[batch_size, frames, channels]`
+    or a 2-D `float32` `Tensor` of shape `[batch_size, frames]`.
+*  <b>`sample_rate`</b>: The sample rate of the signal in hertz.
+*  <b>`max_outputs`</b>: Max number of batch elements to generate audio for.
 *  <b>`collections`</b>: Optional list of ops.GraphKeys.  The collections to add the
     summary to.  Defaults to [ops.GraphKeys.SUMMARIES]
 *  <b>`name`</b>: A name for the operation (optional).
@@ -3452,33 +3555,6 @@ Called when the thread stops.
 
 - - -
 
-### `tf.train.export_meta_graph(filename=None, meta_info_def=None, graph_def=None, saver_def=None, collection_list=None, as_text=False)` {#export_meta_graph}
-
-Returns `MetaGraphDef` proto. Optionally writes it to filename.
-
-This function exports the graph, saver, and collection objects into
-`MetaGraphDef` protocol buffer with the intension of it being imported
-at a later time or location to restart training, run inference, or be
-a subgraph.
-
-##### Args:
-
-
-*  <b>`filename`</b>: Optional filename including the path for writing the
-    generated `MetaGraphDef` protocol buffer.
-*  <b>`meta_info_def`</b>: `MetaInfoDef` protocol buffer.
-*  <b>`graph_def`</b>: `GraphDef` protocol buffer.
-*  <b>`saver_def`</b>: `SaverDef` protocol buffer.
-*  <b>`collection_list`</b>: List of string keys to collect.
-*  <b>`as_text`</b>: If `True`, writes the `MetaGraphDef` as an ASCII proto.
-
-##### Returns:
-
-  A `MetaGraphDef` proto.
-
-
-- - -
-
 ### `tf.train.generate_checkpoint_state_proto(save_dir, model_checkpoint_path, all_model_checkpoint_paths=None)` {#generate_checkpoint_state_proto}
 
 Generates a checkpoint state proto.
@@ -3498,73 +3574,5 @@ Generates a checkpoint state proto.
   CheckpointState proto with model_checkpoint_path and
   all_model_checkpoint_paths updated to either absolute paths or
   relative paths to the current save_dir.
-
-
-- - -
-
-### `tf.train.import_meta_graph(meta_graph_or_file)` {#import_meta_graph}
-
-Recreates a Graph saved in a `MetaGraphDef` proto.
-
-This function takes a `MetaGraphDef` protocol buffer as input. If
-the argument is a file containing a `MetaGraphDef` protocol buffer ,
-it constructs a protocol buffer from the file content. The function
-then adds all the nodes from the `graph_def` field to the
-current graph, recreates all the collections, and returns a saver
-constructed from the `saver_def` field.
-
-In combination with `export_meta_graph()`, this function can be used to
-
-* Serialize a graph along with other Python objects such as `QueueRunner`,
-  `Variable` into a `MetaGraphDef`.
-
-* Restart training from a saved graph and checkpoints.
-
-* Run inference from a saved graph and checkpoints.
-
-```Python
-...
-# Create a saver.
-saver = tf.train.Saver(...variables...)
-# Remember the training_op we want to run by adding it to a collection.
-tf.add_to_collection('train_op', train_op)
-sess = tf.Session()
-for step in xrange(1000000):
-    sess.run(train_op)
-    if step % 1000 == 0:
-        # Saves checkpoint, which by default also exports a meta_graph
-        # named 'my-model-global_step.meta'.
-        saver.save(sess, 'my-model', global_step=step)
-```
-
-Later we can continue training from this saved `meta_graph` without building
-the model from scratch.
-
-```Python
-with tf.Session() as sess:
-  new_saver = tf.train.import_meta_graph('my-save-dir/my-model-10000.meta')
-  new_saver.restore(sess, 'my-save-dir/my-model-10000')
-  # tf.get_collection() returns a list. In this example we only want the
-  # first one.
-  train_op = tf.get_collection('train_op')[0]
-  for step in xrange(1000000):
-    sess.run(train_op)
-```
-
-NOTE: Restarting training from saved `meta_graph` only works if the
-device assignments have not changed.
-
-##### Args:
-
-
-*  <b>`meta_graph_or_file`</b>: `MetaGraphDef` protocol buffer or filename (including
-    the path) containing a `MetaGraphDef`.
-
-##### Returns:
-
-  A saver constructed from `saver_def` in `MetaGraphDef` or None.
-
-  A None value is returned if no variables exist in the `MetaGraphDef`
-  (i.e., there are no variables to restore).
 
 
