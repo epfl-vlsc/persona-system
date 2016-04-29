@@ -22,7 +22,7 @@ from __future__ import print_function
 from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
-from tensorflow.python.framework import ops
+from tensorflow.python.framework import ops, tensor_shape
 from tensorflow.python.ops import common_shapes
 from tensorflow.python.ops import io_ops
 
@@ -47,37 +47,36 @@ def FASTQDecoder(value):
 ops.NoGradient("FASTQDecoder")
 
 class DenseReader(io_ops.ReaderBase):
-    def __init__(self, name=None):
-      rr = gen_user_ops.dense_reader(name=name)
+    def __init__(self, chunk_size, parallel, buffering, name=None):
+      rr = gen_user_ops.dense_reader(name=name, batch_size=chunk_size,
+                                     parallel=parallel, buffer=buffering)
       super(DenseReader, self).__init__(rr)
 ops.NoGradient("DenseReader")
 ops.RegisterShape("DenseReader")(common_shapes.scalar_shape)
 
-@ops.RegisterShape("FASTQDecoder")
-def _FASTQDecoderShape(op):  # pylint: disable=invalid-name
-  """Shape function for the FASTQDecoder op."""
-  input_shape = op.inputs[0].get_shape()
-  # Optionally check that all of other inputs are scalar or empty.
-  for default_input in op.inputs[1:]:
-    default_input_shape = default_input.get_shape().with_rank(1)
-    if default_input_shape[0] > 1:
-      raise ValueError(
-          "Shape of a default must be a length-0 or length-1 vector.")
-  return [input_shape] * len(op.outputs)
-
 @ops.RegisterShape("DenseAggregator")
 def _DenseAggregatorShape(op): # pylint: disable=invalid-name
-  input_flat_shape = op.inputs[0].get_shape()
-  for other in op.inputs[1:]:
-    if other.get_shape() != input_flat_shape:
-      raise ValueError("Flat shapes on DenseAggregators must be equal.")
-  return [input_flat_shape]
+  # TODO this is such a hack
+  return [tensor_shape.unknown_shape()]
 
 def DenseAggregator(bases, qualities, metadata):
   return gen_user_ops.dense_aggregator(bases=bases,
                                        qualities=qualities,
                                        metadata=metadata)
 ops.NoGradient("DenseAggregator")
+
+
+def MakeDenseAggregator(base_files, quality_files, metadata_files, chunk_size, parallel=3, buffering=2):
+  import ipdb; ipdb.set_trace()
+  def make_dense():
+    return DenseReader(chunk_size=chunk_size, parallel=parallel, buffering=buffering)
+  _, base_reads = make_dense().read_batch(base_files)
+  _, quality_reads = make_dense().read_batch(quality_files)
+  _, metadata_reads = make_dense().read_batch(metadata_files)
+  return DenseAggregator(bases=base_reads,
+                         qualities=quality_reads,
+                         metadata=metadata_reads)
+ops.NoGradient("MakeDenseAggregator")
 
 class SAMWriter(io_ops.WriterBase):
 
