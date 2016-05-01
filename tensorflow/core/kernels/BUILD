@@ -199,16 +199,6 @@ cc_library(
 )
 
 cc_library(
-    name = "reader_async_base",
-    srcs = ["reader_async_base.cc"],
-    hdrs = ["reader_async_base.h"],
-    deps = [
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-    ],
-)
-
-cc_library(
     name = "save_restore_tensor",
     srcs = ["save_restore_tensor.cc"],
     hdrs = ["save_restore_tensor.h"],
@@ -783,7 +773,6 @@ tf_kernel_libraries(
     deps = [
         ":ops_util",
         ":reader_base",
-        ":reader_async_base",
         ":writer_base",
         ":writer_async_base",
         ":save_restore_tensor",
