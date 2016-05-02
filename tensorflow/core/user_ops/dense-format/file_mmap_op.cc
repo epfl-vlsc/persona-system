@@ -58,15 +58,16 @@ namespace tensorflow {
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
 
-      auto creator = [filename, ctx](MemoryMappedFile **mmf) {
+      auto creator = [this, filename, ctx](MemoryMappedFile **mmf) {
         ReadOnlyMemoryRegion *rmr;
         TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
         shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr); 
+        PrimeRegion(static_cast<const char*>(rmr->data()), rmr->length());
         *mmf = new MemoryMappedFile(shared_rmr);
         return Status::OK();
       };
 
-      string key("mapped_file: " + filename);
+      string key(filename);
       MemoryMappedFile *mmf;
       OP_REQUIRES_OK(ctx,
                      cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
@@ -78,11 +79,17 @@ namespace tensorflow {
 
       Tensor *output_tensor;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({2}), &output_tensor));
-      auto flat = output_tensor->flat<string>();
-      flat(0) = cinfo.container();
-      flat(1) = key;
+      MappedFileRef container_ref(output_tensor);
+      container_ref.SetName(key);
+      container_ref.SetContainer(cinfo.container());
     }
   private:
+    void PrimeRegion(const char *data, const size_t length, const size_t step_size=4096) {
+      char j = 0;
+      for (size_t i = 0; i < length; i+=step_size) {
+        j += data[i];
+      }
+    }
   };
 
   REGISTER_KERNEL_BUILDER(Name("FileMMap").Device(DEVICE_CPU), FileMMapOp);
