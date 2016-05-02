@@ -1,6 +1,7 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
-#include "file_processor_base.h"
+#include "shared_mmap_file_resource.h"
+#include "tensorflow/core/framework/op_kernel.h"
 #include "format.h"
 #include "decompress.h"
 #include <vector>
@@ -11,7 +12,7 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("batch_size: int")
-  .Input("file_handle: string")
+  .Input("file_set_handle: string")
   .Output("buffer_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
@@ -20,15 +21,30 @@ Reads the dense stuff
 
   using namespace std;
 
-  class DenseReader : public FileProcessorBase {
+  class DenseReader : public OpKernel {
   public:
-    DenseReader(OpKernelConstruction *context) : FileProcessorBase(context) {
+    DenseReader(OpKernelConstruction *context) : OpKernel(context) {
       using namespace errors;
       int batch_size;
       OP_REQUIRES_OK(context, context->GetAttr("batch_size",
                                                &batch_size));
       batch_size_ = batch_size;
       OP_REQUIRES(context, batch_size > 0, InvalidArgument("DenseReaderOp: batch_size must be >0 - ", batch_size));
+    }
+
+    void Compute(OpKernelContext* ctx) override {
+      using namespace errors;
+      const Tensor *fileset;
+      OP_REQUIRES_OK(ctx, ctx->input("file_set_handle", &fileset));
+      OP_REQUIRES(ctx, fileset->shape() == TensorShape({3,2}), InvalidArgument("Tensorshape is incorrect for dense reader op"));
+
+      auto fileset_mat = fileset->matrix<string>();
+      const auto &base_container = fileset_mat(0,0);
+      const auto &base_name = fileset_mat(0,1);
+      const auto &quality_container = fileset_mat(1,0);
+      const auto &quality_name = fileset_mat(1,1);
+      const auto &metadata_container = fileset_mat(2,0);
+      const auto &metadata_name = fileset_mat(2,1);
     }
   protected:
     Status ReadStandardRecord(string *result, const char* record, const size_t length) {
@@ -42,7 +58,7 @@ Reads the dense stuff
     }
 
     Status
-    ProcessFile(MemoryMappedFile &mmf, OpKernelContext *ctx) override
+    ProcessFile(MemoryMappedFile &mmf, OpKernelContext *ctx)
     {
       using namespace format;
       using namespace errors;
