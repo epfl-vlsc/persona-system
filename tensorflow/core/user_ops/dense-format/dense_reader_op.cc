@@ -16,6 +16,7 @@ namespace tensorflow {
   .Attr("batch_size: int")
   .Input("file_handle: string")
   .Output("records: string")
+  .Output("record_count: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Reads the dense stuff
@@ -67,6 +68,11 @@ Reads the dense stuff
       for (; i < batch_size_; i++ ) {
         flat(i) = "";
       }
+
+      Tensor *size_tensor = nullptr;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("record_size", TensorShape({}), &output));
+      auto size_tensor_scalar = size_tensor->scalar<int>();
+      size_tensor_scalar() = num_records;
     }
 
   private:

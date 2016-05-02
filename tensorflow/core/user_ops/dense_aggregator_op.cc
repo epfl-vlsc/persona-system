@@ -8,8 +8,11 @@ namespace tensorflow {
 
   REGISTER_OP("DenseAggregator")
     .Input("bases: string")
+    .Input("bases_count: int32")
     .Input("qualities: string")
+    .Input("qualities_count: int32")
     .Input("metadata: string")
+    .Input("metadata_count: int32")
     .Output("read_record: string")
     .Doc(R"doc(
       An op that aggregates three streams from the DenseFile format and outputs
@@ -26,34 +29,36 @@ public:
 
   void Compute(OpKernelContext* ctx) override {
     using namespace std;
+    using namespace errors;
 
-    const Tensor *bases, *qualities, *metadata;
+    const Tensor *bases, *bases_size, *qualities, *qualities_size, *metadata, *metadata_size;
     OP_REQUIRES_OK(ctx, ctx->input("bases", &bases));
     OP_REQUIRES_OK(ctx, ctx->input("qualities", &qualities));
     OP_REQUIRES_OK(ctx, ctx->input("metadata", &metadata));
+    OP_REQUIRES_OK(ctx, ctx->input("bases_count", &bases_size));
+    OP_REQUIRES_OK(ctx, ctx->input("qualities_count", &qualities_size));
+    OP_REQUIRES_OK(ctx, ctx->input("metadata_count", &metadata_size));
 
     // Now verify that they are all the same dimension
     // Might be able to not worry about this for now, but let's just assume this
     OP_REQUIRES(ctx, bases->IsSameSize(*qualities) && bases->IsSameSize(*metadata),
-                errors::InvalidArgument("Unequal DenseAggregator Shapes\nBases: ",
+                InvalidArgument("Unequal DenseAggregator Shapes\nBases: ",
                                         bases->DebugString(), "\nQualities: ",
                                         qualities->DebugString(), "\nMetadata: ",
                                         metadata->DebugString()));
 
-    auto flat_bases = bases->vec<string>();
-    auto flat_qualities = qualities->vec<string>();
-    auto flat_metadata = metadata->vec<string>();
+    // TODO enforce shape on the count things?
+    auto bases_count = bases_size->scalar<int32>()();
+    auto qualities_count = qualities_size->scalar<int32>()();
+    auto metadata_count = metadata_size->scalar<int32>()();
 
-    Tensor* output_tensor = nullptr;
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({3, 2}), &output_tensor));
+    OP_REQUIRES(ctx, bases_count == qualities_count && bases_count == metadata_count,
+                Internal("Differing counts for actual records:\nBases: ", bases_count, ", Qualities: ", qualities_count, ", Metadata: ", metadata_count));
 
-    auto output = output_tensor->matrix<string>();
-    output(0, 0) = flat_bases(0);
-    output(0, 1) = flat_bases(1);
-    output(1, 0) = flat_qualities(0);
-    output(1, 1) = flat_qualities(1);
-    output(2, 0) = flat_metadata(0);
-    output(2, 1) = flat_metadata(1);
+    Tensor *output = nullptr;
+    //OP_REQUIRES_OK(ctx, ctx->allocate_output("read_record", TensorShape(3)))
+    // Assign the metadata, qualities, and bases to be in the output
+    // as slices
   }
 };
 
