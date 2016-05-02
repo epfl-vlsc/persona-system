@@ -10,7 +10,6 @@
 #include "tensorflow/core/framework/resource_mgr.h"
 
 namespace tensorflow {
-
   /*
     Just a convenience class to track a read-only memory region throughout the execution context.
    */
@@ -24,6 +23,7 @@ namespace tensorflow {
 
     string DebugString() override;
 
+    ReadOnlyMemoryRegion* get();
   private:
        ResourceHandle file_;
   };

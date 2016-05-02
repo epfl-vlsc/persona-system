@@ -45,18 +45,15 @@ public:
     auto flat_metadata = metadata->vec<string>();
 
     Tensor* output_tensor = nullptr;
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({bases->dim_size(0), 3}), &output_tensor));
+    OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({3, 2}), &output_tensor));
 
-    //OP_REQUIRES(ctx, output_tensor->CopyFrom(*read, read->shape()),
-    //            errors::InvalidArgument("DecodeFastq copy failed, input shape was ", 
-    //                                    read->shape().DebugString()));
-    MutableSnapReadDecode reads(output_tensor);
-
-    for (size_t i = 0; i < reads.size(); ++i) {
-      reads.set_bases(i, flat_bases(i));
-      reads.set_metadata(i, flat_metadata(i));
-      reads.set_qualities(i, flat_qualities(i));
-    }
+    auto output = output_tensor->matrix<string>();
+    output(0, 0) = flat_bases(0);
+    output(0, 1) = flat_bases(1);
+    output(1, 0) = flat_qualities(0);
+    output(1, 1) = flat_qualities(1);
+    output(2, 0) = flat_metadata(0);
+    output(2, 1) = flat_metadata(1);
   }
 };
 

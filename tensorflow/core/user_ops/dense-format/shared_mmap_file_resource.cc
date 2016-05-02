@@ -14,6 +14,11 @@ namespace tensorflow {
       return file_.get();
     }
 
+    ReadOnlyMemoryRegion* MemoryMappedFile::get()
+    {
+      return file_.get();
+    }
+
     string MemoryMappedFile::DebugString()
     {
       return "a Memory Mapped File";

@@ -77,10 +77,10 @@ namespace tensorflow {
                                                                                  ));
 
       Tensor *output_tensor;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({1}), &output_tensor));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({2}), &output_tensor));
       auto flat = output_tensor->flat<string>();
       flat(0) = cinfo.container();
-      flat(1) = cinfo.name();
+      flat(1) = key;
     }
   private:
   };
