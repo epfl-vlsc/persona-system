@@ -48,14 +48,14 @@ ops.NoGradient("FASTQDecoder")
 
 def DenseReader(file_handle, batch_size):
   return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size)
+
 ops.NoGradient("DenseReader")
 @ops.RegisterShape("DenseReader")
 def _DenseReaderShape(op):
-  import ipdb; ipdb.set_trace()
   # just force the input to be a vector (will raise an exception if incorrect)
   input_shape = op.inputs[0].get_shape().with_rank(1)
   batch_size = op.get_attr("batch_size")
-  return [tensor_shape.TensorShape([batch_size]), common_shapes.scalar_shape]
+  return [tensor_shape.TensorShape([batch_size]), tensor_shape.scalar()]
 
 def DenseAggregator(bases, bases_count, qualities, qualities_count, metadata, metadata_count):
   return gen_user_ops.dense_aggregator(bases=bases,
@@ -86,7 +86,7 @@ def _DenseAggregatorShape(op): # pylint: disable=invalid-name
 ops.NoGradient("DenseAggregator")
 
 def FileMMap(queue):
-  return gen_user_ops.file_mmap(queue_handle=queue)
+  return gen_user_ops.file_m_map(queue_handle=queue)
 
 @ops.RegisterShape("FileMMap")
 def _FileMMapSHape(op):

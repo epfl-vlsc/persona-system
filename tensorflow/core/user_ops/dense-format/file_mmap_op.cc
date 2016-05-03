@@ -43,6 +43,7 @@ namespace tensorflow {
       if (!ctx->status().ok()) {
         return ctx->status();
       }
+      return Status::OK();
     }
 
     void Compute(OpKernelContext* ctx) override {
