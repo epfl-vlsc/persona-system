@@ -48,7 +48,7 @@ const string& MappedFileRef::GetName()
 void MappedFileRef::SetName(const string& name)
 {
   auto info = ref_tensor_->vec<string>();
-  info(kContainer) = name;
+  info(kName) = name;
 }
 
 ReadOnlyFileRef::ReadOnlyFileRef(const Tensor *ref_tensor) :

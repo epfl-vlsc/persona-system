@@ -68,12 +68,11 @@ namespace tensorflow {
         return Status::OK();
       };
 
-      string key(filename);
       MemoryMappedFile *mmf;
       OP_REQUIRES_OK(ctx,
                      cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
                                                                                  cinfo.container(),
-                                                                                 key,
+                                                                                 filename,
                                                                                  &mmf,
                                                                                  creator
                                                                                  ));
@@ -81,7 +80,7 @@ namespace tensorflow {
       Tensor *output_tensor;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({2}), &output_tensor));
       MappedFileRef container_ref(output_tensor);
-      container_ref.SetName(key);
+      container_ref.SetName(filename);
       container_ref.SetContainer(cinfo.container());
     }
   private:

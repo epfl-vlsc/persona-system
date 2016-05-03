@@ -11,8 +11,6 @@
 namespace tensorflow {
 
   REGISTER_OP("DenseReader")
-  .Attr("container: string = ''")
-  .Attr("shared_name: string = ''")
   .Attr("batch_size: int")
   .Input("file_handle: string")
   .Output("records: string")
