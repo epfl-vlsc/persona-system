@@ -29,7 +29,6 @@ namespace tensorflow {
 
     auto payload_start = data + file_header->segment_start;
     auto payload_size = length - file_header->segment_start;
-    auto data_start_idx = file_header->segment_start;
 
     Status status;
     if (static_cast<CompressionType>(file_header->compression_type) == CompressionType::BZIP2) {
@@ -39,33 +38,33 @@ namespace tensorflow {
     }
     TF_RETURN_IF_ERROR(status);
 
-    const uint64_t index_size = file_header->last_ordinal - file_header->first_ordinal;
-    if (buffer_.size() - data_start_idx < index_size * 2) {
-      return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", buffer_.size() - data_start_idx);
+    const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
+    if (buffer_.size() < index_size * 2) {
+      return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", buffer_.size());
     } /* else if (index_size > batch_size_) {
       return Internal("FillBuffer: decompressed a chunk with ", index_size, " elements, but maximum batch size is ", batch_size_);
       } */
 
-    records = reinterpret_cast<const RecordTable*>(&buffer_[data_start_idx]);
+    records = reinterpret_cast<const RecordTable*>(buffer_.data());
     size_t data_size = 0;
     for (uint64_t i = 0; i < index_size; ++i) {
       data_size += records->relative_index[i];
     }
 
-    const size_t expected_size = buffer_.size() - (data_start_idx + index_size);
+    const size_t expected_size = buffer_.size() - index_size;
     if (data_size != expected_size) {
       if (data_size < expected_size) {
-        return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found",
+        return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
                                     data_size, " bytes");
         } else {
-          return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found",
+          return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
                                     data_size, " bytes");
         }
       }
 
     total_records_ = index_size;
     current_record_ = 0;
-    current_offset_ = data_start_idx;
+    current_offset_ = index_size;
     file_header_ = *file_header;
 
     return Status::OK();

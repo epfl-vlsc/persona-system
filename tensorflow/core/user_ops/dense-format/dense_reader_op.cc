@@ -43,7 +43,7 @@ Reads the dense stuff
       ReadOnlyFileRef file_handle(fileset);
 
       MemoryMappedFile *dense_file;
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, file_handle.GetName(), &dense_file));
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
       core::ScopedUnref unref_me(dense_file);
       auto dense_mapping = dense_file->GetMappedRegion();
 
@@ -68,7 +68,7 @@ Reads the dense stuff
       }
 
       Tensor *size_tensor = nullptr;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("record_size", TensorShape({}), &output));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("record_count", TensorShape({}), &size_tensor));
       auto size_tensor_scalar = size_tensor->scalar<int>();
       size_tensor_scalar() = num_records;
     }
