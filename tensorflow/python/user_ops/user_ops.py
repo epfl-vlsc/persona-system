@@ -57,34 +57,6 @@ def _DenseReaderShape(op):
   batch_size = op.get_attr("batch_size")
   return [tensor_shape.TensorShape([batch_size]), tensor_shape.scalar()]
 
-def DenseAggregator(bases, bases_count, qualities, qualities_count, metadata, metadata_count):
-  return gen_user_ops.dense_aggregator(bases=bases,
-                                       bases_count=bases_count,
-                                       qualities=qualities,
-                                       qualities_count=qualities_count,
-                                       metadata=metadata,
-                                       metadata_count=metadata_count)
-
-@ops.RegisterShape("DenseAggregator")
-def _DenseAggregatorShape(op): # pylint: disable=invalid-name
-  # TODO this is such a hack
-  bases = op.inputs[0]
-  base_count = op.inputs[1]
-  qualities = op.inputs[2]
-  qualities_count = op.inputs[3]
-  metadata = op.inputs[4]
-  metadata_count = op.inputs[5]
-
-  base_count_force = base_count.get_shape().with_rank(0)
-  qualities_count_force = qualities_count.get_shape().with_rank(0)
-  metadata_count_force = metadata_count.get_shape().with_rank(0)
-  bases_force = bases.get_shape().with_rank(1)
-  qualities_force = qualities.get_shape().with_rank(1)
-  metadata_force = metadata.get_shape().with_rank(1)
-
-  return [tensor_shape.TensorShape([3, bases_force[0]])]
-ops.NoGradient("DenseAggregator")
-
 def FileMMap(queue):
   return gen_user_ops.file_m_map(queue_handle=queue)
 
