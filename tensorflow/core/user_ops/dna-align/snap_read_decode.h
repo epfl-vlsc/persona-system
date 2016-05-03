@@ -25,7 +25,7 @@ class SnapReadDecode {
 
     int bases_len(int batch_index);
    
-    size_t size() { return read_tensor_->dim_size(0); }
+    size_t size() { return read_tensor_->dim_size(1); }
 
   private:
     static const int kBases = 0;
@@ -55,9 +55,15 @@ class MutableSnapReadDecode {
 
     int bases_len(int batch_index);
 
-    size_t size() { return read_tensor_->dim_size(0); }
+    size_t size() { return read_tensor_->dim_size(1); }
+
+    bool set_all_bases(const Tensor &bases);
+    bool set_all_qualities(const Tensor &qualities);
+    bool set_all_metadata(const Tensor &metadata);
 
   private:
+    bool valid_vector(const Tensor &bases);
+
     static const int kBases = 0;
     static const int kQualities = 1;
     static const int kMetadata = 2;

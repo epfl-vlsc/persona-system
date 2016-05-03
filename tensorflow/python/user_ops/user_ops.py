@@ -46,13 +46,14 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-class DenseReader(io_ops.ReaderBase):
-    def __init__(self, chunk_size, parallel, buffering, name=None):
-      rr = gen_user_ops.dense_reader(name=name, batch_size=chunk_size,
-                                     parallel=parallel, buffer=buffering)
-      super(DenseReader, self).__init__(rr)
+def DenseReader(batch_size):
+  return gen_user_ops.dense_reader(batch_size=batch_size)
 ops.NoGradient("DenseReader")
-ops.RegisterShape("DenseReader")(common_shapes.scalar_shape)
+@ops.RegisterShape("DenseReader")
+def _DenseReaderShape(op):
+  import ipdb; ipdb.set_trace()
+  return [tensor.unknown_shape()]
+# TODO this is not the right shape
 
 @ops.RegisterShape("DenseAggregator")
 def _DenseAggregatorShape(op): # pylint: disable=invalid-name
@@ -65,18 +66,10 @@ def DenseAggregator(bases, qualities, metadata):
                                        metadata=metadata)
 ops.NoGradient("DenseAggregator")
 
-
-def MakeDenseAggregator(base_files, quality_files, metadata_files, chunk_size, parallel=3, buffering=2):
-  import ipdb; ipdb.set_trace()
-  def make_dense():
-    return DenseReader(chunk_size=chunk_size, parallel=parallel, buffering=buffering)
-  _, base_reads = make_dense().read_batch(base_files)
-  _, quality_reads = make_dense().read_batch(quality_files)
-  _, metadata_reads = make_dense().read_batch(metadata_files)
-  return DenseAggregator(bases=base_reads,
-                         qualities=quality_reads,
-                         metadata=metadata_reads)
-ops.NoGradient("MakeDenseAggregator")
+def FileMMap(queue):
+  return gen_user_ops.file_mmap(queue_handle=queue)
+ops.NoGradient("FileMMap")
+ops.RegisterShape("FileMMap")(common_shapes.scalar_shape)
 
 class SAMWriter(io_ops.WriterBase):
 

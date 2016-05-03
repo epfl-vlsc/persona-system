@@ -39,6 +39,9 @@ public:
     OP_REQUIRES_OK(ctx, ctx->input("qualities_count", &qualities_size));
     OP_REQUIRES_OK(ctx, ctx->input("metadata_count", &metadata_size));
 
+    OP_REQUIRES(ctx, TensorShapeUtils::IsVector(bases->shape()) && TensorShapeUtils::IsVector(qualities->shape()) && TensorShapeUtils::IsVector(metadata->shape()),
+                InvalidArgument("Not all inputs are vectors"));
+
     // Now verify that they are all the same dimension
     // Might be able to not worry about this for now, but let's just assume this
     OP_REQUIRES(ctx, bases->IsSameSize(*qualities) && bases->IsSameSize(*metadata),
@@ -56,9 +59,14 @@ public:
                 Internal("Differing counts for actual records:\nBases: ", bases_count, ", Qualities: ", qualities_count, ", Metadata: ", metadata_count));
 
     Tensor *output = nullptr;
-    //OP_REQUIRES_OK(ctx, ctx->allocate_output("read_record", TensorShape(3)))
-    // Assign the metadata, qualities, and bases to be in the output
-    // as slices
+    OP_REQUIRES_OK(ctx, ctx->allocate_output("read_record", TensorShape({3, bases->dim_size(0)}), &output));
+    MutableSnapReadDecode output_matrix(output);
+    OP_REQUIRES(ctx, output_matrix.set_all_bases(*bases),
+               Internal("Unable to set the bases in DenseAggregator"));
+    OP_REQUIRES(ctx, output_matrix.set_all_qualities(*qualities),
+               Internal("Unable to set the qualities in DenseAggregator"));
+    OP_REQUIRES(ctx, output_matrix.set_all_metadata(*metadata),
+               Internal("Unable to set the metadata in DenseAggregator"));
   }
 };
 
