@@ -42,35 +42,42 @@ Reads the dense stuff
 
       ReadOnlyFileRef file_handle(fileset);
 
-      MemoryMappedFile *dense_file;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
-      core::ScopedUnref unref_me(dense_file);
-      auto dense_mapping = dense_file->GetMappedRegion();
+      { // for the scoped unref
+        MemoryMappedFile *dense_file;
+        OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
+        core::ScopedUnref unref_me(dense_file);
+        auto dense_mapping = dense_file->GetMappedRegion();
 
-      OP_REQUIRES_OK(ctx, data_buffer_.ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
+        OP_REQUIRES_OK(ctx, data_buffer_.ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
 
-      auto num_records = data_buffer_.RecordCount();
-      OP_REQUIRES(ctx, num_records <= batch_size_,
-                  Internal("Record Count ", num_records,
-                           " exceeds batch size ", batch_size_));
-      Tensor *output = nullptr;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("records", TensorShape({batch_size_}), &output));
-      auto flat = output->vec<string>();
+        auto num_records = data_buffer_.RecordCount();
+        OP_REQUIRES(ctx, num_records <= batch_size_,
+                    Internal("Record Count ", num_records,
+                            " exceeds batch size ", batch_size_));
+        Tensor *output = nullptr;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("records", TensorShape({batch_size_}), &output));
+        auto flat = output->vec<string>();
 
-      size_t i = 0;
-      string s;
-      for (; i < num_records; i++) {
-        OP_REQUIRES_OK(ctx, data_buffer_.GetNextRecord(&s));
-        flat(i) = s;
+        size_t i = 0;
+        string s;
+        for (; i < num_records; i++) {
+          OP_REQUIRES_OK(ctx, data_buffer_.GetNextRecord(&s));
+          flat(i) = s;
+        }
+        for (; i < batch_size_; i++ ) {
+          flat(i) = "";
+        }
+
+        Tensor *size_tensor = nullptr;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("record_count", TensorShape({}), &size_tensor));
+        auto size_tensor_scalar = size_tensor->scalar<int>();
+        size_tensor_scalar() = num_records;
+        while (!dense_file->RefCountIsOne()) {
+          dense_file->Unref();
+        }
+        dense_file->Ref(); // what a hack :(
       }
-      for (; i < batch_size_; i++ ) {
-        flat(i) = "";
-      }
-
-      Tensor *size_tensor = nullptr;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("record_count", TensorShape({}), &size_tensor));
-      auto size_tensor_scalar = size_tensor->scalar<int>();
-      size_tensor_scalar() = num_records;
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Delete<MemoryMappedFile>(file_handle.GetContainer(), file_handle.GetName()));
     }
 
   private:
