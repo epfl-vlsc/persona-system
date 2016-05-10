@@ -41,15 +41,15 @@ class MutableSnapReadDecode {
 
     const char* bases(int batch_index);
 
-    void set_bases(int batch_index, std::string& bases);
+    void set_bases(int batch_index, const std::string& bases);
 
     const char* qualities(int batch_index);
 
-    void set_qualities(int batch_index, std::string& quals);
+    void set_qualities(int batch_index, const std::string& quals);
 
     const char* metadata(int batch_index);
 
-    void set_metadata(int batch_index, std::string& meta);
+    void set_metadata(int batch_index, const std::string& meta);
 
     int metadata_len(int batch_index);
 
