@@ -539,9 +539,9 @@ def batch_pdq(tensor_list, batch_size, num_threads=1, capacity=32, num_dq_ops=1,
         math_ops.cast(queue.size(), dtypes.float32) * (1. / capacity))
 
     if batch_size == 1:
-      dequeued = [queue.dequeue(name=name)] * num_dq_ops
+      dequeued = [queue.dequeue(name=name+"_%d"%i) for i in range(num_dq_ops)]
     else:
-      dequeued = [queue.dequeue_many(batch_size, name=name)] * num_dq_ops
+      dequeued = [queue.dequeue_many(batch_size, name=name+"_%d"%i) for i in range(num_dq_ops)]
     return dequeued
 
 
