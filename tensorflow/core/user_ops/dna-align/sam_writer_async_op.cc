@@ -195,6 +195,9 @@ class SamAsyncWriter : public WriterAsyncBase {
       Status status;
       for (int i = 0; i < reads.size(); i++) {
 
+        if (results.num_results(i) == 0)
+          continue;  //skip a blank (we have an uneven batch)
+
         Read snap_read;
         snap_read.init(
             reads.metadata(i),
@@ -205,12 +208,7 @@ class SamAsyncWriter : public WriterAsyncBase {
             );
 
         SingleAlignmentResult* snap_results;
-        if (results.num_results(i) > 0) {
-          snap_results = new SingleAlignmentResult[results.num_results(i)];
-        }
-        else {
-          return errors::Internal("SamAsyncWriter Error: Alignment ", i, " had no results!");
-        }
+        snap_results = new SingleAlignmentResult[results.num_results(i)];
 
         // debugging
         /*LOG(INFO) << "Preparing " << results.num_results(i) << " results for writing to file."

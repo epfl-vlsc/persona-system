@@ -193,7 +193,7 @@ void WriterAsyncBase::Write(OpInputList* values, string key,
 
   if (!status.ok()) {
     buf_pool_->BufferAvailable(buf); // recycle the buffer
-    LOG(INFO) << "WriteUnlocked status was not OK!!";
+    LOG(INFO) << "WriteUnlocked status was not OK!!" << status.ToString();
     context->SetStatus(errors::Internal(
                   "WriteUnlocked failed to write value"));
     return;
