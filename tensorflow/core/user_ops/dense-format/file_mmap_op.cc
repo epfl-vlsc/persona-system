@@ -62,8 +62,10 @@ namespace tensorflow {
       auto creator = [this, filename, ctx](MemoryMappedFile **mmf) {
         ReadOnlyMemoryRegion *rmr;
         TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-        shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr); 
-        PrimeRegion(static_cast<const char*>(rmr->data()), rmr->length());
+        shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr);
+        volatile char c = 0;
+        PrimeRegion(static_cast<const char*>(rmr->data()), rmr->length(), &c);
+        hack += c;
         *mmf = new MemoryMappedFile(shared_rmr);
         return Status::OK();
       };
@@ -83,13 +85,14 @@ namespace tensorflow {
       container_ref.SetName(filename);
       container_ref.SetContainer(cinfo.container());
     }
-  private:
-    void PrimeRegion(const char *data, const size_t length, const size_t step_size=4096) {
-      char j = 0;
+
+    void PrimeRegion(const char *data, const size_t length, volatile char* c, const size_t step_size=4096) {
       for (size_t i = 0; i < length; i+=step_size) {
-        j += data[i];
+        *c += data[i];
       }
     }
+  private:
+    volatile char hack = 0;
   };
 
   REGISTER_KERNEL_BUILDER(Name("FileMMap").Device(DEVICE_CPU), FileMMapOp);

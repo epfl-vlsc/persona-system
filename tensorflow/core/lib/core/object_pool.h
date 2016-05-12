@@ -98,7 +98,7 @@ public:
     mutex_lock l(ready_mu_);
     if (ready_objects_.empty() && block) {
       ready_cv_.wait(l, [this]() {
-          return ready_objects_.empty() && run_;
+          return !(ready_objects_.empty() && run_);
         });
     }
 
@@ -128,7 +128,7 @@ public:
     // If we're still out of objects and we want to block, try to wait for one
     if (empty_objects_.empty() && block) {
       empty_cv_.wait(l, [this]() {
-          return empty_objects_.empty() && run_;
+          return !(empty_objects_.empty() && run_);
         });
     }
 
