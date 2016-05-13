@@ -191,7 +191,7 @@ class SamAsyncWriter : public WriterAsyncBase {
         return errors::Internal("Error: SamAsyncWriter: reads and results ",
             "are of different sizes!!.");
       }
-      
+
       Status status;
       for (int i = 0; i < reads.size(); i++) {
 
@@ -228,13 +228,15 @@ class SamAsyncWriter : public WriterAsyncBase {
         record_number_++;
         //LOG(INFO) << "Record number is: " << record_number_;
         uint64 bytes_used = 0;
-        status = snap_wrapper::writeRead(reader_context_, &snap_read, 
-            snap_results, results.num_results(i), 
+        status = snap_wrapper::writeRead(reader_context_, &snap_read,
+            snap_results, results.num_results(i),
             results.first_is_primary(i), buffer, buffer_size, &bytes_used, format, lvc_,
             reader_context_.genome);
 
+        delete[] snap_results;
+
         if (!status.ok()) {
-          /*LOG(INFO) << "snap writeRead status was not OK: " << status.ToString() 
+          /*LOG(INFO) << "snap writeRead status was not OK: " << status.ToString()
             << "after already processing " << i << " reads/results";*/
           return status;
         }
@@ -242,8 +244,6 @@ class SamAsyncWriter : public WriterAsyncBase {
         (*used) += bytes_used;
         buffer_size -= bytes_used;
         buffer += bytes_used;
-
-        delete[] snap_results;
       }
       return status;
     }
