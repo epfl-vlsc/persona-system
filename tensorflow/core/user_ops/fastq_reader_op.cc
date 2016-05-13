@@ -75,7 +75,7 @@ class FastqReader : public ReaderBase {
     }
     
     TensorShape GetUserRequiredShape() override {
-      return TensorShape({batch_size_, 3});
+      return TensorShape({3, batch_size_});
     }
 
     DataType GetUserRequiredType() override {
