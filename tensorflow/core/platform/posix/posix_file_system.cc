@@ -314,7 +314,9 @@ Status PosixFileSystem::NewReadOnlyMemoryRegionFromFile(
     struct stat st;
     ::fstat(fd, &st);
     const void* address =
-        mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
+    // old
+    //    mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (address == MAP_FAILED) {
       s = IOError(fname, errno);
     } else {
