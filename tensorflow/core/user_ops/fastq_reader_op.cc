@@ -66,7 +66,7 @@ class FastqReader : public ReaderBase {
       mmap_data_ = reinterpret_cast<const char*>(mmap_fastq_->data());
       bytes_ = 0;
       
-      LOG(INFO) << "Opening file: " << current_work() << std::endl;
+      VLOG(INFO) << "Opening file: " << current_work() << std::endl;
       return Status::OK();
     }
 

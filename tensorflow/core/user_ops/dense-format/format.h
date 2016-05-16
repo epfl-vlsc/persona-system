@@ -48,7 +48,8 @@ namespace format {
 
   enum CompressionType {
     UNCOMPRESSED = 0,
-    BZIP2 = 1
+    BZIP2 = 1,
+    GZIP = 2
   };
 
   enum RecordType {
