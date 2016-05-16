@@ -32,6 +32,11 @@ Status decompressSegment<boost::iostreams::bzip2_decompressor>(const char* segme
                                                                 const std::size_t segment_size,
                                                                 std::vector<char> &output);
 
+template
+Status decompressSegment<boost::iostreams::gzip_decompressor>(const char* segment,
+                                                                const std::size_t segment_size,
+                                                                std::vector<char> &output);
+
 Status copySegment(const char* segment,
                    const std::size_t segment_size,
                    std::vector<char> &output)

@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <boost/iostreams/filter/bzip2.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 
 namespace tensorflow {
@@ -19,6 +20,7 @@ Status copySegment(const char* segment,
                    std::vector<char> &output);
 
 auto const decompressBZIP2 = &decompressSegment<boost::iostreams::bzip2_decompressor>;
+auto const decompressGZIP = &decompressSegment<boost::iostreams::gzip_decompressor>;
 
 
 } // namespace tensorflow
