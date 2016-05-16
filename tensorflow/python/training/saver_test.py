@@ -34,10 +34,10 @@ from google.protobuf.any_pb2 import Any
 from tensorflow.core.framework import graph_pb2
 from tensorflow.core.protobuf import meta_graph_pb2
 from tensorflow.core.protobuf import queue_runner_pb2
+from tensorflow.python.framework import errors
 from tensorflow.python.framework import function
 from tensorflow.python.platform import gfile
 from tensorflow.python.training import saver as saver_module
-from tensorflow.python import pywrap_tensorflow
 from tensorflow.python.util import compat
 
 
@@ -805,7 +805,7 @@ class MetaGraphTest(tf.test.TestCase):
       # not the Saver.export_meta_graph instance-level method.
       meta_graph_def = saver_module.export_meta_graph(
           filename=filename,
-          graph_def=tf.get_default_graph().as_graph_def(),
+          graph_def=tf.get_default_graph().as_graph_def(add_shapes=True),
           collection_list=["input_tensor", "output_tensor"],
           saver_def=None,
       )
@@ -903,7 +903,9 @@ class MetaGraphTest(tf.test.TestCase):
     saver1_ckpt = os.path.join(test_dir, "saver1.ckpt")
     with self.test_session(graph=tf.Graph()) as sess:
       # Creates a graph.
-      v0 = tf.Variable(10.0, name="v0")
+      v0 = tf.Variable([[1.0, 2.0],
+                        [3.0, 4.0],
+                        [5.0, 6.0]], name="v0")
       v1 = tf.Variable(11.0, name="v1")
       # Creates 2 savers.
       saver0 = tf.train.Saver({"v0": v0}, name="saver0")
@@ -957,7 +959,11 @@ class MetaGraphTest(tf.test.TestCase):
       new_saver0.restore(sess, saver0_ckpt)
       v0 = sess.graph.get_tensor_by_name("v0:0")
       v1 = sess.graph.get_tensor_by_name("v1:0")
-      self.assertEqual(10.0, v0.eval())
+      self.assertAllEqual([[1.0, 2.0],
+                           [3.0, 4.0],
+                           [5.0, 6.0]], v0.eval())
+      self.assertEqual([3, 2], v0.get_shape())
+      self.assertEqual([], v1.get_shape())
       with self.assertRaisesWithPredicateMatch(
           tf.OpError, lambda e: "uninitialized value v1" in e.message):
         sess.run(v1)
@@ -1212,12 +1218,12 @@ class CheckpointReaderTest(tf.test.TestCase):
       self.assertAllEqual(v0.eval(), v0_tensor)
       self.assertAllEqual(v1.eval(), v1_tensor)
       # Verifies get_tensor() fails for non-existent tensors.
-      with self.assertRaisesRegexp(pywrap_tensorflow.StatusNotOK,
-                                   "Not found"):
+      with self.assertRaisesRegexp(errors.NotFoundError,
+                                   "v3 not found in checkpoint file"):
         reader.get_tensor("v3")
 
   def testNonexistentPath(self):
-    with self.assertRaisesRegexp(pywrap_tensorflow.StatusNotOK,
+    with self.assertRaisesRegexp(errors.NotFoundError,
                                  "Unsuccessful TensorSliceReader"):
       tf.train.NewCheckpointReader("non-existent")
 

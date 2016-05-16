@@ -261,6 +261,55 @@ class SessionTest(test_util.TensorFlowTestCase):
       self.assertAllEqual(sp2_out.values, values)
       self.assertAllEqual(sp2_out.shape, shape)
 
+  def testFeedSparsePlaceholder(self):
+    with session.Session() as s:
+      indices = np.array([[3, 2, 0], [4, 5, 1]]).astype(np.int64)
+      values = np.array([1.0, 2.0]).astype(np.float32)
+      shape = np.array([7, 9, 2]).astype(np.int64)
+      sp = array_ops.sparse_placeholder(dtype=np.float32, name='placeholder1')
+      sp_indices = array_ops.identity(sp.indices)
+      sp_values = array_ops.identity(sp.values)
+      sp_shape = array_ops.identity(sp.shape)
+      sp2 = ops.SparseTensor(sp_indices, sp_values, sp_shape)
+      # Feed with tuple
+      indices_out, values_out, shape_out = s.run(
+          [sp_indices, sp_values, sp_shape], {sp: (indices, values, shape)})
+      self.assertAllEqual(indices_out, indices)
+      self.assertAllEqual(values_out, values)
+      self.assertAllEqual(shape_out, shape)
+      # Feed with SparseTensorValue
+      indices_out, values_out, shape_out = s.run(
+          [sp_indices, sp_values, sp_shape],
+          {sp: ops.SparseTensorValue(indices, values, shape)})
+      self.assertAllEqual(indices_out, indices)
+      self.assertAllEqual(values_out, values)
+      self.assertAllEqual(shape_out, shape)
+      # Feed with SparseTensorValue, fetch SparseTensorValue
+      sp2_out = s.run(sp2, {sp: ops.SparseTensorValue(indices, values, shape)})
+      self.assertAllEqual(sp2_out.indices, indices)
+      self.assertAllEqual(sp2_out.values, values)
+      self.assertAllEqual(sp2_out.shape, shape)
+
+  def testFeedSparePlaceholderConstantShape(self):
+    with session.Session() as s:
+      indices = np.array([[3, 2, 0], [4, 5, 1]]).astype(np.int64)
+      values = np.array([1.0, 2.0]).astype(np.float32)
+      shape = np.array([7, 9, 2]).astype(np.int64)
+      sp = array_ops.sparse_placeholder(dtype=np.float32,
+                                        shape=shape,
+                                        name='placeholder1')
+      self.assertAllEqual(sp.shape.eval(session=s), shape)
+      self.assertAllEqual(tensor_util.constant_value(sp.shape), shape)
+      sp_indices = array_ops.identity(sp.indices)
+      sp_values = array_ops.identity(sp.values)
+      sp_shape = array_ops.identity(sp.shape)
+      # Feed with tuple
+      indices_out, values_out, shape_out = s.run(
+          [sp_indices, sp_values, sp_shape], {sp: (indices, values)})
+      self.assertAllEqual(indices_out, indices)
+      self.assertAllEqual(values_out, values)
+      self.assertAllEqual(shape_out, shape)
+
   def testFetchIndexedSlices(self):
     with session.Session() as s:
       indices = np.array([[3, 2, 0], [4, 5, 1]]).astype(np.int64)
@@ -786,8 +835,8 @@ class SessionTest(test_util.TensorFlowTestCase):
 
   def testInvalidTargetFails(self):
     with self.assertRaisesRegexp(
-        RuntimeError,
-        'No session factory registered for the given session options.'):
+        errors.NotFoundError,
+        'No session factory registered for the given session options'):
       session.Session('INVALID_TARGET')
 
   def testFetchByNameDifferentStringTypes(self):
@@ -922,6 +971,16 @@ class SessionTest(test_util.TensorFlowTestCase):
       self.assertEqual(steps, len(res))
       self.assertEqual(2.0, res[-1])
 
+  def testRunAndPartialRun(self):
+    with session.Session() as sess:
+      a = constant_op.constant(2.0, dtypes.float32)
+      b = a * 2
+      c = b * 3
+      r1 = sess.run([b, c])
+      h = sess.partial_run_setup([b, c], [])
+      r2 = sess.partial_run(h, [b, c])
+      self.assertEqual(r1, r2)
+
   def testFeedDictKeyException(self):
     with session.Session() as sess:
       a = constant_op.constant(1.0, dtypes.float32, name='a')
@@ -991,6 +1050,23 @@ class SessionTest(test_util.TensorFlowTestCase):
           'Must specify at least one target to fetch or execute.'):
         sess.run([])
 
+  def testInferShapesFalse(self):
+    with ops.Graph().as_default(), ops.device('/cpu:0'):
+      a = constant_op.constant([[1, 2]])
+      sess = session.Session()
+      self.assertFalse('_output_shapes' in sess.graph_def.node[0].attr)
+      # Avoid lint error regarding 'unused' var a.
+      self.assertTrue(a == a)
+
+  def testInferShapesTrue(self):
+    config = config_pb2.ConfigProto(
+        graph_options=config_pb2.GraphOptions(infer_shapes=True))
+    with ops.Graph().as_default(), ops.device('/cpu:0'):
+      a = constant_op.constant([[1, 2]])
+      sess = session.Session(config=config)
+      self.assertTrue('_output_shapes' in sess.graph_def.node[0].attr)
+      # Avoid lint error regarding 'unused' var a.
+      self.assertTrue(a == a)
 
 if __name__ == '__main__':
   googletest.main()

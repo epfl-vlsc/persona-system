@@ -111,7 +111,8 @@ test_ffmpeg_lib() {
     bazel test tensorflow/contrib/ffmpeg/kernels:ffmpeg_lib_uninstalled_test
     return $?
   else
-    bazel test tensorflow/contrib/ffmpeg/kernels:ffmpeg_lib_installed_test
+    bazel test tensorflow/contrib/ffmpeg/kernels:ffmpeg_lib_installed_test \
+        tensorflow/contrib/ffmpeg:decode_audio_op_test
     return $?
   fi
 }

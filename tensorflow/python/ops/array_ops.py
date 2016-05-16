@@ -240,7 +240,12 @@ def pack(values, name="pack"):
   Returns:
     output: A packed `Tensor` with the same type as `values`.
   """
-  return gen_array_ops._pack(values, name=name)
+  try:
+    # If the input is a constant list, it can just be converted to a constant op
+    return ops.convert_to_tensor(values, name=name)
+  except (TypeError, ValueError):
+    # Input list contains non-constant tensors
+    return gen_array_ops._pack(values, name=name)
 
 
 def unpack(value, num=None, name="unpack"):
@@ -407,9 +412,8 @@ def boolean_mask(tensor, mask, name="boolean_mask"):
   where `(i1,...,iK)` is the ith `True` entry of `mask` (row-major order).
 
   Args:
-    tensor:  N-D tensor.  First K dimensions can be None, which allows e.g.
-      undefined batch size.  Trailing dimensions must be specified.
-    mask:  K-D boolean tensor, K <= N.
+    tensor:  N-D tensor.
+    mask:  K-D boolean tensor, K <= N and K must be known statically.
     name:  A name for this operation (optional).
 
   Returns:
@@ -423,7 +427,7 @@ def boolean_mask(tensor, mask, name="boolean_mask"):
 
   ```python
   # 2-D example
-  a = [[1, 2], [3, 4], [5, 6]]
+  tensor = [[1, 2], [3, 4], [5, 6]]
   mask = [True, False, True]
   boolean_mask(tensor, mask) ==> [[1, 2], [5, 6]]
   ```
@@ -448,7 +452,7 @@ def boolean_mask(tensor, mask, name="boolean_mask"):
           ".  E.g. shape=[None] is ok, but shape=None is not.")
     shape_tensor[:ndims_mask].assert_is_compatible_with(shape_mask)
 
-    tensor = reshape(tensor, [-1] + shape_tensor.as_list()[ndims_mask:])
+    tensor = reshape(tensor, concat(0, [[-1], shape(tensor)[ndims_mask:]]))
     mask = reshape(mask, [-1])
     return _apply_mask_1d(tensor, mask)
 
@@ -766,6 +770,61 @@ def placeholder(dtype, shape=None, name=None):
   return ret
 
 
+def sparse_placeholder(dtype, shape=None, name=None):
+  """Inserts a placeholder for a sparse tensor that will be always fed.
+
+  **Important**: This sparse tensor will produce an error if evaluated.
+  Its value must be fed using the `feed_dict` optional argument to
+  `Session.run()`, `Tensor.eval()`, or `Operation.run()`.
+
+  For example:
+
+  ```python
+  x = tf.sparse_placeholder(tf.float32)
+  y = tf.sparse_reduce_sum(x)
+
+  with tf.Session() as sess:
+    print(sess.run(y))  # ERROR: will fail because x was not fed.
+
+    indices = np.array([[3, 2, 0], [4, 5, 1]], dtype=np.int64)
+    values = np.array([1.0, 2.0], dtype=np.float32)
+    shape = np.array([7, 9, 2], dtype=np.int64)
+    print(sess.run(y, feed_dict={
+      x: tf.SparseTensorValue(indices, values, shape)}))  # Will succeed.
+    print(sess.run(y, feed_dict={
+      x: (indices, values, shape)}))  # Will succeed.
+
+    sp = tf.SparseTensor(indices=indices, values=values, shape=shape)
+    sp_value = sp.eval(session)
+    print(sess.run(y, feed_dict={x: sp_value}))  # Will succeed.
+  ```
+
+  Args:
+    dtype: The type of `values` elements in the tensor to be fed.
+    shape: The shape of the tensor to be fed (optional). If the shape is not
+      specified, you can feed a sparse tensor of any shape.
+    name: A name for prefixing the operations (optional).
+
+  Returns:
+    A `SparseTensor` that may be used as a handle for feeding a value, but not
+    evaluated directly.
+  """
+  if shape is None:
+    shape = placeholder(
+        dtypes.int64, name=(name + "/shape") if name is not None else None)
+  else:
+    shape = ops.convert_to_tensor(
+        shape, name=(name + "/shape") if name is not None else None)
+  return ops.SparseTensor(
+      values=placeholder(
+          dtype, name=(name + "/values") if name is not None else None),
+      indices=placeholder(
+          dtypes.int64,
+          name=(name + "/indices") if name is not None else None),
+      shape=shape
+  )
+
+
 def pad(tensor, paddings, mode="CONSTANT", name=None):  # pylint: disable=invalid-name
   """Pads a tensor.
 
@@ -1067,17 +1126,19 @@ def _SqueezeShape(op):
 def _BitcastShape(op):
   """Shape function for Bitcast op."""
   input_shape = op.inputs[0].get_shape()
+  if input_shape == tensor_shape.unknown_shape():
+    return [tensor_shape.unknown_shape()]
   input_type = op.inputs[0].dtype
   size_of_input = input_type.size
   output = dtypes.as_dtype(op.get_attr("type"))
   size_of_output = output.size
   if size_of_input == size_of_output:
-    return [tensor_shape.TensorShape(input_shape)]
+    return [input_shape]
   else:
     if size_of_output > size_of_input:
-      new_shape = input_shape.as_list()
+      new_shape = input_shape.with_rank_at_least(1).as_list()
       last_val = new_shape[-1]
-      if last_val == (size_of_output // size_of_input):
+      if last_val is None or last_val == (size_of_output // size_of_input):
         new_shape = new_shape[:-1]
       else:
         raise ValueError(
@@ -1763,7 +1824,7 @@ def one_hot(indices, depth, on_value=1, off_value=0,
 
   The locations represented by indices in `indices` take value `on_value`,
   while all other locations take value `off_value`. By default, `on_value` is 1,
-  and `off_value` is 0. The type of the output tensor is specified by `dtype`, 
+  and `off_value` is 0. The type of the output tensor is specified by `dtype`,
   which defaults to `tf.float32`.
 
   If the input `indices` is rank `N`, the output will have rank `N+1`. The
@@ -1859,8 +1920,8 @@ def one_hot(indices, depth, on_value=1, off_value=0,
     off_value = ops.convert_to_tensor(off_value, dtype=dtype, name="off_value")
     indices = ops.convert_to_tensor(indices, dtype=dtypes.int64, name="indices")
     depth = ops.convert_to_tensor(depth, dtype=dtypes.int32, name="depth")
-    return gen_array_ops._one_hot(indices, depth, on_value, 
-                                  off_value, axis, name)
+    return gen_array_ops._one_hot(indices, depth, on_value, off_value, axis,
+                                  name)
 
 
 @ops.RegisterShape("OneHot")

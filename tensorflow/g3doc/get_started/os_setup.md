@@ -309,8 +309,12 @@ After Docker is installed, launch a Docker container with the TensorFlow binary
 image as follows.
 
 ```bash
-$ docker run -it gcr.io/tensorflow/tensorflow
+$ docker run -it -p 8888:8888 gcr.io/tensorflow/tensorflow
 ```
+
+The option `-p 8888:8888` is used to publish the Docker container᾿s internal port to the host machine, in this case to ensure Jupyter notebook connection.
+
+The format of the port mapping `hostPort:containerPort`. You can speficy any valid port number for the host port but has to be `8888` for the container port portion.
 
 If you're using a container with GPU support, some additional flags must be
 passed to expose the GPU device to the container. For the default config, we
@@ -630,7 +634,7 @@ $ bazel build -c opt --config=cuda //tensorflow/tools/pip_package:build_pip_pack
 $ bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg
 
 # The name of the .whl file will depend on your platform.
-$ pip install /tmp/tensorflow_pkg/tensorflow-0.8.0-py2-none-linux_x86_64.whl
+$ sudo pip install /tmp/tensorflow_pkg/tensorflow-0.8.0-py2-none-any.whl
 ```
 
 ## Setting up TensorFlow for Development
