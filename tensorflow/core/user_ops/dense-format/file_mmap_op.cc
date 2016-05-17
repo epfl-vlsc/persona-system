@@ -26,6 +26,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(context, context->GetAttr("trace_file",
                                                &trace_file));
       OP_REQUIRES_OK(context, context->env()->NewWritableFile(trace_file, &trace_file_));
+      OP_REQUIRES_OK(context, trace_file_->Append("time,duration\n"));
     };
 
     ~FileMMapOp() {
@@ -61,6 +62,7 @@ namespace tensorflow {
     }
 
     void Compute(OpKernelContext* ctx) override {
+      ScopeTimer s(trace_file_);
       QueueInterface* queue;
       OP_REQUIRES_OK(ctx,
                      GetResourceFromContext(ctx, "queue_handle", &queue));
@@ -83,7 +85,7 @@ namespace tensorflow {
 
       MemoryMappedFile *mmf;
       {
-        boost::timer::auto_cpu_timer t("FileMMAP (" + filename + "): %w wall, %u user, %s system\n");
+        //  boost::timer::auto_cpu_timer t("FileMMAP (" + filename + "): %w wall, %u user, %s system\n");
       OP_REQUIRES_OK(ctx,
                      cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
                                                                                  cinfo.container(),

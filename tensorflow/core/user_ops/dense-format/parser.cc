@@ -34,7 +34,7 @@ namespace tensorflow {
       break;
     }
 
-    boost::timer::auto_cpu_timer t("Parse " + type_string + ": %w wall, %u user, %s system\n");
+    //boost::timer::auto_cpu_timer t("Parse " + type_string + ": %w wall, %u user, %s system\n");
 
     auto payload_start = data + file_header->segment_start;
     auto payload_size = length - file_header->segment_start;

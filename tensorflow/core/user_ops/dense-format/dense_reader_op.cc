@@ -8,6 +8,7 @@
 #include "decompress.h"
 #include "shared_mmap_file_resource.h"
 #include "parser.h"
+#include "scope_timer.h"
 #include <vector>
 
 namespace tensorflow {
@@ -39,6 +40,7 @@ Reads the dense stuff
       OP_REQUIRES_OK(context, context->GetAttr("trace_file",
                                                &trace_file));
       OP_REQUIRES_OK(context, context->env()->NewWritableFile(trace_file, &trace_file_));
+      OP_REQUIRES_OK(context, trace_file_->Append("time,duration\n"));
     }
 
     ~DenseReaderOp() {
@@ -47,6 +49,7 @@ Reads the dense stuff
     }
 
     void Compute(OpKernelContext* ctx) override {
+      ScopeTimer s(trace_file_);
       using namespace errors;
       const Tensor *fileset;
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &fileset));
@@ -61,7 +64,7 @@ Reads the dense stuff
         auto dense_mapping = dense_file->GetMappedRegion();
 
         {
-        boost::timer::auto_cpu_timer t("DenseReader: %w wall, %u user, %s system\n");
+          //boost::timer::auto_cpu_timer t("DenseReader: %w wall, %u user, %s system\n");
         OP_REQUIRES_OK(ctx, data_buffer_.ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
 
         auto num_records = data_buffer_.RecordCount();

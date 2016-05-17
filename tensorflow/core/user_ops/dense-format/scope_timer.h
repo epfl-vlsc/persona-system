@@ -8,13 +8,13 @@
 namespace tensorflow {
   using namespace std;
 
-  class ScopeWriter {
+  class ScopeTimer {
   public:
-  ScopeWriter(WritableFile *trace_file) : trace_file_(trace_file),
+  ScopeTimer(WritableFile *trace_file) : trace_file_(trace_file),
       start_tick_(chrono::high_resolution_clock::now()),
       start_time_(chrono::system_clock::now()) {}
 
-    ~ScopeWriter() {
+    ~ScopeTimer() {
       using namespace chrono;
 
       auto tick_diff = high_resolution_clock::now() - start_tick_;

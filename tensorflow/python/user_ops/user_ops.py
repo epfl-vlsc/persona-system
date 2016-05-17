@@ -46,8 +46,8 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, batch_size):
-  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size)
+def DenseReader(file_handle, batch_size, trace_file):
+  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, trace_file=trace_file)
 
 ops.NoGradient("DenseReader")
 @ops.RegisterShape("DenseReader")
@@ -57,8 +57,8 @@ def _DenseReaderShape(op):
   batch_size = op.get_attr("batch_size")
   return [tensor_shape.TensorShape([batch_size]), tensor_shape.scalar()]
 
-def FileMMap(queue):
-  return gen_user_ops.file_m_map(queue_handle=queue)
+def FileMMap(queue, trace_file):
+  return gen_user_ops.file_m_map(queue_handle=queue, trace_file=trace_file)
 
 @ops.RegisterShape("FileMMap")
 def _FileMMapSHape(op):
