@@ -1,3 +1,4 @@
+#include <boost/timer/timer.hpp>
 #include "parser.h"
 #include "decompress.h"
 
@@ -18,14 +19,22 @@ namespace tensorflow {
     }
     auto file_header = reinterpret_cast<const FileHeader*>(data);
     auto record_type = static_cast<RecordType>(file_header->record_type);
+    string type_string;
     switch (record_type) {
     default:
       return Internal("Invalid record type", file_header->record_type);
     case RecordType::BASES:
+      type_string = "bases";
+      break;
     case RecordType::QUALITIES:
+      type_string = "qualities";
+      break;
     case RecordType::COMMENTS:
+      type_string = "metadata";
       break;
     }
+
+    boost::timer::auto_cpu_timer t("Parse " + type_string + ": %w wall, %u user, %s system\n");
 
     auto payload_start = data + file_header->segment_start;
     auto payload_size = length - file_header->segment_start;

@@ -1,6 +1,8 @@
+#include <boost/timer/timer.hpp>
 #include "shared_mmap_file_resource.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
+#include "tensorflow/core/platform/file_system.h"
 
 namespace tensorflow {
 
@@ -11,13 +13,19 @@ namespace tensorflow {
   .Output("file_handle: string") // or is the output string?
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Attr("trace_file: string") // only for tracing timing
   .SetIsStateful()
   .Doc(R"doc(
   )doc");
 
   class FileMMapOp : public OpKernel {
   public:
-    FileMMapOp(OpKernelConstruction* context) : OpKernel(context) {};
+    FileMMapOp(OpKernelConstruction* context) : OpKernel(context) {
+      string trace_file;
+      OP_REQUIRES_OK(context, context->GetAttr("trace_file",
+                                               &trace_file));
+      OP_REQUIRES_OK(context, context->env()->NewWritableFile(trace_file, &trace_file_));
+    };
 
     Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
       Notification n;
@@ -68,6 +76,8 @@ namespace tensorflow {
       };
 
       MemoryMappedFile *mmf;
+      {
+        boost::timer::auto_cpu_timer t("FileMMAP (" + filename + "): %w wall, %u user, %s system\n");
       OP_REQUIRES_OK(ctx,
                      cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
                                                                                  cinfo.container(),
@@ -75,13 +85,15 @@ namespace tensorflow {
                                                                                  &mmf,
                                                                                  creator
                                                                                  ));
-
+      }
       Tensor *output_tensor;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({2}), &output_tensor));
       MappedFileRef container_ref(output_tensor);
       container_ref.SetName(filename);
       container_ref.SetContainer(cinfo.container());
     }
+  private:
+    WritableFile *trace_file_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("FileMMap").Device(DEVICE_CPU), FileMMapOp);

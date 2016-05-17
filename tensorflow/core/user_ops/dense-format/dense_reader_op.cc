@@ -1,7 +1,9 @@
+#include <boost/timer/timer.hpp>
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
 #include "shared_mmap_file_resource.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/platform/file_system.h"
 #include "format.h"
 #include "decompress.h"
 #include "shared_mmap_file_resource.h"
@@ -12,6 +14,7 @@ namespace tensorflow {
 
   REGISTER_OP("DenseReader")
   .Attr("batch_size: int")
+  .Attr("trace_file: string") // only for tracing timing
   .Input("file_handle: string")
   .Output("records: string")
   .Output("record_count: int32")
@@ -31,6 +34,11 @@ Reads the dense stuff
                                                &batch_size));
       OP_REQUIRES(context, batch_size > 0, InvalidArgument("DenseReaderOp: batch_size must be >0 - ", batch_size));
       batch_size_ = batch_size;
+
+      string trace_file;
+      OP_REQUIRES_OK(context, context->GetAttr("trace_file",
+                                               &trace_file));
+      OP_REQUIRES_OK(context, context->env()->NewWritableFile(trace_file, &trace_file_));
     }
 
 
@@ -48,6 +56,8 @@ Reads the dense stuff
         core::ScopedUnref unref_me(dense_file);
         auto dense_mapping = dense_file->GetMappedRegion();
 
+        {
+          boost::timer::auto_cpu_timer t("DenseReader: %w wall, %u user, %s system\n");
         OP_REQUIRES_OK(ctx, data_buffer_.ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
 
         auto num_records = data_buffer_.RecordCount();
@@ -76,6 +86,7 @@ Reads the dense stuff
           dense_file->Unref();
         }
         dense_file->Ref(); // what a hack :(
+        }
       }
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Delete<MemoryMappedFile>(file_handle.GetContainer(), file_handle.GetName()));
     }
@@ -84,6 +95,7 @@ Reads the dense stuff
 
     int batch_size_;
     RecordParser data_buffer_;
+    WritableFile *trace_file_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReader);
