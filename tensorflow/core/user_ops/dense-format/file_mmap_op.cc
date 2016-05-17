@@ -3,6 +3,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
+#include "scope_timer.h"
 
 namespace tensorflow {
 
@@ -26,6 +27,11 @@ namespace tensorflow {
                                                &trace_file));
       OP_REQUIRES_OK(context, context->env()->NewWritableFile(trace_file, &trace_file_));
     };
+
+    ~FileMMapOp() {
+      if (trace_file_)
+        delete trace_file_;
+    }
 
     Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
       Notification n;
@@ -93,7 +99,7 @@ namespace tensorflow {
       container_ref.SetContainer(cinfo.container());
     }
   private:
-    WritableFile *trace_file_;
+    WritableFile *trace_file_ = nullptr;
   };
 
   REGISTER_KERNEL_BUILDER(Name("FileMMap").Device(DEVICE_CPU), FileMMapOp);

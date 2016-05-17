@@ -25,9 +25,9 @@ Reads the dense stuff
 
   using namespace std;
 
-  class DenseReader : public OpKernel {
+  class DenseReaderOp : public OpKernel {
   public:
-    DenseReader(OpKernelConstruction *context) : OpKernel(context) {
+    DenseReaderOp(OpKernelConstruction *context) : OpKernel(context) {
       using namespace errors;
       int batch_size;
       OP_REQUIRES_OK(context, context->GetAttr("batch_size",
@@ -41,6 +41,10 @@ Reads the dense stuff
       OP_REQUIRES_OK(context, context->env()->NewWritableFile(trace_file, &trace_file_));
     }
 
+    ~DenseReaderOp() {
+      if (trace_file_)
+        delete trace_file_;
+    }
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
@@ -57,7 +61,7 @@ Reads the dense stuff
         auto dense_mapping = dense_file->GetMappedRegion();
 
         {
-          boost::timer::auto_cpu_timer t("DenseReader: %w wall, %u user, %s system\n");
+        boost::timer::auto_cpu_timer t("DenseReader: %w wall, %u user, %s system\n");
         OP_REQUIRES_OK(ctx, data_buffer_.ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
 
         auto num_records = data_buffer_.RecordCount();
@@ -92,11 +96,10 @@ Reads the dense stuff
     }
 
   private:
-
     int batch_size_;
     RecordParser data_buffer_;
-    WritableFile *trace_file_;
+    WritableFile *trace_file_ = nullptr;
   };
 
-  REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReader);
+  REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReaderOp);
 } //  namespace tensorflow {
