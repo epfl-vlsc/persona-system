@@ -5,7 +5,7 @@ namespace tensorflow {
   using namespace std;
 
   REGISTER_OP("SinkOp")
-  .Attr("T: {float, int32, string, float32}")
+  .Attr("T: {float, int32, int64, string, float32}")
   .Input("data: T")
   .Doc(R"doc(
 Consumes the input and produces nothing
@@ -27,4 +27,7 @@ Consumes the input and produces nothing
                           SinkOp)
 
 REGISTER_TYPE(string);
+REGISTER_TYPE(int64);
+REGISTER_TYPE(int32);
+REGISTER_TYPE(float);
 } // namespace tensorflow {

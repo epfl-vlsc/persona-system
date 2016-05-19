@@ -9,6 +9,7 @@
 #include "parser.h"
 #include "scope_timer.h"
 #include <vector>
+#include <typeinfo>
 
 namespace tensorflow {
 
@@ -17,29 +18,33 @@ namespace tensorflow {
   .Attr("trace_file: string") // only for tracing timing
   .Attr("trace_file_process: string")
   .Attr("trace_file_decomp: string")
+  .Attr("size_hint: int = 4194304") // 4 MeB
   .Input("file_handle: string")
+  .Output("record_handle: int64")
+  /*
   .Output("records: string")
   .Output("record_count: int32")
+  */
   .SetIsStateful()
   .Doc(R"doc(
 Reads the dense stuff
   )doc");
 
-  constexpr int64_t ipow(int64_t base, int exp, int64_t result = 1) {
-    return exp < 1 ? result : ipow(base*base, exp/2, (exp % 2) ? result*base : result);
-  }
-
   using namespace std;
 
   class DenseReaderOp : public OpKernel {
   public:
-    DenseReaderOp(OpKernelConstruction *context) : OpKernel(context), data_buffer_(536870912) {
+    DenseReaderOp(OpKernelConstruction *context) : OpKernel(context) {
       using namespace errors;
       int batch_size;
       OP_REQUIRES_OK(context, context->GetAttr("batch_size",
                                                &batch_size));
       OP_REQUIRES(context, batch_size > 0, InvalidArgument("DenseReaderOp: batch_size must be >0 - ", batch_size));
       batch_size_ = batch_size;
+
+      OP_REQUIRES_OK(context, context->GetAttr("size_hint", &batch_size));
+      size_hint_ = static_cast<size_t>(batch_size);
+      OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be >0 - ", size_hint_));
 
       string trace_file;
       OP_REQUIRES_OK(context, context->GetAttr("trace_file",
@@ -77,14 +82,21 @@ Reads the dense stuff
         OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
         core::ScopedUnref unref_me(dense_file);
         auto dense_mapping = dense_file->GetMappedRegion();
+        auto data_buffer = new RecordParser(size_hint_);
 
         {
           ScopeTimer x(decomp_trace_file_);
-          OP_REQUIRES_OK(ctx, data_buffer_.ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
+          OP_REQUIRES_OK(ctx, data_buffer->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
         }
 
         {
           ScopeTimer t(convert_trace_file_);
+          // TODO just emit it as a single scalar value
+          Tensor *output = nullptr;
+          OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", TensorShape(), &output));
+          auto handle = output->scalar<int64>();
+          handle() = reinterpret_cast<int64>(data_buffer);
+          /*
           auto num_records = data_buffer_.RecordCount();
           OP_REQUIRES(ctx, num_records <= batch_size_,
                       Internal("Record Count ", num_records,
@@ -102,11 +114,14 @@ Reads the dense stuff
           for (; i < batch_size_; i++ ) {
             flat(i) = "";
           }
+          */
 
+          /*
           Tensor *size_tensor = nullptr;
           OP_REQUIRES_OK(ctx, ctx->allocate_output("record_count", TensorShape({}), &size_tensor));
           auto size_tensor_scalar = size_tensor->scalar<int>();
           size_tensor_scalar() = num_records;
+          */
           while (!dense_file->RefCountIsOne()) {
             dense_file->Unref();
           }
@@ -118,7 +133,7 @@ Reads the dense stuff
 
   private:
     int batch_size_;
-    RecordParser data_buffer_;
+    size_t size_hint_;
     WritableFile *trace_file_ = nullptr, *convert_trace_file_ = nullptr, *decomp_trace_file_ = nullptr;
   };
 
