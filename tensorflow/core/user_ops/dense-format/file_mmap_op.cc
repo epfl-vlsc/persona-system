@@ -1,4 +1,3 @@
-#include <boost/timer/timer.hpp>
 #include "shared_mmap_file_resource.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
@@ -17,6 +16,8 @@ namespace tensorflow {
   .Attr("trace_file: string") // only for tracing timing
   .SetIsStateful()
   .Doc(R"doc(
+    Produces memory-mapped files, synchronously reads them, and produces a Tensor<2>
+    with the container and shared name for the file.
   )doc");
 
   class FileMMapOp : public OpKernel {
@@ -84,8 +85,6 @@ namespace tensorflow {
       };
 
       MemoryMappedFile *mmf;
-      {
-        //  boost::timer::auto_cpu_timer t("FileMMAP (" + filename + "): %w wall, %u user, %s system\n");
       OP_REQUIRES_OK(ctx,
                      cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
                                                                                  cinfo.container(),
@@ -93,7 +92,6 @@ namespace tensorflow {
                                                                                  &mmf,
                                                                                  creator
                                                                                  ));
-      }
       Tensor *output_tensor;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({2}), &output_tensor));
       MappedFileRef container_ref(output_tensor);

@@ -17,7 +17,7 @@ namespace tensorflow {
     ~ScopeTimer() {
       using namespace chrono;
 
-      auto tick_diff = high_resolution_clock::now() - start_tick_;
+      auto tick_diff = duration_cast<microseconds>(high_resolution_clock::now() - start_tick_);
       auto start_time_us = duration_cast<microseconds>(start_time_.time_since_epoch());
       ostringstream a;
       a << start_time_us.count() << "," << tick_diff.count() << "\n";

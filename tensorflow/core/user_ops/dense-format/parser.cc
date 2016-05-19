@@ -6,6 +6,10 @@ namespace tensorflow {
 
   using namespace std;
 
+  RecordParser::RecordParser(std::size_t size) {
+    buffer_.reserve(size);
+  }
+
   Status RecordParser::ParseNew(const char* data, const std::size_t length)
   {
     using namespace errors;

@@ -46,8 +46,8 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, batch_size, trace_file):
-  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, trace_file=trace_file)
+def DenseReader(file_handle, batch_size, trace_file, trace_file_process):
+  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, trace_file=trace_file, trace_file_process=trace_file_process)
 
 ops.NoGradient("DenseReader")
 @ops.RegisterShape("DenseReader")
@@ -64,6 +64,9 @@ def FileMMap(queue, trace_file):
 def _FileMMapSHape(op):
   return [tensor_shape.TensorShape([2])]
 ops.NoGradient("FileMMap")
+
+def SinkOp(input_tensor):
+  return gen_user_ops.sink_op(data=input_tensor)
 
 class SAMWriter(io_ops.WriterBase):
 
