@@ -82,10 +82,11 @@ Reads the dense stuff
         OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
         core::ScopedUnref unref_me(dense_file);
         auto dense_mapping = dense_file->GetMappedRegion();
-        auto data_buffer = new RecordParser(size_hint_);
+        RecordParser *data_buffer;
 
         {
           ScopeTimer x(decomp_trace_file_);
+          data_buffer = new RecordParser(size_hint_);
           OP_REQUIRES_OK(ctx, data_buffer->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
         }
 
