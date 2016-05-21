@@ -11,34 +11,44 @@ namespace tensorflow {
   REGISTER_OP("FileMMap")
   .Input("queue_handle: Ref(string)")
   .Output("file_handle: string") // or is the output string?
+  .Output("file_name: string")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
-  .Attr("trace_file: string") // only for tracing timing
   .SetIsStateful()
   .Doc(R"doc(
-    Produces memory-mapped files, synchronously reads them, and produces a Tensor<2>
-    with the container and shared name for the file.
+Produces memory-mapped files, synchronously reads them, and produces a Tensor<2>
+with the container and shared name for the file.
+
+queue_handle: a handle to the filename queue
+file_handle: a Tensor(2) of strings to access the shared mmaped file resource to downstream nodes
+file_name: a Tensor() of string for the unique key for this file
   )doc");
 
-  class FileMMapOp : public OpKernel {
-  public:
-    FileMMapOp(OpKernelConstruction* context) : OpKernel(context) {
-      string trace_file;
-      OP_REQUIRES_OK(context, context->GetAttr("trace_file",
-                                               &trace_file));
-      OP_REQUIRES_OK(context, context->env()->NewWritableFile(trace_file, &trace_file_));
-      OP_REQUIRES_OK(context, trace_file_->Append("time,duration\n"));
-    };
+  REGISTER_OP("StagedFileMap")
+  .Input("queue_handle: Ref(string)")
+  .Input("upstream_refs: string")
+  .Input("upstream_names: string")
+  .Output("file_handles: string")
+  .Output("file_names: string")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
+  .SetIsStateful()
+  .Doc(R"doc(
+Appends a dense reader handle tensor to an input list.
+To be used for the staged pipeline
 
-    ~FileMMapOp() {
-      if (trace_file_)
-        delete trace_file_;
-    }
+queue_handle: handle to the filename queue
+upstream: the handles from previous stages in the pipeline, if any
+upstream_name: the names from the previous stages of the pipeline, if any
+bundle: [{this file map op}] + upstream
+bundle_name: [{this map op's name}] + upstream_name
+)doc");
 
+  namespace {
     Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
       Notification n;
       queue->TryDequeue(
-                        ctx, [this, ctx, &n, filename](const QueueInterface::Tuple& tuple) {
+                        ctx, [ctx, &n, filename](const QueueInterface::Tuple& tuple) {
                           if (ctx->status().ok()) {
                             if (tuple.size() != 1) {
                               ctx->SetStatus(
@@ -61,9 +71,84 @@ namespace tensorflow {
       }
       return Status::OK();
     }
+  }
+
+  class StagedFileMapOp : public OpKernel {
+  public:
+    StagedFileMapOp(OpKernelConstruction* context) : OpKernel(context) {}
 
     void Compute(OpKernelContext* ctx) override {
-      ScopeTimer s(trace_file_);
+      using namespace errors;
+      const Tensor *upstream_refs, *upstream_names;
+      OP_REQUIRES_OK(ctx, ctx->input("upstream_names", &upstream_names));
+      OP_REQUIRES_OK(ctx, ctx->input("upstream_refs", &upstream_refs));
+      OP_REQUIRES(ctx, upstream_refs->dim_size(0) == upstream_names->dim_size(0),
+                  Internal("Upstream refs have dim(0) size of (", upstream_refs->dim_size(0),
+                           "), while upstream names have size (", upstream_names->dim_size(0), ")"));
+      OP_REQUIRES(ctx, upstream_refs->dims() == 2 && upstream_refs->dim_size(1) == 2,
+                  Internal("upstream_refs has incorrect dims(", upstream_refs->dims(), ", should be 2) or dim(1) size"));
+      OP_REQUIRES(ctx, upstream_names->dims() == 1,
+                  Internal("upstream_names should have 1 dimension, but has ", upstream_names->dims()));
+      // TODO more shape verification needed?
+
+      QueueInterface* queue;
+      OP_REQUIRES_OK(ctx,
+                     GetResourceFromContext(ctx, "queue_handle", &queue));
+      core::ScopedUnref unref_me(queue);
+
+      string filename;
+      OP_REQUIRES_OK(ctx, GetNextFilename(queue, &filename, ctx));
+
+      ContainerInfo cinfo;
+      OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
+
+      auto creator = [filename, ctx](MemoryMappedFile **mmf) {
+        ReadOnlyMemoryRegion *rmr;
+        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
+        shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr);
+        *mmf = new MemoryMappedFile(shared_rmr);
+        return Status::OK();
+      };
+
+      MemoryMappedFile *mmf;
+      OP_REQUIRES_OK(ctx,
+                     cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
+                                                                                 cinfo.container(),
+                                                                                 filename,
+                                                                                 &mmf,
+                                                                                 creator
+                                                                                 ));
+
+      Tensor *file_handles, *file_names;
+      TensorShape file_handles_shape(upstream_refs->shape());
+      TensorShape file_names_shape(upstream_names->shape());
+      file_handles_shape.set_dim(0, file_handles_shape.dim_size(0) + 1);
+      file_names_shape.set_dim(0, file_names_shape.dim_size(0) + 1);
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handles", file_handles_shape, &file_handles));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_names", file_names_shape, &file_names));
+
+      auto handles_matrix = file_handles->matrix<string>();
+      auto names_vec = file_names->vec<string>();
+      auto upstream_handles_matrix = upstream_refs->matrix<string>();
+      auto upstream_names_vec = upstream_names->vec<string>();
+
+      auto max_dim = upstream_refs->dim_size(0);
+      for (int i = 0; i < max_dim; i++) {
+        names_vec(i) = upstream_names_vec(i);
+        handles_matrix(i) = upstream_handles_matrix(i);
+      }
+
+      names_vec(max_dim) = filename;
+      handles_matrix(max_dim, 0) = cinfo.container();
+      handles_matrix(max_dim, 1) = filename;
+    }
+  };
+
+  class FileMMapOp : public OpKernel {
+  public:
+    FileMMapOp(OpKernelConstruction* context) : OpKernel(context) {};
+
+    void Compute(OpKernelContext* ctx) override {
       QueueInterface* queue;
       OP_REQUIRES_OK(ctx,
                      GetResourceFromContext(ctx, "queue_handle", &queue));
@@ -76,7 +161,7 @@ namespace tensorflow {
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
 
-      auto creator = [this, filename, ctx](MemoryMappedFile **mmf) {
+      auto creator = [filename, ctx](MemoryMappedFile **mmf) {
         ReadOnlyMemoryRegion *rmr;
         TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
         shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr);
@@ -93,15 +178,19 @@ namespace tensorflow {
                                                                                  creator
                                                                                  ));
       Tensor *output_tensor;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({2}), &output_tensor));
-      MappedFileRef container_ref(output_tensor);
-      container_ref.SetName(filename);
-      container_ref.SetContainer(cinfo.container());
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));
+      auto output_matrix = output_tensor->matrix<string>();
+      output_matrix(0, 0) = cinfo.container();
+      output_matrix(0, 1) = filename;
+
+      Tensor *file_name;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
+      auto scalar = file_name->vec<string>();
+      scalar(0) = filename;
     }
-  private:
-    WritableFile *trace_file_ = nullptr;
   };
 
   REGISTER_KERNEL_BUILDER(Name("FileMMap").Device(DEVICE_CPU), FileMMapOp);
+  REGISTER_KERNEL_BUILDER(Name("StagedFileMap").Device(DEVICE_CPU), StagedFileMapOp);
 
 } // namespace tensorflow {

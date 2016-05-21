@@ -44,11 +44,16 @@ of the NULL pipeline.
       OP_REQUIRES(ctx, input_tensor->shape() == TensorShape({3}),
                   Internal("TensorShape of DeleteOp is wrong")
                   );
+      auto x = input_tensor->scalar<int64>();
+      auto y = reinterpret_cast<RecordParser*>(x());
+      delete y;
+      /*
       auto flat = input_tensor->vec<int64>();
       for (int i = 0; i < 3; i++) {
         auto x = reinterpret_cast<RecordParser*>(flat(i));
         delete x;
       }
+      */
     }
   };
 

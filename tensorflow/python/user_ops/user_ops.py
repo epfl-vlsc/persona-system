@@ -26,10 +26,6 @@ from tensorflow.python.framework import ops, tensor_shape
 from tensorflow.python.ops import common_shapes
 from tensorflow.python.ops import io_ops
 
-def my_fact():
-  """Example of overriding the generated code for an Op."""
-  return gen_user_ops._fact()
-
 class FASTQReader(io_ops.ReaderBase):
 
     def __init__(self, batch_size, name=None):
@@ -60,13 +56,29 @@ ops.RegisterShape("DenseReader")(common_shapes.scalar_shape)
 #  batch_size = op.get_attr("batch_size")
 #  return [tensor_shape.TensorShape([batch_size]), tensor_shape.scalar()]
 
-def FileMMap(queue, trace_file):
-  return gen_user_ops.file_m_map(queue_handle=queue, trace_file=trace_file)
+def FileMMap(queue):
+  return gen_user_ops.file_m_map(queue_handle=queue)
 
-@ops.RegisterShape("FileMMap")
+_fm_str = "FileMMap"
+@ops.RegisterShape(_fm_str)
 def _FileMMapShape(op):
-  return [tensor_shape.TensorShape([2])]
-ops.NoGradient("FileMMap")
+  return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
+ops.NoGradient(_fm_str)
+
+_sm_str = "StagedFileMap"
+def StagedFileMap(queue, upstream_files, upstream_names):
+  return gen_user_ops.staged_file_map(queue_handle=queue,
+                                      upstream_refs=upstream_files,
+                                      upstream_names=upstream_names)
+ops.NoGradient(_sm_str)
+
+@ops.RegisterShape(_sm_str)
+def _StagedFileMapShape(op):
+  upstream_files_shape = op.inputs[1].get_shape().dims
+  upstream_names_shape = op.inputs[2].get_shape().dims
+  upstream_files_shape[0] += 1
+  upstream_names_shape[0] += 1
+  return [upstream_files_shape, upstream_names_shape]
 
 def DeleteOp(input_tensor):
   return gen_user_ops.delete_op(data=input_tensor)
