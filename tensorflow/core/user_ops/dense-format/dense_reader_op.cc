@@ -78,6 +78,11 @@ Reads the dense stuff
         MemoryMappedFile *dense_file;
         OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
         core::ScopedUnref unref_me(dense_file);
+        while (!dense_file->RefCountIsOne()) {
+          dense_file->Unref();
+        }
+        dense_file->Ref(); // what a hack :(
+
         auto dense_mapping = dense_file->GetMappedRegion();
         RecordParser *data_buffer;
         data_buffer = new RecordParser(size_hint_);
@@ -90,10 +95,6 @@ Reads the dense stuff
         auto handle = output->scalar<int64>();
         handle() = reinterpret_cast<int64>(data_buffer);
 
-        while (!dense_file->RefCountIsOne()) {
-          dense_file->Unref();
-        }
-        dense_file->Ref(); // what a hack :(
       }
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Delete<MemoryMappedFile>(file_handle.GetContainer(), file_handle.GetName()));
     }
