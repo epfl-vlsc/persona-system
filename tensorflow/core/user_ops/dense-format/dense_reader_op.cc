@@ -1,4 +1,3 @@
-#include <boost/timer/timer.hpp>
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
 #include "shared_mmap_file_resource.h"
@@ -7,7 +6,6 @@
 #include "format.h"
 #include "decompress.h"
 #include "parser.h"
-#include "scope_timer.h"
 #include <vector>
 #include <typeinfo>
 
@@ -69,7 +67,6 @@ Reads the dense stuff
     }
 
     void Compute(OpKernelContext* ctx) override {
-      ScopeTimer s(trace_file_);
       using namespace errors;
       const Tensor *fileset;
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &fileset));
@@ -83,28 +80,20 @@ Reads the dense stuff
         core::ScopedUnref unref_me(dense_file);
         auto dense_mapping = dense_file->GetMappedRegion();
         RecordParser *data_buffer;
-        {
-          ScopeTimer x(convert_trace_file_);
-          data_buffer = new RecordParser(size_hint_);
-        }
+        data_buffer = new RecordParser(size_hint_);
 
-        {
-          ScopeTimer x(decomp_trace_file_);
-          OP_REQUIRES_OK(ctx, data_buffer->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
-        }
+        OP_REQUIRES_OK(ctx, data_buffer->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
 
-        {
-          // TODO just emit it as a single scalar value
-          Tensor *output = nullptr;
-          OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", TensorShape(), &output));
-          auto handle = output->scalar<int64>();
-          handle() = reinterpret_cast<int64>(data_buffer);
+        // TODO just emit it as a single scalar value
+        Tensor *output = nullptr;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", TensorShape(), &output));
+        auto handle = output->scalar<int64>();
+        handle() = reinterpret_cast<int64>(data_buffer);
 
-          while (!dense_file->RefCountIsOne()) {
-            dense_file->Unref();
-          }
-          dense_file->Ref(); // what a hack :(
+        while (!dense_file->RefCountIsOne()) {
+          dense_file->Unref();
         }
+        dense_file->Ref(); // what a hack :(
       }
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Delete<MemoryMappedFile>(file_handle.GetContainer(), file_handle.GetName()));
     }
