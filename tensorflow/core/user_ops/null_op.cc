@@ -13,7 +13,7 @@ namespace tensorflow {
 Consumes the input and produces nothing
 )doc");
 
-  REGISTER_OP("Delete")
+  REGISTER_OP("DeleteColumn")
   .Input("data: int64")
   .Doc(R"doc(
 Deletes the triple produced by the concat op for the dense op
@@ -33,20 +33,21 @@ of the NULL pipeline.
     }
   };
 
-  class DeleteOp : public OpKernel {
+  class DeleteColumnOp : public OpKernel {
   public:
-    DeleteOp(OpKernelConstruction* context) : OpKernel(context) {}
+    DeleteColumnOp(OpKernelConstruction* context) : OpKernel(context) {}
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
       const Tensor *input_tensor;
       OP_REQUIRES_OK(ctx, ctx->input("data", &input_tensor));
-      OP_REQUIRES(ctx, input_tensor->shape() == TensorShape({3}),
-                  Internal("TensorShape of DeleteOp is wrong")
-                  );
-      auto x = input_tensor->scalar<int64>();
-      auto y = reinterpret_cast<RecordParser*>(x());
-      delete y;
+      auto xs = input_tensor->flat<int64>();
+      RecordParser *rp;
+      for (int i = 0; i < xs.size(); i++) {
+        rp = reinterpret_cast<RecordParser*>(xs(i));
+        delete rp;
+      }
+        //RecordParser *rp;
       /*
       auto flat = input_tensor->vec<int64>();
       for (int i = 0; i < 3; i++) {
@@ -57,7 +58,7 @@ of the NULL pipeline.
     }
   };
 
-REGISTER_KERNEL_BUILDER(Name("Delete").Device(DEVICE_CPU), DeleteOp);
+REGISTER_KERNEL_BUILDER(Name("DeleteColumn").Device(DEVICE_CPU), DeleteColumnOp);
 
 #define REGISTER_TYPE(TYPE) \
   REGISTER_KERNEL_BUILDER(Name("Sink").Device(DEVICE_CPU).TypeConstraint<TYPE>("T"), \

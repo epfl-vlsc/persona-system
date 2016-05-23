@@ -82,9 +82,9 @@ def _StagedFileMapShape(op):
   upstream_names_shape[0] += 1
   return [upstream_files_shape, upstream_names_shape]
 
-def Delete(input_tensor):
-  return gen_user_ops.delete(data=input_tensor)
-ops.NoGradient("Delete")
+def DeleteColumn(input_tensor):
+  return gen_user_ops.delete_column(data=input_tensor, name="fuckyou")
+ops.NoGradient("DeleteColumn")
 
 def Sink(input_tensor):
   return gen_user_ops.sink(data=input_tensor)

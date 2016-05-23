@@ -80,7 +80,7 @@ namespace tensorflow {
         }
       }
 
-    if (file_header_.record_type == RecordType::BASES) {
+    if (file_header->record_type == RecordType::BASES) {
       vector<char> converted_records(index_size * 100), converted_index(index_size * 101); // TODO determine size better for 
 
       uint8_t current_record_length;
