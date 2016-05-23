@@ -1,5 +1,5 @@
-#include <boost/timer/timer.hpp>
 #include "parser.h"
+#include <utility>
 #include "decompress.h"
 
 namespace tensorflow {
@@ -14,7 +14,6 @@ namespace tensorflow {
   {
     using namespace errors;
     using namespace format;
-
     reset();
 
     if (length < sizeof(FileHeader)) {
@@ -37,8 +36,6 @@ namespace tensorflow {
       type_string = "metadata";
       break;
     }
-
-    //boost::timer::auto_cpu_timer t("Parse " + type_string + ": %w wall, %u user, %s system\n");
 
     auto payload_start = data + file_header->segment_start;
     auto payload_size = length - file_header->segment_start;
@@ -64,9 +61,7 @@ namespace tensorflow {
     const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
     if (buffer_.size() < index_size * 2) {
       return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", buffer_.size());
-    } /* else if (index_size > batch_size_) {
-      return Internal("FillBuffer: decompressed a chunk with ", index_size, " elements, but maximum batch size is ", batch_size_);
-      } */
+    }
 
     records = reinterpret_cast<const RecordTable*>(buffer_.data());
     size_t data_size = 0;
@@ -85,17 +80,43 @@ namespace tensorflow {
         }
       }
 
-    total_records_ = index_size;
-    current_record_ = 0;
-    current_offset_ = index_size;
-    file_header_ = *file_header;
+    if (file_header_.record_type == RecordType::BASES) {
+      vector<char> converted_records(index_size * 100), converted_index(index_size * 101); // TODO determine size better for 
 
+      uint8_t current_record_length;
+      const char* start_ptr = &buffer_[index_size];
+      const BinaryBaseRecord *bases;
+      for (uint64_t i = 0; i < index_size; ++i) {
+        current_record_length = records->relative_index[i];
+        bases = reinterpret_cast<const BinaryBaseRecord*>(start_ptr);
+        start_ptr += current_record_length;
+        TF_RETURN_IF_ERROR(bases->appendToVector(current_record_length, converted_records, converted_index));
+      }
+
+      // append everything in converted_records to the index
+      converted_index.reserve(converted_index.size() + converted_records.size());
+      converted_index.insert(end(converted_index), begin(converted_records), end(converted_records));
+      buffer_ = move(converted_index);
+    } else {
+      current_offset_ = index_size;
+    }
+
+    total_records_ = index_size;
+    file_header_ = *file_header;
+    current_record_ = 0;
     return Status::OK();
   }
 
-  void RecordParser::reset()
+  void RecordParser::reset() {
+    ResetIterator();
+    total_records_ = 0;
+    current_offset_ = 0;
+    valid_record_ = false;
+  }
+
+  void RecordParser::ResetIterator()
   {
-    buffer_.clear();
+    current_record_ = 0;
   }
 
   size_t RecordParser::RecordCount()
@@ -128,6 +149,31 @@ namespace tensorflow {
     current_record_++;
     current_offset_ += current_record_length;
     return Status::OK();
+  }
+
+  Status RecordParser::GetRecordAtIndex(size_t index, string *value)
+  {
+    using namespace errors;
+    using namespace format;
+
+    if (index >= total_records_ || index < 0) {
+      return Internal("Record access attempt at index ", index, ", with only ", total_records_, " records");
+    }
+
+    size_t i = 0;
+    for (size_t j = 0; j < index; j++) {
+      i += records->relative_index[j];
+    }
+
+    auto record_ptr = &buffer_[i];
+    auto record_len = records->relative_index[index];
+
+    if (file_header_.record_type == RecordType::BASES) {
+      auto bases = reinterpret_cast<const format::BinaryBaseRecord*>(record_ptr);
+      TF_RETURN_IF_ERROR(bases->toString(record_len, value));
+    } else {
+      *value = string(record_ptr, record_len);
+    }
   }
 
 } // namespace tensorflow {

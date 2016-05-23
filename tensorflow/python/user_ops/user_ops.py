@@ -42,19 +42,21 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, batch_size, trace_file, trace_file_process, trace_file_decomp, size_hint=None):
+def DenseReader(file_handle, batch_size, size_hint=None):
   if size_hint:
-    return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, trace_file=trace_file, trace_file_process=trace_file_process, trace_file_decomp=trace_file_decomp, size_hint=size_hint)
-  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, trace_file=trace_file, trace_file_process=trace_file_process, trace_file_decomp=trace_file_decomp)
+    return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint)
+  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size)
 
 ops.NoGradient("DenseReader")
-ops.RegisterShape("DenseReader")(common_shapes.scalar_shape)
-#@ops.RegisterShape("DenseReader")
-#def _DenseReaderShape(op):
-#  # just force the input to be a vector (will raise an exception if incorrect)
-#  input_shape = op.inputs[0].get_shape().with_rank(1)
-#  batch_size = op.get_attr("batch_size")
-#  return [tensor_shape.TensorShape([batch_size]), tensor_shape.scalar()]
+@ops.RegisterShape("DenseReader")
+def _DenseReaderShape(op):
+  # just force the input to be a vector (will raise an exception if incorrect)
+  input_shape = op.inputs[0].get_shape()
+  if input_shape != tensor_shape.vector(2):
+    raise Exception("Got shape {actual}, but expected shape {exp}".format(
+      actual=input_shape, exp=tensor_shape.vector(2)))
+  batch_size = op.get_attr("batch_size")
+  return [tensor_shape.scalar()]
 
 def FileMMap(queue):
   return gen_user_ops.file_m_map(queue_handle=queue)
@@ -80,13 +82,13 @@ def _StagedFileMapShape(op):
   upstream_names_shape[0] += 1
   return [upstream_files_shape, upstream_names_shape]
 
-def DeleteOp(input_tensor):
-  return gen_user_ops.delete_op(data=input_tensor)
-ops.NoGradient("DeleteOp")
+def Delete(input_tensor):
+  return gen_user_ops.delete(data=input_tensor)
+ops.NoGradient("Delete")
 
-def SinkOp(input_tensor):
-  return gen_user_ops.sink_op(data=input_tensor)
-ops.NoGradient("SinkOp")
+def Sink(input_tensor):
+  return gen_user_ops.sink(data=input_tensor)
+ops.NoGradient("Sink")
 
 class SAMWriter(io_ops.WriterBase):
 

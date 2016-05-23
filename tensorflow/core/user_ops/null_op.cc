@@ -6,14 +6,14 @@
 namespace tensorflow {
   using namespace std;
 
-  REGISTER_OP("SinkOp")
+  REGISTER_OP("Sink")
   .Attr("T: {float, int32, int64, string, float32}")
   .Input("data: T")
   .Doc(R"doc(
 Consumes the input and produces nothing
 )doc");
 
-  REGISTER_OP("DeleteOp")
+  REGISTER_OP("Delete")
   .Input("data: int64")
   .Doc(R"doc(
 Deletes the triple produced by the concat op for the dense op
@@ -57,10 +57,10 @@ of the NULL pipeline.
     }
   };
 
-REGISTER_KERNEL_BUILDER(Name("DeleteOp").Device(DEVICE_CPU), DeleteOp);
+REGISTER_KERNEL_BUILDER(Name("Delete").Device(DEVICE_CPU), DeleteOp);
 
 #define REGISTER_TYPE(TYPE) \
-  REGISTER_KERNEL_BUILDER(Name("SinkOp").Device(DEVICE_CPU).TypeConstraint<TYPE>("T"), \
+  REGISTER_KERNEL_BUILDER(Name("Sink").Device(DEVICE_CPU).TypeConstraint<TYPE>("T"), \
                           SinkOp)
 
 REGISTER_TYPE(string);

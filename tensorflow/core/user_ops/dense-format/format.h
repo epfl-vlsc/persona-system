@@ -17,6 +17,7 @@
 #define TENSORFLOW_CORE_USER_OPS_FORMAT_H_
 
 #include <cstdint>
+#include <vector>
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
@@ -93,6 +94,8 @@ namespace format {
     intoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<uint64_t> &bases);
     */
     Status toString(const std::size_t record_size_in_bytes, std::string *output) const;
+
+    Status appendToVector(const std::size_t record_size_in_bytes, std::vector<char> &output, std::vector<char> &lengths) const;
 
     BinaryBases bases[]; // relative length stored in the RecordTable.relative_index
 

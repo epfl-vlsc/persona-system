@@ -24,7 +24,7 @@ class SnapReadDecode {
     int metadata_len(int batch_index);
 
     int bases_len(int batch_index);
-   
+
     size_t size() { return read_tensor_->dim_size(1); }
 
   private:
@@ -35,7 +35,7 @@ class SnapReadDecode {
 };
 
 class MutableSnapReadDecode {
-  
+
   public:
     MutableSnapReadDecode(Tensor* read_tensor);
 

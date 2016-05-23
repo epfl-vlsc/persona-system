@@ -5,6 +5,37 @@ namespace format {
 
 using namespace std;
 
+Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, vector<char> &output, vector<char> &lengths) const
+{
+  if (record_size_in_bytes % sizeof(uint64_t) != 0) {
+    return errors::InvalidArgument("Size of record ", record_size_in_bytes, " is not a multiple of ", sizeof(uint64_t));
+  }
+
+  Status status;
+  const size_t record_size_in_base_records = record_size_in_bytes / 8;
+  char base_char = '\0';
+  uint8_t length; // TODO may need to deal with size_t issue better!
+  for (size_t i = 0; i < record_size_in_base_records; ++i) {
+    auto const base = &bases[i];
+    for (size_t j = 0; j < BinaryBases::compression; ++j) {
+      status = base->getBase(j, &base_char);
+
+      if (!status.ok()) {
+        if (errors::IsResourceExhausted(status)) {
+          break; // need to break because of last one
+        } else {
+          return status;
+        }
+      }
+
+      length++;
+      output.push_back(base_char);
+    }
+  }
+  lengths.push_back(static_cast<char>(length));
+  return Status::OK();
+}
+
 Status
 BinaryBaseRecord::toString(const size_t record_size_in_bytes, string *output) const
 {

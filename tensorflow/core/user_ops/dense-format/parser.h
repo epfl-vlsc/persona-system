@@ -13,6 +13,7 @@ namespace tensorflow {
   public:
     RecordParser(std::size_t size);
     RecordParser() = default;
+
     Status ParseNew(const char* data, const std::size_t length);
 
     size_t RecordCount();
@@ -21,7 +22,11 @@ namespace tensorflow {
 
     Status GetNextRecord(std::string *value);
 
+    Status GetRecordAtIndex(std::size_t index, std::string *value);
+
+    void ResetIterator();
   private:
+
     void reset();
 
     std::vector<char> buffer_;
@@ -32,6 +37,8 @@ namespace tensorflow {
     size_t current_record_ = 0;
     size_t current_offset_ = 0;
   };
+
+  
 }  //  namespace tensorflow {
 
 #endif

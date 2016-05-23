@@ -9,11 +9,11 @@ namespace tensorflow {
   using namespace std;
 
   REGISTER_OP("FileMMap")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
   .Input("queue_handle: Ref(string)")
   .Output("file_handle: string") // or is the output string?
   .Output("file_name: string")
-  .Attr("container: string = ''")
-  .Attr("shared_name: string = ''")
   .SetIsStateful()
   .Doc(R"doc(
 Produces memory-mapped files, synchronously reads them, and produces a Tensor<2>
