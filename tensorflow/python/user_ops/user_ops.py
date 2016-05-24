@@ -44,8 +44,8 @@ ops.NoGradient("FASTQDecoder")
 
 def DenseReader(file_handle, batch_size, size_hint=None, name=None):
   if size_hint:
-    return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint, name=name)
-  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, name=name)
+    return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint, name=name) #, trace_file=trace_file)
+  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, name=name) #, trace_file=trace_file)
 
 ops.NoGradient("DenseReader")
 @ops.RegisterShape("DenseReader")

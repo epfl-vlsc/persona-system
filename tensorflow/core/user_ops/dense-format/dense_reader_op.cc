@@ -7,12 +7,13 @@
 #include "decompress.h"
 #include "parser.h"
 #include <vector>
-#include <typeinfo>
+#include "scope_timer.h"
 
 namespace tensorflow {
 
   REGISTER_OP("DenseReader")
   .Attr("batch_size: int")
+  //.Attr("trace_file: string ")
   .Attr("size_hint: int = 4194304") // 4 MeB
   .Input("file_handle: string")
   .Output("record_handle: int64")
@@ -35,7 +36,14 @@ Reads the dense stuff
 
       OP_REQUIRES_OK(context, context->GetAttr("size_hint", &batch_size));
       size_hint_ = static_cast<size_t>(batch_size);
-      OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be >0 - ", size_hint_));
+      OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be > 0 - ", size_hint_));
+
+      /*
+      string s;
+      OP_REQUIRES_OK(context, context->GetAttr("trace_file", &s));
+      OP_REQUIRES_OK(context, context->env()->NewWritableFile(s, &decomp));
+      decomp->Append("time,duration\n");
+      */
     }
 
     ~DenseReaderOp() {}
@@ -47,7 +55,6 @@ Reads the dense stuff
       OP_REQUIRES(ctx, fileset->shape() == TensorShape({2}), InvalidArgument("Tensorshape is incorrect for dense reader op"));
 
       ReadOnlyFileRef file_handle(fileset);
-
       { // for the scoped unref
         MemoryMappedFile *dense_file;
         OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
@@ -60,13 +67,16 @@ Reads the dense stuff
         auto dense_mapping = dense_file->GetMappedRegion();
         auto data_buffer = new RecordParser(size_hint_);
 
-        OP_REQUIRES_OK(ctx, data_buffer->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
+        {
+          //ScopeTimer t(decomp);
+          OP_REQUIRES_OK(ctx, data_buffer->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
 
-        // TODO just emit it as a single scalar value
-        Tensor *output = nullptr;
-        OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", TensorShape(), &output));
-        auto handle = output->scalar<int64>();
-        handle() = reinterpret_cast<int64>(data_buffer);
+          // TODO just emit it as a single scalar value
+          Tensor *output = nullptr;
+          OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", TensorShape(), &output));
+          auto handle = output->scalar<int64>();
+          handle() = reinterpret_cast<int64>(data_buffer);
+        }
       }
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Delete<MemoryMappedFile>(file_handle.GetContainer(), file_handle.GetName()));
     }
@@ -74,6 +84,7 @@ Reads the dense stuff
   private:
     int batch_size_;
     size_t size_hint_;
+    //WritableFile *decomp;
   };
 
   REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReaderOp);
