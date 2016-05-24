@@ -42,10 +42,10 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, batch_size, size_hint=None):
+def DenseReader(file_handle, batch_size, size_hint=None, name=None):
   if size_hint:
-    return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint)
-  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size)
+    return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint, name=name)
+  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, name=name)
 
 ops.NoGradient("DenseReader")
 @ops.RegisterShape("DenseReader")
@@ -58,8 +58,8 @@ def _DenseReaderShape(op):
   batch_size = op.get_attr("batch_size")
   return [tensor_shape.scalar()]
 
-def FileMMap(queue):
-  return gen_user_ops.file_m_map(queue_handle=queue)
+def FileMMap(queue, name=None):
+  return gen_user_ops.file_m_map(queue_handle=queue, name=name)
 
 _fm_str = "FileMMap"
 @ops.RegisterShape(_fm_str)
@@ -68,10 +68,10 @@ def _FileMMapShape(op):
 ops.NoGradient(_fm_str)
 
 _sm_str = "StagedFileMap"
-def StagedFileMap(queue, upstream_files, upstream_names):
+def StagedFileMap(queue, upstream_files, upstream_names, name=None):
   return gen_user_ops.staged_file_map(queue_handle=queue,
                                       upstream_refs=upstream_files,
-                                      upstream_names=upstream_names)
+                                      upstream_names=upstream_names, name=name)
 ops.NoGradient(_sm_str)
 
 @ops.RegisterShape(_sm_str)
@@ -82,12 +82,12 @@ def _StagedFileMapShape(op):
   upstream_names_shape[0] += 1
   return [upstream_files_shape, upstream_names_shape]
 
-def DeleteColumn(input_tensor):
-  return gen_user_ops.delete_column(data=input_tensor, name="fuckyou")
+def DeleteColumn(input_tensor, name=None):
+  return gen_user_ops.delete_column(data=input_tensor, name=name)
 ops.NoGradient("DeleteColumn")
 
-def Sink(input_tensor):
-  return gen_user_ops.sink(data=input_tensor)
+def Sink(input_tensor, name=None):
+  return gen_user_ops.sink(data=input_tensor, name=name)
 ops.NoGradient("Sink")
 
 class SAMWriter(io_ops.WriterBase):

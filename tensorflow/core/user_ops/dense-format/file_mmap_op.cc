@@ -135,7 +135,8 @@ bundle_name: [{this map op's name}] + upstream_name
       auto max_dim = upstream_refs->dim_size(0);
       for (int i = 0; i < max_dim; i++) {
         names_vec(i) = upstream_names_vec(i);
-        handles_matrix(i) = upstream_handles_matrix(i);
+        handles_matrix(i, 0) = upstream_handles_matrix(i, 0);
+        handles_matrix(i, 1) = upstream_handles_matrix(i, 1);
       }
 
       names_vec(max_dim) = filename;
