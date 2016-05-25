@@ -20,9 +20,9 @@ namespace tensorflow {
 
     bool HasNextRecord();
 
-    Status GetNextRecord(std::string *value);
+    Status GetNextRecord(const char** value, std::size_t *length);
 
-    Status GetRecordAtIndex(std::size_t index, std::string *value);
+    Status GetRecordAtIndex(std::size_t index, const char **value, std::size_t *length);
 
     void ResetIterator();
   private:
@@ -38,7 +38,6 @@ namespace tensorflow {
     size_t current_offset_ = 0;
   };
 
-  
 }  //  namespace tensorflow {
 
 #endif

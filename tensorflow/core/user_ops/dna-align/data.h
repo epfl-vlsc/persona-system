@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include "tensorflow/core/framework/resource_mgr.h"
+#include "tensorflow/core/lib/core/status.h"
 
 namespace tensorflow {
 
@@ -13,29 +14,24 @@ namespace tensorflow {
     virtual bool has_metadata();
     virtual std::size_t num_records() = 0;
 
-    // The expensive methods, to access by index
-    virtual const char* qualities(std::size_t index) = 0;
-    virtual const char* bases(std::size_t index) = 0;
-    virtual std::size_t bases_length(std::size_t index) = 0;
-    // Note: we assume bases and qualities are the same length (they should be)
+    virtual Status qualities(std::size_t index, const char **data, std::size_t *length) = 0;
+    virtual Status bases(std::size_t index, const char **data, std::size_t *length) = 0;
+    virtual Status metadata(std::size_t index, const char **data, std::size_t *length);
 
-    virtual const char* metadata(std::size_t index);
-    virtual std::size_t metadata_length(std::size_t index);
-
-    virtual bool get_next_record(const char **bases, std::size_t *bases_length,
-                                 const char **qualities);
-
-    virtual bool get_next_record(const char **bases, std::size_t *bases_length,
-                                 const char **qualities,
-                                 const char **metadata, std::size_t *metadata_length);
+    virtual Status get_next_record(const char **bases, std::size_t *bases_length,
+                                   const char **qualities, std::size_t *qualities_length);
+    virtual Status get_next_record(const char **bases, std::size_t *bases_length,
+                                   const char **qualities, std::size_t *qualities_length,
+                                   const char **metadata, std::size_t *metadata_length);
 
     virtual void reset_iter();
   protected:
     std::size_t iter_ = 0;
+    bool exhausted();
 
   private:
-    bool get_current_record(const char **bases, std::size_t *bases_length,
-                                  const char **qualities);
+    Status get_current_record(const char **bases, std::size_t *bases_length,
+                              const char **qualities, std::size_t *qualities_length);
   };
 } // namespace tensorflow {
 

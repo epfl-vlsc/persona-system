@@ -129,7 +129,7 @@ namespace tensorflow {
     return current_record_ < total_records_;
   }
 
-  Status RecordParser::GetNextRecord(string *value)
+  Status RecordParser::GetNextRecord(const char** value, size_t *length)
   {
     using namespace errors;
     using namespace format;
@@ -140,18 +140,16 @@ namespace tensorflow {
 
     auto current_record_length = records->relative_index[current_record_];
     auto start_ptr = &buffer_[current_offset_];
-    if (file_header_.record_type == RecordType::BASES) {
-      auto bases = reinterpret_cast<const format::BinaryBaseRecord*>(start_ptr);
-      TF_RETURN_IF_ERROR(bases->toString(current_record_length, value));
-    } else {
-      *value = string(&buffer_[current_offset_], current_record_length);
-    }
+    *value = start_ptr;
+    *length = current_record_length;
+
     current_record_++;
     current_offset_ += current_record_length;
+
     return Status::OK();
   }
 
-  Status RecordParser::GetRecordAtIndex(size_t index, string *value)
+  Status RecordParser::GetRecordAtIndex(size_t index, const char **value, size_t *length)
   {
     using namespace errors;
     using namespace format;
@@ -167,13 +165,8 @@ namespace tensorflow {
 
     auto record_ptr = &buffer_[i];
     auto record_len = records->relative_index[index];
-
-    if (file_header_.record_type == RecordType::BASES) {
-      auto bases = reinterpret_cast<const format::BinaryBaseRecord*>(record_ptr);
-      TF_RETURN_IF_ERROR(bases->toString(record_len, value));
-    } else {
-      *value = string(record_ptr, record_len);
-    }
+    *value = record_ptr;
+    *length = record_len;
   }
 
 } // namespace tensorflow {

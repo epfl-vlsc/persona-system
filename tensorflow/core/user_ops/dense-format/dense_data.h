@@ -4,6 +4,7 @@
 #include <memory>
 #include "parser.h"
 #include "tensorflow/core/user_ops/dna-align/data.h"
+#include "tensorflow/core/lib/core/status.h"
 
 namespace tensorflow {
 
@@ -15,18 +16,21 @@ namespace tensorflow {
                   RecordBuffer metadata = nullptr);
 
     // TODO override destructor here for proper cleanup
+    virtual Status qualities(std::size_t index, const char **data, std::size_t *length) override;
+    virtual Status bases(std::size_t index, const char **data, std::size_t *length) override;
+    virtual Status metadata(std::size_t index, const char **data, std::size_t *length) override;
 
     virtual bool has_metadata() override;
     virtual std::size_t num_records() override;
 
-    virtual const char* qualities(std::size_t index) override;
-    virtual const char* bases(std::size_t index) override;
-    virtual std::size_t bases_length(std::size_t index) override;
+    // TODO have a node that specifically sets the metadata on an existing upstream node
+    Status set_metadata(RecordBuffer metadata);
 
-    virtual const char* metadata(std::size_t index) override;
-    virtual std::size_t metadata_length(std::size_t index) override;
-
-    void set_metadata(RecordBuffer metadata);
+    virtual Status get_next_record(const char **bases, std::size_t *bases_length,
+                                   const char **qualities, std::size_t *qualities_length) override;
+    virtual Status get_next_record(const char **bases, std::size_t *bases_length,
+                                   const char **qualities, std::size_t *qualities_length,
+                                   const char **metadata, std::size_t *metadata_length) override;
 
   private:
     RecordBuffer bases_, qualities_, metadata_;

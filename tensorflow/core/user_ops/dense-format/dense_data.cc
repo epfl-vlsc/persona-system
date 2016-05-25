@@ -2,6 +2,8 @@
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
+  using namespace std;
+
   DenseReadData::DenseReadData(RecordBuffer bases,
                                RecordBuffer qualities,
                                RecordBuffer metadata) : bases_(bases),
@@ -22,38 +24,74 @@ namespace tensorflow {
     }
   }
 
-  void DenseReadData::set_metadata(RecordBuffer metadata) {
+  Status DenseReadData::set_metadata(RecordBuffer metadata) {
+    auto md_record_count = metadata->RecordCount();
+    auto base_record_count = bases_->RecordCount();
+    if (base_record_count != md_record_count) {
+      return errors::InvalidArgument("Metadata record count (", md_record_count, ") is not the same as base record count (", base_record_count, ")");
+    }
     metadata_ = metadata;
+    return Status::OK();
   }
 
   bool DenseReadData::has_metadata() {
     return metadata_.get() != nullptr;
   }
 
-  std::size_t DenseReadData::num_records() {
+  size_t DenseReadData::num_records() {
     return bases_->RecordCount();
   }
 
-
-  const char* DenseReadData::qualities(std::size_t index) {
-    
+  Status DenseReadData::qualities(size_t index, const char **data, size_t *length) {
+    return qualities_->GetRecordAtIndex(index, data, length);
   }
 
-  const char* DenseReadData::bases(std::size_t index) {
-
+  Status DenseReadData::bases(size_t index, const char **data, size_t *length) {
+    return bases_->GetRecordAtIndex(index, data, length);
   }
 
-  std::size_t DenseReadData::bases_length(std::size_t index) {
+  Status DenseReadData::metadata(size_t index, const char **data, size_t *length) {
+    if (has_metadata()) {
+      return metadata_->GetRecordAtIndex(index, data, length);
+    }
 
+    return errors::NotFound("Accessing metadata on Dense Record that has none");
   }
 
+  Status DenseReadData::get_next_record(const char **bases, size_t *bases_length,
+                                        const char **qualities, size_t *qualities_length) {
+    using namespace errors;
 
-  const char* DenseReadData::metadata(std::size_t index) {
+    if (exhausted()) {
+      return ResourceExhausted("next record unavailable for get_next_record");
+    }
 
+    auto a = bases_->GetNextRecord(bases, bases_length);
+    if (a.ok()) {
+      a = qualities_->GetNextRecord(qualities, qualities_length);
+      if (a.ok()) {
+        iter_++;
+      }
+    }
+
+    return a;
   }
 
-  std::size_t DenseReadData::metadata_length(std::size_t index) {
+  Status DenseReadData::get_next_record(const char **bases, size_t *bases_length,
+                                        const char **qualities, size_t *qualities_length,
+                                        const char **metadata, size_t *metadata_length) {
+    using namespace errors;
+    if (!has_metadata()) {
+      return Internal("Attempting to get_next_record on a record without metadata");
+    }
 
+    // This call will advance iter_. Don't worry about resetting if it errors
+    auto a = get_next_record(bases, bases_length, qualities, qualities_length);
+    if (a.ok()) {
+      a = metadata_->GetNextRecord(metadata, metadata_length);
+    }
+
+    return a;
   }
 
 } // namespace tensorflow {
