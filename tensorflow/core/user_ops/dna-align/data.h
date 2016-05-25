@@ -25,6 +25,8 @@ namespace tensorflow {
                                    const char **metadata, std::size_t *metadata_length);
 
     virtual void reset_iter();
+
+    virtual string DebugString() override;
   protected:
     std::size_t iter_ = 0;
     bool exhausted();

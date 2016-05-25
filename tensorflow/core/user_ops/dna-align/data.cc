@@ -59,4 +59,8 @@ namespace tensorflow {
   void ReadData::reset_iter() {
     iter_ = 0;
   }
+
+  string ReadData::DebugString() {
+    return "a ReadData data reader";
+  }
 } // namespace tensorflow {

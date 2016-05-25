@@ -47,8 +47,9 @@ def DenseReader(file_handle, batch_size, size_hint=None, name=None):
     return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint, name=name) #, trace_file=trace_file)
   return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, name=name) #, trace_file=trace_file)
 
-ops.NoGradient("DenseReader")
-@ops.RegisterShape("DenseReader")
+_dread_str = "DenseReader"
+ops.NoGradient(_dread_str)
+@ops.RegisterShape(_dread_str)
 def _DenseReaderShape(op):
   # just force the input to be a vector (will raise an exception if incorrect)
   input_shape = op.inputs[0].get_shape()
@@ -73,6 +74,33 @@ def StagedFileMap(queue, upstream_files, upstream_names, name=None):
                                       upstream_refs=upstream_files,
                                       upstream_names=upstream_names, name=name)
 ops.NoGradient(_sm_str)
+
+_dr_str = "DenseRecordCreator"
+def DenseRecordCreator(bases, qualities, name=None):
+  return gen_user_ops.dense_record_creator(bases=bases, qualities=qualities, name=name)
+ops.NoGradient(_dr_str)
+
+@ops.RegisterShape(_dr_str)
+def _DenseRecordCreatorShape(op):
+  base_shape = op.inputs[0].get_shape()
+  qual_shape = op.inputs[1].get_shape()
+  if base_shape != qual_shape:
+    raise Exception("base shape is {base}, not equal to qual shape {qual}".format(
+      base=base_shape, qual=qual_shape))
+  return [base_shape]
+
+_dram_str = "DenseRecordCreator"
+def DenseRecordAddMetadata(dense_records, metadata, name=None):
+  return gen_user_ops.dense_record_creator(dense_data=dense_records, metadata=metadata, name=name)
+ops.NoGradient(_dram_str)
+
+@ops.RegisterShape(_dram_str)
+def _DenseRecordMetadataShape(op):
+  dense_shapes = op.inputs[0].get_shape()
+  metadata_shapes = op.inputs[1].get_shape()
+  if dense_shapes != metadata_shapes:
+    raise Exception("Dense Shape is {dense}, not equal to metadata shape {md}".format(dense=dense_shapes, md=metadata_shapes))
+  return [dense_shapes]
 
 @ops.RegisterShape(_sm_str)
 def _StagedFileMapShape(op):
