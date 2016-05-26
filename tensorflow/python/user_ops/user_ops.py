@@ -47,17 +47,25 @@ def DenseReader(file_handle, batch_size, size_hint=None, name=None):
     return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint, name=name) #, trace_file=trace_file)
   return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, name=name) #, trace_file=trace_file)
 
+# default is 2 for the shared resource ref
+def _assert_matrix(shape, column_dim=2):
+  if shape.ndims != 2:
+    raise Exception("Expected a matrix shape from {shp}".format(shp=shape))
+  if shape[1] != column_dim:
+    raise Exception("Expected {exp} for shape[1], but got {actual}".format(
+      exp=column_dim, actual=shape[1]))
+
 _dread_str = "DenseReader"
 ops.NoGradient(_dread_str)
 @ops.RegisterShape(_dread_str)
 def _DenseReaderShape(op):
   # just force the input to be a vector (will raise an exception if incorrect)
   input_shape = op.inputs[0].get_shape()
-  if input_shape != tensor_shape.vector(2):
-    raise Exception("Got shape {actual}, but expected shape {exp}".format(
-      actual=input_shape, exp=tensor_shape.vector(2)))
+  _assert_matrix(input_shape)
   batch_size = op.get_attr("batch_size")
-  return [tensor_shape.scalar()]
+  if batch_size < 1:
+    raise Exception("dense reader expects a positive batch size. Received {}".format(batch_size))
+  return [input_shape]
 
 def FileMMap(queue, name=None):
   return gen_user_ops.file_m_map(queue_handle=queue, name=name)
@@ -68,12 +76,31 @@ def _FileMMapShape(op):
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_fm_str)
 
+_sink_str = "SinkOp"
+def Sink(data, name=None):
+  return gen_user_ops.sink(data=data, name=name)
+ops.NoGradient(_sink_str)
+
+@ops.RegisterShape(_sink_str)
+def _SinkShape(op):
+  data = op.inputs[0].get_shape()
+  _assert_matrix(data)
+  return []
+
 _sm_str = "StagedFileMap"
 def StagedFileMap(queue, upstream_files, upstream_names, name=None):
   return gen_user_ops.staged_file_map(queue_handle=queue,
                                       upstream_refs=upstream_files,
                                       upstream_names=upstream_names, name=name)
 ops.NoGradient(_sm_str)
+
+@ops.RegisterShape(_sm_str)
+def _StagedFileMapShape(op):
+  upstream_files_shape = op.inputs[1].get_shape().dims
+  upstream_names_shape = op.inputs[2].get_shape().dims
+  upstream_files_shape[0] += 1
+  upstream_names_shape[0] += 1
+  return [upstream_files_shape, upstream_names_shape]
 
 _dr_str = "DenseRecordCreator"
 def DenseRecordCreator(bases, qualities, name=None):
@@ -84,39 +111,27 @@ ops.NoGradient(_dr_str)
 def _DenseRecordCreatorShape(op):
   base_shape = op.inputs[0].get_shape()
   qual_shape = op.inputs[1].get_shape()
-  if base_shape != qual_shape:
-    raise Exception("base shape is {base}, not equal to qual shape {qual}".format(
-      base=base_shape, qual=qual_shape))
+  _assert_matrix(base_shape)
+  _assert_matrix(qual_shape)
+  if base_shape != qual_shape: # to compare number of rows
+    raise Exception("Expected base shape ({b}) to be the same as qual shape ({q})".format(
+      b=base_shape, q=qual_shape))
   return [base_shape]
 
-_dram_str = "DenseRecordCreator"
+_dram_str = "DenseRecordAddMetadata"
 def DenseRecordAddMetadata(dense_records, metadata, name=None):
-  return gen_user_ops.dense_record_creator(dense_data=dense_records, metadata=metadata, name=name)
+  return gen_user_ops.dense_record_add_metadata(dense_data=dense_records, metadata=metadata, name=name)
 ops.NoGradient(_dram_str)
 
 @ops.RegisterShape(_dram_str)
 def _DenseRecordMetadataShape(op):
   dense_shapes = op.inputs[0].get_shape()
   metadata_shapes = op.inputs[1].get_shape()
+  _assert_matrix(dense_shapes)
+  _assert_matrix(metadata_shapes)
   if dense_shapes != metadata_shapes:
     raise Exception("Dense Shape is {dense}, not equal to metadata shape {md}".format(dense=dense_shapes, md=metadata_shapes))
   return [dense_shapes]
-
-@ops.RegisterShape(_sm_str)
-def _StagedFileMapShape(op):
-  upstream_files_shape = op.inputs[1].get_shape().dims
-  upstream_names_shape = op.inputs[2].get_shape().dims
-  upstream_files_shape[0] += 1
-  upstream_names_shape[0] += 1
-  return [upstream_files_shape, upstream_names_shape]
-
-def DeleteColumn(input_tensor, name=None):
-  return gen_user_ops.delete_column(data=input_tensor, name=name)
-ops.NoGradient("DeleteColumn")
-
-def Sink(input_tensor, name=None):
-  return gen_user_ops.sink(data=input_tensor, name=name)
-ops.NoGradient("Sink")
 
 class SAMWriter(io_ops.WriterBase):
 

@@ -1,25 +1,15 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/user_ops/dense-format/parser.h"
+#include "tensorflow/core/framework/resource_mgr.h"
 
 namespace tensorflow {
   using namespace std;
 
   REGISTER_OP("Sink")
-  .Attr("T: {float, int32, int64, string, float32}")
-  .Input("data: T")
+  .Input("data: string")
   .Doc(R"doc(
 Consumes the input and produces nothing
-)doc");
-
-  REGISTER_OP("DeleteColumn")
-  .Input("data: int64")
-  .Doc(R"doc(
-Deletes the triple produced by the concat op for the dense op
-
-This is really hacky, and is basically just for a proof-of-concept
-of the NULL pipeline.
 )doc");
 
   class SinkOp : public OpKernel {
@@ -30,42 +20,22 @@ of the NULL pipeline.
       // TODO do I have to even do anything with it?
       const Tensor *input_tensor;
       OP_REQUIRES_OK(ctx, ctx->input("data", &input_tensor));
+      // assume that the Python layer checks the shape, se we don't have to do it here
+
+      ContainerInfo cinfo;
+      OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
+      auto rmgr = cinfo.resource_manager();
+
+      auto input = input_tensor->matrix<string>();
+      ResourceBase *rb;
+      for (int64 i = 0; i < input_tensor->dim_size(0); i++) {
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(input(i, 0), input(i, 1), &rb));
+        OP_REQUIRES_OK(ctx, rmgr->Delete<ResourceBase>(input(i, 0), input(i, 1)));
+        while (!rb->Unref()) {}
+      }
     }
   };
 
-  class DeleteColumnOp : public OpKernel {
-  public:
-    DeleteColumnOp(OpKernelConstruction* context) : OpKernel(context) {}
 
-    void Compute(OpKernelContext* ctx) override {
-      using namespace errors;
-      const Tensor *input_tensor;
-      OP_REQUIRES_OK(ctx, ctx->input("data", &input_tensor));
-      auto xs = input_tensor->flat<int64>();
-      RecordParser *rp;
-      for (int i = 0; i < xs.size(); i++) {
-        rp = reinterpret_cast<RecordParser*>(xs(i));
-        delete rp;
-      }
-        //RecordParser *rp;
-      /*
-      auto flat = input_tensor->vec<int64>();
-      for (int i = 0; i < 3; i++) {
-        auto x = reinterpret_cast<RecordParser*>(flat(i));
-        delete x;
-      }
-      */
-    }
-  };
-
-REGISTER_KERNEL_BUILDER(Name("DeleteColumn").Device(DEVICE_CPU), DeleteColumnOp);
-
-#define REGISTER_TYPE(TYPE) \
-  REGISTER_KERNEL_BUILDER(Name("Sink").Device(DEVICE_CPU).TypeConstraint<TYPE>("T"), \
-                          SinkOp)
-
-REGISTER_TYPE(string);
-REGISTER_TYPE(int64);
-REGISTER_TYPE(int32);
-REGISTER_TYPE(float);
+REGISTER_KERNEL_BUILDER(Name("Sink").Device(DEVICE_CPU), SinkOp);
 } // namespace tensorflow {

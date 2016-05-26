@@ -20,7 +20,6 @@ from __future__ import print_function
 
 from tensorflow.core.framework import tensor_shape_pb2
 
-
 class Dimension(object):
   """Represents the value of one dimension in a TensorShape."""
 

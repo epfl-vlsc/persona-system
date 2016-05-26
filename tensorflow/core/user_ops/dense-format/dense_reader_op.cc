@@ -13,10 +13,11 @@ namespace tensorflow {
 
   REGISTER_OP("DenseReader")
   .Attr("batch_size: int")
-  //.Attr("trace_file: string ")
   .Attr("size_hint: int = 4194304") // 4 MeB
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
   .Input("file_handle: string")
-  .Output("record_handle: int64")
+  .Output("record_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
 Reads the dense stuff
@@ -37,13 +38,6 @@ Reads the dense stuff
       OP_REQUIRES_OK(context, context->GetAttr("size_hint", &batch_size));
       size_hint_ = static_cast<size_t>(batch_size);
       OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be > 0 - ", size_hint_));
-
-      /*
-      string s;
-      OP_REQUIRES_OK(context, context->GetAttr("trace_file", &s));
-      OP_REQUIRES_OK(context, context->env()->NewWritableFile(s, &decomp));
-      decomp->Append("time,duration\n");
-      */
     }
 
     ~DenseReaderOp() {}
@@ -52,38 +46,50 @@ Reads the dense stuff
       using namespace errors;
       const Tensor *fileset;
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &fileset));
-      OP_REQUIRES(ctx, fileset->shape() == TensorShape({2}), InvalidArgument("Tensorshape is incorrect for dense reader op"));
+      // assume that the python shape function takes care of this
+      auto fileset_matrix = fileset->matrix<string>();
 
-      ReadOnlyFileRef file_handle(fileset);
-      { // for the scoped unref
-        MemoryMappedFile *dense_file;
-        OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(file_handle.GetContainer(), file_handle.GetName(), &dense_file));
-        core::ScopedUnref unref_me(dense_file);
-        while (!dense_file->RefCountIsOne()) {
-          dense_file->Unref();
-        }
-        dense_file->Ref(); // what a hack :(
+      ContainerInfo cinfo;
+      OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
+      auto rmgr = cinfo.resource_manager();
 
-        auto dense_mapping = dense_file->GetMappedRegion();
-        auto data_buffer = new RecordParser(size_hint_);
+      Tensor *output;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", fileset->shape(), &output));
+      auto output_matrix = output->matrix<string>();
 
-        {
-          //ScopeTimer t(decomp);
-          OP_REQUIRES_OK(ctx, data_buffer->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
+      string resource_name(name());
+      RecordParser *rp;
+      MemoryMappedFile *dense_file;
+      for (int64 i = 0; i < fileset->dim_size(0); i++)
+      {
+          OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &dense_file));
+          {
+            core::ScopedUnref unref_me(dense_file);
 
-          // TODO just emit it as a single scalar value
-          Tensor *output = nullptr;
-          OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", TensorShape(), &output));
-          auto handle = output->scalar<int64>();
-          handle() = reinterpret_cast<int64>(data_buffer);
-        }
+            auto dense_mapping = dense_file->GetMappedRegion();
+
+            resource_name = name();
+            resource_name.append(to_string(round_++));
+
+            rp = new RecordParser(size_hint_);
+            OP_REQUIRES_OK(ctx, rp->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
+            OP_REQUIRES_OK(ctx, rmgr->Create<RecordParser>(cinfo.container(), resource_name, rp));
+
+            output_matrix(i, 0) = cinfo.container();
+            output_matrix(i, 1) = resource_name;
+          }
+          OP_REQUIRES_OK(ctx, rmgr->Delete<MemoryMappedFile>(fileset_matrix(i, 0), fileset_matrix(i, 1)));
+          if (!dense_file->RefCountIsOne()) {
+            LOG(ERROR) << "Ref count is not 1 for dense file after delete\n";
+            ctx->CtxFailure(Internal("Ref count is not 1 for dense file after delete"));
+          }
       }
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Delete<MemoryMappedFile>(file_handle.GetContainer(), file_handle.GetName()));
     }
 
   private:
     int batch_size_;
     size_t size_hint_;
+    size_t round_ = 0;
     //WritableFile *decomp;
   };
 

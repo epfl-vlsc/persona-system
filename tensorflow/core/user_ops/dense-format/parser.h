@@ -3,12 +3,13 @@
 
 #include "format.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/framework/resource_mgr.h"
 #include <vector>
 #include <string>
 #include <cstdint>
 
 namespace tensorflow {
-  class RecordParser
+  class RecordParser : public ResourceBase
   {
   public:
     RecordParser(std::size_t size);
@@ -25,6 +26,8 @@ namespace tensorflow {
     Status GetRecordAtIndex(std::size_t index, const char **value, std::size_t *length);
 
     void ResetIterator();
+
+    virtual string DebugString() override;
   private:
 
     void reset();

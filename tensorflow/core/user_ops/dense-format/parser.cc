@@ -149,6 +149,11 @@ namespace tensorflow {
     return Status::OK();
   }
 
+  string RecordParser::DebugString()
+  {
+    return "a record parser";
+  }
+
   Status RecordParser::GetRecordAtIndex(size_t index, const char **value, size_t *length)
   {
     using namespace errors;

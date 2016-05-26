@@ -5,9 +5,11 @@
 
 namespace tensorflow {
   REGISTER_OP("DenseRecordCreator")
-  .Input("bases: int64")
-  .Input("qualities: int64")
-  .Output("dense_data: int64")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
+  .Input("bases: string")
+  .Input("qualities: string")
+  .Output("dense_data: string")
   .Doc(R"doc(
 Assembles the bases and qualities, based as opaque pointer scalar values,
 into a DenseReadData object.
@@ -17,9 +19,11 @@ qualities: the RecordParser object for the quality records
 )doc");
 
   REGISTER_OP("DenseRecordAddMetadata")
-  .Input("dense_data: int64")
-  .Input("metadata: int64")
-  .Output("dense_data_out: int64")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
+  .Input("dense_data: string")
+  .Input("metadata: string")
+  .Output("dense_data_out: string")
   .Doc(R"doc(
 dense_data: a DenseReadData object, as a pointer. Opaque to user-space (python)
 metadata: a RecordParser object pointer for the metadata records
@@ -38,27 +42,46 @@ dense_data: the same data as dense_data input
       OP_REQUIRES_OK(ctx, ctx->input("qualities", &quality));
 
       const auto &base_shape = base->shape();
-      const auto &qual_shape = quality->shape();
-      OP_REQUIRES(ctx, base_shape == qual_shape,
-                  InvalidArgument("base shape (", base_shape.DebugString(), ") is not equal to qual shape (", qual_shape.DebugString(), ")"));
+      // assume that the Python layer takes care of the shapes
+
+      ContainerInfo cinfo;
+      OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
+      auto rmgr = cinfo.resource_manager();
+
+      auto base_matrix = base->matrix<string>();
+      auto quality_matrix = quality->matrix<string>();
+      string resource_name(name());
 
       Tensor *output;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("dense_data", base_shape, &output));
 
-      auto bases = base->flat<int64>();
-      auto qualities = quality->flat<int64>();
-      auto out = output->flat<int64>();
-
+      auto output_matrix = output->matrix<string>();
       RecordParser *b, *q;
       DenseReadData *drd;
-      for (size_t i = 0; i < bases.size(); i++) {
-        b = reinterpret_cast<RecordParser*>(bases(i));
-        q = reinterpret_cast<RecordParser*>(qualities(i));
-        shared_ptr<RecordParser> b_sp(b), q_sp(q);
-        drd = new DenseReadData(b_sp, q_sp);
-        out(i) = reinterpret_cast<int64>(drd);
+      for (int64 i = 0; i < base->dim_size(0); i++) {
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(base_matrix(i, 0), base_matrix(i, 1), &b));
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(quality_matrix(i, 0), quality_matrix(i, 1), &q));
+        // No scoped unref. We need tihs to service inside of the DenseReadData object
+        // We just need to get them out of this container
+
+        resource_name = name();
+        resource_name.append(to_string(round_++));
+
+        drd = new DenseReadData(shared_ptr<RecordParser>(b), shared_ptr<RecordParser>(q));
+        OP_REQUIRES_OK(ctx, rmgr->Create<DenseReadData>(cinfo.container(), resource_name, drd));
+        auto creator = [ctx, b, q](DenseReadData **drd) {
+          return Status::OK();
+        };
+
+        output_matrix(i, 0) = cinfo.container();
+        output_matrix(i, 1) = resource_name;
+
+        OP_REQUIRES_OK(ctx, rmgr->Delete<RecordParser>(base_matrix(i, 0), base_matrix(i, 1)));
+        OP_REQUIRES_OK(ctx, rmgr->Delete<RecordParser>(quality_matrix(i, 0), quality_matrix(i, 1)));
       }
     }
+  private:
+    size_t round_ = 0;
   };
 
   class DenseRecordAddMetadataOp : public OpKernel {
@@ -68,26 +91,31 @@ dense_data: the same data as dense_data input
       const Tensor *dense_data, *metadata;
       OP_REQUIRES_OK(ctx, ctx->input("dense_data", &dense_data));
       OP_REQUIRES_OK(ctx, ctx->input("metadata", &metadata));
-      const auto &dense_shape = dense_data->shape();
-      const auto &metadata_shape = metadata->shape();
+      // Assume that the Python ensures the proper shape
 
-      OP_REQUIRES(ctx, dense_shape == metadata_shape, InvalidArgument("Tensor shape for dense_data (", dense_shape.DebugString(), ") does not match metadata_shape (", metadata_shape.DebugString(), ")"));
+      ContainerInfo cinfo;
+      OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
+      auto rmgr = cinfo.resource_manager();
 
-      auto dense = dense_data->flat<int64>();
-      auto md = metadata->flat<int64>();
+      auto dense = dense_data->matrix<string>();
+      auto md = metadata->matrix<string>();
 
-      DenseReadData *read;
+      DenseReadData *drd;
       RecordParser *rp;
       for (size_t i = 0; i < dense.size(); i++) {
-        read = reinterpret_cast<DenseReadData *>(dense(i));
-        rp = reinterpret_cast<RecordParser *>(md(i));
-        shared_ptr<RecordParser> a(rp);
-        OP_REQUIRES_OK(ctx, read->set_metadata(a));
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(dense(i, 0), dense(i, 1), &drd));
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(md(i, 0), md(i, 1), &rp));
+        core::ScopedUnref unref_drd(drd);
+
+        OP_REQUIRES_OK(ctx, drd->set_metadata(shared_ptr<RecordParser>(rp)));
+
+        // Just to delete from the resource manager. It's lifetime will be managed by drd
+        OP_REQUIRES_OK(ctx, rmgr->Delete<RecordParser>(md(i, 0), md(i, 1)));
       }
 
-      Tensor *dd_out;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("dense_data_out", dense_shape, &dd_out));
-      *dd_out = *dense_data;
+      Tensor *dense_out;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("dense_data_out", dense_data->shape(), &dense_out));
+      *dense_out = *dense_data;
     }
   };
 

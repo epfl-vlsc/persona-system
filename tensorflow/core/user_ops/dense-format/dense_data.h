@@ -15,6 +15,8 @@ namespace tensorflow {
                   RecordBuffer qualities,
                   RecordBuffer metadata = nullptr);
 
+    virtual ~DenseReadData();
+
     // TODO override destructor here for proper cleanup
     virtual Status qualities(std::size_t index, const char **data, std::size_t *length) override;
     virtual Status bases(std::size_t index, const char **data, std::size_t *length) override;

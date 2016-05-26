@@ -4,6 +4,13 @@
 namespace tensorflow {
   using namespace std;
 
+  DenseReadData::~DenseReadData() {
+    while (!bases_->Unref()) {};
+    while (!qualities_->Unref()) {};
+    if (has_metadata())
+      while (!metadata_->Unref()) {};
+  }
+
   DenseReadData::DenseReadData(RecordBuffer bases,
                                RecordBuffer qualities,
                                RecordBuffer metadata) : bases_(bases),
