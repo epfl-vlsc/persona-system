@@ -2,11 +2,14 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
+#include "dense-format/dense_data.h"
 
 namespace tensorflow {
   using namespace std;
 
   REGISTER_OP("Sink")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
   .Input("data: string")
   .Doc(R"doc(
 Consumes the input and produces nothing
@@ -27,11 +30,13 @@ Consumes the input and produces nothing
       auto rmgr = cinfo.resource_manager();
 
       auto input = input_tensor->matrix<string>();
-      ResourceBase *rb;
+      DenseReadData *rb;
       for (int64 i = 0; i < input_tensor->dim_size(0); i++) {
-        OP_REQUIRES_OK(ctx, rmgr->Lookup(input(i, 0), input(i, 1), &rb));
-        OP_REQUIRES_OK(ctx, rmgr->Delete<ResourceBase>(input(i, 0), input(i, 1)));
-        while (!rb->Unref()) {}
+        auto ctr = input(i, 0);
+        auto nm = input(i, 1);
+        //OP_REQUIRES_OK(ctx, rmgr->Lookup(ctr, nm, &rb));
+        OP_REQUIRES_OK(ctx, rmgr->Delete<DenseReadData>(ctr, nm));
+        //while (!rb->Unref()) {}
       }
     }
   };

@@ -42,7 +42,7 @@ namespace tensorflow {
   }
 
   bool DenseReadData::has_metadata() {
-    return metadata_.get() != nullptr;
+    return metadata_ != nullptr;
   }
 
   size_t DenseReadData::num_records() {

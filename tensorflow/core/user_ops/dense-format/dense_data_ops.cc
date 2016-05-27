@@ -67,7 +67,7 @@ dense_data: the same data as dense_data input
         resource_name = name();
         resource_name.append(to_string(round_++));
 
-        drd = new DenseReadData(shared_ptr<RecordParser>(b), shared_ptr<RecordParser>(q));
+        drd = new DenseReadData(b, q);
         OP_REQUIRES_OK(ctx, rmgr->Create<DenseReadData>(cinfo.container(), resource_name, drd));
         auto creator = [ctx, b, q](DenseReadData **drd) {
           return Status::OK();
@@ -102,12 +102,14 @@ dense_data: the same data as dense_data input
 
       DenseReadData *drd;
       RecordParser *rp;
-      for (size_t i = 0; i < dense.size(); i++) {
-        OP_REQUIRES_OK(ctx, rmgr->Lookup(dense(i, 0), dense(i, 1), &drd));
+      for (size_t i = 0; i < dense.dimension(0); i++) {
+        auto ctr = dense(i, 0);
+        auto nm = dense(i, 1);
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(ctr, nm, &drd));
         OP_REQUIRES_OK(ctx, rmgr->Lookup(md(i, 0), md(i, 1), &rp));
         core::ScopedUnref unref_drd(drd);
 
-        OP_REQUIRES_OK(ctx, drd->set_metadata(shared_ptr<RecordParser>(rp)));
+        OP_REQUIRES_OK(ctx, drd->set_metadata(rp));
 
         // Just to delete from the resource manager. It's lifetime will be managed by drd
         OP_REQUIRES_OK(ctx, rmgr->Delete<RecordParser>(md(i, 0), md(i, 1)));

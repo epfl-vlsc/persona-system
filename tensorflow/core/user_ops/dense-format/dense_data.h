@@ -10,7 +10,7 @@ namespace tensorflow {
 
   class DenseReadData : public ReadData {
   public:
-    typedef std::shared_ptr<RecordParser> RecordBuffer;
+    typedef RecordParser* RecordBuffer;
     DenseReadData(RecordBuffer bases,
                   RecordBuffer qualities,
                   RecordBuffer metadata = nullptr);
