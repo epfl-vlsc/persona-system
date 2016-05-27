@@ -69,9 +69,6 @@ dense_data: the same data as dense_data input
 
         drd = new DenseReadData(b, q);
         OP_REQUIRES_OK(ctx, rmgr->Create<DenseReadData>(cinfo.container(), resource_name, drd));
-        auto creator = [ctx, b, q](DenseReadData **drd) {
-          return Status::OK();
-        };
 
         output_matrix(i, 0) = cinfo.container();
         output_matrix(i, 1) = resource_name;
