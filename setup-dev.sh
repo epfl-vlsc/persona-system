@@ -18,9 +18,8 @@ prep_virtualenv() {
         sudo easy_install pip
     else
         # assume Ubuntu
-        sudo apt-get install python-pip python-dev
+        sudo apt-get install python-pip python-dev python-retrying python-ipaddr bc python-virtualenv
     fi
-    sudo pip install --upgrade virtualenv
 
     virtualenv --system-site-packages $dev_dir
     source $dev_dir/bin/activate
@@ -41,8 +40,8 @@ prep_dirs() {
 install_dev_build() {
     pushd .
     cd $build_virtualenv_dir
-
-    ln -sf ../bazel-bin/tensorflow/tools/pip_package/build_pip_package.runfiles/* .
+    
+    ln -sf ../bazel-bin/tensorflow/tools/pip_package/build_pip_package.runfiles/org_tensorflow/* .
     ln -sf ../tensorflow/tools/pip_package/* .
     python setup.py develop
 
