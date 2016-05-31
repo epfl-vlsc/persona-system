@@ -100,6 +100,8 @@ struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
 #endif
   }
 
+  int NumThreads() const { return num_threads_; };
+
   const int num_threads_;
 };
 
@@ -114,6 +116,8 @@ struct ThreadPool::Impl {
                    std::function<void(int64, int64)> fn) {
     CHECK(0);  // should not be used with the old thread pool
   }
+
+  int NumThreads() const { return threads_.size(); };
 
  private:
   struct Waiter {
@@ -241,6 +245,8 @@ void ThreadPool::ParallelFor(int64 total, int64 cost_per_unit,
                              std::function<void(int64, int64)> fn) {
   impl_->ParallelFor(total, cost_per_unit, std::move(fn));
 }
+
+int ThreadPool::NumThreads() const { return impl_->NumThreads(); }
 
 }  // namespace thread
 }  // namespace tensorflow

@@ -184,6 +184,7 @@ bool IsCudnnR2() {
   __macro(cudnnSetStream)                                 \
   __macro(cudnnActivationForward)                         \
   __macro(cudnnConvolutionForward)                        \
+  __macro(cudnnConvolutionBackwardBias)                   \
   __macro(cudnnGetConvolutionForwardWorkspaceSize)        \
   __macro(cudnnTransformTensor)                           \
   __macro(cudnnSetConvolutionNdDescriptor)                \
@@ -268,6 +269,9 @@ cudnnConvolutionFwdAlgo_t ToConvForwardAlgo(dnn::AlgorithmType algorithm) {
     case CUDNN_CONVOLUTION_FWD_ALGO_DIRECT:
     case CUDNN_CONVOLUTION_FWD_ALGO_FFT:
     case CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING:
+#if CUDNN_VERSION >= 5000
+    case CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD:
+#endif
       return algo;
     default:
       LOG(FATAL) << "Unsupported Cudnn convolution forward algorithm: "
@@ -283,6 +287,9 @@ cudnnConvolutionBwdDataAlgo_t ToConvBackwardDataAlgo(
     case CUDNN_CONVOLUTION_BWD_DATA_ALGO_1:
     case CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT:
     case CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING:
+#if CUDNN_VERSION >= 5000
+    case CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD:
+#endif
       return algo;
     default:
       LOG(FATAL)
@@ -865,6 +872,9 @@ bool CudnnSupport::GetConvolveAlgorithms(
       CUDNN_CONVOLUTION_FWD_ALGO_DIRECT,
       CUDNN_CONVOLUTION_FWD_ALGO_FFT,
       CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING,
+#if CUDNN_VERSION >= 5000
+      CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD,
+#endif
       // clang-format on
   });
   return true;
@@ -878,6 +888,9 @@ bool CudnnSupport::GetConvolveBackwardDataAlgorithms(
       CUDNN_CONVOLUTION_BWD_DATA_ALGO_1,
       CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT,
       CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING,
+#if CUDNN_VERSION >= 5000
+      CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD,
+#endif
       // clang-format on
   });
   return true;
@@ -1479,6 +1492,72 @@ bool CudnnSupport::DoConvolveBackwardFilter(
       convolution_descriptor, filter_descriptor,
       backward_filter_data, scratch_allocator,
       algorithm, output_profile_result);
+}
+
+template <class T>
+bool CudnnSupport::DoConvolveBackwardBiasImpl(
+    Stream* stream, int cudnn_type,  // Actually cudnnDataType_t.
+    const dnn::BatchDescriptor& input_descriptor,
+    const DeviceMemory<T>& input_data,
+    const dnn::BatchDescriptor& bias_descriptor,
+    DeviceMemory<T>* backward_bias_data) {
+  mutex_lock lock{dnn_handle_mutex_};
+  auto status = dynload::cudnnSetStream(parent_, ToHandle(dnn_handle_),
+                                        AsCUDAStreamValue(stream));
+  if (status != CUDNN_STATUS_SUCCESS) {
+    LOG(FATAL) << "failed to set stream for cudnn handle: " << ToString(status);
+  }
+
+  ScopedTensorDescriptor input_nd{parent_, input_descriptor,
+                                  static_cast<cudnnDataType_t>(cudnn_type)};
+  ScopedTensorDescriptor bias_nd{parent_, bias_descriptor,
+                                 static_cast<cudnnDataType_t>(cudnn_type)};
+
+  // Alpha is the scaling factor for input.
+  float alpha = 1.0;
+  // Beta is the scaling factor for output.
+  float beta = 0.0;
+
+  status = dynload::cudnnConvolutionBackwardBias(
+      parent_, ToHandle(dnn_handle_), &alpha, input_nd.handle(),
+      input_data.opaque(), &beta, bias_nd.handle(),
+      backward_bias_data->opaque());
+  if (status != CUDNN_STATUS_SUCCESS) {
+    LOG(FATAL) << "failed to enqueue backward convolution on stream: "
+               << ToString(status);
+    return false;
+  }
+  return true;
+}
+
+bool CudnnSupport::DoConvolveBackwardBias(
+    Stream* stream, const BatchDescriptor& input_descriptor,
+    const DeviceMemory<double>& input_data,
+    const BatchDescriptor& bias_descriptor,
+    DeviceMemory<double>* backward_bias_data) {
+  return DoConvolveBackwardBiasImpl(stream, CUDNN_DATA_DOUBLE, input_descriptor,
+                                    input_data, bias_descriptor,
+                                    backward_bias_data);
+}
+
+bool CudnnSupport::DoConvolveBackwardBias(
+    Stream* stream, const BatchDescriptor& input_descriptor,
+    const DeviceMemory<float>& input_data,
+    const BatchDescriptor& bias_descriptor,
+    DeviceMemory<float>* backward_bias_data) {
+  return DoConvolveBackwardBiasImpl(stream, CUDNN_DATA_FLOAT, input_descriptor,
+                                    input_data, bias_descriptor,
+                                    backward_bias_data);
+}
+
+bool CudnnSupport::DoConvolveBackwardBias(
+    Stream* stream, const BatchDescriptor& input_descriptor,
+    const DeviceMemory<Eigen::half>& input_data,
+    const BatchDescriptor& bias_descriptor,
+    DeviceMemory<Eigen::half>* backward_bias_data) {
+  return DoConvolveBackwardBiasImpl(stream, CUDNN_DATA_HALF, input_descriptor,
+                                    input_data, bias_descriptor,
+                                    backward_bias_data);
 }
 
 bool CudnnSupport::DoMatMul(Stream* stream,

@@ -54,6 +54,9 @@ class ThreadPool {
   void ParallelFor(int64 total, int64 cost_per_unit,
                    std::function<void(int64, int64)> fn);
 
+  // Returns the number of threads in the pool.
+  int NumThreads() const;
+
   struct Impl;
 
  private:

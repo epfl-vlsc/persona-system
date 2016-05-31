@@ -1,6 +1,3 @@
-[submodule "google/protobuf"]
-	path = google/protobuf
-	url = https://github.com/google/protobuf.git
 [submodule "tensorflow/user_ops/dna-align/snap"]
 	path = tensorflow/core/user_ops/dna-align/snap
 	url = git@github.com:epfl-bioflow/snap.git

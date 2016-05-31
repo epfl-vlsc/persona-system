@@ -114,7 +114,6 @@ cc_library(
 cc_library(
     name = "ops_testutil",
     testonly = 1,
-    srcs = ["ops_testutil.cc"],
     hdrs = ["ops_testutil.h"],
     deps = [
         "//tensorflow/core:core_cpu",
@@ -503,6 +502,10 @@ tf_cc_test(
 tf_cc_test(
     name = "slice_op_test",
     size = "small",
+    linkopts = select({
+        "//tensorflow:darwin": ["-headerpad_max_install_names"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":ops_testutil",
         ":ops_util",
@@ -798,6 +801,10 @@ tf_cc_tests(
 )
 
 tf_cc_tests(
+    linkopts = select({
+        "//tensorflow:darwin": ["-headerpad_max_install_names"],
+        "//conditions:default": [],
+    }),
     tests = [
         "adjust_contrast_op_test",
         "colorspace_op_test",
@@ -1091,6 +1098,10 @@ tf_cuda_cc_test(
 tf_cuda_cc_test(
     name = "reduction_ops_test",
     size = "small",
+    linkopts = select({
+        "//tensorflow:darwin": ["-headerpad_max_install_names"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":ops_testutil",
         ":ops_util",
@@ -1295,6 +1306,7 @@ tf_cuda_cc_test(
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "//tensorflow/core:testlib",
+        "//third_party/eigen3",
     ],
 )
 
@@ -1458,6 +1470,7 @@ tf_kernel_libraries(
         "sparse_reduce_sum_op",
         "sparse_dense_binary_op_shared",
         "sparse_reorder_op",
+        "sparse_softmax",
         "sparse_split_op",
         "sparse_tensor_dense_add_op",
         "sparse_tensor_dense_matmul_op",
@@ -1572,7 +1585,7 @@ tf_cc_test(
     ],
 )
 
-tf_cc_test(
+tf_cuda_cc_test(
     name = "multinomial_op_test",
     size = "small",
     deps = [
@@ -1697,10 +1710,12 @@ filegroup(
         "conv_2d.h",
         "image_resizer_state.h",
         "maxpooling_op.h",
+        "pad_op.h",
         "reduction_ops.h",
         "reduction_ops_common.h",
         "relu_op.h",
         "relu_op_functor.h",
+        "reverse_op.h",
         "save_restore_tensor.h",
         "softplus_op.h",
         "softsign_op.h",
@@ -1756,6 +1771,7 @@ filegroup(
         "in_topk_op.cc",
         "lrn_op.cc",
         "maxpooling_op.cc",
+        "pad_op.cc",
         "reduction_ops_common.cc",
         "reduction_ops_max.cc",
         "reduction_ops_mean.cc",
@@ -1765,6 +1781,7 @@ filegroup(
         "relu_op.cc",
         "resize_nearest_neighbor_op.cc",
         "restore_op.cc",
+        "reverse_op.cc",
         "save_op.cc",
         "save_restore_tensor.cc",
         "session_ops.cc",
@@ -1793,14 +1810,12 @@ cc_library(
         "//conditions:default": [],
     }),
     copts = tf_copts(),
-    features = ["-layering_check"],
     tags = [
         "manual",
         "notap",
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "@re2//:re2",
         "//tensorflow/core:android_tensorflow_lib_lite",
         "//tensorflow/core:protos_cc",
         "//third_party/eigen3",

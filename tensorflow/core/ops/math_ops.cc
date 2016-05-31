@@ -37,7 +37,7 @@ REGISTER_OP("BatchMatMul")
     .Input("x: T")
     .Input("y: T")
     .Output("output: T")
-    .Attr("T: {float, double, int32, complex64}")
+    .Attr("T: {half, float, double, int32, complex64, complex128}")
     .Attr("adj_x: bool = false")
     .Attr("adj_y: bool = false")
     .Doc(R"doc(
@@ -134,7 +134,15 @@ tf.complex_abs(x) ==> [5.25594902, 6.60492229]
 // Declares cwise unary operations signature: 't -> 't
 #define UNARY()                      \
   Input("x: T").Output("y: T").Attr( \
-      "T: {half, float, double, int32, complex64, int64}")
+      "T: {half, float, double, int32, int64, complex64, complex128}")
+
+#define UNARY_REAL()                 \
+  Input("x: T").Output("y: T").Attr( \
+      "T: {half, float, double}")
+
+#define UNARY_COMPLEX()              \
+  Input("x: T").Output("y: T").Attr( \
+      "T: {half, float, double, complex64, complex128}")
 
 REGISTER_OP("Neg")
     .UNARY()
@@ -158,65 +166,65 @@ I.e., \\(y = x * x = x^2\\).
 )doc");
 
 REGISTER_OP("Sqrt")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes square root of x element-wise.
 I.e., \\(y = \sqrt{x} = x^{1/2}\\).
 )doc");
 
 REGISTER_OP("Rsqrt")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes reciprocal of square root of x element-wise.
 I.e., \\(y = 1 / \sqrt{x}\\).
 )doc");
 
 REGISTER_OP("Exp")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes exponential of x element-wise.  \\(y = e^x\\).
 )doc");
 
 REGISTER_OP("Log")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes natural logarithm of x element-wise.
 I.e., \\(y = \log_e x\\).
 )doc");
 
 REGISTER_OP("Tanh")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes hyperbolic tangent of `x` element-wise.
 )doc");
 
 REGISTER_OP("Lgamma")
-    .UNARY()
+    .UNARY_REAL()
     .Doc(R"doc(
 Computes the log of the absolute value of `Gamma(x)` element-wise.
 )doc");
 
 REGISTER_OP("Digamma")
-    .UNARY()
+    .UNARY_REAL()
     .Doc(R"doc(
 Computes Psi, the derivative of Lgamma (the log of the absolute value of
 `Gamma(x)`), element-wise.
 )doc");
 
 REGISTER_OP("Erf")
-    .UNARY()
+    .UNARY_REAL()
     .Doc(R"doc(
 Computes the Gauss error function of `x` element-wise.
 )doc");
 
 REGISTER_OP("Erfc")
-    .UNARY()
+    .UNARY_REAL()
     .Doc(R"doc(
 Computes the complementary error function of `x` element-wise.
 )doc");
 
 REGISTER_OP("Sigmoid")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes sigmoid of `x` element-wise.
 
@@ -224,18 +232,44 @@ Specifically, `y = 1 / (1 + exp(-x))`.
 )doc");
 
 REGISTER_OP("Sin")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes sin of x element-wise.
 )doc");
 
 REGISTER_OP("Cos")
-    .UNARY()
+    .UNARY_COMPLEX()
     .Doc(R"doc(
 Computes cos of x element-wise.
 )doc");
 
+REGISTER_OP("Tan")
+    .UNARY()
+    .Doc(R"doc(
+Computes tan of x element-wise.
+)doc");
+
+REGISTER_OP("Asin")
+    .UNARY()
+    .Doc(R"doc(
+Computes asin of x element-wise.
+)doc");
+
+REGISTER_OP("Acos")
+    .UNARY()
+    .Doc(R"doc(
+Computes acos of x element-wise.
+)doc");
+
+REGISTER_OP("Atan")
+    .UNARY()
+    .Doc(R"doc(
+Computes atan of x element-wise.
+)doc");
+
 #undef UNARY
+#undef UNARY_REAL
+#undef UNARY_COMPLEX
 
 REGISTER_OP("IsNan")
     .Input("x: T")
@@ -297,7 +331,7 @@ Returns element-wise smallest integer in not less than x.
 
 #define BINARY_FEWER()                             \
   Input("x: T").Input("y: T").Output("z: T").Attr( \
-      "T: {half, float, double, int32, complex64, int64, complex128}")
+      "T: {half, float, double, int32, int64, complex64, complex128}")
 
 // TODO(mrry): Restore `SetIsCommutative()` for non-string types.
 REGISTER_OP("Add")
@@ -306,7 +340,7 @@ REGISTER_OP("Add")
     .Output("z: T")
     .Attr(
         "T: {half, float, double, uint8, int8, int16, int32, int64, complex64, "
-        "string}")
+        "complex128, string}")
     .Doc(R"doc(
 Returns x + y element-wise.
 
@@ -375,7 +409,7 @@ REGISTER_OP("Pow")
     .Input("x: T")
     .Input("y: T")
     .Output("z: T")
-    .Attr("T: {half, float, double, int32, complex64, int64}")
+    .Attr("T: {half, float, double, int32, int64, complex64, complex128}")
     .Doc(R"doc(
 Computes the power of one value to another.
 
@@ -504,7 +538,7 @@ Returns the truth value of (x >= y) element-wise.
 #define EQUALITY_COMPARISON()                                                  \
   Input("x: T").Input("y: T").Output("z: bool").SetIsCommutative().Attr(       \
       "T: {half, float, double, uint8, int8, int16, int32, int64, complex64, " \
-      "quint8, qint8, qint32, string, bool}")
+      "quint8, qint8, qint32, string, bool, complex128}")
 
 REGISTER_OP("Equal")
     .EQUALITY_COMPARISON()
@@ -610,7 +644,7 @@ REGISTER_OP("MatMul")
     .Output("product: T")
     .Attr("transpose_a: bool = false")
     .Attr("transpose_b: bool = false")
-    .Attr("T: {float, double, int32, complex64}")
+    .Attr("T: {half, float, double, int32, complex64, complex128}")
     .Doc(R"doc(
 Multiply the matrix "a" by the matrix "b".
 
@@ -777,7 +811,7 @@ REGISTER_OP("SegmentSum")
     .Input("data: T")
     .Input("segment_ids: Tindices")
     .Output("output: T")
-    .Attr("T: realnumbertype")
+    .Attr("T: numbertype")
     .Attr("Tindices: {int32,int64}")
     .Doc(R"doc(
 Computes the sum along segments of a tensor.
@@ -833,7 +867,7 @@ REGISTER_OP("SegmentProd")
     .Input("data: T")
     .Input("segment_ids: Tindices")
     .Output("output: T")
-    .Attr("T: realnumbertype")
+    .Attr("T: numbertype")
     .Attr("Tindices: {int32,int64}")
     .Doc(R"doc(
 Computes the product along segments of a tensor.
@@ -917,7 +951,7 @@ REGISTER_OP("UnsortedSegmentSum")
     .Input("segment_ids: Tindices")
     .Input("num_segments: int32")
     .Output("output: T")
-    .Attr("T: realnumbertype")
+    .Attr("T: numbertype")
     .Attr("Tindices: {int32,int64}")
     .Doc(R"doc(
 Computes the sum along segments of a tensor.
@@ -1241,8 +1275,9 @@ tf.imag(input) ==> [4.75, 5.75]
 )doc");
 
 REGISTER_OP("Conj")
-    .Input("input: complex64")
-    .Output("output: complex64")
+    .Input("input: T")
+    .Output("output: T")
+    .Attr("T: {complex64, complex128} = DT_COMPLEX64")
     .Doc(R"doc(
 Returns the complex conjugate of a complex number.
 

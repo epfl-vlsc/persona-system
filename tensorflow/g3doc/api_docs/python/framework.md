@@ -2304,6 +2304,11 @@ Creates a new TensorShape with the given dimensions.
 *  <b>`dims`</b>: A list of Dimensions, or None if the shape is unspecified.
 *  <b>`DEPRECATED`</b>: A single integer is treated as a singleton list.
 
+##### Raises:
+
+
+*  <b>`TypeError`</b>: If dims cannot be converted to a list of dimensions.
+
 
 - - -
 
@@ -2482,6 +2487,10 @@ The conversion function must have the following signature:
 It must return a `Tensor` with the given `dtype` if specified. If the
 conversion function creates a new `Tensor`, it should use the given
 `name` if specified. All exceptions will be propagated to the caller.
+
+The conversion function may return `NotImplemented` for some
+inputs. In this case, the conversion process will continue to try
+subsequent conversion functions.
 
 If `as_ref` is true, the function must return a `Tensor` reference,
 such as a `Variable`.
