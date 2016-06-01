@@ -79,10 +79,6 @@ Reads the dense stuff
             output_matrix(i, 1) = resource_name;
           }
           OP_REQUIRES_OK(ctx, rmgr->Delete<MemoryMappedFile>(fileset_matrix(i, 0), fileset_matrix(i, 1)));
-          if (!dense_file->RefCountIsOne()) {
-            LOG(ERROR) << "Ref count is not 1 for dense file after delete\n";
-            ctx->CtxFailure(Internal("Ref count is not 1 for dense file after delete"));
-          }
       }
     }
 
