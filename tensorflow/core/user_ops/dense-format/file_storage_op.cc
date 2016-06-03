@@ -1,9 +1,8 @@
-#include "shared_mmap_file_resource.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
-#include "scope_timer.h"
 #include <rados/librados.hpp>
+#include "shared_mmap_file_resource.h"
 
 namespace tensorflow {
 
@@ -27,20 +26,46 @@ file_handle: a Tensor(2) of strings to access the file resource in downstream no
 file_name: a Tensor() of string for the unique key for this file
   )doc");
 
+  class StringReadOnlyMemoryRegion : public ReadOnlyMemoryRegion {
+  public:
+    StringReadOnlyMemoryRegion(std::string str) : str_(str) {}
+
+    const void* data() override { return static_cast<void*>(&str_); }
+    uint64 length() override { return str_.size(); }
+
+  private:
+    std::string str_;
+  }
+
   class FileStorageOp : public OpKernel {
   public:
-    FileStorageOp(OpKernelConstruction* context) : OpKernel(context) {};
+    FileStorageOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+      LOG(INFO) << "Initializing rados cluster";
 
-    void Compute(OpKernelContext* ctx) override {
-      if(!initialized_cluster_) {
-        LOG(INFO) << "Initializing rados cluster";
+      string cluster_name;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_name", &cluster_name));
+      string cluster_user;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_user", &cluster_user));
 
-        string cluster_name;
-        OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_name", &cluster_name));
-        string cluster_user;
-        OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_user", &cluster_user));
+      int retval;
+
+      retval = cluster.init2(cluster_user.c_str(), cluster_name.c_str(), 0); // TODO flags?
+      if(retval < 0) {
+        LOG(FATAL) << "Error in cluster.init2: " << retval;
       }
 
+      retval = cluster.connect();
+      if(retval < 0) {
+        LOG(FATAL) << "Error in cluster.connect: " << retval;
+      }
+
+      retval = cluster.ioctx_create(pool_name, io_ctx);
+      if(retval < 0) {
+        LOG(FATAL) << "Error in cluster.ioctx_create: " << retval;
+      }
+    }
+
+    void Compute(OpKernelContext* ctx) override {
       QueueInterface* queue;
       OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "queue_handle", &queue));
 
@@ -50,18 +75,32 @@ file_name: a Tensor() of string for the unique key for this file
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
 
-      auto creator = [filename, ctx](MemoryMappedFile **mmf) {
-        ReadOnlyMemoryRegion *rmr;
-        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-        shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr);
-        *mmf = new MemoryMappedFile(shared_rmr);
+      auto creator = [this, filename](MemoryMappedFile **mmf) {
+        librados::bufferlist read_buf;
+        librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
+        int retval;
+
+        retval = io_ctx.aio_read(filename, read_completion, &read_buf, read_len, 0);
+        if(retval < 0) {
+          return errors::Unknown("Error during io_ctx.aio_read: ", to_string(retval));
+        }
+
+        // TODO: This is awful; asynchrony would be nice.
+        read_completion->wait_for_complete();
+        retval = read_completion->get_return_value();
+        if(retval < 0) {
+          return errors::Unknown("Error during read_completion->get_return_value: ", to_string(retval));
+        }
+
+        shared_ptr<ReadOnlyMemoryRegionn> rmr(new StringReadOnlyMemoryRegion(read_buf.to_str()));
+        *mmf = new MemoryMappedFile(rmr);
         return Status::OK();
       };
 
-      MemoryMappedFile *mmf;
+      MemoryMappedFile *file;
       OP_REQUIRES_OK(ctx,
                      cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
-                       cinfo.container(), filename, &mmf, creator));
+                       cinfo.container(), filename, &file, creator));
 
       Tensor *output_tensor;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));
@@ -78,8 +117,8 @@ file_name: a Tensor() of string for the unique key for this file
     }
 
   private:
-    bool initialized_cluster_ = false;
     librados::Rados cluster;
+    librados::IoCtx io_ctx;
 
     Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
       Notification n;
