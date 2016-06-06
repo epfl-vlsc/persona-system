@@ -30,7 +30,6 @@ Consumes the input and produces nothing
       auto rmgr = cinfo.resource_manager();
 
       auto input = input_tensor->matrix<string>();
-      DenseReadData *rb;
       for (int64 i = 0; i < input_tensor->dim_size(0); i++) {
         auto ctr = input(i, 0);
         auto nm = input(i, 1);

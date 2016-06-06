@@ -97,6 +97,7 @@ namespace tensorflow {
       converted_index.reserve(converted_index.size() + converted_records.size());
       converted_index.insert(end(converted_index), begin(converted_records), end(converted_records));
       buffer_ = move(converted_index);
+      current_offset_ = 0;
     } else {
       current_offset_ = index_size;
     }
