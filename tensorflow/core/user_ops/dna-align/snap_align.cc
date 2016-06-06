@@ -16,6 +16,7 @@
 #include "snap_read_decode.h"
 #include "snap_results_decode.h"
 #include "aligner_options_resource.h"
+#include <boost/timer/timer.hpp>
 
 namespace tensorflow {
 using namespace std;
@@ -55,6 +56,8 @@ class SnapAlignOp : public OpKernel {
         }
       }
 
+      boost::timer::auto_cpu_timer t;
+
       const Tensor* reads;
       OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
       
@@ -85,6 +88,7 @@ class SnapAlignOp : public OpKernel {
 
         input_reads.push_back(snap_read);
       }
+
 
       size_t num_actual_reads = input_reads.size();
       vector<SingleAlignmentResult> alignment_results;

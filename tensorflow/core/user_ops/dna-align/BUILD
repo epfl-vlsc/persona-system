@@ -65,6 +65,9 @@ cc_library(
             ":snap_tensor_decoders",
             ":snap_lib"],
     alwayslink=1,
+    linkopts = [
+             "-lboost_system", "-lboost_timer"
+    ]
 )
 
 cc_library(
