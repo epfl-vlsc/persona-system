@@ -1,9 +1,26 @@
 #include "format.h"
+#include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
 namespace format {
 
 using namespace std;
+
+namespace {
+  struct BaseMap {
+    const BaseAlphabet base;
+    const char base_char;
+    constexpr BaseMap(BaseAlphabet base_, char base_char_) : base(base_), base_char(base_char_) {}
+  };
+
+  const std::array<BaseMap, 5> base_map {{
+    BaseMap(BaseAlphabet::A, 'A'),
+    BaseMap(BaseAlphabet::G, 'G'),
+    BaseMap(BaseAlphabet::C, 'C'),
+    BaseMap(BaseAlphabet::T, 'T'),
+    BaseMap(BaseAlphabet::N, 'N'),
+  }};
+}
 
 Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, vector<char> &output, vector<char> &lengths) const
 {
@@ -13,57 +30,47 @@ Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, 
 
   Status status;
   const size_t record_size_in_base_records = record_size_in_bytes / 8;
-  char base_char = '\0';
-  uint8_t length; // TODO may need to deal with size_t issue better!
+  size_t length = 0;
   for (size_t i = 0; i < record_size_in_base_records; ++i) {
     auto const base = &bases[i];
-    for (size_t j = 0; j < BinaryBases::compression; ++j) {
-      status = base->getBase(j, &base_char);
-
-      if (!status.ok()) {
-        if (errors::IsResourceExhausted(status)) {
-          break; // need to break because of last one
-        } else {
-          return status;
-        }
-      }
-
-      length++;
-      output.push_back(base_char);
-    }
+    TF_RETURN_IF_ERROR(base->appendToVector(output, &length));
   }
   lengths.push_back(static_cast<char>(length));
   return Status::OK();
 }
 
-Status
-BinaryBaseRecord::toString(const size_t record_size_in_bytes, string *output) const
+Status BinaryBases::appendToVector(vector<char> &output, size_t *num_bases) const
 {
-  if (record_size_in_bytes % sizeof(uint64_t) != 0) {
-    return errors::InvalidArgument("Size of record ", record_size_in_bytes, " is not a multiple of ", sizeof(uint64_t));
-  }
-  const size_t record_size_in_base_records = record_size_in_bytes / 8;
-  string converted;
-  Status status;
-  char base_char = '\0';
-  for (size_t i = 0; i < record_size_in_base_records; ++i) {
-    auto const base = &bases[i];
-    for (size_t j = 0; j < BinaryBases::compression; ++j) {
-      status = base->getBase(j, &base_char);
+  using namespace errors;
+  BaseAlphabet base;
+  auto bases_copy = bases;
+  size_t length = 0;
+  bool set;
+  for (size_t i = 0; i < compression; i++, length++) {
+    base = static_cast<BaseAlphabet>(bases_copy & 0x7);
+    set = false;
+    if (base == BaseAlphabet::END) {
+      break;
+    }
 
-      if (!status.ok()) {
-        if (errors::IsResourceExhausted(status)) {
-          break; // need to break because of last one
-        } else {
-          return status;
-        }
+    for (const auto &bm : base_map) {
+      if (base == bm.base) {
+        output.push_back(bm.base_char);
+        set = true;
+        break;
       }
+    }
 
-      converted.push_back(base_char);
+    if (!set) {
+      // Don't worry about unwinding this now
+      return Internal("Could not find conversion for base ", static_cast<int>(base));
+    } else {
+      bases_copy >>= 3;
     }
   }
 
-  *output = converted;
+  *num_bases += length;
+
   return Status::OK();
 }
 
