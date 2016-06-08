@@ -8,7 +8,10 @@ namespace tensorflow {
 template <typename T>
 class ResourceContainer : public ResourceBase {
 public:
-  string DebugString() override;
+  string DebugString() override {
+    static const string s = "a resource container";
+    return s;
+  };
 
   explicit ResourceContainer(std::unique_ptr<T> &&data) : data_(data) {}
 

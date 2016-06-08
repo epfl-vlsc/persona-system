@@ -357,6 +357,7 @@ cc_library(
             "//tensorflow/core/user_ops/dna-align:sam_writer_async",
             "//tensorflow/core/user_ops/dna-align:snap_align",
             "//tensorflow/core/user_ops/dense-format:dense_format",
+            "//tensorflow/core/user_ops/object-pool:object_pool",
            ],
     alwayslink = 1,
 )
