@@ -75,7 +75,7 @@ protected:
       ref_pool->AddResource(cinfo_.container(), s);
     }
 
-    auto h = pool_handle_.AccessTensor(ctx)->flat<string>();
+    auto h = pool_handle_.AccessTensor(ctx)->vec<string>();
     h(0) = cinfo_.container();
     h(1) = cinfo_.name();
 
