@@ -12,6 +12,7 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Input("data: string")
+  .Input("parser_pool: Ref(string)")
   .Doc(R"doc(
 Consumes the input and produces nothing
 )doc");

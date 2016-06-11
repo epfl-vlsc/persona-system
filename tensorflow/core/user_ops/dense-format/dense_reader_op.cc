@@ -45,10 +45,12 @@ Reads the dense stuff
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
-      const Tensor *fileset;
+      const Tensor *fileset, *parser_pool;
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &fileset));
       // assume that the python shape function takes care of this
       auto fileset_matrix = fileset->matrix<string>();
+
+      OP_REQUIRES_OK(ctx, ctx->input("pool_handle", &parser_pool));
 
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));

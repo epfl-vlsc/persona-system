@@ -39,7 +39,7 @@ public:
   ~ReferencePoolOp() override {
     mutex_lock l(mu_);
     if (pool_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
-      TF_CHECK_OK(cinfo_.resource_manager()->Delete<ReferencePool>(cinfo_.container(), cinfo_.name()));
+      TF_CHECK_OK(cinfo_.resource_manager()->Delete<ReferencePool<T>>(cinfo_.container(), cinfo_.name()));
     }
   }
 
@@ -58,7 +58,7 @@ protected:
     TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
     auto rmgr = cinfo_.resource_manager();
 
-    std::unique_ptr<ReferencePool> ref_pool(new ReferencePool());
+    std::unique_ptr<ReferencePool<T>> ref_pool(new ReferencePool<T>());
 
     string s;
     std::unique_ptr<ResourceContainer<T>> a;
@@ -69,10 +69,9 @@ protected:
       s.append("-");
       s.append(std::to_string(i));
       obj = CreateObject();
-      a.reset(new ResourceContainer<T>(std::move(obj)));
-      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<T>>(cinfo_.container(), s, a.release()));
-
-      ref_pool->AddResource(cinfo_.container(), s);
+      a.reset(new ResourceContainer<T>(std::move(obj), cinfo_.container(), s, ref_pool.get()));
+      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<T>>(cinfo_.container(), s, a.get()));
+      ref_pool->AddResource(std::move(a));
     }
 
     auto h = pool_handle_.AccessTensor(ctx)->vec<string>();
@@ -80,7 +79,7 @@ protected:
     h(1) = cinfo_.name();
 
     // put ref_pool into the shared resource
-    TF_RETURN_IF_ERROR(rmgr->Create<ReferencePool>(cinfo_.container(), cinfo_.name(), ref_pool.release()));
+    TF_RETURN_IF_ERROR(rmgr->Create<ReferencePool<T>>(cinfo_.container(), cinfo_.name(), ref_pool.release()));
     pool_handle_set_ = true;
   }
 

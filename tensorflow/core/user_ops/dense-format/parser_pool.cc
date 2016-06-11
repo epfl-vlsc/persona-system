@@ -23,6 +23,7 @@ Creates and initializes a pool containing the `size` number of RecordParser obje
       return unique_ptr<RecordParser>(new RecordParser(size_hint_));
     }
 
+  private:
     int size_hint_;
   };
 

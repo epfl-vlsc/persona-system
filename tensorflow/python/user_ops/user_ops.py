@@ -42,10 +42,10 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, batch_size, size_hint=None, name=None):
+def DenseReader(file_handle, pool_handle, batch_size, size_hint=None, name=None):
   if size_hint:
-    return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, size_hint=size_hint, name=name) #, trace_file=trace_file)
-  return gen_user_ops.dense_reader(file_handle=file_handle, batch_size=batch_size, name=name) #, trace_file=trace_file)
+    return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, batch_size=batch_size, size_hint=size_hint, name=name) #, trace_file=trace_file)
+  return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, batch_size=batch_size, name=name) #, trace_file=trace_file)
 
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):
@@ -60,7 +60,12 @@ ops.NoGradient(_dread_str)
 @ops.RegisterShape(_dread_str)
 def _DenseReaderShape(op):
   # just force the input to be a vector (will raise an exception if incorrect)
-  input_shape = op.inputs[0].get_shape()
+  handle_shape = op.inputs[0].get_shape()
+  expected_handle_shape = tensor_shape.vector(2)
+  if handle_shape != expected_handle_shape:
+      raise Exception("dense reader requires handle shape {exp}, but got {actual}".format(
+          exp=expected_handle_shape, actual=handle_shape))
+  input_shape = op.inputs[1].get_shape()
   _assert_matrix(input_shape)
   batch_size = op.get_attr("batch_size")
   if batch_size < 1:
@@ -85,6 +90,11 @@ ops.NoGradient(_sink_str)
 def _SinkShape(op):
   data = op.inputs[0].get_shape()
   _assert_matrix(data)
+  pool_shape = op.inputs[1].get_shape()
+  expected_pool_shape = tensor_shape.vector(2)
+  if pool_shape != expected_pool_shape:
+      raise Exception("sink op expected handle shape of {exp}, but got {act}".format(
+          exp=expected_pool_shape, act=pool_shape))
   return []
 
 _sm_str = "StagedFileMap"
@@ -173,3 +183,12 @@ def SnapAlign(genome, options, read):
     return gen_user_ops.snap_align(genome_handle=genome, options_handle=options, read=read)
 
 ops.NoGradient("SnapAlign")
+
+_pp_str = "ParserPool"
+def ParserPool(size, size_hint=4194304):
+    return gen_user_ops.parser_pool(size=size, size_hint=size_hint)
+
+ops.NoGradient(_pp_str)
+@ops.RegisterShape(_pp_str)
+def _ParserPoolShape(op):
+    return [tensor_shape.vector(2)]
