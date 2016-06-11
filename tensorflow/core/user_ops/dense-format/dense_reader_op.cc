@@ -16,6 +16,7 @@ namespace tensorflow {
   .Attr("size_hint: int = 4194304") // 4 MeB
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Input("pool_handle: Ref(string)")
   .Input("file_handle: string")
   .Output("record_handle: string")
   .SetIsStateful()

@@ -9,6 +9,7 @@
 #include "resource_container.h"
 #include <string>
 #include <utility>
+#include <memory>
 
 namespace tensorflow {
 
@@ -20,9 +21,6 @@ namespace tensorflow {
     .Attr("shared_name: string = ''") \
     .Output("pool_handle: Ref(string)") \
     .SetIsStateful()
-
-#define REGISTER_REFERENCE_POOL_KERNEL(_NAME, _TYPE) \
-  REGISTER_KERNEL_BUILDER(Name(_NAME).Device(DEVICE_CPU), ReferencePoolOp<_TYPE>)
 
 template <typename T>
 class ReferencePoolOp : public OpKernel {
@@ -64,12 +62,14 @@ protected:
 
     string s;
     std::unique_ptr<ResourceContainer<T>> a;
+    std::unique_ptr<T> obj;
     for (int i = 0; i < size_; i++) {
       // make the name
       s = cinfo_.name();
       s.append("-");
       s.append(std::to_string(i));
-      a.reset(new ResourceContainer<T>(new T()));
+      obj = CreateObject();
+      a.reset(new ResourceContainer<T>(std::move(obj)));
       TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<T>>(cinfo_.container(), s, a.release()));
 
       ref_pool->AddResource(cinfo_.container(), s);
@@ -83,6 +83,8 @@ protected:
     TF_RETURN_IF_ERROR(rmgr->Create<ReferencePool>(cinfo_.container(), cinfo_.name(), ref_pool.release()));
     pool_handle_set_ = true;
   }
+
+  virtual std::unique_ptr<T> CreateObject() = 0;
 
 private:
 

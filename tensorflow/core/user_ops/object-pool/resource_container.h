@@ -13,7 +13,7 @@ public:
     return s;
   };
 
-  explicit ResourceContainer(std::unique_ptr<T> &&data) : data_(data) {}
+  explicit ResourceContainer(std::unique_ptr<T> &&data) : data_(std::move(data)) {}
 
   T* get() const {
     return data_.get();
