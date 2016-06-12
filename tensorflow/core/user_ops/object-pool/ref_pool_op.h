@@ -44,6 +44,7 @@ public:
   }
 
   void Compute(OpKernelContext* ctx) override {
+    // TODO do I need to lock here
     {
       mutex_lock l(mu_);
       if (!pool_handle_set_) {
@@ -54,6 +55,7 @@ public:
   }
 
 protected:
+
   Status CreatePool(OpKernelContext *ctx) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
     auto rmgr = cinfo_.resource_manager();
@@ -81,6 +83,7 @@ protected:
     // put ref_pool into the shared resource
     TF_RETURN_IF_ERROR(rmgr->Create<ReferencePool<T>>(cinfo_.container(), cinfo_.name(), ref_pool.release()));
     pool_handle_set_ = true;
+    return Status::OK();
   }
 
   virtual std::unique_ptr<T> CreateObject() = 0;

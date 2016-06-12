@@ -7,8 +7,12 @@
 #include <condition_variable>
 #include "tensorflow/core/platform/mutex.h"
 #include "resource_container.h"
+#include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
+
+  template <typename U>
+  class ResourceContainer;
 
   template <typename T>
   class ReferencePool : public ResourceBase {
@@ -30,7 +34,7 @@ namespace tensorflow {
 
     // For getting / releasing resources
     // locks are grabbed here
-    void GetResource(ResourceContainer<T> **rct) {
+    Status GetResource(ResourceContainer<T> **rct) {
       mutex_lock l(objects_mu_);
       // while instead of for in case multiple are woken up
       while (objects_.empty() && run_) {
@@ -44,8 +48,9 @@ namespace tensorflow {
         auto s = objects_.front();
         *rct = s;
         objects_.pop_front();
+        return Status::OK();
       } else {
-        *rct = nullptr;
+        return errors::Aborted("Reference Pool has been stopped");
       }
     }
 

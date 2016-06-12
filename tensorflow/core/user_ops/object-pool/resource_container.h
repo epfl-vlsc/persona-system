@@ -24,16 +24,8 @@ public:
     return data_.get();
   }
 
-  T& operator*() const {
-    return *data_;
-  }
-
-  T* operator->() const {
-    return data_.get();
-  }
-
   void release() {
-    ref_pool_->ReturnResource(this);
+    ref_pool_->ReleaseResource(this);
   }
 
   const std::string& container() { return container_; }

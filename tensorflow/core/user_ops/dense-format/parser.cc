@@ -6,7 +6,8 @@ namespace tensorflow {
 
   using namespace std;
 
-  RecordParser::RecordParser(std::size_t size) {
+  RecordParser::RecordParser(std::size_t size)
+  {
     buffer_.reserve(size);
   }
 
@@ -64,6 +65,7 @@ namespace tensorflow {
     }
 
     records = reinterpret_cast<const RecordTable*>(buffer_.data());
+    /*
     size_t data_size = 0;
     for (uint64_t i = 0; i < index_size; ++i) {
       data_size += records->relative_index[i];
@@ -79,6 +81,8 @@ namespace tensorflow {
                                     data_size, " bytes");
         }
       }
+
+    */
 
     if (false && file_header->record_type == RecordType::BASES) {
       vector<char> converted_records(index_size * 100), converted_index(index_size * 101); // TODO determine size better for 

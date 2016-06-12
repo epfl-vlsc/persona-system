@@ -7,7 +7,8 @@
 #include "decompress.h"
 #include "parser.h"
 #include <vector>
-#include "scope_timer.h"
+#include "tensorflow/core/user_ops/object-pool/resource_container.h"
+#include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 
 namespace tensorflow {
 
@@ -16,7 +17,7 @@ namespace tensorflow {
   .Attr("size_hint: int = 4194304") // 4 MeB
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
-  .Input("pool_handle: Ref(string)")
+  .Input("pool_handle: string")
   .Input("file_handle: string")
   .Output("record_handle: string")
   .SetIsStateful()
@@ -51,17 +52,21 @@ Reads the dense stuff
       auto fileset_matrix = fileset->matrix<string>();
 
       OP_REQUIRES_OK(ctx, ctx->input("pool_handle", &parser_pool));
+      auto pp = parser_pool->vec<string>();
 
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
       auto rmgr = cinfo.resource_manager();
+
+      ReferencePool<RecordParser> *ref_pool;
+      OP_REQUIRES_OK(ctx, rmgr->Lookup<ReferencePool<RecordParser>>(pp(0), pp(1), &ref_pool));
 
       Tensor *output;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", fileset->shape(), &output));
       auto output_matrix = output->matrix<string>();
 
       string resource_name(name());
-      RecordParser *rp;
+      ResourceContainer<RecordParser> *rec_parser;
       MemoryMappedFile *dense_file;
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
@@ -74,12 +79,12 @@ Reads the dense stuff
             resource_name = name();
             resource_name.append(to_string(round_++));
 
-            rp = new RecordParser(size_hint_);
-            OP_REQUIRES_OK(ctx, rp->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
-            OP_REQUIRES_OK(ctx, rmgr->Create<RecordParser>(cinfo.container(), resource_name, rp));
+            OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_parser));
 
-            output_matrix(i, 0) = cinfo.container();
-            output_matrix(i, 1) = resource_name;
+            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
+
+            output_matrix(i, 0) = rec_parser->container();
+            output_matrix(i, 1) = rec_parser->name();
           }
           OP_REQUIRES_OK(ctx, rmgr->Delete<MemoryMappedFile>(fileset_matrix(i, 0), fileset_matrix(i, 1)));
       }

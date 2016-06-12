@@ -90,11 +90,6 @@ ops.NoGradient(_sink_str)
 def _SinkShape(op):
   data = op.inputs[0].get_shape()
   _assert_matrix(data)
-  pool_shape = op.inputs[1].get_shape()
-  expected_pool_shape = tensor_shape.vector(2)
-  if pool_shape != expected_pool_shape:
-      raise Exception("sink op expected handle shape of {exp}, but got {act}".format(
-          exp=expected_pool_shape, act=pool_shape))
   return []
 
 _sm_str = "StagedFileMap"
