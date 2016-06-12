@@ -27,7 +27,7 @@ class ReferencePoolOp : public OpKernel {
 
 public:
 
-  ReferencePoolOp(OpKernelConstruction* context) : OpKernel(context) {
+ ReferencePoolOp(OpKernelConstruction* context) : OpKernel(context), pool_handle_set_(false) {
     using namespace errors;
 
     OP_REQUIRES_OK(context, context->GetAttr("size", &size_));
@@ -76,12 +76,12 @@ protected:
       ref_pool->AddResource(std::move(a));
     }
 
-    auto h = pool_handle_.AccessTensor(ctx)->vec<string>();
-    h(0) = cinfo_.container();
-    h(1) = cinfo_.name();
 
     // put ref_pool into the shared resource
     TF_RETURN_IF_ERROR(rmgr->Create<ReferencePool<T>>(cinfo_.container(), cinfo_.name(), ref_pool.release()));
+    auto h = pool_handle_.AccessTensor(ctx)->vec<string>();
+    h(0) = cinfo_.container();
+    h(1) = cinfo_.name();
     pool_handle_set_ = true;
     return Status::OK();
   }

@@ -17,7 +17,7 @@ namespace tensorflow {
   .Attr("size_hint: int = 4194304") // 4 MeB
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
-  .Input("pool_handle: string")
+  .Input("pool_handle: Ref(string)")
   .Input("file_handle: string")
   .Output("record_handle: string")
   .SetIsStateful()
@@ -51,15 +51,12 @@ Reads the dense stuff
       // assume that the python shape function takes care of this
       auto fileset_matrix = fileset->matrix<string>();
 
-      OP_REQUIRES_OK(ctx, ctx->input("pool_handle", &parser_pool));
-      auto pp = parser_pool->vec<string>();
+      ReferencePool<RecordParser> *ref_pool;
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
 
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
       auto rmgr = cinfo.resource_manager();
-
-      ReferencePool<RecordParser> *ref_pool;
-      OP_REQUIRES_OK(ctx, rmgr->Lookup<ReferencePool<RecordParser>>(pp(0), pp(1), &ref_pool));
 
       Tensor *output;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("record_handle", fileset->shape(), &output));
