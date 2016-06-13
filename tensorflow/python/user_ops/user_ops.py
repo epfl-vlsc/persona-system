@@ -70,6 +70,10 @@ def _DenseReaderShape(op):
 def FileMMap(queue, name=None):
   return gen_user_ops.file_m_map(queue_handle=queue, name=name)
 
+def FileStorage(access_key, secret_key, host, bucket, queue, name=None):
+  return gen_user_ops.file_storage(access_key=access_key, secret_key=secret_key, host=host,
+                                   bucket=bucket, queue_handle=queue, name=name)
+
 _fm_str = "FileMMap"
 @ops.RegisterShape(_fm_str)
 def _FileMMapShape(op):

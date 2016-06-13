@@ -1,7 +1,10 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
-#include <rados/librados.hpp>
+#include "libs3.h"
+#include "stdlib.h"
+#include <iostream>
+#include <fstream>
 #include "shared_mmap_file_resource.h"
 
 namespace tensorflow {
@@ -9,16 +12,16 @@ namespace tensorflow {
   using namespace std;
 
   REGISTER_OP("FileStorage")
-  .Attr("container: string = ''")
-  .Attr("shared_name: string = ''")
-  .Attr("cluster_name: string = ''")
-  .Attr("cluster_user: string = ''")
+  .Attr("access_key: string")
+  .Attr("secret_key: string")
+  .Attr("host: string")
+  .Attr("bucket: string")
   .Input("queue_handle: Ref(string)")
-  .Output("file_handle: string")
-  .Output("file_name: string")
+//  .Output("file_handle: string")
+//  .Output("file_name: string")
   .SetIsStateful()
   .Doc(R"doc(
-Fetches files from storage, synchronously reads them, and produces a Tensor<2>
+Fetches files from storage, synchronously reads them, and produces a Tensor[1,2]
 with the container and shared name for the file.
 
 queue_handle: a handle to the filename queue
@@ -26,99 +29,79 @@ file_handle: a Tensor(2) of strings to access the file resource in downstream no
 file_name: a Tensor() of string for the unique key for this file
   )doc");
 
-  class StringReadOnlyMemoryRegion : public ReadOnlyMemoryRegion {
-  public:
-    StringReadOnlyMemoryRegion(std::string str) : str_(str) {}
-
-    const void* data() override { return static_cast<void*>(&str_); }
-    uint64 length() override { return str_.size(); }
-
-  private:
-    std::string str_;
-  }
-
   class FileStorageOp : public OpKernel {
   public:
     FileStorageOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      LOG(INFO) << "Initializing rados cluster";
+      LOG(INFO) << "Initializing LibS3 connection";
 
-      string cluster_name;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_name", &cluster_name));
-      string cluster_user;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_user", &cluster_user));
+      // Receive access_key, secret_key, host, bucket via attributes
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("access_key", &access_key));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("secret_key", &secret_key));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("host", &host));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("bucket", &bucket));
 
-      int retval;
+      // Initialize bucket context and handlers
+      bucketContext.hostName = host.c_str();
+      bucketContext.bucketName = bucket.c_str();
+      bucketContext.protocol = S3ProtocolHTTP;
+      bucketContext.uriStyle = S3UriStylePath;
+      bucketContext.accessKeyId = access_key.c_str();
+      bucketContext.secretAccessKey = secret_key.c_str();
 
-      retval = cluster.init2(cluster_user.c_str(), cluster_name.c_str(), 0); // TODO flags?
-      if(retval < 0) {
-        LOG(FATAL) << "Error in cluster.init2: " << retval;
-      }
+      responseHandler.propertiesCallback = &FileStorageOp::responsePropertiesCallback;
+      responseHandler.completeCallback = &FileStorageOp::responseCompleteCallback;
 
-      retval = cluster.connect();
-      if(retval < 0) {
-        LOG(FATAL) << "Error in cluster.connect: " << retval;
-      }
+      getObjectHandler.responseHandler = FileStorageOp::responseHandler;
+      getObjectHandler.getObjectDataCallback = &FileStorageOp::getObjectDataCallback;
 
-      retval = cluster.ioctx_create(pool_name, io_ctx);
-      if(retval < 0) {
-        LOG(FATAL) << "Error in cluster.ioctx_create: " << retval;
-      }
+      // Open connection
+      S3_initialize("s3", S3_INIT_ALL, host.c_str());
     }
 
     void Compute(OpKernelContext* ctx) override {
       QueueInterface* queue;
       OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "queue_handle", &queue));
+      core::ScopedUnref unref_me(queue);
 
-      string filename;
-      OP_REQUIRES_OK(ctx, GetNextFilename(queue, &filename, ctx));
+      OP_REQUIRES_OK(ctx, GetNextFilename(queue, &file_key, ctx));
 
-      ContainerInfo cinfo;
-      OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
-
-      auto creator = [this, filename](MemoryMappedFile **mmf) {
-        librados::bufferlist read_buf;
-        librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
-        int retval;
-
-        retval = io_ctx.aio_read(filename, read_completion, &read_buf, read_len, 0);
-        if(retval < 0) {
-          return errors::Unknown("Error during io_ctx.aio_read: ", to_string(retval));
-        }
-
-        // TODO: This is awful; asynchrony would be nice.
-        read_completion->wait_for_complete();
-        retval = read_completion->get_return_value();
-        if(retval < 0) {
-          return errors::Unknown("Error during read_completion->get_return_value: ", to_string(retval));
-        }
-
-        shared_ptr<ReadOnlyMemoryRegionn> rmr(new StringReadOnlyMemoryRegion(read_buf.to_str()));
-        *mmf = new MemoryMappedFile(rmr);
-        return Status::OK();
-      };
-
-      MemoryMappedFile *file;
-      OP_REQUIRES_OK(ctx,
-                     cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
-                       cinfo.container(), filename, &file, creator));
-
-      Tensor *output_tensor;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));
-
-      auto output_matrix = output_tensor->matrix<string>();
-      output_matrix(0, 0) = cinfo.container();
-      output_matrix(0, 1) = filename;
-
-      Tensor *file_name;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
-
-      auto scalar = file_name->vec<string>();
-      scalar(0) = filename;
+      FILE* buffer = (FILE *) stdout; // Currently set to standard out
+      S3_get_object(&bucketContext, file_key.c_str(), NULL, 0, 0, NULL, &getObjectHandler, buffer);
     }
 
   private:
-    librados::Rados cluster;
-    librados::IoCtx io_ctx;
+    string access_key;
+    string secret_key;
+    string host;
+    string bucket;
+    string file_key;
+
+    S3BucketContext bucketContext;
+    S3ResponseHandler responseHandler;
+    S3GetObjectHandler getObjectHandler;
+
+    static S3Status responsePropertiesCallback(
+                    const S3ResponseProperties *properties,
+                    void *callbackData)
+    {
+      return S3StatusOK;
+    }
+
+    static void responseCompleteCallback(
+                    S3Status status,
+                    const S3ErrorDetails *error,
+                    void *callbackData)
+    {
+      return;
+    }
+
+    static S3Status getObjectDataCallback(int bufferSize, const char *buffer, void *callbackData)
+    {
+//      FILE *outfile = (FILE *) callbackData;
+//      size_t wrote = fwrite(buffer, 1, bufferSize, outfile);
+      cout << buffer; /* Attempt to write to a char buffer */
+      return S3StatusOK; /*((wrote < (size_t) bufferSize) ? S3StatusAbortedByCallback : S3StatusOK);*/
+    }
 
     Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
       Notification n;
