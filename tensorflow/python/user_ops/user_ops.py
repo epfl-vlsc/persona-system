@@ -42,7 +42,7 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, pool_handle, batch_size, size_hint=None, verify=False, name=None):
+def DenseReader(file_handle, pool_handle, batch_size, size_hint=None, name=None, verify=False):
   if size_hint:
     return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, batch_size=batch_size, size_hint=size_hint, name=name)
   return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, batch_size=batch_size, name=name)
