@@ -15,7 +15,7 @@ namespace tensorflow {
     RecordParser(std::size_t size);
     RecordParser() = default;
 
-    Status ParseNew(const char* data, const std::size_t length);
+    Status ParseNew(const char* data, const std::size_t length, const bool verify);
 
     size_t RecordCount();
 

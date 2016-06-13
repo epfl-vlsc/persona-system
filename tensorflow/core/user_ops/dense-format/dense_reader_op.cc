@@ -17,6 +17,7 @@ namespace tensorflow {
   .Attr("size_hint: int = 4194304") // 4 MeB
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Attr("verify: bool = false")
   .Input("pool_handle: Ref(string)")
   .Input("file_handle: string")
   .Output("record_handle: string")
@@ -40,6 +41,8 @@ Reads the dense stuff
       OP_REQUIRES_OK(context, context->GetAttr("size_hint", &batch_size));
       size_hint_ = static_cast<size_t>(batch_size);
       OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be > 0 - ", size_hint_));
+
+      OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
     }
 
     ~DenseReaderOp() {}
@@ -78,7 +81,7 @@ Reads the dense stuff
 
             OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_parser));
 
-            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
+            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length(), verify_));
 
             output_matrix(i, 0) = rec_parser->container();
             output_matrix(i, 1) = rec_parser->name();
@@ -91,6 +94,7 @@ Reads the dense stuff
     int batch_size_;
     size_t size_hint_;
     size_t round_ = 0;
+    bool verify_ = false;
     //WritableFile *decomp;
   };
 
