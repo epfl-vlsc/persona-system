@@ -37,6 +37,7 @@ Consumes the input and produces nothing
         auto ctr = input(i, 0);
         auto nm = input(i, 1);
         OP_REQUIRES_OK(ctx, rmgr->Lookup<ResourceContainer<RecordParser>>(ctr, nm, &rp));
+        // TODO need to unref rp here!
         rp->release();
       }
     }

@@ -72,8 +72,8 @@ def _DenseReaderShape(op):
     raise Exception("dense reader expects a positive batch size. Received {}".format(batch_size))
   return [input_shape]
 
-def FileMMap(queue, name=None):
-  return gen_user_ops.file_m_map(queue_handle=queue, name=name)
+def FileMMap(queue, handle, name=None):
+  return gen_user_ops.file_m_map(queue_handle=queue, pool_handle=handle, name=name)
 
 _fm_str = "FileMMap"
 @ops.RegisterShape(_fm_str)
@@ -93,8 +93,8 @@ def _SinkShape(op):
   return []
 
 _sm_str = "StagedFileMap"
-def StagedFileMap(queue, upstream_files, upstream_names, name=None):
-  return gen_user_ops.staged_file_map(queue_handle=queue,
+def StagedFileMap(queue, upstream_files, upstream_names, handle, name=None):
+  return gen_user_ops.staged_file_map(queue_handle=queue, pool_handle=handle,
                                       upstream_refs=upstream_files,
                                       upstream_names=upstream_names, name=name)
 ops.NoGradient(_sm_str)
@@ -186,4 +186,14 @@ def ParserPool(size, size_hint=4194304):
 ops.NoGradient(_pp_str)
 @ops.RegisterShape(_pp_str)
 def _ParserPoolShape(op):
+    return [tensor_shape.vector(2)]
+
+_mmp_str = "MMapPool"
+def MMapPool(size):
+    return gen_user_ops.m_map_pool(size=size)
+ops.NoGradient(_mmp_str)
+
+# seems like there should be a better way to do this
+@ops.RegisterShape(_mmp_str)
+def _MMapPoolShape(op):
     return [tensor_shape.vector(2)]

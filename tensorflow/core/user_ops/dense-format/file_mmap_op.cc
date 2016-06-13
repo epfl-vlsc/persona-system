@@ -2,6 +2,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
+#include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "scope_timer.h"
 
 namespace tensorflow {
@@ -11,6 +12,7 @@ namespace tensorflow {
   REGISTER_OP("FileMMap")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Input("pool_handle: Ref(string)")
   .Input("queue_handle: Ref(string)")
   .Output("file_handle: string") // or is the output string?
   .Output("file_name: string")
@@ -32,6 +34,7 @@ file_name: a Tensor() of string for the unique key for this file
   .Output("file_names: string")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Input("pool_handle: Ref(string)")
   .SetIsStateful()
   .Doc(R"doc(
 Appends a dense reader handle tensor to an input list.
@@ -89,7 +92,6 @@ bundle_name: [{this map op's name}] + upstream_name
                   Internal("upstream_refs has incorrect dims(", upstream_refs->dims(), ", should be 2) or dim(1) size"));
       OP_REQUIRES(ctx, upstream_names->dims() == 1,
                   Internal("upstream_names should have 1 dimension, but has ", upstream_names->dims()));
-      // TODO more shape verification needed?
 
       QueueInterface* queue;
       OP_REQUIRES_OK(ctx,
@@ -102,22 +104,15 @@ bundle_name: [{this map op's name}] + upstream_name
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
 
-      auto creator = [filename, ctx](MemoryMappedFile **mmf) {
-        ReadOnlyMemoryRegion *rmr;
-        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-        shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr);
-        *mmf = new MemoryMappedFile(shared_rmr);
-        return Status::OK();
-      };
+      ReferencePool<MemoryMappedFile> *ref_pool;
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
 
-      MemoryMappedFile *mmf;
-      OP_REQUIRES_OK(ctx,
-                     cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
-                                                                                 cinfo.container(),
-                                                                                 filename,
-                                                                                 &mmf,
-                                                                                 creator
-                                                                                 ));
+      ResourceContainer<MemoryMappedFile> *mmf;
+      OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
+
+      ReadOnlyMemoryRegion *rmr;
+      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
+      mmf->get()->own(rmr);
 
       Tensor *file_handles, *file_names;
       TensorShape file_handles_shape(upstream_refs->shape());
@@ -140,8 +135,8 @@ bundle_name: [{this map op's name}] + upstream_name
       }
 
       names_vec(max_dim) = filename;
-      handles_matrix(max_dim, 0) = cinfo.container();
-      handles_matrix(max_dim, 1) = filename;
+      handles_matrix(max_dim, 0) = mmf->container();
+      handles_matrix(max_dim, 1) = mmf->name();
     }
   };
 
@@ -162,27 +157,21 @@ bundle_name: [{this map op's name}] + upstream_name
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
 
-      auto creator = [filename, ctx](MemoryMappedFile **mmf) {
-        ReadOnlyMemoryRegion *rmr;
-        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-        shared_ptr<ReadOnlyMemoryRegion> shared_rmr(rmr);
-        *mmf = new MemoryMappedFile(shared_rmr);
-        return Status::OK();
-      };
+      ReferencePool<MemoryMappedFile> *ref_pool;
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
 
-      MemoryMappedFile *mmf;
-      OP_REQUIRES_OK(ctx,
-                     cinfo.resource_manager()->LookupOrCreate<MemoryMappedFile>(
-                                                                                 cinfo.container(),
-                                                                                 filename,
-                                                                                 &mmf,
-                                                                                 creator
-                                                                                 ));
+      ResourceContainer<MemoryMappedFile> *mmf;
+      OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
+
+      ReadOnlyMemoryRegion *rmr;
+      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
+      mmf->get()->own(rmr);
+
       Tensor *output_tensor;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));
       auto output_matrix = output_tensor->matrix<string>();
-      output_matrix(0, 0) = cinfo.container();
-      output_matrix(0, 1) = filename;
+      output_matrix(0, 0) = mmf->container();
+      output_matrix(0, 1) = mmf->name();
 
       Tensor *file_name;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));

@@ -67,26 +67,25 @@ Reads the dense stuff
 
       string resource_name(name());
       ResourceContainer<RecordParser> *rec_parser;
-      MemoryMappedFile *dense_file;
+      ResourceContainer<MemoryMappedFile> *dense_file;
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
           OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &dense_file));
           {
             core::ScopedUnref unref_me(dense_file);
-
-            auto dense_mapping = dense_file->GetMappedRegion();
+            ResourceReleaser<MemoryMappedFile> m(*dense_file);
 
             resource_name = name();
             resource_name.append(to_string(round_++));
 
             OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_parser));
 
-            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length(), verify_));
+            auto g = dense_file->get();
+            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(g->data(), g->size(), verify_));
 
             output_matrix(i, 0) = rec_parser->container();
             output_matrix(i, 1) = rec_parser->name();
           }
-          OP_REQUIRES_OK(ctx, rmgr->Delete<MemoryMappedFile>(fileset_matrix(i, 0), fileset_matrix(i, 1)));
       }
     }
 

@@ -31,7 +31,7 @@ class ReferencePoolOp : public OpKernel {
 public:
 
  ReferencePoolOp(OpKernelConstruction* context) : OpKernel(context), pool_handle_set_(false) {
-    static_assert(std::is_base_of<T,U>::value, "not able to construct reference pool of non-base type");
+    static_assert(std::is_base_of<U,T>::value, "not able to construct reference pool of non-base type");
     using namespace errors;
 
     OP_REQUIRES_OK(context, context->GetAttr("size", &size_));
@@ -77,7 +77,7 @@ protected:
       a.reset(new ResourceContainer<T>(std::move(obj), cinfo_.container(), s, ref_pool.get()));
       // I think this should be U
       // not the correct cast
-      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<U>>(cinfo_.container(), s, a.get()));
+      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<U>>(cinfo_.container(), s, a.get())); //static_cast<ResourceContainer<U>*>(a.get())));
       ref_pool->AddResource(std::move(a));
     }
 

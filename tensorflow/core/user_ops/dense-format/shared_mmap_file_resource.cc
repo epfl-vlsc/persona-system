@@ -5,23 +5,19 @@
 #include "shared_mmap_file_resource.h"
 
 namespace tensorflow {
+  using namespace std;
 
-MemoryMappedFile::MemoryMappedFile(ResourceHandle &mapped_file) :
-  file_(mapped_file) {}
+  MemoryMappedFile::MemoryMappedFile(ResourceHandle &&file) : file_(move(file)) {}
 
-ReadOnlyMemoryRegion *
-MemoryMappedFile::GetMappedRegion() {
-  return file_.get();
-}
+  const char* MemoryMappedFile::data() const {
+    return reinterpret_cast<const char*>(file_->data());
+  }
 
-ReadOnlyMemoryRegion* MemoryMappedFile::get()
-{
-  return file_.get();
-}
+  size_t MemoryMappedFile::size() const {
+    return file_->length();
+  }
 
-string MemoryMappedFile::DebugString()
-{
-  return "a Memory Mapped File";
-}
-
+  void MemoryMappedFile::own(ReadOnlyMemoryRegion *rmr) {
+    file_.reset(rmr);
+  }
 } // namespace tensorflow {
