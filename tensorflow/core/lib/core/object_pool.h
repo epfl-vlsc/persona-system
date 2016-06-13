@@ -174,6 +174,11 @@ private:
   volatile bool run_;
 };
 
+ ReferencePool::DebugString() {
+   static const string s = "a reference pool";
+   return s;
+ }
+
 } // namespace tensorflow 
 
 #endif // TENSORFLOW_LIB_CORE_OBJECT_POOL_H_

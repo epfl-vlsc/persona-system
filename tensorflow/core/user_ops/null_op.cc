@@ -3,6 +3,8 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "dense-format/dense_data.h"
+#include "dense-format/parser.h"
+#include "tensorflow/core/user_ops/object-pool/resource_container.h"
 
 namespace tensorflow {
   using namespace std;
@@ -29,13 +31,13 @@ Consumes the input and produces nothing
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
       auto rmgr = cinfo.resource_manager();
 
+      ResourceContainer<RecordParser> *rp;
       auto input = input_tensor->matrix<string>();
       for (int64 i = 0; i < input_tensor->dim_size(0); i++) {
         auto ctr = input(i, 0);
         auto nm = input(i, 1);
-        //OP_REQUIRES_OK(ctx, rmgr->Lookup(ctr, nm, &rb));
-        OP_REQUIRES_OK(ctx, rmgr->Delete<DenseReadData>(ctr, nm));
-        //while (!rb->Unref()) {}
+        OP_REQUIRES_OK(ctx, rmgr->Lookup<ResourceContainer<RecordParser>>(ctr, nm, &rp));
+        rp->release();
       }
     }
   };

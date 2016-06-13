@@ -29,33 +29,6 @@ namespace tensorflow {
   private:
        ResourceHandle file_;
   };
-
-  class MappedFileRef {
-  public:
-    MappedFileRef(Tensor *ref_tensor);
-
-    const string& GetContainer();
-    void SetContainer(const string& container);
-    const string& GetName();
-    void SetName(const string& name);
-
-  private:
-    Tensor *ref_tensor_;
-
-  public:
-    static const std::size_t kContainer = 0;
-    static const std::size_t kName = 1;
-  };
-
-  class ReadOnlyFileRef {
-  public:
-    ReadOnlyFileRef(const Tensor *ref_tensor);
-    const string& GetName();
-    const string& GetContainer();
-  private:
-    const Tensor *ref_tensor_;
-  };
-
 } // namespace tensorflow {
 
 #endif

@@ -6,11 +6,12 @@ namespace tensorflow {
 
   using namespace std;
 
-  RecordParser::RecordParser(std::size_t size) {
+  RecordParser::RecordParser(std::size_t size)
+  {
     buffer_.reserve(size);
   }
 
-  Status RecordParser::ParseNew(const char* data, const std::size_t length)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify)
   {
     using namespace errors;
     using namespace format;
@@ -64,23 +65,27 @@ namespace tensorflow {
     }
 
     records = reinterpret_cast<const RecordTable*>(buffer_.data());
-    size_t data_size = 0;
-    for (uint64_t i = 0; i < index_size; ++i) {
-      data_size += records->relative_index[i];
-    }
 
-    const size_t expected_size = buffer_.size() - index_size;
-    if (data_size != expected_size) {
-      if (data_size < expected_size) {
-        return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
-                                    data_size, " bytes");
-        } else {
-          return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
-                                    data_size, " bytes");
-        }
+    if (verify) {
+      size_t data_size = 0;
+      // This iteration is expensive, which is why this is optional. Run with perf to get an idea
+      for (uint64_t i = 0; i < index_size; ++i) {
+        data_size += records->relative_index[i];
       }
 
-    if (file_header->record_type == RecordType::BASES) {
+      const size_t expected_size = buffer_.size() - index_size;
+      if (data_size != expected_size) {
+        if (data_size < expected_size) {
+          return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
+                            data_size, " bytes");
+        } else {
+          return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
+                            data_size, " bytes");
+        }
+      }
+    }
+
+    if (false && file_header->record_type == RecordType::BASES) {
       vector<char> converted_records(index_size * 100), converted_index(index_size * 101); // TODO determine size better for 
 
       uint8_t current_record_length;
