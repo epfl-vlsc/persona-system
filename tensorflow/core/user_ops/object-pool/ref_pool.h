@@ -71,7 +71,7 @@ namespace tensorflow {
       if (run_) {
         {
           mutex_lock l(objects_mu_);
-          objects_.push_back(rct);
+          objects_.push_front(rct);
         }
         objects_cv_.notify_one();
       }

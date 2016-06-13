@@ -44,7 +44,6 @@ public:
   }
 
   void Compute(OpKernelContext* ctx) override {
-    // TODO do I need to lock here
     {
       mutex_lock l(mu_);
       if (!pool_handle_set_) {
