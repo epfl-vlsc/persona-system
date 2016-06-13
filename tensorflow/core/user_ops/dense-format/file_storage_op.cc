@@ -97,10 +97,9 @@ file_name: a Tensor() of string for the unique key for this file
 
     static S3Status getObjectDataCallback(int bufferSize, const char *buffer, void *callbackData)
     {
-//      FILE *outfile = (FILE *) callbackData;
-//      size_t wrote = fwrite(buffer, 1, bufferSize, outfile);
-      cout << buffer; /* Attempt to write to a char buffer */
-      return S3StatusOK; /*((wrote < (size_t) bufferSize) ? S3StatusAbortedByCallback : S3StatusOK);*/
+      FILE *outfile = (FILE *) callbackData;
+      size_t wrote = fwrite(buffer, 1, bufferSize, outfile);
+      return ((wrote < (size_t) bufferSize) ? S3StatusAbortedByCallback : S3StatusOK);
     }
 
     Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
