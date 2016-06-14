@@ -13,7 +13,7 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Input("pool_handle: Ref(string)")
-  .Input("queue_handle: Ref(string)")
+  .Input("filename: string")
   .Output("file_handle: string") // or is the output string?
   .Output("file_name: string")
   .SetIsStateful()
@@ -27,14 +27,14 @@ file_name: a Tensor() of string for the unique key for this file
   )doc");
 
   REGISTER_OP("StagedFileMap")
-  .Input("queue_handle: Ref(string)")
+  .Input("filename: string")
   .Input("upstream_refs: string")
   .Input("upstream_names: string")
+  .Input("pool_handle: Ref(string)")
   .Output("file_handles: string")
   .Output("file_names: string")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
-  .Input("pool_handle: Ref(string)")
   .SetIsStateful()
   .Doc(R"doc(
 Appends a dense reader handle tensor to an input list.
@@ -82,24 +82,13 @@ bundle_name: [{this map op's name}] + upstream_name
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
-      const Tensor *upstream_refs, *upstream_names;
+      const Tensor *upstream_refs, *upstream_names, *filename_input;
       OP_REQUIRES_OK(ctx, ctx->input("upstream_names", &upstream_names));
       OP_REQUIRES_OK(ctx, ctx->input("upstream_refs", &upstream_refs));
-      OP_REQUIRES(ctx, upstream_refs->dim_size(0) == upstream_names->dim_size(0),
-                  Internal("Upstream refs have dim(0) size of (", upstream_refs->dim_size(0),
-                           "), while upstream names have size (", upstream_names->dim_size(0), ")"));
-      OP_REQUIRES(ctx, upstream_refs->dims() == 2 && upstream_refs->dim_size(1) == 2,
-                  Internal("upstream_refs has incorrect dims(", upstream_refs->dims(), ", should be 2) or dim(1) size"));
-      OP_REQUIRES(ctx, upstream_names->dims() == 1,
-                  Internal("upstream_names should have 1 dimension, but has ", upstream_names->dims()));
 
-      QueueInterface* queue;
-      OP_REQUIRES_OK(ctx,
-                     GetResourceFromContext(ctx, "queue_handle", &queue));
-      core::ScopedUnref unref_me(queue);
+      OP_REQUIRES_OK(ctx, ctx->input("filename", &filename_input));
 
-      string filename;
-      OP_REQUIRES_OK(ctx, GetNextFilename(queue, &filename, ctx));
+      auto filename = filename_input->scalar<string>()();
 
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
@@ -145,14 +134,11 @@ bundle_name: [{this map op's name}] + upstream_name
     FileMMapOp(OpKernelConstruction* context) : OpKernel(context) {};
 
     void Compute(OpKernelContext* ctx) override {
-      QueueInterface* queue;
-      OP_REQUIRES_OK(ctx,
-                     GetResourceFromContext(ctx, "queue_handle", &queue));
-      core::ScopedUnref unref_me(queue);
+      using namespace errors;
 
-      // 1. get a filename
-      string filename;
-      OP_REQUIRES_OK(ctx, GetNextFilename(queue, &filename, ctx));
+      const Tensor *filename_input;
+      OP_REQUIRES_OK(ctx, ctx->input("filename", &filename_input));
+      auto filename = filename_input->scalar<string>()();
 
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));

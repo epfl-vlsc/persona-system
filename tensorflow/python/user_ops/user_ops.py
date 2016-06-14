@@ -54,6 +54,15 @@ def _assert_matrix(shape, column_dim=2):
   if shape[1] != column_dim:
     raise Exception("Expected {exp} for shape[1], but got {actual}".format(
       exp=column_dim, actual=shape[1]))
+  return shape[0]
+
+def _assert_vec(shape, vec_length):
+    if shape != tensor_shape.vector(vec_length):
+        raise Exception("Expected vec({length}), but got {act}".format(length=vec_length, act=shape))
+
+def _assert_scalar(shape):
+    if shape != tensor_shape.scalar():
+        raise Exception("expected scalar value from {act}".format(act=shape))
 
 _dread_str = "DenseReader"
 ops.NoGradient(_dread_str)
@@ -72,12 +81,16 @@ def _DenseReaderShape(op):
     raise Exception("dense reader expects a positive batch size. Received {}".format(batch_size))
   return [input_shape]
 
-def FileMMap(queue, handle, name=None):
-  return gen_user_ops.file_m_map(queue_handle=queue, pool_handle=handle, name=name)
+def FileMMap(filename, handle, name=None):
+  return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, name=name)
 
 _fm_str = "FileMMap"
 @ops.RegisterShape(_fm_str)
 def _FileMMapShape(op):
+  filename_input = op.inputs[1].get_shape()
+  pool_handle = op.inputs[0].get_shape()
+  _assert_vec(pool_handle, 2)
+  _assert_scalar(filename_input)
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_fm_str)
 
@@ -93,19 +106,27 @@ def _SinkShape(op):
   return []
 
 _sm_str = "StagedFileMap"
-def StagedFileMap(queue, upstream_files, upstream_names, handle, name=None):
-  return gen_user_ops.staged_file_map(queue_handle=queue, pool_handle=handle,
+def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
+  return gen_user_ops.staged_file_map(filename=filename, pool_handle=handle,
                                       upstream_refs=upstream_files,
                                       upstream_names=upstream_names, name=name)
 ops.NoGradient(_sm_str)
 
 @ops.RegisterShape(_sm_str)
 def _StagedFileMapShape(op):
-  upstream_files_shape = op.inputs[1].get_shape().dims
-  upstream_names_shape = op.inputs[2].get_shape().dims
-  upstream_files_shape[0] += 1
-  upstream_names_shape[0] += 1
-  return [upstream_files_shape, upstream_names_shape]
+  filename = op.inputs[0].get_shape()
+  files = op.inputs[1].get_shape()
+  names = op.inputs[2].get_shape()
+  pool_handle = op.inputs[3].get_shape()
+  _assert_vec(pool_handle, 2)
+  _assert_scalar(filename)
+  num_files = _assert_matrix(files)
+  _assert_vec(names, num_files)
+  files_shape = files.dims
+  names_shape = names.dims
+  files_shape[0] += 1
+  names_shape[0] += 1
+  return [files_shape, names_shape]
 
 _dr_str = "DenseRecordCreator"
 def DenseRecordCreator(bases, qualities, name=None):
