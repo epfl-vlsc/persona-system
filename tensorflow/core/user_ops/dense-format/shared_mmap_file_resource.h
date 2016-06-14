@@ -10,25 +10,30 @@
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/user_ops/dna-align/data.h"
 
 namespace tensorflow {
   /*
     Just a convenience class to track a read-only memory region throughout the execution context.
    */
-  class MemoryMappedFile : public ResourceBase {
+
+  class MemoryMappedFile : public Data {
   public:
-    typedef std::shared_ptr<ReadOnlyMemoryRegion> ResourceHandle;
+    typedef std::unique_ptr<ReadOnlyMemoryRegion> ResourceHandle;
 
-    explicit MemoryMappedFile(ResourceHandle &mapped_file);
+    virtual const char* data() const override;
+    virtual std::size_t size() const override;
 
-    ReadOnlyMemoryRegion* GetMappedRegion();
+    // needed for pool creation
+    MemoryMappedFile() = default;
+    MemoryMappedFile(ResourceHandle &&file);
+    MemoryMappedFile& operator=(MemoryMappedFile &&x) = default;
 
-    string DebugString() override;
-
-    ReadOnlyMemoryRegion* get();
+    void own(ReadOnlyMemoryRegion *rmr);
   private:
-       ResourceHandle file_;
+    ResourceHandle file_;
   };
+
 } // namespace tensorflow {
 
 #endif

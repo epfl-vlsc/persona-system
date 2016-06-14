@@ -37,6 +37,7 @@ dense_data: the same data as dense_data input
   public:
     DenseRecordCreatorOp(OpKernelConstruction *context) : OpKernel(context) {}
     void Compute(OpKernelContext* ctx) override {
+#if 0
       const Tensor *base, *quality;
       OP_REQUIRES_OK(ctx, ctx->input("bases", &base));
       OP_REQUIRES_OK(ctx, ctx->input("qualities", &quality));
@@ -76,6 +77,7 @@ dense_data: the same data as dense_data input
         OP_REQUIRES_OK(ctx, rmgr->Delete<RecordParser>(base_matrix(i, 0), base_matrix(i, 1)));
         OP_REQUIRES_OK(ctx, rmgr->Delete<RecordParser>(quality_matrix(i, 0), quality_matrix(i, 1)));
       }
+#endif
     }
   private:
     size_t round_ = 0;
@@ -85,6 +87,7 @@ dense_data: the same data as dense_data input
   public:
     DenseRecordAddMetadataOp(OpKernelConstruction *context) : OpKernel(context) {}
     void Compute(OpKernelContext* ctx) override {
+#if 0
       const Tensor *dense_data, *metadata;
       OP_REQUIRES_OK(ctx, ctx->input("dense_data", &dense_data));
       OP_REQUIRES_OK(ctx, ctx->input("metadata", &metadata));
@@ -115,6 +118,7 @@ dense_data: the same data as dense_data input
       Tensor *dense_out;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("dense_data_out", dense_data->shape(), &dense_out));
       *dense_out = *dense_data;
+#endif
     }
   };
 

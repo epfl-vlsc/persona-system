@@ -36,8 +36,9 @@ Consumes the input and produces nothing
       for (int64 i = 0; i < input_tensor->dim_size(0); i++) {
         auto ctr = input(i, 0);
         auto nm = input(i, 1);
-        OP_REQUIRES_OK(ctx, rmgr->Lookup<ResourceContainer<RecordParser>>(ctr, nm, &rp));
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(ctr, nm, &rp));
         rp->release();
+        rp->Unref(); // the Lookup causes a ref
       }
     }
   };

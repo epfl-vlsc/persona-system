@@ -10,6 +10,7 @@
 #include <string>
 #include <utility>
 #include <memory>
+#include <type_traits>
 
 namespace tensorflow {
 
@@ -22,12 +23,15 @@ namespace tensorflow {
     .Output("pool_handle: Ref(string)") \
     .SetIsStateful()
 
-template <typename T>
+  // T is the 
+  // U is the container it puts the resources in (by type), so further ops can do a generic lookup
+template <typename T, typename U>
 class ReferencePoolOp : public OpKernel {
 
 public:
 
  ReferencePoolOp(OpKernelConstruction* context) : OpKernel(context), pool_handle_set_(false) {
+    static_assert(std::is_base_of<U,T>::value, "not able to construct reference pool of non-base type");
     using namespace errors;
 
     OP_REQUIRES_OK(context, context->GetAttr("size", &size_));
@@ -71,10 +75,11 @@ protected:
       s.append(std::to_string(i));
       obj = CreateObject();
       a.reset(new ResourceContainer<T>(std::move(obj), cinfo_.container(), s, ref_pool.get()));
-      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<T>>(cinfo_.container(), s, a.get()));
+      // This cast is correct because of the is_base_of check above,
+      // and the fact that resource container is just a smart pointer
+      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<U>>(cinfo_.container(), s, reinterpret_cast<ResourceContainer<U>*>(a.get())));
       ref_pool->AddResource(std::move(a));
     }
-
 
     // put ref_pool into the shared resource
     TF_RETURN_IF_ERROR(rmgr->Create<ReferencePool<T>>(cinfo_.container(), cinfo_.name(), ref_pool.release()));

@@ -10,9 +10,9 @@ namespace tensorflow {
 Creates and initializes a pool containing the `size` number of RecordParser objects
 )doc");
 
-  class ParserPoolOp : public ReferencePoolOp<RecordParser> {
+  class ParserPoolOp : public ReferencePoolOp<RecordParser, RecordParser> {
   public:
-    ParserPoolOp(OpKernelConstruction* ctx) : ReferencePoolOp<RecordParser>(ctx) {
+    ParserPoolOp(OpKernelConstruction* ctx) : ReferencePoolOp<RecordParser, RecordParser>(ctx) {
       using namespace errors;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("size_hint", &size_hint_));
       OP_REQUIRES(ctx, size_hint_ > 0, InvalidArgument("ParserPoolOp requires size_hint > 0 : ", size_hint_));

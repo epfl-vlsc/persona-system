@@ -14,10 +14,7 @@ template <typename T>
 Status decompressSegment(const char* segment,
                          const std::size_t segment_size,
                          std::vector<char> &output);
- 
-Status copySegment(const char* segment,
-                   const std::size_t segment_size,
-                   std::vector<char> &output);
+
 
 auto const decompressBZIP2 = &decompressSegment<boost::iostreams::bzip2_decompressor>;
 auto const decompressGZIP = &decompressSegment<boost::iostreams::gzip_decompressor>;
