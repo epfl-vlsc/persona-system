@@ -3,7 +3,7 @@
 
 #include <memory>
 #include "parser.h"
-#include "tensorflow/core/user_ops/dna-align/data.h"
+#include "tensorflow/core/user_ops/dna-align/read_data.h"
 #include "tensorflow/core/lib/core/status.h"
 
 namespace tensorflow {

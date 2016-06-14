@@ -10,7 +10,7 @@
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/user_ops/dna-align/buffer.h"
+#include "tensorflow/core/user_ops/dna-align/data.h"
 
 namespace tensorflow {
   /*
