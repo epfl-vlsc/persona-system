@@ -1,6 +1,7 @@
 #include "parser.h"
 #include <utility>
 #include "decompress.h"
+#include "util.h"
 
 namespace tensorflow {
 
@@ -11,7 +12,7 @@ namespace tensorflow {
     buffer_.reserve(size);
   }
 
-  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, vector<char> &scratch, vector<char> &index_scratch)
   {
     using namespace errors;
     using namespace format;
@@ -85,24 +86,27 @@ namespace tensorflow {
       }
     }
 
-    if (false && file_header->record_type == RecordType::BASES) {
-      vector<char> converted_records(index_size * 100), converted_index(index_size * 101); // TODO determine size better for 
+    if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
+      scratch.clear(); index_scratch.clear();
 
       uint8_t current_record_length;
       const char* start_ptr = &buffer_[index_size];
       const BinaryBaseRecord *bases;
+
       for (uint64_t i = 0; i < index_size; ++i) {
         current_record_length = records->relative_index[i];
         bases = reinterpret_cast<const BinaryBaseRecord*>(start_ptr);
         start_ptr += current_record_length;
-        TF_RETURN_IF_ERROR(bases->appendToVector(current_record_length, converted_records, converted_index));
+
+        TF_RETURN_IF_ERROR(bases->appendToVector(current_record_length, scratch, index_scratch));
       }
 
       // append everything in converted_records to the index
-      converted_index.reserve(converted_index.size() + converted_records.size());
-      converted_index.insert(end(converted_index), begin(converted_records), end(converted_records));
-      buffer_ = move(converted_index);
-      current_offset_ = 0;
+      buffer_.clear();
+      buffer_.reserve(index_scratch.size() + scratch.size());
+      TF_RETURN_IF_ERROR(copySegment(&index_scratch[0], index_scratch.size(), buffer_));
+      TF_RETURN_IF_ERROR(appendSegment(&scratch[0], scratch.size(), buffer_));
+      current_offset_ = index_scratch.size(); // FIXME I think this is wrong
     } else {
       current_offset_ = index_size;
     }
@@ -115,6 +119,7 @@ namespace tensorflow {
 
   void RecordParser::reset() {
     ResetIterator();
+    buffer_.clear();
     total_records_ = 0;
     current_offset_ = 0;
     valid_record_ = false;
@@ -173,6 +178,7 @@ namespace tensorflow {
     auto record_len = records->relative_index[index];
     *value = record_ptr;
     *length = record_len;
+    return Status::OK();
   }
 
 } // namespace tensorflow {

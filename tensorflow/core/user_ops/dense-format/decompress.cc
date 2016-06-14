@@ -38,20 +38,4 @@ template
 Status decompressSegment<boost::iostreams::gzip_decompressor>(const char* segment,
                                                                 const size_t segment_size,
                                                                 vector<char> &output);
-
-Status copySegment(const char* segment,
-                   const size_t segment_size,
-                   vector<char> &output)
-{
-  output.reserve(segment_size);
-  if (output.capacity() < segment_size) {
-    // just use normal insert and not the optimized memcpy
-    output.insert(output.end(), segment, segment+segment_size);
-  } else {
-    memcpy(&output[0], segment, segment_size);
-    output.resize(segment_size);
-  }
-  return Status::OK();
-}
-
 } // namespace tensorflow

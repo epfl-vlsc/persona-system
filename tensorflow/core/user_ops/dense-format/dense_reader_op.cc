@@ -3,6 +3,7 @@
 #include "shared_mmap_file_resource.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/file_system.h"
+#include "tensorflow/core/platform/logging.h"
 #include "format.h"
 #include "decompress.h"
 #include "parser.h"
@@ -43,6 +44,9 @@ Reads the dense stuff
       OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be > 0 - ", size_hint_));
 
       OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
+      if (verify_) {
+        LOG(DEBUG) << name() << " enabled verification\n";
+      }
     }
 
     ~DenseReaderOp() {}
@@ -81,7 +85,7 @@ Reads the dense stuff
             OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_parser));
 
             auto g = dense_file->get();
-            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(g->data(), g->size(), verify_));
+            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(g->data(), g->size(), verify_, conversion_scratch_, index_scratch_));
 
             output_matrix(i, 0) = rec_parser->container();
             output_matrix(i, 1) = rec_parser->name();
@@ -94,7 +98,8 @@ Reads the dense stuff
     size_t size_hint_;
     size_t round_ = 0;
     bool verify_ = false;
-    //WritableFile *decomp;
+    // TODO to use for conversion
+    vector<char> conversion_scratch_, index_scratch_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReaderOp);

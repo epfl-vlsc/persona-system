@@ -15,7 +15,7 @@ namespace tensorflow {
     RecordParser(std::size_t size);
     RecordParser() = default;
 
-    Status ParseNew(const char* data, const std::size_t length, const bool verify);
+    Status ParseNew(const char* data, const std::size_t length, const bool verify, std::vector<char> &scratch, std::vector<char> &index_scratch);
 
     size_t RecordCount();
 
@@ -26,6 +26,7 @@ namespace tensorflow {
     Status GetRecordAtIndex(std::size_t index, const char **value, std::size_t *length);
 
     void ResetIterator();
+
   private:
 
     void reset();
