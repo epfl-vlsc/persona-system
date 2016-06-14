@@ -9,7 +9,7 @@
 #include <cstdint>
 
 namespace tensorflow {
-  class RecordParser : public ResourceBase
+  class RecordParser
   {
   public:
     RecordParser(std::size_t size);
@@ -26,8 +26,6 @@ namespace tensorflow {
     Status GetRecordAtIndex(std::size_t index, const char **value, std::size_t *length);
 
     void ResetIterator();
-
-    virtual string DebugString() override;
   private:
 
     void reset();

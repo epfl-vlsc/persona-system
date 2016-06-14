@@ -67,13 +67,13 @@ Reads the dense stuff
 
       string resource_name(name());
       ResourceContainer<RecordParser> *rec_parser;
-      ResourceContainer<MemoryMappedFile> *dense_file;
+      ResourceContainer<Data> *dense_file;
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
           OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &dense_file));
           {
             core::ScopedUnref unref_me(dense_file);
-            ResourceReleaser<MemoryMappedFile> m(*dense_file);
+            ResourceReleaser<Data> m(*dense_file);
 
             resource_name = name();
             resource_name.append(to_string(round_++));

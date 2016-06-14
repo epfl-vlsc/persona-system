@@ -75,9 +75,9 @@ protected:
       s.append(std::to_string(i));
       obj = CreateObject();
       a.reset(new ResourceContainer<T>(std::move(obj), cinfo_.container(), s, ref_pool.get()));
-      // I think this should be U
-      // not the correct cast
-      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<U>>(cinfo_.container(), s, a.get())); //static_cast<ResourceContainer<U>*>(a.get())));
+      // This cast is correct because of the is_base_of check above,
+      // and the fact that resource container is just a smart pointer
+      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<U>>(cinfo_.container(), s, reinterpret_cast<ResourceContainer<U>*>(a.get())));
       ref_pool->AddResource(std::move(a));
     }
 

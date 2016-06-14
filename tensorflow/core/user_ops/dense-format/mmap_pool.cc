@@ -11,9 +11,9 @@ Creates pools of MemoryMappedFile objects
 )doc");
 
 
-  class MMapPoolOp : public ReferencePoolOp<MemoryMappedFile, MemoryMappedFile> {
+  class MMapPoolOp : public ReferencePoolOp<MemoryMappedFile, Data> {
   public:
-    MMapPoolOp(OpKernelConstruction *ctx) : ReferencePoolOp<MemoryMappedFile, MemoryMappedFile>(ctx) {}
+    MMapPoolOp(OpKernelConstruction *ctx) : ReferencePoolOp<MemoryMappedFile, Data>(ctx) {}
 
   protected:
     unique_ptr<MemoryMappedFile> CreateObject() override {
