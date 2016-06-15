@@ -48,14 +48,11 @@ namespace tensorflow {
     case CompressionType::GZIP:
       status = decompressGZIP(payload_start, payload_size, buffer_);
       break;
-    case CompressionType::BZIP2:
-      status = decompressBZIP2(payload_start, payload_size, buffer_);
-      break;
     case CompressionType::UNCOMPRESSED:
       status = copySegment(payload_start, payload_size, buffer_);
       break;
     default:
-      status = errors::InvalidArgument("Compressed type '", file_header->compression_type, "' doesn't match to any valid compression enum type");
+      status = errors::InvalidArgument("Compressed type '", file_header->compression_type, "' doesn't match to any valid or supported compression enum type");
       break;
     }
     TF_RETURN_IF_ERROR(status);

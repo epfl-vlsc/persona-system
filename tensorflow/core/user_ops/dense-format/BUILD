@@ -17,6 +17,6 @@ cc_library(
     "//tensorflow/core/kernels:ops_util"],
     # TODO: this needs to be built better, like this: https://github.com/mzhaom/trunk/blob/master/third_party/boost/BUILD
     linkopts = [
-             "-lboost_system", "-lboost_iostreams", "-lboost_timer"
+             "-lz"
     ]
 )
