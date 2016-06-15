@@ -75,9 +75,9 @@ def _DenseReaderShape(op):
 def FileMMap(queue, handle, name=None):
   return gen_user_ops.file_m_map(queue_handle=queue, pool_handle=handle, name=name)
 
-def FileStorage(access_key, secret_key, host, bucket, queue, name=None):
+def FileStorage(access_key, secret_key, host, bucket, queue, pool, name=None):
   return gen_user_ops.file_storage(access_key=access_key, secret_key=secret_key, host=host,
-                                   bucket=bucket, queue_handle=queue, name=name)
+                                   bucket=bucket, queue_handle=queue, pool_handle=pool, name=name)
 
 _fm_str = "FileMMap"
 @ops.RegisterShape(_fm_str)
@@ -158,7 +158,7 @@ class SAMAsyncWriter(io_ops.WriterBase):
     def __init__(self, name=None, out_file=None, num_buffers=16, buffer_size=1048576):
         if out_file is None:
             out_file = name + '_out.txt'
-        ww = gen_user_ops.sam_async_writer(name=name, out_file=out_file, 
+        ww = gen_user_ops.sam_async_writer(name=name, out_file=out_file,
             num_buffers=num_buffers, buffer_size=buffer_size)
         super(SAMAsyncWriter, self).__init__(ww)
 
@@ -200,4 +200,13 @@ ops.NoGradient(_mmp_str)
 # seems like there should be a better way to do this
 @ops.RegisterShape(_mmp_str)
 def _MMapPoolShape(op):
+    return [tensor_shape.vector(2)]
+
+_bp_str = "BufferPool"
+def BufferPool(size, buffer_size=20000000000):
+    return gen_user_ops.buffer_pool(size=size, buffer_size=buffer_size)
+
+ops.NoGradient(_bp_str)
+@ops.RegisterShape(_bp_str)
+def _BufferPoolShape(op):
     return [tensor_shape.vector(2)]

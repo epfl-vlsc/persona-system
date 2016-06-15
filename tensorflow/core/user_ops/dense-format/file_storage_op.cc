@@ -1,6 +1,12 @@
+#include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
+#include "tensorflow/core/user_ops/object-pool/resource_container.h"
+#include "tensorflow/core/user_ops/object-pool/ref_pool.h"
+#include "tensorflow/core/user_ops/dna-align/data.h"
+#include "tensorflow/core/user_ops/dense-format/buffer.h"
 #include "libs3.h"
 #include "stdlib.h"
 #include <iostream>
@@ -17,14 +23,16 @@ namespace tensorflow {
   .Attr("host: string")
   .Attr("bucket: string")
   .Input("queue_handle: Ref(string)")
-//  .Output("file_handle: string")
-//  .Output("file_name: string")
+  .Input("pool_handle: Ref(string)")
+  .Output("file_handle: string")
+  .Output("file_name: string")
   .SetIsStateful()
   .Doc(R"doc(
-Fetches files from storage, synchronously reads them, and produces a Tensor[1,2]
-with the container and shared name for the file.
+Obtains file names from a queue, fetches those files from storage using S3, and writes
+them to a buffer from a pool of buffers.
 
 queue_handle: a handle to the filename queue
+pool_handle: a handle to the buffer pool
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
 file_name: a Tensor() of string for the unique key for this file
   )doc");
@@ -59,14 +67,33 @@ file_name: a Tensor() of string for the unique key for this file
     }
 
     void Compute(OpKernelContext* ctx) override {
+      // Get files to download from the queue
       QueueInterface* queue;
       OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "queue_handle", &queue));
       core::ScopedUnref unref_me(queue);
 
       OP_REQUIRES_OK(ctx, GetNextFilename(queue, &file_key, ctx));
 
-      FILE* buffer = (FILE *) stdout; // Currently set to standard out
-      S3_get_object(&bucketContext, file_key.c_str(), NULL, 0, 0, NULL, &getObjectHandler, buffer);
+      // Get the buffer to write the file into from the buffer pool
+      ReferencePool<Buffer> *ref_pool;
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
+
+      ResourceContainer<Buffer> *rec_buffer;
+      OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_buffer));
+
+      S3_get_object(&bucketContext, file_key.c_str(), NULL, 0, 0, NULL, &getObjectHandler, rec_buffer);
+
+      // Output tensors
+      Tensor *output_tensor;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));
+      auto output_matrix = output_tensor->matrix<string>();
+      output_matrix(0, 0) = rec_buffer->container();
+      output_matrix(0, 1) = rec_buffer->name();
+
+      Tensor *file_name;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
+      auto scalar = file_name->vec<string>();
+      scalar(0) = file_key;
     }
 
   private:
@@ -97,9 +124,9 @@ file_name: a Tensor() of string for the unique key for this file
 
     static S3Status getObjectDataCallback(int bufferSize, const char *buffer, void *callbackData)
     {
-      FILE *outfile = (FILE *) callbackData;
-      size_t wrote = fwrite(buffer, 1, bufferSize, outfile);
-      return ((wrote < (size_t) bufferSize) ? S3StatusAbortedByCallback : S3StatusOK);
+      auto buf = (ResourceContainer<Buffer> *) callbackData;
+      buf->get()->WriteBuffer(buffer, bufferSize);
+      return S3StatusOK;
     }
 
     Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
