@@ -18,6 +18,7 @@ Status resize_output(z_stream &strm, vector<char> &output, size_t extend_len) {
 
   if (strm.avail_out == 0) {
     auto new_cap = output.capacity() + extend_len;
+    output.resize(output.capacity());
     output.reserve(new_cap);
     if (output.capacity() < new_cap) {
       s = Internal("Unable to reserve more capacity in a buffer");
@@ -57,27 +58,25 @@ Status decompressGZIP(const char* segment,
   // First, try to decompress as much as possible in a single step
   strm.avail_out = output.capacity();
   strm.next_out = reinterpret_cast<unsigned char*>(&output[0]);
+  output.resize(output.capacity());
   status = inflate(&strm, Z_FINISH);
 
   if (status != Z_STREAM_END) {
-    if (status == Z_MEM_ERROR || status == Z_BUF_ERROR) {
+    if (status == Z_OK || status == Z_MEM_ERROR || status == Z_BUF_ERROR) {
       // Do normal decompression because we couldn't do it in one shot
-      do {
-        s = resize_output(strm, output, extend_length);
-        if (!s.ok()) {
-          break;
-        }
-
+      s = resize_output(strm, output, extend_length);
+      while (status != Z_STREAM_END && s.ok()) {
         status = inflate(&strm, Z_NO_FLUSH);
         switch (status) {
         case Z_OK:
+          s = resize_output(strm, output, extend_length);
         case Z_STREAM_END:
           break;
         default: // an error
           s = Internal("inflate(Z_NO_FLUSH) returned code ", status, " with message '", strm.msg == NULL ? "" : strm.msg, "'");
           break;
         }
-      } while (status != Z_STREAM_END && s.ok());
+      }
     } else {
       s = Internal("inflate(Z_FINISH) return code ", status, " with message '", strm.msg == NULL ? "" : strm.msg, "'");
     }
