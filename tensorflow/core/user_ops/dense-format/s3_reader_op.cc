@@ -10,14 +10,13 @@
 #include "libs3.h"
 #include "stdlib.h"
 #include <iostream>
-#include <fstream>
 #include "shared_mmap_file_resource.h"
 
 namespace tensorflow {
 
   using namespace std;
 
-  REGISTER_OP("FileStorage")
+  REGISTER_OP("S3Reader")
   .Attr("access_key: string")
   .Attr("secret_key: string")
   .Attr("host: string")
@@ -37,9 +36,9 @@ file_handle: a Tensor(2) of strings to access the file resource in downstream no
 file_name: a Tensor() of string for the unique key for this file
   )doc");
 
-  class FileStorageOp : public OpKernel {
+  class S3ReaderOp : public OpKernel {
   public:
-    FileStorageOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    S3ReaderOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       LOG(INFO) << "Initializing LibS3 connection";
 
       // Receive access_key, secret_key, host, bucket via attributes
@@ -56,11 +55,11 @@ file_name: a Tensor() of string for the unique key for this file
       bucketContext.accessKeyId = access_key.c_str();
       bucketContext.secretAccessKey = secret_key.c_str();
 
-      responseHandler.propertiesCallback = &FileStorageOp::responsePropertiesCallback;
-      responseHandler.completeCallback = &FileStorageOp::responseCompleteCallback;
+      responseHandler.propertiesCallback = &S3ReaderOp::responsePropertiesCallback;
+      responseHandler.completeCallback = &S3ReaderOp::responseCompleteCallback;
 
-      getObjectHandler.responseHandler = FileStorageOp::responseHandler;
-      getObjectHandler.getObjectDataCallback = &FileStorageOp::getObjectDataCallback;
+      getObjectHandler.responseHandler = S3ReaderOp::responseHandler;
+      getObjectHandler.getObjectDataCallback = &S3ReaderOp::getObjectDataCallback;
 
       // Open connection
       S3_initialize("s3", S3_INIT_ALL, host.c_str());
@@ -155,6 +154,6 @@ file_name: a Tensor() of string for the unique key for this file
     }
   };
 
-  REGISTER_KERNEL_BUILDER(Name("FileStorage").Device(DEVICE_CPU), FileStorageOp);
+  REGISTER_KERNEL_BUILDER(Name("S3Reader").Device(DEVICE_CPU), S3ReaderOp);
 
 } // namespace tensorflow

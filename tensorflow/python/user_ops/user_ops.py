@@ -75,15 +75,21 @@ def _DenseReaderShape(op):
 def FileMMap(queue, handle, name=None):
   return gen_user_ops.file_m_map(queue_handle=queue, pool_handle=handle, name=name)
 
-def FileStorage(access_key, secret_key, host, bucket, queue, pool, name=None):
-  return gen_user_ops.file_storage(access_key=access_key, secret_key=secret_key, host=host,
-                                   bucket=bucket, queue_handle=queue, pool_handle=pool, name=name)
+def S3Reader(access_key, secret_key, host, bucket, queue, pool, name=None):
+  return gen_user_ops.s3_reader(access_key=access_key, secret_key=secret_key, host=host,
+                                bucket=bucket, queue_handle=queue, pool_handle=pool, name=name)
 
 _fm_str = "FileMMap"
 @ops.RegisterShape(_fm_str)
 def _FileMMapShape(op):
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_fm_str)
+
+_sr_str = "S3Reader"
+@ops.RegisterShape(_sr_str)
+def _S3ReaderShape(op):
+  return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
+ops.NoGradient(_sr_str)
 
 _sink_str = "SinkOp"
 def Sink(data, name=None):
