@@ -84,6 +84,10 @@ def _DenseReaderShape(op):
 def FileMMap(filename, handle, name=None):
   return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, name=name)
 
+def S3Reader(access_key, secret_key, host, bucket, queue, pool, name=None):
+  return gen_user_ops.s3_reader(access_key=access_key, secret_key=secret_key, host=host,
+                                bucket=bucket, queue_handle=queue, pool_handle=pool, name=name)
+
 _fm_str = "FileMMap"
 @ops.RegisterShape(_fm_str)
 def _FileMMapShape(op):
@@ -93,6 +97,12 @@ def _FileMMapShape(op):
   _assert_scalar(filename_input)
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_fm_str)
+
+_sr_str = "S3Reader"
+@ops.RegisterShape(_sr_str)
+def _S3ReaderShape(op):
+  return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
+ops.NoGradient(_sr_str)
 
 _sink_str = "SinkOp"
 def Sink(data, name=None):
@@ -175,7 +185,7 @@ class SAMAsyncWriter(io_ops.WriterBase):
     def __init__(self, name=None, out_file=None, num_buffers=16, buffer_size=1048576):
         if out_file is None:
             out_file = name + '_out.txt'
-        ww = gen_user_ops.sam_async_writer(name=name, out_file=out_file, 
+        ww = gen_user_ops.sam_async_writer(name=name, out_file=out_file,
             num_buffers=num_buffers, buffer_size=buffer_size)
         super(SAMAsyncWriter, self).__init__(ww)
 
@@ -217,4 +227,13 @@ ops.NoGradient(_mmp_str)
 # seems like there should be a better way to do this
 @ops.RegisterShape(_mmp_str)
 def _MMapPoolShape(op):
+    return [tensor_shape.vector(2)]
+
+_bp_str = "BufferPool"
+def BufferPool(size, buffer_size=20000000000):
+    return gen_user_ops.buffer_pool(size=size, buffer_size=buffer_size)
+
+ops.NoGradient(_bp_str)
+@ops.RegisterShape(_bp_str)
+def _BufferPoolShape(op):
     return [tensor_shape.vector(2)]
