@@ -21,7 +21,7 @@ namespace tensorflow {
     }
 
     const char* Buffer::data() const {
-      return buf_.get();
+        return buf_.get();
     }
 
     size_t Buffer::size() const {
