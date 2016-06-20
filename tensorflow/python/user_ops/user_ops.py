@@ -230,8 +230,8 @@ def _MMapPoolShape(op):
     return [tensor_shape.vector(2)]
 
 _bp_str = "BufferPool"
-def BufferPool(size, buffer_size=20000000000):
-    return gen_user_ops.buffer_pool(size=size, buffer_size=buffer_size)
+def BufferPool(size):
+    return gen_user_ops.buffer_pool(size=size)
 
 ops.NoGradient(_bp_str)
 @ops.RegisterShape(_bp_str)
