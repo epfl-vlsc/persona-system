@@ -60,6 +60,7 @@ Reads the dense stuff
 
       ReferencePool<RecordParser> *ref_pool;
       OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
+      core::ScopedUnref unref_pool(ref_pool);
 
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));

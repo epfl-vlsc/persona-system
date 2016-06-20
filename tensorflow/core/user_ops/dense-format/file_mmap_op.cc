@@ -95,6 +95,7 @@ bundle_name: [{this map op's name}] + upstream_name
 
       ReferencePool<MemoryMappedFile> *ref_pool;
       OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
+      core::ScopedUnref unref_pool(ref_pool);
 
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
@@ -145,6 +146,7 @@ bundle_name: [{this map op's name}] + upstream_name
 
       ReferencePool<MemoryMappedFile> *ref_pool;
       OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
+      core::ScopedUnref unref_pool(ref_pool);
 
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));

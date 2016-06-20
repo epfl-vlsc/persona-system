@@ -76,6 +76,7 @@ file_name: a Tensor() of string for the unique key for this file
       // Get the buffer to write the file into from the buffer pool
       ReferencePool<Buffer> *ref_pool;
       OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
+      core::ScopedUnref unref_pool(ref_pool);
 
       ResourceContainer<Buffer> *rec_buffer;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_buffer));
