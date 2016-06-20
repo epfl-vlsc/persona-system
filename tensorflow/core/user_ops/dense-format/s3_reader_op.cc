@@ -125,7 +125,7 @@ file_name: a Tensor() of string for the unique key for this file
     static S3Status getObjectDataCallback(int bufferSize, const char *buffer, void *callbackData)
     {
       auto buf = (ResourceContainer<Buffer> *) callbackData;
-      buf->get()->WriteBuffer(buffer, bufferSize);
+      buf->get()->AppendBuffer(buffer, bufferSize);
       return S3StatusOK;
     }
 

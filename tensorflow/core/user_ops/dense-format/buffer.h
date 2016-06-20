@@ -1,22 +1,19 @@
 #pragma once
 #include <cstddef>
 #include <string.h>
-#include <memory>
+#include <vector>
 #include "tensorflow/core/user_ops/dna-align/data.h"
+#include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
     class Buffer : public Data {
     public:
-        Buffer(std::size_t total_size);
-        void WriteBuffer(const char* content, std::size_t size_of_content);
+        Status WriteBuffer(const char* content, std::size_t content_size);
+        Status AppendBuffer(const char* content, std::size_t content_size);
         virtual const char* data() const override;
         virtual std::size_t size() const override;
-        const std::size_t total_size() const;
 
     private:
-        std::size_t valid_size_;
-        const std::size_t total_size_;
-        std::unique_ptr<char> buf_;
-        char* curr_position_;
+        std::vector<char> buf_;
     };
 } // namespace tensorflow {
