@@ -10,6 +10,7 @@ namespace tensorflow {
     public:
         Status WriteBuffer(const char* content, std::size_t content_size);
         Status AppendBuffer(const char* content, std::size_t content_size);
+        void reset();
         virtual const char* data() const override;
         virtual std::size_t size() const override;
 

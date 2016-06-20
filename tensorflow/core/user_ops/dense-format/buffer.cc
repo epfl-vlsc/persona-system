@@ -24,4 +24,8 @@ namespace tensorflow {
     return buf_.size();
   }
 
+  void Buffer::reset() {
+    buf_.clear();
+  }
+
 } // namespace tensorflow {

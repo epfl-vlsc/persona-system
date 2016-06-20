@@ -80,6 +80,7 @@ file_name: a Tensor() of string for the unique key for this file
 
       ResourceContainer<Buffer> *rec_buffer;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_buffer));
+      rec_buffer->get()->reset();
 
       S3_get_object(&bucketContext, file_key.c_str(), NULL, 0, 0, NULL, &getObjectHandler, rec_buffer);
 
