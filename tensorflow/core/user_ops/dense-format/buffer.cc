@@ -3,17 +3,15 @@
 #include "tensorflow/core/user_ops/dna-align/data.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
 
-using namespace std;
 
 namespace tensorflow {
+
+  using namespace std;
+
     Buffer::Buffer(size_t total_size) : total_size_(total_size) {
         valid_size_ = 0;
-        buf_ = new char[total_size];
-        curr_position_ = (char*) buf_;
-    }
-
-    Buffer::~Buffer() {
-        delete[] buf_;
+        buf_.reset(new char[total_size]);
+        curr_position_ = buf_.get();
     }
 
     void Buffer::WriteBuffer(const char* content, size_t size_of_content) {
@@ -23,7 +21,7 @@ namespace tensorflow {
     }
 
     const char* Buffer::data() const {
-        return buf_;
+      return buf_.get();
     }
 
     size_t Buffer::size() const {
