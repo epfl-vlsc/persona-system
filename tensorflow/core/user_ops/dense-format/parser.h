@@ -16,10 +16,12 @@ namespace tensorflow {
 
   private:
     std::array<char, N> characters_;
+    std::size_t effective_characters_;
 
   public:
 
-    BaseMapping(std::array<char, N> chars) : characters_(chars) {}
+    BaseMapping(std::array<char, N> chars, std::size_t effective_characters) : characters_(chars),
+      effective_characters_(effective_characters) {}
 
     BaseMapping() {
       characters_.fill('\0');
@@ -28,6 +30,10 @@ namespace tensorflow {
 
     const std::array<char, N>& get() const {
       return characters_;
+    }
+
+    const std::size_t effective_characters() const {
+      return effective_characters_;
     }
   };
 

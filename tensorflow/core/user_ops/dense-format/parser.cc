@@ -18,7 +18,7 @@ namespace tensorflow {
     mutex base_table_mu_;
 
     template <size_t N>
-    array<char, N>
+    BaseMapping<N>
     make_result(size_t key) {
       using namespace format;
       array<char, N> ret;
@@ -26,6 +26,7 @@ namespace tensorflow {
       uint64_t masked;
       bool run = true, valid = true;
       char c;
+      size_t usable_characters = 0;
       auto mask = ~(~0 << BinaryBases::base_width);
       for (size_t i = 0; run && i < ret.size(); ++i) {
         masked = static_cast<BaseAlphabet>(key & mask);
@@ -51,19 +52,21 @@ namespace tensorflow {
           c = 'N';
           break;
         case BaseAlphabet::END:
-          c = '\0';
           run = false;
           break;
         }
-        ret[i] = c;
+        if (run) {
+          ret[i] = c;
+          usable_characters++;
+        }
       }
 
       if (!valid) {
         ret.fill('\0');
-        ret[0] = 'Z'; // FIXME some hack to let the lookup know that it is invalid
+        usable_characters = 0;
       }
 
-      return ret;
+      return BaseMapping<N>(ret, usable_characters);
     }
 
     void init_table_locked() {
