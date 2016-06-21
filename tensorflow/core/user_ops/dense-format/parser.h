@@ -5,10 +5,31 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include <vector>
+#include <array>
 #include <string>
 #include <cstdint>
 
 namespace tensorflow {
+
+  template <size_t N>
+  class BaseMapping {
+
+  private:
+    std::array<char, N> characters_;
+
+  public:
+
+    BaseMapping(std::array<char, N> chars) : characters_(chars) {}
+
+    BaseMapping() {
+      characters_.fill('\0');
+      characters_[0] = 'Z'; // TODO hack: an arbitrary bad value, used to indicate an impossible issue
+    }
+    const std::array<char, N>& get() const {
+      return characters_;
+    }
+  };
+
   class RecordParser
   {
   public:
@@ -27,6 +48,7 @@ namespace tensorflow {
 
     void ResetIterator();
 
+    // TODO this shouldn't have to be public, but I can't figure out how to do it otherwise
   private:
 
     void reset();

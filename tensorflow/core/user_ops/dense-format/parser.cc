@@ -1,15 +1,102 @@
 #include "parser.h"
 #include <utility>
+#include <array>
 #include "decompress.h"
 #include "util.h"
+#include "format.h"
+#include "tensorflow/core/platform/mutex.h"
+#include <cstdint>
 
 namespace tensorflow {
 
   using namespace std;
+  namespace {
+    volatile bool table_needs_init_ = true;
+    const size_t base_width = 3;
+    const size_t num_bases = 512; // 2*(enum_bit_width{3} * base_width{3})
+    array<BaseMapping<base_width>, num_bases> base_table_;
+    mutex base_table_mu_;
+
+    template <size_t N>
+    array<char, N>
+    make_result(size_t key) {
+      using namespace format;
+      array<char, N> ret;
+      ret.fill('\0');
+      uint64_t masked;
+      bool run = true, valid = true;
+      char c;
+      auto mask = ~(~0 << BinaryBases::base_width);
+      for (size_t i = 0; run && i < ret.size(); ++i) {
+        masked = static_cast<BaseAlphabet>(key & mask);
+        switch (masked) {
+        default:
+          // if a bad value is found, we need to set to a default "bad" value, as below
+          run = false;
+          valid = false;
+          break;
+        case BaseAlphabet::A:
+          c = 'A';
+          break;
+        case BaseAlphabet::T:
+          c = 'T';
+          break;
+        case BaseAlphabet::C:
+          c = 'C';
+          break;
+        case BaseAlphabet::G:
+          c = 'G';
+          break;
+        case BaseAlphabet::N:
+          c = 'N';
+          break;
+        case BaseAlphabet::END:
+          c = '\0';
+          run = false;
+          break;
+        }
+        ret[i] = c;
+      }
+
+      if (!valid) {
+        ret.fill('\0');
+        ret[0] = 'Z'; // FIXME some hack to let the lookup know that it is invalid
+      }
+
+      return ret;
+    }
+
+    void init_table_locked() {
+      for (size_t i = 0; i < base_table_.size(); ++i) {
+        base_table_[i] = make_result<base_width>(i);
+      }
+    }
+
+    void init_table() {
+      if (table_needs_init_) {
+        mutex_lock l(base_table_mu_);
+        if (table_needs_init_) {
+          init_table_locked();
+          table_needs_init_ = false;
+        }
+      }
+    }
+
+    const BaseMapping<3>*
+    lookup_triple(const size_t bases) {
+      auto b = bases & 0x1ff;
+      const auto &a = base_table_[b];
+      if (a.get()[0] == 'Z') {
+        return nullptr;
+      }
+      return &a;
+    }
+  }
 
   RecordParser::RecordParser(std::size_t size)
   {
     buffer_.reserve(size);
+    init_table();
   }
 
   Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, vector<char> &scratch, vector<char> &index_scratch)
@@ -177,5 +264,4 @@ namespace tensorflow {
     *length = record_len;
     return Status::OK();
   }
-
 } // namespace tensorflow {

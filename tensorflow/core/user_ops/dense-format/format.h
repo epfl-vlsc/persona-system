@@ -83,10 +83,10 @@ namespace format {
     uint64_t bases;
 
     static const std::size_t compression = 21; //sizeof(uint64_t) * 2; // 4 bits = 2 per byte
+    static const std::size_t base_width = 3;
 
   protected:
 
-    static const std::size_t base_width = 3;
 
     Status setBaseAtPosition(const BaseAlphabet base, const std::size_t position);
   };

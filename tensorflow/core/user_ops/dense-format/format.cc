@@ -1,4 +1,5 @@
 #include "format.h"
+#include <array>
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
@@ -44,15 +45,15 @@ Status BinaryBases::appendToVector(vector<char> &output, size_t *num_bases) cons
   using namespace errors;
   BaseAlphabet base;
   auto bases_copy = bases;
+  uint64_t base_i;
   size_t length = 0;
   bool set;
-  for (size_t i = 0; i < compression; i++, length++) {
-    base = static_cast<BaseAlphabet>(bases_copy & 0x7);
-    set = false;
-    if (base == BaseAlphabet::END) {
-      break;
-    }
+  //TODO this is the method to fix
+  for (size_t i = 0; i < compression; i+=3) {
+    base_i = (bases_copy & 0x1ff);
+    // TODO need to do something with length here
 
+    set = false;
     for (const auto &bm : base_map) {
       if (base == bm.base) {
         output.push_back(bm.base_char);
