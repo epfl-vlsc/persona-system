@@ -81,16 +81,16 @@ namespace tensorflow {
         }
       }
     }
+  }
 
-    const BaseMapping<3>*
-    lookup_triple(const size_t bases) {
-      auto b = bases & 0x1ff;
-      const auto &a = base_table_[b];
-      if (a.get()[0] == 'Z') {
-        return nullptr;
-      }
-      return &a;
+  const BaseMapping<3>*
+  lookup_triple(const size_t bases) {
+    auto b = bases & 0x1ff;
+    const auto &a = base_table_[b];
+    if (a.get()[0] == 'Z') {
+      return nullptr;
     }
+    return &a;
   }
 
   RecordParser::RecordParser(std::size_t size)

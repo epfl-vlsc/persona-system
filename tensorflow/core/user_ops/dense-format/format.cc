@@ -1,5 +1,7 @@
 #include "format.h"
+#include "parser.h"
 #include <array>
+#include <cstring>
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
@@ -47,26 +49,25 @@ Status BinaryBases::appendToVector(vector<char> &output, size_t *num_bases) cons
   auto bases_copy = bases;
   uint64_t base_i;
   size_t length = 0;
-  bool set;
+  bool run = true;
   //TODO this is the method to fix
-  for (size_t i = 0; i < compression; i+=3) {
-    base_i = (bases_copy & 0x1ff);
-    // TODO need to do something with length here
-
-    set = false;
-    for (const auto &bm : base_map) {
-      if (base == bm.base) {
-        output.push_back(bm.base_char);
-        set = true;
-        break;
-      }
+  for (size_t i = 0; run && i < compression;) {
+    auto res = lookup_triple(bases_copy);
+    if (res == nullptr) {
+      return Internal("unable to convert value ", bases_copy & 0x1ff, " to a triple\n");
     }
 
-    if (!set) {
-      // Don't worry about unwinding this now
-      return Internal("Could not find conversion for base ", static_cast<int>(base));
-    } else {
-      bases_copy >>= 3;
+    auto val = res->get();
+    i += val.size();
+
+    for (const auto &b_char : val) {
+      if (b_char == '\0') {
+        run = false; // to break from the output loop
+        break;
+      }
+
+      output.push_back(b_char);
+      length += 1;
     }
   }
 

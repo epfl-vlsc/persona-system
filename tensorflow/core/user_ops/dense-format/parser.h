@@ -25,10 +25,14 @@ namespace tensorflow {
       characters_.fill('\0');
       characters_[0] = 'Z'; // TODO hack: an arbitrary bad value, used to indicate an impossible issue
     }
+
     const std::array<char, N>& get() const {
       return characters_;
     }
   };
+
+  const BaseMapping<3>*
+  lookup_triple(const std::size_t bases);
 
   class RecordParser
   {
@@ -48,7 +52,6 @@ namespace tensorflow {
 
     void ResetIterator();
 
-    // TODO this shouldn't have to be public, but I can't figure out how to do it otherwise
   private:
 
     void reset();
