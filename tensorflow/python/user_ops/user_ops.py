@@ -42,10 +42,10 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, pool_handle, batch_size, size_hint=None, name=None, verify=False):
+def DenseReader(file_handle, pool_handle, size_hint=None, name=None, verify=False):
   if size_hint:
-    return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, batch_size=batch_size, size_hint=size_hint, name=name)
-  return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, batch_size=batch_size, name=name)
+    return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, size_hint=size_hint, name=name)
+  return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, name=name)
 
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):
@@ -76,9 +76,6 @@ def _DenseReaderShape(op):
           exp=expected_handle_shape, actual=handle_shape))
   input_shape = op.inputs[1].get_shape()
   _assert_matrix(input_shape)
-  batch_size = op.get_attr("batch_size")
-  if batch_size < 1:
-    raise Exception("dense reader expects a positive batch size. Received {}".format(batch_size))
   return [input_shape]
 
 def FileMMap(filename, handle, name=None):
