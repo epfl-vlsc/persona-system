@@ -14,7 +14,6 @@
 namespace tensorflow {
 
   REGISTER_OP("DenseReader")
-  .Attr("batch_size: int")
   .Attr("size_hint: int = 4194304") // 4 MeB
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
@@ -33,14 +32,9 @@ Reads the dense stuff
   public:
     DenseReaderOp(OpKernelConstruction *context) : OpKernel(context) {
       using namespace errors;
-      int batch_size;
-      OP_REQUIRES_OK(context, context->GetAttr("batch_size",
-                                               &batch_size));
-      OP_REQUIRES(context, batch_size > 0, InvalidArgument("DenseReaderOp: batch_size must be >0 - ", batch_size));
-      batch_size_ = batch_size;
-
-      OP_REQUIRES_OK(context, context->GetAttr("size_hint", &batch_size));
-      size_hint_ = static_cast<size_t>(batch_size);
+      int size_hint;
+      OP_REQUIRES_OK(context, context->GetAttr("size_hint", &size_hint));
+      size_hint_ = static_cast<size_t>(size_hint);
       OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be > 0 - ", size_hint_));
 
       OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
@@ -95,7 +89,6 @@ Reads the dense stuff
     }
 
   private:
-    int batch_size_;
     size_t size_hint_;
     size_t round_ = 0;
     bool verify_ = false;
