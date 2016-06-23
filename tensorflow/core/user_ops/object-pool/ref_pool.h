@@ -29,7 +29,7 @@ namespace tensorflow {
     void AddResource(std::unique_ptr<ResourceContainer<T>> &&new_resource)
     {
       objects_.push_back(new_resource.get());
-      all_objects_.push_back(std::move(new_resource));
+      all_objects_.push_back(new_resource.release());
     }
 
     // For getting / releasing resources
@@ -61,7 +61,7 @@ namespace tensorflow {
 
   private:
 
-    std::vector<std::unique_ptr<ResourceContainer<T>>> all_objects_;
+    std::vector<ResourceContainer<T>*> all_objects_;
     std::deque<ResourceContainer<T>*> objects_;
     mutable mutex objects_mu_;
     mutable std::condition_variable objects_cv_;
