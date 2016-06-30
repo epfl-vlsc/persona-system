@@ -70,7 +70,17 @@ namespace format {
   };
 
   struct __attribute__((packed)) AlignmentResult {
-    // TODO(Laura): fill this in
+    uint8_t mapq;
+    uint16_t flag;
+    uint32_t pos;
+    uint32_t pnext;
+    int32_t tlen;
+    char rnext;
+    uint8_t qname_len;
+    uint8_t rname_len;
+    uint8_t cigar_len;
+    // contains the fields: qname, rname, cigar respectively
+    char fields_string[48]; // TODO: static size, check size before writing into it
   };
 
   struct __attribute__((packed)) BinaryBases {
