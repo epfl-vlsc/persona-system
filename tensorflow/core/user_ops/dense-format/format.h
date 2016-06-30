@@ -78,6 +78,12 @@ namespace format {
     int score;
     int mapq;
     int64_t location;
+    
+    AligmentResult(size_t len1, size_t len2, const uint16_t& flag, int status, int direction, 
+                int score, int mapq, const int64_t& location)
+                : rname_len(len1), cigar_len(len2), flag(flag), status(status), 
+                  direction(direction), score(score), mapq(mapq), location(location)
+    {}
    };
 
     // stores the variable length fields in Alignment Result: rname and cigar, respectively
