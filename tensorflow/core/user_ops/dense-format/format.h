@@ -70,18 +70,18 @@ namespace format {
   };
 
   struct __attribute__((packed)) AlignmentResult {
-    uint8_t mapq;
+    uint8_t rname_len; // length of rname field stored in VarLenFieldsResult
+    uint8_t cigar_len; // length of cigar field stored in VarLenFieldsResult
     uint16_t flag;
-    uint32_t pos;
-    uint32_t pnext;
-    int32_t tlen;
-    char rnext;
-    uint8_t qname_len;
-    uint8_t rname_len;
-    uint8_t cigar_len;
-    // contains the fields: qname, rname, cigar respectively
-    char fields_string[48]; // TODO: static size, check size before writing into it
-  };
+    int status;
+    int direction;
+    int score;
+    int mapq;
+    int64_t location;
+   };
+
+    // stores the variable length fields in Alignment Result: rname and cigar, respectively
+    string VarLenFieldsResult;
 
   struct __attribute__((packed)) BinaryBases {
     BinaryBases() : bases(0) {};
