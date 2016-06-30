@@ -69,6 +69,10 @@ namespace format {
     END = 7
   };
 
+  struct __attribute__((packed)) AlignmentResult {
+    // TODO(Laura): fill this in
+  };
+
   struct __attribute__((packed)) BinaryBases {
     BinaryBases() : bases(0) {};
 
