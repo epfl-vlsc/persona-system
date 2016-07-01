@@ -170,5 +170,10 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
   }
 }
 
+  AlignmentResult::AlignmentResult(const SingleAlignmentResult &result)
+  {
+    // TODO(Laura): fill this in to populate the fields
+  }
+
 } // namespace format
 } // namespace tensorflow

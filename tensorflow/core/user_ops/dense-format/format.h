@@ -20,6 +20,7 @@
 #include <vector>
 #include <array>
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
 
 namespace tensorflow {
 namespace format {
@@ -80,11 +81,7 @@ namespace format {
     int mapq;
     int64_t location;
 
-    AlignmentResult(size_t len1, size_t len2, const uint16_t& flag, int status, int direction,
-                int score, int mapq, const int64_t& location)
-                : rname_len(len1), cigar_len(len2), flag(flag), status(status),
-                  direction(direction), score(score), mapq(mapq), location(location)
-    {}
+    AlignmentResult(const SingleAlignmentResult &result);
    };
 
   struct __attribute__((packed)) BinaryBases {
