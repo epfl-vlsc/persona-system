@@ -170,7 +170,7 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
   }
 }
 
-  AlignmentResult::AlignmentResult(const SingleAlignmentResult &result)
+  void AlignmentResult::convertFromSNAP(const SingleAlignmentResult &result, string &str_buf)
   {
     // TODO(Laura): fill this in to populate the fields
   }

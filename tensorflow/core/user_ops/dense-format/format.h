@@ -81,7 +81,7 @@ namespace format {
     int mapq;
     int64_t location;
 
-    AlignmentResult(const SingleAlignmentResult &result);
+    void convertFromSNAP(const SingleAlignmentResult &result, std::string &str_buf);
    };
 
   struct __attribute__((packed)) BinaryBases {
