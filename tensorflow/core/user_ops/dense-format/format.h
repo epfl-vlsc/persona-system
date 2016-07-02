@@ -72,14 +72,11 @@ namespace format {
   };
 
   struct __attribute__((packed)) AlignmentResult {
-    uint8_t rname_len; // length of rname field stored in VarLenFieldsResult
-    uint8_t cigar_len; // length of cigar field stored in VarLenFieldsResult
-    uint16_t flag;
-    int status;
-    int direction;
+    uint8_t cigar_len; 
+    uint16_t flag; // replaces status and direction
     int score;
     int mapq;
-    int64_t location;
+    int64_t location; // POS field in SAM format
 
     void convertFromSNAP(const SingleAlignmentResult &result, std::string &str_buf);
    };
