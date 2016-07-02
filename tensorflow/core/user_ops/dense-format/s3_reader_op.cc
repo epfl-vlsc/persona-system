@@ -5,7 +5,7 @@
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
-#include "tensorflow/core/user_ops/dna-align/data.h"
+#include "data.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
 #include "libs3.h"
 #include "stdlib.h"

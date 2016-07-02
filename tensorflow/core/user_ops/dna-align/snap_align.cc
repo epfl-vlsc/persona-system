@@ -8,6 +8,9 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/strings/numbers.h"
+#include "tensorflow/core/user_ops/object-pool/resource_container.h"
+#include "tensorflow/core/user_ops/object-pool/ref_pool.h"
+#include "tensorflow/core/user_ops/dense-format/buffer.h"
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "snap_proto.pb.h"
@@ -57,7 +60,16 @@ class SnapAlignOp : public OpKernel {
 
       const Tensor* reads;
       OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
-      
+
+      ReferencePool<Buffer> *buf_pool;
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_pool", &buf_pool));
+      core::ScopedUnref unref_pool(buf_pool);
+      ResourceContainer<Buffer> *buffer_resource_container;
+      OP_REQUIRES_OK(ctx, buf_pool->GetResource(&buffer_resource_container));
+      auto buffer_ctr = buffer_resource_container->get();
+      buffer_ctr->reset();
+      auto &buffer = buffer_ctr->get();
+
       //LOG(INFO) << "reads shape is: " << reads->shape().DebugString();
       SnapReadDecode read_batch(reads);
       size_t num_reads = read_batch.size();
@@ -148,6 +160,7 @@ class SnapAlignOp : public OpKernel {
   REGISTER_OP("SnapAlign")
       .Input("genome_handle: Ref(string)")
       .Input("options_handle: Ref(string)")
+      .Input("buffer_pool: Ref(string)")
       .Input("read: string")
       .Output("output: int64")
       .Output("reads_out: string")

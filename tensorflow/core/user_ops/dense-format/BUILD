@@ -12,7 +12,7 @@ cc_library(
     alwayslink = 1,
     visibility = ["//visibility:public"],
     deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:io",
-    "//tensorflow/core/user_ops/dna-align:snap_align",
+    "//tensorflow/core/user_ops/dna-align:snap_lib",
     "//tensorflow/core/user_ops/object-pool:object_pool",
     "//tensorflow/core/kernels:ops_util"],
     # TODO: this needs to be built better, like this: https://github.com/mzhaom/trunk/blob/master/third_party/boost/BUILD

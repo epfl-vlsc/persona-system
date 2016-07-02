@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <string.h>
 #include <vector>
-#include "tensorflow/core/user_ops/dna-align/data.h"
+#include "data.h"
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {

@@ -43,8 +43,6 @@ Reads the dense stuff
       }
     }
 
-    ~DenseReaderOp() {}
-
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
       const Tensor *fileset, *parser_pool;

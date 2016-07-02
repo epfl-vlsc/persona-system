@@ -1,6 +1,6 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool_op.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
-#include "tensorflow/core/user_ops/dna-align/data.h"
+#include "data.h"
 
 namespace tensorflow {
   using namespace std;

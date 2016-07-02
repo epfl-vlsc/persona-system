@@ -1,5 +1,5 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
-#include "tensorflow/core/user_ops/dna-align/data.h"
+#include "data.h"
 #include <cstdio>
 #include <vector>
 #include "compress.h"

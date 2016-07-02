@@ -14,7 +14,7 @@ namespace tensorflow {
     index.push_back(static_cast<char>(index_entry));
   }
 
-  void AlignmentResultBuilder::AppendAlignmentResult(const SingleAlignmentResult &result, vector<char> &index) 
+  void AlignmentResultBuilder::AppendAlignmentResult(const SingleAlignmentResult &result, vector<char> &index)
   {
     builder_result_.convertFromSNAP(result, builder_string_);
     AppendAlignmentResult(builder_result_, builder_string_, index);

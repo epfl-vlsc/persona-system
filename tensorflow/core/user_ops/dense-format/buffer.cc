@@ -1,7 +1,7 @@
 #include <cstddef>
 #include <string.h>
-#include "tensorflow/core/user_ops/dna-align/data.h"
-#include "tensorflow/core/user_ops/dense-format/buffer.h"
+#include "data.h"
+#include "buffer.h"
 #include "util.h"
 
 namespace tensorflow {

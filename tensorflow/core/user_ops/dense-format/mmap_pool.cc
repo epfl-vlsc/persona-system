@@ -1,5 +1,5 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool_op.h"
-#include "tensorflow/core/user_ops/dna-align/data.h"
+#include "data.h"
 #include "shared_mmap_file_resource.h"
 
 namespace tensorflow {
