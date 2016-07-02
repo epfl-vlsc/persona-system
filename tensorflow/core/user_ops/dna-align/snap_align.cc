@@ -70,7 +70,7 @@ class SnapAlignOp : public OpKernel {
       OP_REQUIRES_OK(ctx, buf_pool->GetResource(&buffer_resource_container));
       auto buffer_ctr = buffer_resource_container->get();
       buffer_ctr->reset();
-      vector<char> &buffer = buffer_ctr->get();
+      vector<char> &alignment_result_buffer = buffer_ctr->get();
 #endif
 
       //LOG(INFO) << "reads shape is: " << reads->shape().DebugString();
@@ -127,6 +127,11 @@ class SnapAlignOp : public OpKernel {
           SingleAlignmentResult result = alignment_results[j];
           /*LOG(INFO) << "Type/status: " << result.status << "Location: " << GenomeLocationAsInt64(result.location)
             << " score: " << result.score << " mapq: " << result.mapq << " direction: " << result.direction;*/
+
+          // TODO where should this part go?
+#ifdef NEW_OUTPUT
+        result_builder.AppendAlignmentResult(result, alignment_result_buffer);
+#endif
           results.set_result_type(i, j, (int64)result.status); // cast from enum
           results.set_genome_location(i, j, GenomeLocationAsInt64(result.location));
           results.set_score(i, j, result.score);
@@ -149,6 +154,10 @@ class SnapAlignOp : public OpKernel {
         LOG(INFO) << "setting 0 for uneven batch";
         results.set_num_results(i, 0);
       }
+
+#ifdef NEW_OUTPUT
+      result_builder.AppendAndFlush(alignment_result_buffer);
+#endif
     }
 
   private:
