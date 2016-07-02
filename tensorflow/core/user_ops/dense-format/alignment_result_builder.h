@@ -25,6 +25,8 @@ private:
      in the public methods above
    */
   std::vector<char> records_;
+  std::string builder_string_;
+  format::AlignmentResult builder_result_;
 };
 
 } // namespace tensorflow

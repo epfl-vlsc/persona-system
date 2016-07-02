@@ -172,6 +172,7 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
 
   void AlignmentResult::convertFromSNAP(const SingleAlignmentResult &result, string &str_buf)
   {
+<<<<<<< HEAD
     // TODO: info about flag, rname and cigar currently missing in SingleAlignmentResult
     
     status = result.status;
@@ -179,6 +180,12 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
     direction = result.direction;
     score = result.score;
     mapq = result.mapq;
+=======
+    str_buf.clear();
+
+    // TODO(Laura): fill this in to populate the fields
+    // make sure all fields get assigned or zeroed-out
+>>>>>>> eaf6ae5a27bc5c309086860e62eb5912bc7eb2cf
   }
 
 } // namespace format
