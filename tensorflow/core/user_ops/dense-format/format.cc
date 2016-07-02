@@ -172,7 +172,13 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
 
   void AlignmentResult::convertFromSNAP(const SingleAlignmentResult &result, string &str_buf)
   {
-    // TODO(Laura): fill this in to populate the fields
+    // TODO: info about flag, rname and cigar currently missing in SingleAlignmentResult
+    
+    status = result.status;
+    location = result.location;
+    direction = result.direction;
+    score = result.score;
+    mapq = result.mapq;
   }
 
 } // namespace format
