@@ -28,4 +28,8 @@ namespace tensorflow {
     buf_.clear();
   }
 
+  vector<char>& Buffer::get() {
+    return buf_;
+  }
+
 } // namespace tensorflow {

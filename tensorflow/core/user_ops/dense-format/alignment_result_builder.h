@@ -14,9 +14,9 @@ public:
     Append the current alignment result to the internal result buffer
     result_size is needed to ensure that the result is the correct size
    */
-  void AppendAlignmentResult(const format::AlignmentResult &result, const std::string &string_buf);
+  void AppendAlignmentResult(const format::AlignmentResult &result, const std::string &string_buf, std::vector<char> &index);
 
-  void AppendAlignmentResult(const SingleAlignmentResult &result);
+  void AppendAlignmentResult(const SingleAlignmentResult &result, std::vector<char> &index);
 
   void AppendAndFlush(std::vector<char> &idx_buf);
 
