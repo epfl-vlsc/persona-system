@@ -2,7 +2,7 @@
 #include "data.h"
 #include <cstdio>
 #include <vector>
-#include "compress.h"
+#include "compression.h"
 
 namespace tensorflow {
 
@@ -43,7 +43,7 @@ This writes out to local disk only
                   Internal("Unable to open file at path:", filepath));
 
       int fwrite_ret;
-      Status s(Status::OK());
+      auto s = Status::OK();
       // TODO in the future, override with a separate op to avoid an if statement
       if (compress_) {
         // compressGZIP already calls buf_.clear()
@@ -56,6 +56,11 @@ This writes out to local disk only
       }
 
       fclose(file_out);
+
+      if (s.ok() && fwrite_ret != 1) {
+        s = Internal("Received non-1 fwrite return value: ", fwrite_ret);
+      }
+
       OP_REQUIRES_OK(ctx, s); // in case s screws up
     }
 

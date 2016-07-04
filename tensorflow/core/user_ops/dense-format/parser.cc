@@ -1,7 +1,7 @@
 #include "parser.h"
 #include <utility>
 #include <array>
-#include "decompress.h"
+#include "compression.h"
 #include "util.h"
 #include "format.h"
 #include "tensorflow/core/platform/mutex.h"

@@ -5,7 +5,7 @@
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/platform/logging.h"
 #include "format.h"
-#include "decompress.h"
+#include "compression.h"
 #include "parser.h"
 #include <vector>
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
