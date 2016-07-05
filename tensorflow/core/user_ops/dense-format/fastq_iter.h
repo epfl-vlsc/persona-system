@@ -21,7 +21,11 @@ namespace tensorflow {
     //void reset_iter();
 
   private:
+
+    Status read_line(const char **line_start, std::size_t *line_length);
+    Status skip_line();
+
     const Data *data_;
-    size_t index_ = 0;
+    size_t index_ = 0, data_size_ = 0;
   };
 } // namespace tensorflow {
