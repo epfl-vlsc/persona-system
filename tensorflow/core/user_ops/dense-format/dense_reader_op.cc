@@ -14,7 +14,6 @@
 namespace tensorflow {
 
   REGISTER_OP("DenseReader")
-  .Attr("size_hint: int = 4194304") // 4 MeB
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("verify: bool = false")
@@ -27,16 +26,11 @@ Reads the dense stuff
   )doc");
 
   using namespace std;
+  using namespace errors;
 
   class DenseReaderOp : public OpKernel {
   public:
     DenseReaderOp(OpKernelConstruction *context) : OpKernel(context) {
-      using namespace errors;
-      int size_hint;
-      OP_REQUIRES_OK(context, context->GetAttr("size_hint", &size_hint));
-      size_hint_ = static_cast<size_t>(size_hint);
-      OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be > 0 - ", size_hint_));
-
       OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
       if (verify_) {
         LOG(DEBUG) << name() << " enabled verification\n";
@@ -44,7 +38,6 @@ Reads the dense stuff
     }
 
     void Compute(OpKernelContext* ctx) override {
-      using namespace errors;
       const Tensor *fileset, *parser_pool;
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &fileset));
       // assume that the python shape function takes care of this
@@ -87,7 +80,6 @@ Reads the dense stuff
     }
 
   private:
-    size_t size_hint_;
     size_t round_ = 0;
     bool verify_ = false;
     // TODO to use for conversion

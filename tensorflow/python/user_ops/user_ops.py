@@ -42,9 +42,7 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, pool_handle, size_hint=None, name=None, verify=False):
-  if size_hint:
-    return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, size_hint=size_hint, name=name)
+def DenseReader(file_handle, pool_handle, name=None, verify=False):
   return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, name=name)
 
 # default is 2 for the shared resource ref
