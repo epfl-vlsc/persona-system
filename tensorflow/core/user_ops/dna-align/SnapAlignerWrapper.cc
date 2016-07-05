@@ -10,7 +10,7 @@
 #include "SeedSequencer.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/core/errors.h"
-
+#include "SAM.h"
 #include "SnapAlignerWrapper.h"
 
 namespace snap_wrapper {
@@ -97,6 +97,168 @@ namespace snap_wrapper {
     delete[] secondaryResults;
 
     return tensorflow::Status::OK();
+  }
+
+  bool computeCigar(
+    Read *read,
+    std::vector<SingleAlignmentResult> results,
+    int nResults,
+    bool firstIsPrimary, 
+    const SAMFormat* format,
+    LandauVishkinWithCigar& lvc, 
+    const Genome* genome,
+		//output
+		std::vector<std::string> cigarStrings
+  ) 
+  {  
+    bool status;
+    
+    // Adapted from SNAP, but not using the writeRead method, as we need only
+    // the cigar string, not also writing the output to the buffer
+    
+    for (int i = 0; i < nResults; i++) {
+      if (results[i].status == NotFound) {
+        results[i].location = InvalidGenomeLocation;
+      }
+    }
+
+    // needed for ComputeCigarString
+    const int MAX_READ = MAX_READ_LENGTH;
+    const int cigarBufSize = MAX_READ * 2;
+    char cigarBuf[cigarBufSize];
+
+    const int cigarBufWithClippingSize = MAX_READ * 2 + 32;
+    char cigarBufWithClipping[cigarBufWithClippingSize];
+
+    int editDistance = -1;
+    int *o_addFrontClipping;
+    *o_addFrontClipping = 0;
+
+		// needed for createSAMLine
+    char data[MAX_READ]; 
+    char quality[MAX_READ];
+    const char *contigName = "*";
+		int contigIndex = -1;
+		int flags = 0; // TODO: check if it's the same flags field that we also need
+    GenomeDistance positionInContig = 0;
+    const char *mateContigName = "*";
+    int mateContigIndex = -1;
+    GenomeDistance matePositionInContig = 0;
+    _int64 templateLength = 0;
+    unsigned fullLength;
+		const char* clippedData;
+    unsigned clippedLength;
+    unsigned basesClippedBefore;
+    unsigned basesClippedAfter;
+    size_t qnameLen = read->getIdLength();
+  	bool hasMate = false;
+		bool firstInPair = false;
+		bool alignedAsPair = false;
+    bool useM = false; // TODO: find out what useM does and assign the correct value to it
+    Read *mate = NULL;
+    AlignmentResult mateResult = NotFound;
+    GenomeLocation mateLocation = 0;
+    Direction mateDirection = FORWARD;
+		GenomeDistance extraBasesClippedBefore;   // Clipping added if we align before the beginning of a chromosome
+
+    for (int whichResult = 0; whichResult < nResults; whichResult++) {
+      // int addFrontClipping = 0;
+      read->setAdditionalFrontClipping(0);
+      //int cumulativeAddFrontClipping = 0;
+			
+			AlignmentResult result = results[whichResult].status; 
+      GenomeLocation genomeLocation = results[whichResult].location;
+			Direction direction = results[whichResult].direction;
+			bool secondaryAlignment = (whichResult > 0) || !firstIsPrimary;
+
+//      unsigned nAdjustments = 0;
+//      size_t used_local;	
+
+	    status = format->createSAMLine(
+  	    genome, &lvc,
+    	  // output data
+      	data, quality, MAX_READ, contigName, contigIndex, flags, positionInContig, 
+				results[whichResult].mapq, mateContigName, mateContigIndex, matePositionInContig,
+				templateLength, fullLength, clippedData, clippedLength, basesClippedBefore,
+				basesClippedAfter,
+				// input data
+ 			  qnameLen, read, result, genomeLocation, direction, secondaryAlignment,
+				useM, hasMate, firstInPair, alignedAsPair, mate, mateResult, mateLocation, mateDirection,
+        &extraBasesClippedBefore);
+
+      if (!status) {
+        return false;
+      }
+
+      if (genomeLocation != InvalidGenomeLocation) {
+        // the computeCigarString method which should have been used here is private, but the
+        // computeCigar method which it calls is public, so we'll use that one
+        GenomeDistance extraBasesClippedAfter;
+        int cigarBufUsed;
+				unsigned frontHardClipping = read->getOriginalFrontHardClipping();
+				unsigned backHardClipping = read->getOriginalBackHardClipping();
+        
+        format->computeCigar(
+          COMPACT_CIGAR_STRING, genome, &lvc, cigarBuf, cigarBufSize, clippedData, clippedLength,
+          basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
+          genomeLocation, useM, &editDistance, &cigarBufUsed, o_addFrontClipping);
+          
+        /*
+    	    cigar = format->computeCigarString(
+          genome, &lvc, cigarBuf, cigarBufSize, cigarBufWithClipping, cigarBufWithClippingSize,
+					clippedData, clippedLength, basesClippedBefore, extraBasesClippedBefore, 
+					basesClippedAfter, read->getOriginalFrontHardClipping(), read->getOriginalBackHardClipping,
+					genomeLocation, direction, useM, &editDistance, o_addFrontClipping
+        );
+        */
+
+
+				if (*o_addFrontClipping != 0) {
+        	// return NULL;
+					return false; // TODO: change error returns from type char* to bool accordingly
+    		}
+
+				// *o_editDistance -> editDistance
+				if (editDistance == -2) {
+						WriteErrorMessage( "WARNING: computeEditDistance returned -2; cigarBuf may be too small\n");
+						strcpy(cigarBufWithClipping, "*");
+						// return "*";
+				} else if (editDistance == -1) {
+						static bool warningPrinted = false;
+						if (!warningPrinted) {
+								WriteErrorMessage( "WARNING: computeEditDistance returned -1; this shouldn't happen\n");
+								warningPrinted = true;
+						}
+						strcpy(cigarBufWithClipping, "*");
+						// return "*";
+				} else {
+						// Add some CIGAR instructions for soft-clipping if we've ignored some bases in the read.
+						char clipBefore[16] = {'\0'};
+						char clipAfter[16] = {'\0'};
+						char hardClipBefore[16] = {'\0'};
+						char hardClipAfter[16] = {'\0'};
+						if (frontHardClipping > 0) {
+								snprintf(hardClipBefore, sizeof(hardClipBefore), "%uH", frontHardClipping);
+						}
+						if (basesClippedBefore + extraBasesClippedBefore > 0) {
+								snprintf(clipBefore, sizeof(clipBefore), "%lluS", basesClippedBefore + extraBasesClippedBefore);
+						}
+						if (basesClippedAfter + extraBasesClippedAfter > 0) {
+								snprintf(clipAfter, sizeof(clipAfter), "%lluS", basesClippedAfter + extraBasesClippedAfter);
+						}
+						if (backHardClipping > 0) {
+								snprintf(hardClipAfter, sizeof(hardClipAfter), "%uH", backHardClipping);
+						}
+						snprintf(cigarBufWithClipping, cigarBufWithClippingSize, "%s%s%s%s%s", hardClipBefore, clipBefore, cigarBuf, clipAfter, hardClipAfter);
+				}
+				
+				// maybe TODO: validate Cigar String - cannot access validateCigarString (private member and only for debugging)
+
+				cigarStrings.push_back(cigarBufWithClipping);	
+      }
+		}
+
+    return true;
   }
 
   tensorflow::Status writeRead(const ReaderContext& context, 
