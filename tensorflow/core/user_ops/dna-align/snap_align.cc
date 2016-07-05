@@ -12,6 +12,7 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
 #include "tensorflow/core/user_ops/dense-format/alignment_result_builder.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "snap_proto.pb.h"
@@ -20,6 +21,10 @@
 #include "snap_read_decode.h"
 #include "snap_results_decode.h"
 #include "aligner_options_resource.h"
+
+#ifdef NEW_OUTPUT
+include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Read.h" // for the ReaderContext struct
+#endif
 
 namespace tensorflow {
 using namespace std;
@@ -71,6 +76,9 @@ class SnapAlignOp : public OpKernel {
       auto buffer_ctr = buffer_resource_container->get();
       buffer_ctr->reset();
       vector<char> &alignment_result_buffer = buffer_ctr->get();
+      
+      memset(&reader_context_, 0, sizeof(reader_context_));
+      reader_context_.genome = genome_handle->get_genome(); // the only field needed by writeRead
 #endif
 
       //LOG(INFO) << "reads shape is: " << reads->shape().DebugString();
@@ -123,15 +131,29 @@ class SnapAlignOp : public OpKernel {
         //LOG(INFO) << "Result for read " << input_reads[i]->getData();
         results.set_first_is_primary(i, first_is_primary);
         results.set_num_results(i, alignment_results.size()); 
+        
+        // TODO where should this part go?
+#ifdef NEW_OUTPUT
+        std::size_t num_results = alignment_results.size();
+        bool nstatus; // TODO: change return type of function
+        LandauVishkinWithCigar lvc;
+
+        Genome *genome = genome_index_->get_genome();
+
+        // compute the CIGAR strings
+        // TODO: format??
+//          nstatus = snap_wrapper::computeCigar(
+//          snap_read, alignment_results, alignment_results.size(), first_is_primary, format,
+//          lvc, genome, alignment_result_buffer
+        );
+        result_builder.AppendAlignmentResult(result, alignment_result_buffer);
+#endif
+
+
         for (int j = 0; j < alignment_results.size(); j++) {
           SingleAlignmentResult result = alignment_results[j];
           /*LOG(INFO) << "Type/status: " << result.status << "Location: " << GenomeLocationAsInt64(result.location)
             << " score: " << result.score << " mapq: " << result.mapq << " direction: " << result.direction;*/
-
-          // TODO where should this part go?
-#ifdef NEW_OUTPUT
-        result_builder.AppendAlignmentResult(result, alignment_result_buffer);
-#endif
           results.set_result_type(i, j, (int64)result.status); // cast from enum
           results.set_genome_location(i, j, GenomeLocationAsInt64(result.location));
           results.set_score(i, j, result.score);
@@ -146,7 +168,9 @@ class SnapAlignOp : public OpKernel {
         if (!status.ok()) {
           LOG(INFO) << "SnapAlignOp: alignSingle failed!!";
         }
-      }
+      
+
+    }
 
       //LOG(INFO) << "actual: " << num_actual_reads << " total: " << num_reads;
       for (size_t i = num_actual_reads; i < num_reads; i++) {
@@ -166,6 +190,11 @@ class SnapAlignOp : public OpKernel {
     GenomeIndexResource* index_resource_ = nullptr;
     AlignerOptionsResource* options_resource_ = nullptr;
     AlignmentResultBuilder result_builder;
+    const FileFormat *format;
+
+    #ifdef NEW_OUTPUT
+    ReaderContext reader_context_;
+    #endif
 };
 
 
