@@ -3,6 +3,9 @@
 #include <memory>
 #include <string>
 #include "tensorflow/core/framework/resource_mgr.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 #include "ref_pool.h"
 
 namespace tensorflow {
@@ -28,8 +31,19 @@ public:
     ref_pool_->ReleaseResource(this);
   }
 
-  const std::string& container() { return container_; }
-  const std::string& name() { return name_; }
+  const std::string& container() const { return container_; }
+  const std::string& name() const { return name_; }
+
+  Status allocate_output(const std::string &handle_name, OpKernelContext *ctx)
+  {
+    static const TensorShape handle_shape_({2});
+    Tensor *handle;
+    TF_RETURN_IF_ERROR(ctx->allocate_output(handle_name, handle_shape_, &handle));
+    auto handle_vec = handle->vec<string>();
+    handle_vec(0) = container_;
+    handle_vec(1) = name_;
+    return Status::OK();
+  }
 
 private:
   std::unique_ptr<T> data_;

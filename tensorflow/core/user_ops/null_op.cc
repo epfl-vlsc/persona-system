@@ -2,7 +2,6 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
-#include "dense-format/dense_data.h"
 #include "dense-format/parser.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 
