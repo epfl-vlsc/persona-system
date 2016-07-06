@@ -76,7 +76,6 @@ but this is just for the utility than the speed at this point.
       auto &qual = qual_buf->get();
       auto &meta = meta_buf->get();
 
-      // TODO need to assemble something to write out the columns
       const char* bases, *qualities, *metadata;
       size_t bases_length, qualities_length, metadata_length;
 
@@ -105,7 +104,7 @@ but this is just for the utility than the speed at this point.
   private:
 
     void GetNewFile(OpKernelContext *ctx) {
-      //TODO populate a new fastq op from the context
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "fastq_file_handle", &fastq_file_));
       fastq_iter_ = FASTQIterator(fastq_file_->get());
     }
 
