@@ -1,4 +1,4 @@
-#include "alignment_result_builder.h"
+#include "column_builder.h"
 #include "util.h"
 
 namespace tensorflow {

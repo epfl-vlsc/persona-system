@@ -11,7 +11,7 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
-#include "tensorflow/core/user_ops/dense-format/alignment_result_builder.h"
+#include "tensorflow/core/user_ops/dense-format/column_builder.h"
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "snap_proto.pb.h"
