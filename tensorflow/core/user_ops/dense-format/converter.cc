@@ -127,4 +127,6 @@ but this is just for the utility than the speed at this point.
     StringColumnBuilder meta_builder_, qual_builder_;
     BaseColumnBuilder base_builder_;
   };
+
+  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), DenseConverterOp);
 } // namespace tensorflow {
