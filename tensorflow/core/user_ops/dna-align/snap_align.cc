@@ -132,21 +132,27 @@ class SnapAlignOp : public OpKernel {
         results.set_first_is_primary(i, first_is_primary);
         results.set_num_results(i, alignment_results.size()); 
         
-        // TODO where should this part go?
 #ifdef NEW_OUTPUT
         std::size_t num_results = alignment_results.size();
-        bool nstatus; // TODO: change return type of function
-        LandauVishkinWithCigar lvc;
-
-        Genome *genome = genome_index_->get_genome();
-
-        // compute the CIGAR strings
-        // TODO: format??
-//          nstatus = snap_wrapper::computeCigar(
-//          snap_read, alignment_results, alignment_results.size(), first_is_primary, format,
-//          lvc, genome, alignment_result_buffer
+        const Genome *genome = index_resource_->get_genome();
+        AlignerOptions *options = options_resource_->value();
+        SAMFormat *format = new SAMFormat(options->useM);
+      
+        cigarStrings.clear();
+        flags.clear();
+        
+        // compute the CIGAR strings and flags
+        // input_reads[i] holds the current snap_read
+        status = snap_wrapper::computeCigarFlags(
+          input_reads[i], alignment_results, alignment_results.size(), first_is_primary, format,
+          options->useM, lvc, genome, cigarStrings, flags
         );
-        result_builder.AppendAlignmentResult(result, alignment_result_buffer);
+        
+        // temporary, to not interfere with already existing code
+        cigarStrings.clear(); 
+        flags.clear();
+        
+        // result_builder.AppendAlignmentResult(result, alignment_result_buffer);
 #endif
 
 
@@ -192,9 +198,12 @@ class SnapAlignOp : public OpKernel {
     AlignmentResultBuilder result_builder;
     const FileFormat *format;
 
-    #ifdef NEW_OUTPUT
+#ifdef NEW_OUTPUT
     ReaderContext reader_context_;
-    #endif
+    std::vector<std::string> cigarStrings;
+    std::vector<int> flags;
+    LandauVishkinWithCigar lvc;
+#endif
 };
 
 

@@ -111,11 +111,11 @@ namespace snap_wrapper {
     const Genome* genome,
 		//output
 		std::vector<std::string> &cigarStrings,
-    int &flags // TODO: check if it's the same flags field that we also need AND initialize with 0
+    std::vector<int> &flagsBuf
   ) 
   {  
     // Adapted from SNAP, but not using the writeRead method, as we need only
-    // the cigar string, not also writing the output to the buffer
+    // the cigar string and the flag, not also writing the output to the buffer
     
     for (int i = 0; i < nResults; i++) {
       if (results[i].status == NotFound) {
@@ -140,6 +140,7 @@ namespace snap_wrapper {
     char quality[MAX_READ];
     const char *contigName = "*";
 		int contigIndex = -1;
+    int flags = 0;
     GenomeDistance positionInContig = 0;
     const char *mateContigName = "*";
     int mateContigIndex = -1;
@@ -162,17 +163,12 @@ namespace snap_wrapper {
 
     for (int whichResult = 0; whichResult < nResults; whichResult++) {
       bool status;
-      // int addFrontClipping = 0;
       read->setAdditionalFrontClipping(0);
-      //int cumulativeAddFrontClipping = 0;
 			
 			AlignmentResult result = results[whichResult].status; 
       GenomeLocation genomeLocation = results[whichResult].location;
 			Direction direction = results[whichResult].direction;
 			bool secondaryAlignment = (whichResult > 0) || !firstIsPrimary;
-
-//      unsigned nAdjustments = 0;
-//      size_t used_local;	
 
 	    status = format->createSAMLine(
   	    genome, &lvc,
@@ -190,6 +186,8 @@ namespace snap_wrapper {
         return tensorflow::errors::Internal("createSAMLine failed!"); // TODO: check if right type of error
       }
 
+      flagsBuf.push_back(flags);
+
       if (genomeLocation != InvalidGenomeLocation) {
         // the computeCigarString method which should have been used here is private, but the
         // computeCigar method which it calls is public, so we'll use that one
@@ -203,18 +201,7 @@ namespace snap_wrapper {
           basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
           genomeLocation, useM, &editDistance, &cigarBufUsed, o_addFrontClipping);
           
-        /*
-    	    cigar = format->computeCigarString(
-          genome, &lvc, cigarBuf, cigarBufSize, cigarBufWithClipping, cigarBufWithClippingSize,
-					clippedData, clippedLength, basesClippedBefore, extraBasesClippedBefore, 
-					basesClippedAfter, read->getOriginalFrontHardClipping(), read->getOriginalBackHardClipping,
-					genomeLocation, direction, useM, &editDistance, o_addFrontClipping
-        );
-        */
-
-
-				if (*o_addFrontClipping != 0) {
-        	// return NULL;
+      	if (*o_addFrontClipping != 0) {
           // TODO: check type of error
           return tensorflow::errors::ResourceExhausted("buffer too full in SNAP writeRead"); 
     		}

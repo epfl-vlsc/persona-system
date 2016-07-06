@@ -36,7 +36,7 @@ namespace snap_wrapper {
         const Genome* genome,
         //outputs
         std::vector<std::string> &cigarStrings,
-        int& flags);
+        std::vector<int> &flagsBuf);
 
     // uses slightly modified SNAP code to write results in 
     // `format` format to the provided buffer
