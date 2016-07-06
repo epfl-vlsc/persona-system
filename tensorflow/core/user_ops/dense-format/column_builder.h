@@ -8,7 +8,19 @@
 
 namespace tensorflow {
 
-class AlignmentResultBuilder {
+
+  class ColumnBuilder {
+  public:
+
+    void AppendAndFlush(std::vector<char> &idx_buf);
+
+  protected:
+
+    // To be used for subclasses to build up their results
+    std::vector<char> records_;
+  };
+
+class AlignmentResultBuilder : public ColumnBuilder {
 public:
   /*
     Append the current alignment result to the internal result buffer
@@ -23,15 +35,16 @@ public:
 
   void AppendAlignmentResult(const SingleAlignmentResult &result, std::vector<char> &index);
 
-  void AppendAndFlush(std::vector<char> &idx_buf);
-
 private:
-  /* A buffer to build up the records. This is copy-appended to the "scratch" buffer
-     in the public methods above
-   */
-  std::vector<char> records_;
   std::string builder_string_;
   format::AlignmentResult builder_result_;
+};
+
+class StringResultBuilder : public ColumnBuilder {
+public:
+
+  void AppendString(const char* record, const std::size_t record_size, std::vector<char> &index);
+
 };
 
 } // namespace tensorflow
