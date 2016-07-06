@@ -8,6 +8,7 @@
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "FileFormat.h"
+#include "SAM.h" 
 
 namespace snap_wrapper {
     using namespace tensorflow;
@@ -21,6 +22,21 @@ namespace snap_wrapper {
         AlignerOptions* options, Read* read, 
         std::vector<SingleAlignmentResult>* results, 
         int num_secondary_alignments, bool& first_is_primary);
+ 
+    // Uses SNAP code to compute the 'cigar' and 'flags' fields from the SAM format
+    Status computeCigarFlags(
+        // inputs
+        Read *read,
+        std::vector<SingleAlignmentResult> results,
+        int nResults,
+        bool firstIsPrimary, 
+        const SAMFormat* format,
+        bool useM,
+        LandauVishkinWithCigar& lvc, 
+        const Genome* genome,
+        //outputs
+        std::vector<std::string> &cigarStrings,
+        int& flags);
 
     // uses slightly modified SNAP code to write results in 
     // `format` format to the provided buffer

@@ -99,20 +99,21 @@ namespace snap_wrapper {
     return tensorflow::Status::OK();
   }
 
-  bool computeCigar(
+  tensorflow::Status computeCigarFlags(
+    // input
     Read *read,
     std::vector<SingleAlignmentResult> results,
     int nResults,
-    bool firstIsPrimary, 
+    bool firstIsPrimary,
     const SAMFormat* format,
+    bool useM,
     LandauVishkinWithCigar& lvc, 
     const Genome* genome,
 		//output
-		std::vector<std::string> cigarStrings
+		std::vector<std::string> &cigarStrings,
+    int &flags // TODO: check if it's the same flags field that we also need AND initialize with 0
   ) 
   {  
-    bool status;
-    
     // Adapted from SNAP, but not using the writeRead method, as we need only
     // the cigar string, not also writing the output to the buffer
     
@@ -131,7 +132,7 @@ namespace snap_wrapper {
     char cigarBufWithClipping[cigarBufWithClippingSize];
 
     int editDistance = -1;
-    int *o_addFrontClipping;
+    int *o_addFrontClipping = new int;
     *o_addFrontClipping = 0;
 
 		// needed for createSAMLine
@@ -139,7 +140,6 @@ namespace snap_wrapper {
     char quality[MAX_READ];
     const char *contigName = "*";
 		int contigIndex = -1;
-		int flags = 0; // TODO: check if it's the same flags field that we also need
     GenomeDistance positionInContig = 0;
     const char *mateContigName = "*";
     int mateContigIndex = -1;
@@ -154,7 +154,6 @@ namespace snap_wrapper {
   	bool hasMate = false;
 		bool firstInPair = false;
 		bool alignedAsPair = false;
-    bool useM = false; // TODO: find out what useM does and assign the correct value to it
     Read *mate = NULL;
     AlignmentResult mateResult = NotFound;
     GenomeLocation mateLocation = 0;
@@ -162,6 +161,7 @@ namespace snap_wrapper {
 		GenomeDistance extraBasesClippedBefore;   // Clipping added if we align before the beginning of a chromosome
 
     for (int whichResult = 0; whichResult < nResults; whichResult++) {
+      bool status;
       // int addFrontClipping = 0;
       read->setAdditionalFrontClipping(0);
       //int cumulativeAddFrontClipping = 0;
@@ -187,7 +187,7 @@ namespace snap_wrapper {
         &extraBasesClippedBefore);
 
       if (!status) {
-        return false;
+        return tensorflow::errors::Internal("createSAMLine failed!"); // TODO: check if right type of error
       }
 
       if (genomeLocation != InvalidGenomeLocation) {
@@ -215,7 +215,8 @@ namespace snap_wrapper {
 
 				if (*o_addFrontClipping != 0) {
         	// return NULL;
-					return false; // TODO: change error returns from type char* to bool accordingly
+          // TODO: check type of error
+          return tensorflow::errors::ResourceExhausted("buffer too full in SNAP writeRead"); 
     		}
 
 				// *o_editDistance -> editDistance
@@ -258,7 +259,7 @@ namespace snap_wrapper {
       }
 		}
 
-    return true;
+    return tensorflow::Status::OK();
   }
 
   tensorflow::Status writeRead(const ReaderContext& context, 
