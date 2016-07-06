@@ -26,7 +26,7 @@ namespace tensorflow {
     records_.clear();
   }
 
-  void StringResultBuilder::AppendString(const char* record, const std::size_t record_size, std::vector<char> &index)
+  void StringColumnBuilder::AppendString(const char* record, const std::size_t record_size, std::vector<char> &index)
   {
     appendSegment(record, record_size, records_);
     index.push_back(static_cast<char>(record_size));

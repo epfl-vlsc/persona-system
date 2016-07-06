@@ -8,17 +8,16 @@
 
 namespace tensorflow {
 
+class ColumnBuilder {
+public:
 
-  class ColumnBuilder {
-  public:
+  void AppendAndFlush(std::vector<char> &idx_buf);
 
-    void AppendAndFlush(std::vector<char> &idx_buf);
+protected:
 
-  protected:
-
-    // To be used for subclasses to build up their results
-    std::vector<char> records_;
-  };
+  // To be used for subclasses to build up their results
+  std::vector<char> records_;
+};
 
 class AlignmentResultBuilder : public ColumnBuilder {
 public:
@@ -40,11 +39,16 @@ private:
   format::AlignmentResult builder_result_;
 };
 
-class StringResultBuilder : public ColumnBuilder {
+class StringColumnBuilder : public ColumnBuilder {
 public:
 
   void AppendString(const char* record, const std::size_t record_size, std::vector<char> &index);
-
 };
+
+ class BaseColumnBuilder : public ColumnBuilder {
+ public:
+
+   void AppendString(const char* bases, const std::size_t base_length, std::vector<char> &index);
+ };
 
 } // namespace tensorflow

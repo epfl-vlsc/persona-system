@@ -4,6 +4,7 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "shared_mmap_file_resource.h"
+#include "column_builder.h"
 #include "compression.h"
 #include "buffer.h"
 #include "fastq_iter.h"
@@ -85,7 +86,9 @@ but this is just for the utility than the speed at this point.
                                              &qualities, &qualities_length,
                                              &metadata, &metadata_length);
         if (status.ok()) {
-          // TODO actually append things into the buffers
+          qual_builder_.AppendString(qualities, qualities_length, qual);
+          meta_builder_.AppendString(metadata, metadata_length, meta);
+          base_builder_.AppendString(bases, bases_length, base);
         } else {
           if (IsResourceExhausted(status)) {
             ReleaseFile();
@@ -121,5 +124,7 @@ but this is just for the utility than the speed at this point.
     ResourceContainer<MemoryMappedFile> *fastq_file_ = nullptr;
     ReferencePool<Buffer> *buf_pool_ = nullptr;
     FASTQIterator fastq_iter_;
+    StringColumnBuilder meta_builder_, qual_builder_;
+    BaseColumnBuilder base_builder_;
   };
 } // namespace tensorflow {
