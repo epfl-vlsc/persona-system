@@ -20,4 +20,8 @@ namespace tensorflow {
   void MemoryMappedFile::own(ReadOnlyMemoryRegion *rmr) {
     file_.reset(rmr);
   }
+
+  void MemoryMappedFile::release() {
+    file_.release();
+  }
 } // namespace tensorflow {

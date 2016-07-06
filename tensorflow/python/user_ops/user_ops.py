@@ -42,9 +42,7 @@ def FASTQDecoder(value):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, pool_handle, size_hint=None, name=None, verify=False):
-  if size_hint:
-    return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, size_hint=size_hint, name=name)
+def DenseReader(file_handle, pool_handle, name=None, verify=False):
   return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, name=name)
 
 # default is 2 for the shared resource ref
@@ -234,3 +232,18 @@ ops.NoGradient(_bp_str)
 @ops.RegisterShape(_bp_str)
 def _BufferPoolShape(op):
     return [tensor_shape.vector(2)]
+
+def DenseConverter(fastq_file_handle, chunk_buffer_pool, compress, chunk_size):
+    return gen_user_ops.dense_converter(compress=compress, chunk_size=chunk_size,
+                                        fastq_file_handle=fastq_file_handle,
+                                        chunk_buffer_pool=chunk_buffer_pool)
+
+_dc_str = "DenseConverter"
+ops.NoGradient(_dc_str)
+@ops.RegisterShape(_dc_str)
+def _DenseConverterShape(op):
+    fastq_shape = op.inputs[0].get_shape()
+    buffer_pool_shape = op.inputs[1].get_shape()
+    _assert_vec(fastq_shape, 2)
+    _assert_vec(buffer_pool_shape, 2)
+    return [tensor_shape.vector(2)] * 3

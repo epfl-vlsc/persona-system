@@ -47,35 +47,6 @@ bundle: [{this file map op}] + upstream
 bundle_name: [{this map op's name}] + upstream_name
 )doc");
 
-  namespace {
-    Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
-      Notification n;
-      queue->TryDequeue(
-                        ctx, [ctx, &n, filename](const QueueInterface::Tuple& tuple) {
-                          if (ctx->status().ok()) {
-                            if (tuple.size() != 1) {
-                              ctx->SetStatus(
-                                                 errors::InvalidArgument("Expected single component queue"));
-                            } else if (tuple[0].dtype() != DT_STRING) {
-                              ctx->SetStatus(errors::InvalidArgument(
-                                                                         "Expected queue with single string component"));
-                            } else if (tuple[0].NumElements() != 1) {
-                              ctx->SetStatus(errors::InvalidArgument(
-                                                                         "Expected to dequeue a one-element string tensor"));
-                            } else {
-                              *filename = tuple[0].flat<string>()(0);
-                            }
-                          }
-                          n.Notify();
-                        });
-      n.WaitForNotification();
-      if (!ctx->status().ok()) {
-        return ctx->status();
-      }
-      return Status::OK();
-    }
-  }
-
   class StagedFileMapOp : public OpKernel {
   public:
     StagedFileMapOp(OpKernelConstruction* context) : OpKernel(context) {}

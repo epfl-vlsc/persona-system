@@ -1,4 +1,4 @@
-#include "alignment_result_builder.h"
+#include "column_builder.h"
 #include "util.h"
 
 namespace tensorflow {
@@ -20,9 +20,26 @@ namespace tensorflow {
     AppendAlignmentResult(builder_result_, builder_string_, index);
   }
 
-  void AlignmentResultBuilder::AppendAndFlush(vector<char> &idx_buf)
+  void ColumnBuilder::AppendAndFlush(vector<char> &idx_buf)
   {
     appendSegment(&records_[0], records_.size(), idx_buf);
     records_.clear();
+  }
+
+  void StringColumnBuilder::AppendString(const char* record, const std::size_t record_size, std::vector<char> &index)
+  {
+    appendSegment(record, record_size, records_);
+    index.push_back(static_cast<char>(record_size));
+  }
+
+  Status BaseColumnBuilder::AppendString(const char* record, const std::size_t record_size, std::vector<char> &index)
+  {
+    using namespace format;
+
+    base_scratch_.clear();
+    TF_RETURN_IF_ERROR(BinaryBaseRecord::IntoBases(record, record_size, base_scratch_));
+    size_t converted_size = base_scratch_.size() * sizeof(BinaryBases);
+    appendSegment(reinterpret_cast<const char*>(&base_scratch_[0]), converted_size, records_);
+    index.push_back(static_cast<char>(converted_size));
   }
 } // namespace tensorflow {

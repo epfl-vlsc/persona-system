@@ -11,8 +11,12 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
-#include "tensorflow/core/user_ops/dense-format/alignment_result_builder.h"
+<<<<<<< HEAD
+#include "tensorflow/core/user_ops/dense-format/column_builder.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
+=======
+#include "tensorflow/core/user_ops/dense-format/column_builder.h"
+>>>>>>> d55a3fcfe73a1e954b5f60c37618e80bbc6b6ae4
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "snap_proto.pb.h"
@@ -214,8 +218,12 @@ class SnapAlignOp : public OpKernel {
       .Input("buffer_pool: Ref(string)")
 #endif
       .Input("read: string")
+#ifdef NEW_OUTPUT
+      .Output("result_buf_handle: string")
+#else
       .Output("output: int64")
       .Output("reads_out: string")
+#endif
       .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
