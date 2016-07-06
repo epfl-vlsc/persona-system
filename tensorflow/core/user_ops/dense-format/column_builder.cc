@@ -31,4 +31,15 @@ namespace tensorflow {
     appendSegment(record, record_size, records_);
     index.push_back(static_cast<char>(record_size));
   }
+
+  Status BaseColumnBuilder::AppendString(const char* record, const std::size_t record_size, std::vector<char> &index)
+  {
+    using namespace format;
+
+    base_scratch_.clear();
+    TF_RETURN_IF_ERROR(BinaryBaseRecord::IntoBases(record, record_size, base_scratch_));
+    size_t converted_size = base_scratch_.size() * sizeof(BinaryBases);
+    appendSegment(reinterpret_cast<const char*>(&base_scratch_[0]), converted_size, records_);
+    index.push_back(static_cast<char>(converted_size));
+  }
 } // namespace tensorflow {
