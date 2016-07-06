@@ -11,18 +11,21 @@ namespace tensorflow {
 
   REGISTER_OP("ColumnWriter")
   .Attr("compress: bool = true")
+  .Attr("record_id: string")
   .Input("column_handle: string")
   .Input("file_path: string")
   // TODO these can be collapsed into a vec(3) if that would help performance
   .Input("first_ordinal: int64")
   .Input("num_records: int64")
   .Input("record_type: int32")
-  .Input("record_id: string")
   .SetIsStateful()
   .Doc(R"doc(
 Writes out a column (just a character buffer) to the location specified by the input.
 
 This writes out to local disk only
+
+Assumes that the record_id for a given set does not change for the runtime of the graph
+and is thus passed as an Attr instead of an input (for efficiency);
 )doc");
 
   using namespace std;
@@ -32,6 +35,12 @@ This writes out to local disk only
   public:
     ColumnWriterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
+      string s;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &s));
+      auto max_size = sizeof(header_.string_id);
+      OP_REQUIRES(ctx, s.length() < max_size,
+                  Internal("record_id for column header '", s, "' greater than 32 characters"));
+      strncpy(header_.string_id, s.c_str(), max_size);
     }
 
     void Compute(OpKernelContext* ctx) override {
@@ -92,11 +101,6 @@ This writes out to local disk only
       TF_RETURN_IF_ERROR(ctx->input("record_type", &tensor));
       auto record_type = static_cast<uint8_t>(tensor->scalar<int32>()());
       header_.record_type = record_type;
-
-      TF_RETURN_IF_ERROR(ctx->input("record_id", &tensor));
-      auto record_id = tensor->scalar<string>()();
-      strncpy(header_.string_id, record_id.c_str(), sizeof(header_.string_id));
-      header_.string_id[sizeof(header_.string_id)-1] = '\0'; // to make sure it's null-terminated, per strncpy manpage
 
       int fwrite_ret = fwrite(&header_, sizeof(header_), 1, file_out);
       if (fwrite_ret != 1) {
