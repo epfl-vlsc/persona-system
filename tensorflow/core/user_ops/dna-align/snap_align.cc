@@ -176,8 +176,12 @@ class SnapAlignOp : public OpKernel {
       .Input("buffer_pool: Ref(string)")
 #endif
       .Input("read: string")
+#ifdef NEW_OUTPUT
+      .Output("result_buf_handle: string")
+#else
       .Output("output: int64")
       .Output("reads_out: string")
+#endif
       .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
