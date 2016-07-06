@@ -12,12 +12,12 @@ namespace tensorflow {
   REGISTER_OP("ColumnWriter")
   .Attr("compress: bool = true")
   .Attr("record_id: string")
+  .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
   .Input("column_handle: string")
   .Input("file_path: string")
   // TODO these can be collapsed into a vec(3) if that would help performance
   .Input("first_ordinal: int64")
   .Input("num_records: int64")
-  .Input("record_type: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Writes out a column (just a character buffer) to the location specified by the input.
@@ -26,6 +26,9 @@ This writes out to local disk only
 
 Assumes that the record_id for a given set does not change for the runtime of the graph
 and is thus passed as an Attr instead of an input (for efficiency);
+
+This also assumes that this writer only writes out a single record type.
+Thus we always need 3 of these for the full conversion pipeline
 )doc");
 
   using namespace std;
@@ -34,6 +37,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
   class ColumnWriterOp : public OpKernel {
   public:
     ColumnWriterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
+      using namespace format;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
       string s;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &s));
@@ -41,6 +45,19 @@ and is thus passed as an Attr instead of an input (for efficiency);
       OP_REQUIRES(ctx, s.length() < max_size,
                   Internal("record_id for column header '", s, "' greater than 32 characters"));
       strncpy(header_.string_id, s.c_str(), max_size);
+
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &s));
+      RecordType t;
+      if (s.compare("base")) {
+        t = RecordType::BASES;
+      } else if (s.compare("qual")) {
+        t = RecordType::QUALITIES;
+      } else if (s.compare("meta")) {
+        t = RecordType::COMMENTS;
+      } else { // no need to check. we're saved by string enum types if TF
+        t = RecordType::ALIGNMENT;
+      }
+      header_.record_type = static_cast<uint8_t>(t);
     }
 
     void Compute(OpKernelContext* ctx) override {
