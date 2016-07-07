@@ -9,6 +9,7 @@ namespace tensorflow {
 namespace format {
 
 using namespace std;
+using namespace errors;
 
 namespace {
   struct BaseMap {
@@ -29,7 +30,7 @@ namespace {
 Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, vector<char> &output, vector<char> &lengths) const
 {
   if (record_size_in_bytes % sizeof(uint64_t) != 0) {
-    return errors::InvalidArgument("Size of record ", record_size_in_bytes, " is not a multiple of ", sizeof(uint64_t));
+    return InvalidArgument("Size of record ", record_size_in_bytes, " is not a multiple of ", sizeof(uint64_t));
   }
 
   Status status;
@@ -97,9 +98,9 @@ BinaryBases::getBase(const size_t position, char* base) const
     *base = 'N';
     break;
   case END:
-    return errors::ResourceExhausted("done");
+    return ResourceExhausted("done");
   default:
-    return errors::NotFound("Base alphabet for type ", x, " not found");
+    return NotFound("Base alphabet for type ", x, " not found");
   }
   return Status::OK();
 }
@@ -146,7 +147,7 @@ Status BinaryBases::setBase(const char base, size_t position) {
     b = BaseAlphabet::N;
     break;
   default:
-    return errors::InvalidArgument("Unable to convert the following base character: ", string(&base, 1));
+    return InvalidArgument("Unable to convert the following base character: ", string(&base, 1));
   }
 
   return setBaseAtPosition(b, position);
@@ -166,7 +167,7 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
     bases |= packed_base << packed_shift;
     return Status::OK();
   } else {
-    return errors::InvalidArgument("Unable to set base position of ", position, "\nMaximum position: ", compression-1);
+    return InvalidArgument("Unable to set base position of ", position, "\nMaximum position: ", compression-1);
   }
 }
 
