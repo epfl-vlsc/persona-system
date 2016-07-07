@@ -156,7 +156,7 @@ class SnapAlignOp : public OpKernel {
 
         
         
-        // result_builder.AppendAlignmentResult(result, alignment_result_buffer);
+        // result_builder.AppendAlignmentResult(result, cigarString, alignment_result_buffer);
 #endif
 
 

@@ -31,12 +31,9 @@ public:
 
       records_ is used to build up the actual reads, which are appended into the chunk.
     */
-    void AppendAlignmentResult(const format::AlignmentResult &result, const std::string &string_buf, std::vector<char> &index);
-
-    void AppendAlignmentResult(const SingleAlignmentResult &result, std::vector<char> &index);
+  void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, std::vector<char> &index);
 
   private:
-    std::string builder_string_;
     format::AlignmentResult builder_result_;
   };
 
