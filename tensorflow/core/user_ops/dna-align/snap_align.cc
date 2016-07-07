@@ -23,10 +23,6 @@
 #include "snap_results_decode.h"
 #include "aligner_options_resource.h"
 
-#ifdef NEW_OUTPUT
-include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Read.h" // for the ReaderContext struct
-#endif
-
 namespace tensorflow {
 using namespace std;
 
@@ -35,34 +31,37 @@ class SnapAlignOp : public OpKernel {
     explicit SnapAlignOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
     ~SnapAlignOp() override {
-      if (index_resource_) index_resource_->Unref();
-      if (options_resource_) options_resource_->Unref();
+      core::ScopedUnref index_unref(index_resource_);
+      core::ScopedUnref options_unref(options_resource_);
+      core::ScopedUnref buf_pool_unref(buf_pool_);
     }
 
+  Status InitHandles(OpKernelContext* ctx)
+  {
+    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
+    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &index_resource_));
+    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pool", &buf_pool));
+    TF_RETURN_IF_ERROR(snap_wrapper::init());
+
+    LOG(INFO) << "SNAP Kernel creating BaseAligner";
+
+    base_aligner_ = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
+
+    AlignerOptions* options = options_resource_->value();
+
+    if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+      num_secondary_alignments_ = 0;
+    } else {
+      num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine,
+                                                                      options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource_->get_index()->getSeedLength());
+    }
+
+    return Status::OK();
+  }
+
     void Compute(OpKernelContext* ctx) override {
-      //LOG(INFO) << "SnapAlign started";
-
       if (base_aligner_ == nullptr) {
-        OP_REQUIRES_OK(ctx,
-            GetResourceFromContext(ctx, "options_handle", &options_resource_));
-        OP_REQUIRES_OK(ctx,
-            GetResourceFromContext(ctx, "genome_handle", &index_resource_));
-
-        OP_REQUIRES_OK(ctx,
-            snap_wrapper::init());
-        LOG(INFO) << "SNAP Kernel creating BaseAligner";
-
-        base_aligner_ = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
-
-        AlignerOptions* options = options_resource_->value();
-
-        if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
-          num_secondary_alignments_ = 0;
-        }
-        else {
-          num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine,
-              options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource_->get_index()->getSeedLength());
-        }
+        OP_REQUIRES_OK(ctx, InitHandles(ctx));
       }
 
       const Tensor* reads;
@@ -196,6 +195,7 @@ class SnapAlignOp : public OpKernel {
 
   private:
     BaseAligner* base_aligner_ = nullptr;
+    ReferencePool<Buffer> *buf_pool_ = nullptr;
     int num_secondary_alignments_ = 0;
     GenomeIndexResource* index_resource_ = nullptr;
     AlignerOptionsResource* options_resource_ = nullptr;
