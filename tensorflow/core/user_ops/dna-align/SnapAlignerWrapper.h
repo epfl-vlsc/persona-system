@@ -35,8 +35,8 @@ namespace snap_wrapper {
         LandauVishkinWithCigar& lvc, 
         const Genome* genome,
         //outputs
-        std::vector<std::string> &cigarStrings,
-        std::vector<int> &flagsBuf);
+        std::string &cigarString,
+        int &flags);
 
     // uses slightly modified SNAP code to write results in 
     // `format` format to the provided buffer

@@ -110,8 +110,8 @@ namespace snap_wrapper {
     LandauVishkinWithCigar& lvc, 
     const Genome* genome,
 		//output
-		std::vector<std::string> &cigarStrings,
-    std::vector<int> &flagsBuf
+		std::string &cigarString,
+    int &flags
   ) 
   {  
     // Adapted from SNAP, but not using the writeRead method, as we need only
@@ -140,7 +140,6 @@ namespace snap_wrapper {
     char quality[MAX_READ];
     const char *contigName = "*";
 		int contigIndex = -1;
-    int flags = 0;
     GenomeDistance positionInContig = 0;
     const char *mateContigName = "*";
     int mateContigIndex = -1;
@@ -170,6 +169,8 @@ namespace snap_wrapper {
 			Direction direction = results[whichResult].direction;
 			bool secondaryAlignment = (whichResult > 0) || !firstIsPrimary;
 
+      flags = 0;
+
 	    status = format->createSAMLine(
   	    genome, &lvc,
     	  // output data
@@ -185,8 +186,6 @@ namespace snap_wrapper {
       if (!status) {
         return tensorflow::errors::Internal("createSAMLine failed!"); // TODO: check if right type of error
       }
-
-      flagsBuf.push_back(flags);
 
       if (genomeLocation != InvalidGenomeLocation) {
         // the computeCigarString method which should have been used here is private, but the
@@ -242,7 +241,7 @@ namespace snap_wrapper {
 				
 				// maybe TODO: validate Cigar String - cannot access validateCigarString (private member and only for debugging)
 
-				cigarStrings.push_back(cigarBufWithClipping);	
+				cigarString = cigarBufWithClipping;	
       }
 		}
 

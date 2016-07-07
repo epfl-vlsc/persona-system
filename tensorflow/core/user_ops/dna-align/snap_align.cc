@@ -11,12 +11,9 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
-<<<<<<< HEAD
 #include "tensorflow/core/user_ops/dense-format/column_builder.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
-=======
 #include "tensorflow/core/user_ops/dense-format/column_builder.h"
->>>>>>> d55a3fcfe73a1e954b5f60c37618e80bbc6b6ae4
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "snap_proto.pb.h"
@@ -128,6 +125,12 @@ class SnapAlignOp : public OpKernel {
 
       //LOG(INFO) << "num actual reads is " << num_actual_reads;
       bool first_is_primary;
+
+
+#ifdef NEW_OUTPUT
+        cigarString.clear();
+#endif 
+
       for (size_t i = 0; i < num_actual_reads; i++) {
         Status status = snap_wrapper::alignSingle(base_aligner_, options_resource_->value(), input_reads[i],
             &alignment_results, num_secondary_alignments_, first_is_primary);
@@ -142,19 +145,16 @@ class SnapAlignOp : public OpKernel {
         AlignerOptions *options = options_resource_->value();
         SAMFormat *format = new SAMFormat(options->useM);
       
-        cigarStrings.clear();
-        flags.clear();
-        
+        flag = 0;
+
         // compute the CIGAR strings and flags
         // input_reads[i] holds the current snap_read
         status = snap_wrapper::computeCigarFlags(
           input_reads[i], alignment_results, alignment_results.size(), first_is_primary, format,
-          options->useM, lvc, genome, cigarStrings, flags
+          options->useM, lvc, genome, cigarString, flag
         );
+
         
-        // temporary, to not interfere with already existing code
-        cigarStrings.clear(); 
-        flags.clear();
         
         // result_builder.AppendAlignmentResult(result, alignment_result_buffer);
 #endif
@@ -204,8 +204,8 @@ class SnapAlignOp : public OpKernel {
 
 #ifdef NEW_OUTPUT
     ReaderContext reader_context_;
-    std::vector<std::string> cigarStrings;
-    std::vector<int> flags;
+    std::string cigarString;
+    int flag;
     LandauVishkinWithCigar lvc;
 #endif
 };
