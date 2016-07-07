@@ -26,6 +26,7 @@ namespace tensorflow {
   .Output("base_handle: string")
   .Output("qual_handle: string")
   .Output("meta_handle: string")
+  .Output("num_records: int32") // to be used by the metadata op to issue ordinals
   .SetIsStateful()
   .Doc(R"doc(
 An op to convert a FASTQ file into multiple chunks
@@ -81,7 +82,8 @@ but this is just for the utility than the speed at this point.
       size_t bases_length, qualities_length, metadata_length;
 
       Status status;
-      for (int i = 0; i < chunk_size_; ++i) {
+      int num_records = 0;
+      for (; num_records < chunk_size_; ++num_records) {
         status = fastq_iter_.get_next_record(&bases, &bases_length,
                                              &qualities, &qualities_length,
                                              &metadata, &metadata_length);
@@ -102,6 +104,9 @@ but this is just for the utility than the speed at this point.
       OP_REQUIRES_OK(ctx, base_buf_ctr->allocate_output("base_handle", ctx));
       OP_REQUIRES_OK(ctx, qual_buf_ctr->allocate_output("qual_handle", ctx));
       OP_REQUIRES_OK(ctx, meta_buf_ctr->allocate_output("meta_handle", ctx));
+      Tensor *num_records_t;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records", TensorShape(), &num_records_t));
+      num_records_t->scalar<int>()() = num_records;
     }
 
   private:
