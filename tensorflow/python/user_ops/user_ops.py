@@ -247,3 +247,36 @@ def _DenseConverterShape(op):
     _assert_vec(fastq_shape, 2)
     _assert_vec(buffer_pool_shape, 2)
     return [tensor_shape.vector(2)] * 3
+
+_dm_str = "DenseMetadata"
+def DenseMetadata(output_dir, record_id, num_records):
+    return gen_user_ops.dense_metadata(output_dir=output_dir,
+                                       record_id=record_id,
+                                       num_records=num_records)
+
+ops.NoGradient(_dm_str)
+@ops.RegisterShape(_dm_str)
+def _DenseMetadataShape(op):
+    num_records_shape = op.inputs[0].get_shape()
+    _assert_scalar(num_records_shape)
+    return [tensor_shape.scalar()] * 4
+
+_cw_str = "ColumnWriter"
+def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, compress=False):
+    return gen_user_ops.column_writer(
+        column_handle=column_handle,
+        file_path=file_path,
+        first_ordinal=first_ordinal,
+        num_records=num_records,
+        compress=compress,
+        record_id=record_id
+    )
+
+ops.NoGradient(_cw_str)
+@ops.RegisterShape(_cw_str)
+def _ColumnWriterShape(op):
+    column_handle_shape = op.inputs[0].get_shape()
+    _assert_vec(column_handle_shape, 2)
+    for i in xrange(1,4):
+        _assert_scalar(ops.inputs[i].get_shape())
+    return []

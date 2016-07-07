@@ -10,7 +10,7 @@
 namespace tensorflow {
 
   REGISTER_OP("ColumnWriter")
-  .Attr("compress: bool = true")
+  .Attr("compress: bool")
   .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
   .Input("column_handle: string")
