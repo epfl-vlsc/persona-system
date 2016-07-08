@@ -22,7 +22,7 @@ namespace tensorflow {
 
   private:
 
-    Status read_line(const char **line_start, std::size_t *line_length);
+    Status read_line(const char **line_start, std::size_t *line_length, std::size_t skip_length = 0);
     Status skip_line();
 
     const Data *data_;

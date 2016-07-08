@@ -17,7 +17,7 @@ namespace tensorflow {
       return Internal("get_next_record called with null data!");
     }
 
-    TF_RETURN_IF_ERROR(read_line(metadata, metadata_length));
+    TF_RETURN_IF_ERROR(read_line(metadata, metadata_length, 1)); // +1 to skip '@'
     TF_RETURN_IF_ERROR(read_line(bases, bases_length));
     TF_RETURN_IF_ERROR(skip_line());
     TF_RETURN_IF_ERROR(read_line(qualities, qualities_length));
@@ -25,13 +25,14 @@ namespace tensorflow {
     return Status::OK();
   }
 
-  Status FASTQIterator::read_line(const char **line_start, std::size_t *line_length)
+  Status FASTQIterator::read_line(const char **line_start, size_t *line_length, size_t skip_length)
   {
     if (index_ >= data_size_) {
       return ResourceExhausted("no more records in this file");
     }
 
-    const char *start = &data_->data()[index_];
+    const char *start = &data_->data()[index_] + skip_length;
+    index_ += skip_length;
     const char *curr = start;
     size_t record_size = 0;
     for (; *curr != '\n' && index_ < data_size_;
