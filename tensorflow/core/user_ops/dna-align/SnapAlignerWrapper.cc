@@ -102,10 +102,10 @@ namespace snap_wrapper {
   tensorflow::Status computeCigarFlags(
     // input
     Read *read,
-    std::vector<SingleAlignmentResult> results,
+    std::vector<SingleAlignmentResult> &results,
     int nResults,
     bool firstIsPrimary,
-    const SAMFormat* format,
+    const SAMFormat &format,
     bool useM,
     LandauVishkinWithCigar& lvc, 
     const Genome* genome,
@@ -171,7 +171,7 @@ namespace snap_wrapper {
 
       flags = 0;
 
-	    status = format->createSAMLine(
+	    status = format.createSAMLine(
   	    genome, &lvc,
     	  // output data
       	data, quality, MAX_READ, contigName, contigIndex, flags, positionInContig, 
@@ -195,7 +195,7 @@ namespace snap_wrapper {
 				unsigned frontHardClipping = read->getOriginalFrontHardClipping();
 				unsigned backHardClipping = read->getOriginalBackHardClipping();
         
-        format->computeCigar(
+        format.computeCigar(
           COMPACT_CIGAR_STRING, genome, &lvc, cigarBuf, cigarBufSize, clippedData, clippedLength,
           basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
           genomeLocation, useM, &editDistance, &cigarBufUsed, o_addFrontClipping);

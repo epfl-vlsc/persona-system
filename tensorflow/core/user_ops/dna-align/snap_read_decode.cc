@@ -16,23 +16,23 @@ SnapReadDecode::SnapReadDecode(const Tensor* read_tensor) {
   read_tensor_ = read_tensor;
 }
 
-const char* SnapReadDecode::bases(int batch_index) {
+const char* SnapReadDecode::bases(int batch_index) const {
   auto reads = read_tensor_->matrix<string>();
   return reads(kBases, batch_index).c_str();
 }
-const char* SnapReadDecode::qualities(int batch_index) {
+const char* SnapReadDecode::qualities(int batch_index) const {
   auto reads = read_tensor_->matrix<string>();
   return reads(kQualities, batch_index).c_str();
 }
-const char* SnapReadDecode::metadata(int batch_index) {
+const char* SnapReadDecode::metadata(int batch_index) const {
   auto reads = read_tensor_->matrix<string>();
   return reads(kMetadata, batch_index).c_str();
 }
-int SnapReadDecode::metadata_len(int batch_index) {
+int SnapReadDecode::metadata_len(int batch_index) const {
   auto reads = read_tensor_->matrix<string>();
   return reads(kMetadata, batch_index).length();
 }
-int SnapReadDecode::bases_len(int batch_index) {
+int SnapReadDecode::bases_len(int batch_index) const {
   auto reads = read_tensor_->matrix<string>();
   return reads(kBases, batch_index).length();
 }

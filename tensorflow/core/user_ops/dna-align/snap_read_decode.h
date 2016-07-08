@@ -15,17 +15,17 @@ class SnapReadDecode {
   public:
     SnapReadDecode(const Tensor* read_tensor);
 
-    const char* bases(int batch_index);
+    const char* bases(int batch_index) const;
 
-    const char* qualities(int batch_index);
+    const char* qualities(int batch_index) const;
 
-    const char* metadata(int batch_index);
+    const char* metadata(int batch_index) const;
 
-    int metadata_len(int batch_index);
+    int metadata_len(int batch_index) const;
 
-    int bases_len(int batch_index);
+    int bases_len(int batch_index) const;
 
-    size_t size() { return read_tensor_->dim_size(1); }
+    size_t size() const { return read_tensor_->dim_size(1); }
 
   private:
     static const int kBases = 0;

@@ -27,10 +27,10 @@ namespace snap_wrapper {
     Status computeCigarFlags(
         // inputs
         Read *read,
-        std::vector<SingleAlignmentResult> results,
+        std::vector<SingleAlignmentResult> &results,
         int nResults,
         bool firstIsPrimary, 
-        const SAMFormat* format,
+        const SAMFormat &format,
         bool useM,
         LandauVishkinWithCigar& lvc, 
         const Genome* genome,

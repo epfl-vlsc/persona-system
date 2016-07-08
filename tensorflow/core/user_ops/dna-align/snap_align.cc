@@ -25,6 +25,7 @@
 
 namespace tensorflow {
 using namespace std;
+using namespace errors;
 
 class SnapAlignOp : public OpKernel {
   public:
@@ -40,7 +41,7 @@ class SnapAlignOp : public OpKernel {
   {
     TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
     TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &index_resource_));
-    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pool", &buf_pool));
+    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pool", &buf_pool_));
     TF_RETURN_IF_ERROR(snap_wrapper::init());
 
     LOG(INFO) << "SNAP Kernel creating BaseAligner";
@@ -59,6 +60,44 @@ class SnapAlignOp : public OpKernel {
     return Status::OK();
   }
 
+  Status GetResultBuffer(OpKernelContext* ctx, ResourceContainer<Buffer> **ctr)
+  {
+    TF_RETURN_IF_ERROR(buf_pool_->GetResource(ctr));
+    (*ctr)->get()->reset();
+    TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
+    return Status::OK();
+  }
+
+  size_t InitializeReads(const SnapReadDecode &read_batch)
+  {
+    size_t num_reads = read_batch.size();
+
+    input_reads_.clear(); input_reads_.reserve(num_reads);
+
+    for (size_t i = 0; i < num_reads; i++) {
+      if (read_batch.bases_len(i) == 0) {
+        LOG(INFO) << "string was empty, is this a partial batch?";
+        continue;
+      }
+      /*LOG(INFO) << "Read from decoder:";
+        LOG(INFO) << "Meta: " << read_batch.metadata(i) <<  "\nBases: " << read_batch.bases(i)
+        << "\nQual: " << read_batch.qualities(i) << "\nbase len: " << read_batch.bases_len(i);*/
+
+      Read snap_read;
+      snap_read.init(
+                      read_batch.metadata(i),  // id
+                      read_batch.metadata_len(i), // id len
+                      read_batch.bases(i),  // data (bases)
+                      read_batch.qualities(i),  // qualities
+                      read_batch.bases_len(i)  // data len
+                      );
+
+      input_reads_.push_back(snap_read);
+    }
+
+    return input_reads_.size();
+  }
+
     void Compute(OpKernelContext* ctx) override {
       if (base_aligner_ == nullptr) {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
@@ -67,129 +106,44 @@ class SnapAlignOp : public OpKernel {
       const Tensor* reads;
       OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
 
-#ifdef NEW_OUTPUT
-      ReferencePool<Buffer> *buf_pool;
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_pool", &buf_pool));
-      core::ScopedUnref unref_pool(buf_pool);
       ResourceContainer<Buffer> *buffer_resource_container;
-      OP_REQUIRES_OK(ctx, buf_pool->GetResource(&buffer_resource_container));
-      auto buffer_ctr = buffer_resource_container->get();
-      buffer_ctr->reset();
-      vector<char> &alignment_result_buffer = buffer_ctr->get();
-      
-      memset(&reader_context_, 0, sizeof(reader_context_));
-      reader_context_.genome = genome_handle->get_genome(); // the only field needed by writeRead
-#endif
+      OP_REQUIRES_OK(ctx, GetResultBuffer(ctx, &buffer_resource_container));
+      auto &alignment_result_buffer = buffer_resource_container->get()->get();
 
-      //LOG(INFO) << "reads shape is: " << reads->shape().DebugString();
       SnapReadDecode read_batch(reads);
-      size_t num_reads = read_batch.size();
+      size_t num_actual_reads = InitializeReads(read_batch);
+      auto options = options_resource_->value();
 
-      vector<Read*> input_reads;
-      input_reads.reserve(num_reads);
-
-      for (size_t i = 0; i < num_reads; i++) {
-        if (read_batch.bases_len(i) == 0) {
-          LOG(INFO) << "string was empty, is this a partial batch?";
-          continue;
-        }
-        /*LOG(INFO) << "Read from decoder:";
-        LOG(INFO) << "Meta: " << read_batch.metadata(i) <<  "\nBases: " << read_batch.bases(i)
-          << "\nQual: " << read_batch.qualities(i) << "\nbase len: " << read_batch.bases_len(i);*/
-      
-        Read* snap_read = new Read();
-        snap_read->init(
-            read_batch.metadata(i),  // id
-            read_batch.metadata_len(i), // id len
-            read_batch.bases(i),  // data (bases)
-            read_batch.qualities(i),  // qualities
-            read_batch.bases_len(i)  // data len
-            );
-
-        input_reads.push_back(snap_read);
-      }
-
-      size_t num_actual_reads = input_reads.size();
       vector<SingleAlignmentResult> alignment_results;
 
-      Tensor* out = nullptr;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, 
-            SnapResultsDecode::get_results_shape(num_reads, 
-              num_secondary_alignments_), &out));
-
-      MutableSnapResultsDecode results(out);
-
-      OP_REQUIRES_OK(ctx, ctx->set_output("reads_out", *reads));
-      //forward_ref_input_to_ref_output(0, 1);
-
-      //LOG(INFO) << "num actual reads is " << num_actual_reads;
       bool first_is_primary;
+      cigarString_.clear();
 
+      for (size_t i = 0; i < num_actual_reads; ++i) {
+        OP_REQUIRES_OK(ctx, snap_wrapper::alignSingle(base_aligner_, options, &input_reads_[i],
+                                                      &alignment_results, num_secondary_alignments_, first_is_primary));
 
-#ifdef NEW_OUTPUT
-        cigarString.clear();
-#endif 
+        size_t num_results = alignment_results.size();
+        OP_REQUIRES(ctx, num_results == 1, Internal("New format only supports exactly 1 result. Time to fix it :)"));
 
-      for (size_t i = 0; i < num_actual_reads; i++) {
-        Status status = snap_wrapper::alignSingle(base_aligner_, options_resource_->value(), input_reads[i],
-            &alignment_results, num_secondary_alignments_, first_is_primary);
-
-        //LOG(INFO) << "Result for read " << input_reads[i]->getData();
-        results.set_first_is_primary(i, first_is_primary);
-        results.set_num_results(i, alignment_results.size()); 
-        
-#ifdef NEW_OUTPUT
-        std::size_t num_results = alignment_results.size();
         const Genome *genome = index_resource_->get_genome();
-        AlignerOptions *options = options_resource_->value();
-        SAMFormat *format = new SAMFormat(options->useM);
-      
-        flag = 0;
+        SAMFormat format(options->useM);
+        flag_ = 0;
 
         // compute the CIGAR strings and flags
         // input_reads[i] holds the current snap_read
-        status = snap_wrapper::computeCigarFlags(
-          input_reads[i], alignment_results, alignment_results.size(), first_is_primary, format,
-          options->useM, lvc, genome, cigarString, flag
-        );
+        OP_REQUIRES_OK(ctx, snap_wrapper::computeCigarFlags(
+          &input_reads_[i], alignment_results, alignment_results.size(), first_is_primary, format,
+          options->useM, lvc_, genome, cigarString_, flag_));
 
-        
-        
-        // result_builder.AppendAlignmentResult(result, cigarString, alignment_result_buffer);
-#endif
+        result_builder_.AppendAlignmentResult(alignment_results[0], cigarString_, alignment_result_buffer);
 
-
-        for (int j = 0; j < alignment_results.size(); j++) {
-          SingleAlignmentResult result = alignment_results[j];
-          /*LOG(INFO) << "Type/status: " << result.status << "Location: " << GenomeLocationAsInt64(result.location)
-            << " score: " << result.score << " mapq: " << result.mapq << " direction: " << result.direction;*/
-          results.set_result_type(i, j, (int64)result.status); // cast from enum
-          results.set_genome_location(i, j, GenomeLocationAsInt64(result.location));
-          results.set_score(i, j, result.score);
-          results.set_mapq(i, j, result.mapq);
-          results.set_direction(i, j, result.direction);
-        }
         alignment_results.clear();
-
-        // TODO(solal): Smart pointers would probably make this unnecessary, but I'm not knowledgeable enough in C++ to do that
-        delete input_reads[i];
-
-        if (!status.ok()) {
-          LOG(INFO) << "SnapAlignOp: alignSingle failed!!";
-        }
-      
 
     }
 
-      //LOG(INFO) << "actual: " << num_actual_reads << " total: " << num_reads;
-      for (size_t i = num_actual_reads; i < num_reads; i++) {
-        // for uneven batches, set the num of results to 0
-        LOG(INFO) << "setting 0 for uneven batch";
-        results.set_num_results(i, 0);
-      }
-
 #ifdef NEW_OUTPUT
-      result_builder.AppendAndFlush(alignment_result_buffer);
+      result_builder_.AppendAndFlush(alignment_result_buffer);
 #endif
     }
 
@@ -199,37 +153,29 @@ class SnapAlignOp : public OpKernel {
     int num_secondary_alignments_ = 0;
     GenomeIndexResource* index_resource_ = nullptr;
     AlignerOptionsResource* options_resource_ = nullptr;
-    AlignmentResultBuilder result_builder;
-    const FileFormat *format;
+    const FileFormat *format_;
 
-#ifdef NEW_OUTPUT
-    ReaderContext reader_context_;
-    std::string cigarString;
-    int flag;
-    LandauVishkinWithCigar lvc;
-#endif
+    string cigarString_;
+    AlignmentResultBuilder result_builder_;
+    int flag_;
+    LandauVishkinWithCigar lvc_;
+
+    vector<Read> input_reads_; // a vector to pass to SNAP
 };
 
 
   REGISTER_OP("SnapAlign")
       .Input("genome_handle: Ref(string)")
       .Input("options_handle: Ref(string)")
-#ifdef NEW_OUTPUT
       .Input("buffer_pool: Ref(string)")
-#endif
       .Input("read: string")
-#ifdef NEW_OUTPUT
       .Output("result_buf_handle: string")
-#else
-      .Output("output: int64")
-      .Output("reads_out: string")
-#endif
       .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
 generation of alignment candidates.
 output: a tensor [num_reads] containing serialized reads and results
-containing the alignment candidates. 
+containing the alignment candidates.
 )doc");
 
 
