@@ -56,7 +56,7 @@ but this is just for the utility than the speed at this point.
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "chunk_buffer_pool", &buf_pool_));
       }
 
-      if (!fastq_file_) {
+      if (needs_new_file_) {
         GetNewFile(ctx);
       }
 
@@ -112,22 +112,23 @@ but this is just for the utility than the speed at this point.
   private:
 
     void GetNewFile(OpKernelContext *ctx) {
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "fastq_file_handle", &fastq_file_));
-      fastq_iter_ = FASTQIterator(fastq_file_->get());
+      ResourceContainer<Data> *fastq_file;
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "fastq_file_handle", &fastq_file));
+      fastq_iter_ = FASTQIterator(fastq_file);
+      needs_new_file_ = false;
     }
 
-    void ReleaseFile() {
-      fastq_file_->get()->release();
-      fastq_file_->release(); // must be the last thing!
-      fastq_file_ = nullptr;
+    inline void ReleaseFile() {
+      fastq_iter_ = FASTQIterator(); // run the constructor to release
+      needs_new_file_ = true;
     }
 
     bool compress_;
     int chunk_size_;
     // Keep it like this instead of <Data> so that this converter op can close when it's done
     // This keeps memory to a minimum
-    ResourceContainer<MemoryMappedFile> *fastq_file_ = nullptr;
     ReferencePool<Buffer> *buf_pool_ = nullptr;
+    bool needs_new_file_ = true;
     FASTQIterator fastq_iter_;
     StringColumnBuilder meta_builder_, qual_builder_;
     BaseColumnBuilder base_builder_;

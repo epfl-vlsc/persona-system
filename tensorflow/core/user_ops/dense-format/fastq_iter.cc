@@ -6,14 +6,13 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
 
-  FASTQIterator::FASTQIterator(const Data *data) : data_(data), data_size_(data->size()) {}
-  FASTQIterator::FASTQIterator() : data_(nullptr) {}
+  FASTQIterator::FASTQIterator(ResourceContainer<Data> *fastq_file) : fastq_file_(fastq_file), data_size_(fastq_file->get()->size()), data_(fastq_file->get()) {}
 
   Status FASTQIterator::get_next_record(const char **bases, size_t *bases_length,
                                         const char **qualities, size_t *qualities_length,
                                         const char **metadata, size_t *metadata_length)
   {
-    if (!data_) {
+    if (!fastq_file_) {
       return Internal("get_next_record called with null data!");
     }
 
@@ -52,6 +51,28 @@ namespace tensorflow {
     const char *curr = &data_->data()[index_];
     for (; *curr != '\n' && index_ < data_size_; index_++, curr++);
     index_++; // to skip over the \n character
+  }
+
+  bool FASTQIterator::reset_iter()
+  {
+    index_ = 0;
+    return true;
+  }
+
+  bool FASTQIterator::has_qualities()
+  {
+    return true;
+  }
+
+  bool FASTQIterator::has_metadata()
+  {
+    return true;
+  }
+
+  FASTQIterator::~FASTQIterator()
+  {
+    if (fastq_file_)
+      fastq_file_->release();
   }
 
 } // namespace tensorflow {

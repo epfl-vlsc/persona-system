@@ -2,30 +2,36 @@
 
 #include <cstdint>
 #include "tensorflow/core/lib/core/status.h"
+#include "read_resource.h"
+#include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "data.h"
 
 namespace tensorflow {
 
-  class FASTQIterator {
+  class FASTQIterator : public ReadResource {
   public:
 
-    FASTQIterator(const Data *data);
-    FASTQIterator();
+    explicit FASTQIterator(ResourceContainer<Data> *fastq_file);
+    FASTQIterator() = default;
+    // TODO override the destructor
+    ~FASTQIterator() override;
 
     Status get_next_record(const char **bases, std::size_t *bases_length,
                            const char **qualities, std::size_t *qualities_length,
-                           const char **metadata, std::size_t *metadata_length);
+                           const char **metadata, std::size_t *metadata_length) override;
 
-    // TODO implement if we need to iterate multiple times
-    // currently not needed
-    //void reset_iter();
+    bool reset_iter() override;
+
+    bool has_qualities() override;
+    bool has_metadata() override;
 
   private:
 
     Status read_line(const char **line_start, std::size_t *line_length, std::size_t skip_length = 0);
     Status skip_line();
 
-    const Data *data_;
-    size_t index_ = 0, data_size_ = 0;
+    ResourceContainer<Data> *fastq_file_ = nullptr;
+    const Data *data_ = nullptr;
+    std::size_t index_ = 0, data_size_ = 0;
   };
 } // namespace tensorflow {
