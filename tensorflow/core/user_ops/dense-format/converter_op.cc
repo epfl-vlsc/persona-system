@@ -57,7 +57,7 @@ but this is just for the utility than the speed at this point.
       }
 
       if (needs_new_file_) {
-        GetNewFile(ctx);
+        OP_REQUIRES_OK(ctx, GetNewFile(ctx));
       }
 
       ResourceContainer<Buffer> *base_buf_ctr, *qual_buf_ctr, *meta_buf_ctr;
@@ -111,9 +111,9 @@ but this is just for the utility than the speed at this point.
 
   private:
 
-    void GetNewFile(OpKernelContext *ctx) {
+    Status GetNewFile(OpKernelContext *ctx) {
       ResourceContainer<Data> *fastq_file;
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "fastq_file_handle", &fastq_file));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "fastq_file_handle", &fastq_file));
       fastq_iter_ = FASTQIterator(fastq_file);
       needs_new_file_ = false;
     }
