@@ -25,7 +25,8 @@
 namespace tensorflow {
 namespace format {
   struct __attribute__((packed)) RecordTable {
-    uint8_t relative_index[];
+    typedef uint8_t IndexValue;
+    IndexValue relative_index[];
   };
 
   const uint8_t current_major = 0;
