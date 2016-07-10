@@ -3,19 +3,22 @@
 #include "shared_mmap_file_resource.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/file_system.h"
+#include "tensorflow/core/platform/logging.h"
 #include "format.h"
 #include "decompress.h"
 #include "parser.h"
 #include <vector>
-#include "scope_timer.h"
+#include "tensorflow/core/user_ops/object-pool/resource_container.h"
+#include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 
 namespace tensorflow {
 
   REGISTER_OP("DenseReader")
-  .Attr("batch_size: int")
   .Attr("size_hint: int = 4194304") // 4 MeB
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Attr("verify: bool = false")
+  .Input("pool_handle: Ref(string)")
   .Input("file_handle: string")
   .Output("record_handle: string")
   .SetIsStateful()
@@ -29,25 +32,29 @@ Reads the dense stuff
   public:
     DenseReaderOp(OpKernelConstruction *context) : OpKernel(context) {
       using namespace errors;
-      int batch_size;
-      OP_REQUIRES_OK(context, context->GetAttr("batch_size",
-                                               &batch_size));
-      OP_REQUIRES(context, batch_size > 0, InvalidArgument("DenseReaderOp: batch_size must be >0 - ", batch_size));
-      batch_size_ = batch_size;
-
-      OP_REQUIRES_OK(context, context->GetAttr("size_hint", &batch_size));
-      size_hint_ = static_cast<size_t>(batch_size);
+      int size_hint;
+      OP_REQUIRES_OK(context, context->GetAttr("size_hint", &size_hint));
+      size_hint_ = static_cast<size_t>(size_hint);
       OP_REQUIRES(context, size_hint_ > 0, InvalidArgument("DenseReaderOp: size_hint_ must be > 0 - ", size_hint_));
+
+      OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
+      if (verify_) {
+        LOG(DEBUG) << name() << " enabled verification\n";
+      }
     }
 
     ~DenseReaderOp() {}
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
-      const Tensor *fileset;
+      const Tensor *fileset, *parser_pool;
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &fileset));
       // assume that the python shape function takes care of this
       auto fileset_matrix = fileset->matrix<string>();
+
+      ReferencePool<RecordParser> *ref_pool;
+      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
+      core::ScopedUnref unref_pool(ref_pool);
 
       ContainerInfo cinfo;
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
@@ -58,39 +65,35 @@ Reads the dense stuff
       auto output_matrix = output->matrix<string>();
 
       string resource_name(name());
-      RecordParser *rp;
-      MemoryMappedFile *dense_file;
+      ResourceContainer<RecordParser> *rec_parser;
+      ResourceContainer<Data> *dense_file;
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
           OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &dense_file));
           {
             core::ScopedUnref unref_me(dense_file);
-
-            auto dense_mapping = dense_file->GetMappedRegion();
+            ResourceReleaser<Data> m(*dense_file);
 
             resource_name = name();
             resource_name.append(to_string(round_++));
 
-            rp = new RecordParser(size_hint_);
-            OP_REQUIRES_OK(ctx, rp->ParseNew(static_cast<const char*>(dense_mapping->data()), dense_mapping->length()));
-            OP_REQUIRES_OK(ctx, rmgr->Create<RecordParser>(cinfo.container(), resource_name, rp));
+            OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_parser));
 
-            output_matrix(i, 0) = cinfo.container();
-            output_matrix(i, 1) = resource_name;
-          }
-          OP_REQUIRES_OK(ctx, rmgr->Delete<MemoryMappedFile>(fileset_matrix(i, 0), fileset_matrix(i, 1)));
-          if (!dense_file->RefCountIsOne()) {
-            LOG(ERROR) << "Ref count is not 1 for dense file after delete\n";
-            ctx->CtxFailure(Internal("Ref count is not 1 for dense file after delete"));
+            auto g = dense_file->get();
+            OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(g->data(), g->size(), verify_, conversion_scratch_, index_scratch_));
+
+            output_matrix(i, 0) = rec_parser->container();
+            output_matrix(i, 1) = rec_parser->name();
           }
       }
     }
 
   private:
-    int batch_size_;
     size_t size_hint_;
     size_t round_ = 0;
-    //WritableFile *decomp;
+    bool verify_ = false;
+    // TODO to use for conversion
+    vector<char> conversion_scratch_, index_scratch_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReaderOp);

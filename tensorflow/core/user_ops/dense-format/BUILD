@@ -1,10 +1,5 @@
 # user ops
 
-load(
-    "//tensorflow/core:platform/default/build_config.bzl",
-    "tf_proto_library_cc",
-)
-
 load("//tensorflow:tensorflow.bzl", "tf_copts")
 # copy this
 cc_library(
@@ -18,9 +13,10 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:io",
     "//tensorflow/core/user_ops/dna-align:snap_align",
+    "//tensorflow/core/user_ops/object-pool:object_pool",
     "//tensorflow/core/kernels:ops_util"],
     # TODO: this needs to be built better, like this: https://github.com/mzhaom/trunk/blob/master/third_party/boost/BUILD
     linkopts = [
-             "-lboost_system", "-lboost_iostreams", "-lboost_timer"
+             "-lz", "-lboost_system", "-lboost_iostreams", "-lboost_timer", "-ls3"
     ]
 )

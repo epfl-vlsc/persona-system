@@ -1,49 +1,97 @@
 #include "decompress.h"
-
-#include <boost/iostreams/filtering_stream.hpp>
+#include "tensorflow/core/platform/logging.h"
+#include <zlib.h>
 
 namespace tensorflow {
 
-  //auto decompressBZIP2 = decompressSegment<boost::iostreams::bzip2_decompressor>;
+using namespace std;
+using namespace errors;
 
-template <typename T>
-Status decompressSegment(const char* segment,
-                         const std::size_t segment_size,
-                         std::vector<char> &output)
-{
-  namespace bsio = boost::iostreams;
-  bsio::filtering_ostream os;
+namespace {
 
-  // No need to call output.reserve().
-  // We can't be sure exactly how much data it will produce.
+static const int ENABLE_ZLIB_GZIP = 32;
+static const int window_bits = 15;
+static const size_t extend_length = 1024 * 1024 * 2; // 2 Mb
 
-  os.push(T());
-  os.push(std::back_inserter(output));
-  os.write(segment, segment_size);
+Status resize_output(z_stream &strm, vector<char> &output, size_t extend_len) {
+  auto s = Status::OK();
 
-  // Not sure if these need to be called, or if the destructor gets them
-  os.flush();
-  os.reset();
-  return Status::OK();
+  if (strm.avail_out == 0) {
+    auto new_cap = output.capacity() + extend_len;
+    output.resize(output.capacity());
+    output.reserve(new_cap);
+    if (output.capacity() < new_cap) {
+      s = Internal("Unable to reserve more capacity in a buffer");
+    } else {
+      strm.next_out = reinterpret_cast<unsigned char*>(&output[strm.total_out]);
+      // should never be negative
+      strm.avail_out = output.capacity() - strm.total_out;
+    }
+  }
+
+  return s;
 }
 
-template
-Status decompressSegment<boost::iostreams::bzip2_decompressor>(const char* segment,
-                                                                const std::size_t segment_size,
-                                                                std::vector<char> &output);
+}
 
-template
-Status decompressSegment<boost::iostreams::gzip_decompressor>(const char* segment,
-                                                                const std::size_t segment_size,
-                                                                std::vector<char> &output);
-
-Status copySegment(const char* segment,
-                   const std::size_t segment_size,
-                   std::vector<char> &output)
+Status decompressGZIP(const char* segment,
+                      const size_t segment_size,
+                      vector<char> &output)
 {
-  output.reserve(segment_size);
-  output.insert(output.end(), segment, segment+segment_size);
-  return Status::OK();
+  // TODO this only supports decompress write, not appending
+  // this is an easy change to make, but requires some more "math"
+  output.clear(); // just to be sure, in case the caller didn't do it
+  static const int init_flags = window_bits | ENABLE_ZLIB_GZIP;
+  z_stream strm = {0};
+  strm.zalloc = Z_NULL;
+  strm.zfree = Z_NULL;
+  strm.next_in = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(segment));
+  strm.avail_in = segment_size;
+
+  int status = inflateInit2(&strm, init_flags);
+  if (status != Z_OK) {
+    return Internal("inflateInit2 failed with error: ", status);
+  }
+
+  auto s = Status::OK();
+
+  // First, try to decompress as much as possible in a single step
+  strm.avail_out = output.capacity();
+  strm.next_out = reinterpret_cast<unsigned char*>(&output[0]);
+  output.resize(output.capacity());
+  status = inflate(&strm, Z_FINISH);
+
+  if (status != Z_STREAM_END) {
+    if (status == Z_OK || status == Z_MEM_ERROR || status == Z_BUF_ERROR) {
+      // Do normal decompression because we couldn't do it in one shot
+      s = resize_output(strm, output, extend_length);
+      while (status != Z_STREAM_END && s.ok()) {
+        status = inflate(&strm, Z_NO_FLUSH);
+        switch (status) {
+        case Z_OK:
+          s = resize_output(strm, output, extend_length);
+        case Z_STREAM_END:
+          break;
+        default: // an error
+          s = Internal("inflate(Z_NO_FLUSH) returned code ", status, " with message '", strm.msg == NULL ? "" : strm.msg, "'");
+          break;
+        }
+      }
+    } else {
+      s = Internal("inflate(Z_FINISH) return code ", status, " with message '", strm.msg == NULL ? "" : strm.msg, "'");
+    }
+  }
+
+  auto total_out = strm.total_out;
+
+  status = inflateEnd(&strm);
+  if (s.ok() && status != Z_OK) { // s.ok() status to make sure we don't override non-inflateEnd error
+    s = Internal("inflateEnd() didn't receive Z_OK. Got: ", status);
+    output.clear();
+  } else {
+    output.resize(total_out);
+  }
+  return s;
 }
 
 } // namespace tensorflow

@@ -5,17 +5,48 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include <vector>
+#include <array>
 #include <string>
 #include <cstdint>
 
 namespace tensorflow {
-  class RecordParser : public ResourceBase
+
+  template <size_t N>
+  class BaseMapping {
+
+  private:
+    std::array<char, N> characters_;
+    std::size_t effective_characters_;
+
+  public:
+
+    BaseMapping(std::array<char, N> chars, std::size_t effective_characters) : characters_(chars),
+      effective_characters_(effective_characters) {}
+
+    BaseMapping() {
+      characters_.fill('\0');
+      characters_[0] = 'Z'; // TODO hack: an arbitrary bad value, used to indicate an impossible issue
+    }
+
+    const std::array<char, N>& get() const {
+      return characters_;
+    }
+
+    const std::size_t effective_characters() const {
+      return effective_characters_;
+    }
+  };
+
+  const BaseMapping<3>*
+  lookup_triple(const std::size_t bases);
+
+  class RecordParser
   {
   public:
     RecordParser(std::size_t size);
     RecordParser() = default;
 
-    Status ParseNew(const char* data, const std::size_t length);
+    Status ParseNew(const char* data, const std::size_t length, const bool verify, std::vector<char> &scratch, std::vector<char> &index_scratch);
 
     size_t RecordCount();
 
@@ -27,7 +58,6 @@ namespace tensorflow {
 
     void ResetIterator();
 
-    virtual string DebugString() override;
   private:
 
     void reset();

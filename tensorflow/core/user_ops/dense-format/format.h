@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <array>
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
@@ -71,6 +72,8 @@ namespace format {
   struct __attribute__((packed)) BinaryBases {
     BinaryBases() : bases(0) {};
 
+    Status appendToVector(std::vector<char> &output, std::size_t *num_bases) const;
+
     Status getBase(const std::size_t position, char* base) const;
 
     Status setBase(const char base, std::size_t position);
@@ -80,20 +83,15 @@ namespace format {
     uint64_t bases;
 
     static const std::size_t compression = 21; //sizeof(uint64_t) * 2; // 4 bits = 2 per byte
+    static const std::size_t base_width = 3;
 
   protected:
-    static const std::size_t base_width = 3;
+
 
     Status setBaseAtPosition(const BaseAlphabet base, const std::size_t position);
   };
 
   struct __attribute__((packed)) BinaryBaseRecord {
-    /*
-    static
-    std::size_t
-    intoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<uint64_t> &bases);
-    */
-    Status toString(const std::size_t record_size_in_bytes, std::string *output) const;
 
     Status appendToVector(const std::size_t record_size_in_bytes, std::vector<char> &output, std::vector<char> &lengths) const;
 

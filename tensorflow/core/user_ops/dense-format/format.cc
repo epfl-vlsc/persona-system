@@ -1,9 +1,30 @@
 #include "format.h"
+#include "parser.h"
+#include "util.h"
+#include <array>
+#include <cstring>
+#include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
 namespace format {
 
 using namespace std;
+
+namespace {
+  struct BaseMap {
+    const BaseAlphabet base;
+    const char base_char;
+    constexpr BaseMap(BaseAlphabet base_, char base_char_) : base(base_), base_char(base_char_) {}
+  };
+
+  const std::array<BaseMap, 5> base_map {{
+    BaseMap(BaseAlphabet::A, 'A'),
+    BaseMap(BaseAlphabet::G, 'G'),
+    BaseMap(BaseAlphabet::C, 'C'),
+    BaseMap(BaseAlphabet::T, 'T'),
+    BaseMap(BaseAlphabet::N, 'N'),
+  }};
+}
 
 Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, vector<char> &output, vector<char> &lengths) const
 {
@@ -13,57 +34,43 @@ Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, 
 
   Status status;
   const size_t record_size_in_base_records = record_size_in_bytes / 8;
-  char base_char = '\0';
-  uint8_t length; // TODO may need to deal with size_t issue better!
+  size_t length = 0;
   for (size_t i = 0; i < record_size_in_base_records; ++i) {
     auto const base = &bases[i];
-    for (size_t j = 0; j < BinaryBases::compression; ++j) {
-      status = base->getBase(j, &base_char);
-
-      if (!status.ok()) {
-        if (errors::IsResourceExhausted(status)) {
-          break; // need to break because of last one
-        } else {
-          return status;
-        }
-      }
-
-      length++;
-      output.push_back(base_char);
-    }
+    TF_RETURN_IF_ERROR(base->appendToVector(output, &length));
   }
   lengths.push_back(static_cast<char>(length));
   return Status::OK();
 }
 
-Status
-BinaryBaseRecord::toString(const size_t record_size_in_bytes, string *output) const
+Status BinaryBases::appendToVector(vector<char> &output, size_t *num_bases) const
 {
-  if (record_size_in_bytes % sizeof(uint64_t) != 0) {
-    return errors::InvalidArgument("Size of record ", record_size_in_bytes, " is not a multiple of ", sizeof(uint64_t));
-  }
-  const size_t record_size_in_base_records = record_size_in_bytes / 8;
-  string converted;
-  Status status;
-  char base_char = '\0';
-  for (size_t i = 0; i < record_size_in_base_records; ++i) {
-    auto const base = &bases[i];
-    for (size_t j = 0; j < BinaryBases::compression; ++j) {
-      status = base->getBase(j, &base_char);
+  using namespace errors;
+  BaseAlphabet base;
+  auto bases_copy = bases;
+  uint64_t base_i;
+  size_t length = 0;
+  //TODO this is the method to fix
+  for (size_t i = 0; i < compression;) {
+    auto res = lookup_triple(bases_copy);
+    if (res == nullptr) {
+      return Internal("unable to convert value ", bases_copy & 0x1ff, " to a triple\n");
+    }
 
-      if (!status.ok()) {
-        if (errors::IsResourceExhausted(status)) {
-          break; // need to break because of last one
-        } else {
-          return status;
-        }
-      }
+    auto val = res->get();
+    auto num_chars = res->effective_characters();
+    i += val.size();
 
-      converted.push_back(base_char);
+    appendSegment(val.data(), res->effective_characters(), output);
+    length += num_chars;
+    // there must be a terminating character in here
+    if (num_chars < val.size()) {
+      break;
     }
   }
 
-  *output = converted;
+  *num_bases += length;
+
   return Status::OK();
 }
 

@@ -349,6 +349,7 @@ cc_library(
     name = "user_ops_op_lib",
     srcs = glob(["user_ops/*.cc"]),
     copts = tf_copts(),
+    linkopts = ["-lrados"],
     linkstatic = 1,
     visibility = ["//visibility:public"],
     # TODO  do something about this hacky stuff
@@ -357,6 +358,7 @@ cc_library(
             "//tensorflow/core/user_ops/dna-align:sam_writer_async",
             "//tensorflow/core/user_ops/dna-align:snap_align",
             "//tensorflow/core/user_ops/dense-format:dense_format",
+            "//tensorflow/core/user_ops/object-pool:object_pool",
            ],
     alwayslink = 1,
 )
