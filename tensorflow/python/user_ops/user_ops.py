@@ -280,3 +280,22 @@ def _ColumnWriterShape(op):
     for i in xrange(1,4):
         _assert_scalar(ops.inputs[i].get_shape())
     return []
+
+_da_str = "DenseAssembler"
+def DenseAssembler(dense_read_pool, base_handle, qual_handle, meta_handle, num_records):
+    return gen_user_ops.dense_assembler(
+        dense_read_pool=dense_read_pool,
+        base_handle=base_handle,
+        qual_handle=qual_handle,
+        meta_handle=meta_handle,
+        num_records=num_records
+    )
+
+ops.NoGradient(_da_str)
+@ops.RegisterShape(_da_str)
+def _DenseAssembleShape(op):
+    for i in range(4):
+        op_shape = ops.inputs[i].get_shape()
+        _assert_vec(op_shape, 2)
+    _assert_scalar(ops.inputs[4].get_shape())
+    return [tensor_shape.vector(2)]
