@@ -312,3 +312,21 @@ ops.NoGradient(_dap_str)
 @ops.RegisterShape(_dap_str)
 def _DenseAssemblerPoolShape(op):
     return [tensor_shape.vector(2)]
+
+_fc_str = "FASTQCreator"
+def FASTQCreator(data_handle, pool_handle, name=None):
+    return gen_user_ops.fastq_creator(data_handle=data_handle,
+                                      pool_handle=pool_handle,
+                                      name=name)
+
+ops.NoGradient(_fc_str)
+@ops.RegisterShape(_fc_str)
+def _FASTQCreatorOPShape(op):
+    for i in xrange(2):
+        a = ops.iniputs[i].get_shape()
+        _assert_vec(a, 2)
+    return [tensor_shape.vector(2)]
+
+_fcp_str = _fc_str + "Pool"
+def FASTQCreatorPool(size=0, bound=False, name=None):
+    return gen_user_ops.fastq_creator_pool(size=size, bound=bound, name=name)

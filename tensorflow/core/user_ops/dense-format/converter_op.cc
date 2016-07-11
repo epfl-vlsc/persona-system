@@ -114,6 +114,7 @@ but this is just for the utility than the speed at this point.
     Status GetNewFile(OpKernelContext *ctx) {
       ResourceContainer<Data> *fastq_file;
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "fastq_file_handle", &fastq_file));
+      core::ScopedUnref a(fastq_file);
       fastq_iter_ = FASTQIterator(fastq_file);
       needs_new_file_ = false;
     }
