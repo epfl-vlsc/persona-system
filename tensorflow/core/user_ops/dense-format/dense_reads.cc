@@ -6,6 +6,9 @@ namespace tensorflow {
   using namespace errors;
   using namespace format;
 
+  DenseReadResource::DenseReadResource() : num_records_(0), base_idx_(nullptr), qual_idx_(nullptr), meta_idx_(nullptr),
+                                           base_data_(nullptr), qual_data_(nullptr), meta_data_(nullptr) {}
+
   DenseReadResource::DenseReadResource(size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta) :
     bases_(bases), quals_(quals), meta_(meta), num_records_(num_records)
   {

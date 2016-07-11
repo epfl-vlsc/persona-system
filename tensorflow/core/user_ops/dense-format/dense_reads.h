@@ -14,6 +14,8 @@ namespace tensorflow {
       Note that this iterator assumes that the Data in each of the possible containers has already been verified in a prior step
      */
 
+    explicit DenseReadResource();
+
     explicit DenseReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta);
     ~DenseReadResource() override;
 

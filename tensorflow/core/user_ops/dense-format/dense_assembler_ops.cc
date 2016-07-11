@@ -4,13 +4,14 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
+#include "tensorflow/core/user_ops/object-pool/ref_pool_op.h"
 #include "dense_reads.h"
 
 namespace tensorflow {
   using namespace std;
   using namespace errors;
   namespace {
-    const string op_name("DenseAssembler");
+    const string op_name("DenseAssembler"), dense_read_pool("DenseReadPool");
   }
 
   REGISTER_OP(op_name.c_str())
@@ -27,6 +28,13 @@ which is passed downstream for conversion / alignment.
 
 Currently this op requires all 3 fields to be available.
 If we need to only process a subset in the future, we must make a separate op.
+)doc");
+
+  REGISTER_REFERENCE_POOL(dense_read_pool.c_str())
+  .Doc(R"doc(
+A pool specifically for dense read resources.
+
+Intended to be used for DenseAssembler
 )doc");
 
   class DenseAssemblerOp : public OpKernel {
@@ -65,5 +73,17 @@ If we need to only process a subset in the future, we must make a separate op.
     ReferencePool<DenseReadResource> *drr_pool_ = nullptr;
   };
 
+  class DenseAssemblerPoolOp : public ReferencePoolOp<DenseReadResource, ReadResource> {
+  public:
+    DenseAssemblerPoolOp(OpKernelConstruction *ctx) : ReferencePoolOp<DenseReadResource, ReadResource>(ctx) {}
+
+  protected:
+    unique_ptr<DenseReadResource> CreateObject() override {
+      return unique_ptr<DenseReadResource>(new DenseReadResource());
+    };
+  };
+
+
   REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), DenseAssemblerOp);
+  REGISTER_KERNEL_BUILDER(Name(dense_read_pool.c_str()).Device(DEVICE_CPU), DenseAssemblerPoolOp);
 } // namespace tensorflow {
