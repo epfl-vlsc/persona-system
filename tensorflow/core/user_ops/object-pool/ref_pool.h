@@ -1,13 +1,14 @@
 #pragma once
 
-#include "tensorflow/core/framework/resource_mgr.h"
 #include <string>
 #include <deque>
 #include <memory>
+#include <functional>
 #include <condition_variable>
 #include "tensorflow/core/platform/mutex.h"
 #include "resource_container.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/framework/op_kernel.h"
 
 namespace tensorflow {
 
@@ -17,6 +18,10 @@ namespace tensorflow {
   template <typename T>
   class ReferencePool : public ResourceBase {
   public:
+
+    explicit ReferencePool() = default;
+
+    explicit ReferencePool(std::function<Status(ReferencePool<T>*)> creator) : creator_(creator), unbound_(true) {}
 
     virtual ~ReferencePool() override {
       mutex_lock l(objects_mu_);
@@ -63,6 +68,10 @@ namespace tensorflow {
 
     std::vector<ResourceContainer<T>*> all_objects_;
     std::deque<ResourceContainer<T>*> objects_;
+
+    std::function<Status(ReferencePool<T>*)> creator_;
+    bool unbound_ = false;
+
     mutable mutex objects_mu_;
     mutable std::condition_variable objects_cv_;
     volatile bool run_ = true;

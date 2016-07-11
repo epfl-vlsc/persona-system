@@ -18,12 +18,13 @@ namespace tensorflow {
 #define REGISTER_REFERENCE_POOL(_NAME) \
   REGISTER_OP(_NAME) \
     .Attr("size: int") \
+    .Attr("bound: bool = true") \
     .Attr("container: string = ''") \
     .Attr("shared_name: string = ''") \
     .Output("pool_handle: Ref(string)") \
     .SetIsStateful()
 
-  // T is the 
+  // T is the type of the actual container being made
   // U is the container it puts the resources in (by type), so further ops can do a generic lookup
 template <typename T, typename U>
 class ReferencePoolOp : public OpKernel {
@@ -35,9 +36,10 @@ public:
     using namespace errors;
 
     OP_REQUIRES_OK(context, context->GetAttr("size", &size_));
-    OP_REQUIRES(context, size_ > 0, InvalidArgument("ReferencePoolOp: size must be >0: ", size_));
+    OP_REQUIRES(context, size_ >= 0, InvalidArgument("ReferencePoolOp: size must be >= 0: ", size_));
     OP_REQUIRES_OK(context, context->allocate_persistent(DT_STRING, TensorShape({2}),
                                                          &pool_handle_, nullptr));
+    OP_REQUIRES_OK(context, context->GetAttr("bound", &bound_));
   }
 
   ~ReferencePoolOp() override {
@@ -63,22 +65,19 @@ protected:
     TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
     auto rmgr = cinfo_.resource_manager();
 
-    std::unique_ptr<ReferencePool<T>> ref_pool(new ReferencePool<T>());
+    std::unique_ptr<ReferencePool<T>> ref_pool;
+    if (bound_) {
+      ref_pool.reset(new ReferencePool<T>());
+    } else {
+      auto func = [this](ReferencePool<T>* t) -> Status {
+        return AddObjectToPool(t);
+      };
+      ref_pool.reset(new ReferencePool<T>(func));
+    }
 
-    string s;
-    std::unique_ptr<ResourceContainer<T>> a;
-    std::unique_ptr<T> obj;
-    for (int i = 0; i < size_; i++) {
-      // make the name
-      s = cinfo_.name();
-      s.append("-");
-      s.append(std::to_string(i));
-      obj = CreateObject();
-      a.reset(new ResourceContainer<T>(std::move(obj), cinfo_.container(), s, ref_pool.get()));
-      // This cast is correct because of the is_base_of check above,
-      // and the fact that resource container is just a smart pointer
-      TF_RETURN_IF_ERROR(rmgr->Create<ResourceContainer<U>>(cinfo_.container(), s, reinterpret_cast<ResourceContainer<U>*>(a.get())));
-      ref_pool->AddResource(std::move(a));
+    auto rp = ref_pool.get();
+    while (idx_ < size_) {
+      TF_RETURN_IF_ERROR(AddObjectToPool(ref_pool.get()));
     }
 
     // put ref_pool into the shared resource
@@ -90,13 +89,30 @@ protected:
     return Status::OK();
   }
 
+  inline Status AddObjectToPool(ReferencePool<T> *ref_pool)
+  {
+    // make the name
+    string s(cinfo_.name());
+    s.append("-");
+    s.append(std::to_string(idx_++));
+    auto obj = CreateObject();
+    std::unique_ptr<ResourceContainer<T>> a(new ResourceContainer<T>(std::move(obj), cinfo_.container(), s, ref_pool));
+    // This cast is correct because of the is_base_of check above,
+    // and the fact that resource container is just a smart pointer
+    TF_RETURN_IF_ERROR(cinfo_.resource_manager()->Create<ResourceContainer<U>>(cinfo_.container(), s, reinterpret_cast<ResourceContainer<U>*>(a.get())));
+    ref_pool->AddResource(std::move(a));
+    return Status::OK();
+  }
+
+
   virtual std::unique_ptr<T> CreateObject() = 0;
 
 private:
 
   mutable mutex mu_;
-  int size_;
+  int size_, idx_ = 0;
   ContainerInfo cinfo_;
+  bool bound_;
   PersistentTensor pool_handle_ GUARDED_BY(mu_);
   bool pool_handle_set_ GUARDED_BY(mu_);
 };
