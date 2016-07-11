@@ -122,6 +122,7 @@ Thus we always need 3 of these for the full conversion pipeline
       int fwrite_ret = fwrite(&header_, sizeof(header_), 1, file_out);
       if (fwrite_ret != 1) {
         // TODO get errno out of the file
+        fclose(file_out);
         return Internal("frwrite(header_) failed");
       }
       return Status::OK();
