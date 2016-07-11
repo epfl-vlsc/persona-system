@@ -349,7 +349,7 @@ cc_library(
     name = "user_ops_op_lib",
     srcs = glob(["user_ops/*.cc"]),
     copts = tf_copts(),
-    linkopts = ["-lrados"],
+    #linkopts = ["-lrados"],
     linkstatic = 1,
     visibility = ["//visibility:public"],
     # TODO  do something about this hacky stuff
