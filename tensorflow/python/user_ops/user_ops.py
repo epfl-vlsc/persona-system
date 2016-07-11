@@ -323,7 +323,7 @@ ops.NoGradient(_fc_str)
 @ops.RegisterShape(_fc_str)
 def _FASTQCreatorOPShape(op):
     for i in xrange(2):
-        a = ops.iniputs[i].get_shape()
+        a = ops.inputs[i].get_shape()
         _assert_vec(a, 2)
     return [tensor_shape.vector(2)]
 
