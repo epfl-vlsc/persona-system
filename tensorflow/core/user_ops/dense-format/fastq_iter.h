@@ -14,6 +14,7 @@ namespace tensorflow {
     explicit FASTQIterator(ResourceContainer<Data> *fastq_file);
     FASTQIterator() = default;
     ~FASTQIterator() override;
+    FASTQIterator& operator=(FASTQIterator &&other);
 
     Status get_next_record(const char **bases, std::size_t *bases_length,
                            const char **qualities, std::size_t *qualities_length,
@@ -34,5 +35,9 @@ namespace tensorflow {
     ResourceContainer<Data> *fastq_file_ = nullptr;
     const Data *data_ = nullptr;
     std::size_t index_ = 0, data_size_ = 0;
+
+    FASTQIterator(const FASTQIterator &other) = delete;
+    FASTQIterator& operator=(const FASTQIterator &other) = delete;
+    FASTQIterator(FASTQIterator &&other) = delete;
   };
 } // namespace tensorflow {

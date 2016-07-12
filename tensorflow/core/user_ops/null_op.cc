@@ -28,8 +28,6 @@ Consumes the input and produces nothing
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads));
       core::ScopedUnref a(reads);
       ResourceReleaser<ReadResource> b(*reads);
-      auto x = reads->get();
-      reads->get()->release();
     }
   };
 

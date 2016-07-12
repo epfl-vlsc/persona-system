@@ -6,6 +6,18 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
 
+  FASTQIterator& FASTQIterator::operator=(FASTQIterator &&other) {
+    fastq_file_ = other.fastq_file_;
+    other.fastq_file_ = nullptr;
+    data_ = other.data_;
+    other.data_ = nullptr;
+
+    // No need to reset these other things
+    index_ = other.index_;
+    data_size_ = other.data_size_;
+    return *this;
+  }
+
   FASTQIterator::FASTQIterator(ResourceContainer<Data> *fastq_file) : fastq_file_(fastq_file), data_size_(fastq_file->get()->size()), data_(fastq_file->get()) {}
 
   Status FASTQIterator::get_next_record(const char **bases, size_t *bases_length,

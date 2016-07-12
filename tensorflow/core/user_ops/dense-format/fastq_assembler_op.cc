@@ -1,3 +1,4 @@
+#include <utility>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
@@ -49,7 +50,8 @@ Recommended to make this unbound and manage the bounding with queues.
       ResourceContainer<FASTQIterator> *fastq_handle;
       OP_REQUIRES_OK(ctx, fastq_pool_->GetResource(&fastq_handle));
       auto fastq = fastq_handle->get();
-      *fastq = FASTQIterator(fastq_file);
+      // TODO need to assign a move constructor here!
+      *fastq = move(FASTQIterator(fastq_file));
       OP_REQUIRES_OK(ctx, fastq_handle->allocate_output("fastq_handle", ctx));
     }
   private:
