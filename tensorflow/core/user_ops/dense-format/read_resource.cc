@@ -14,4 +14,6 @@ namespace tensorflow {
   bool ReadResource::reset_iter() {
     return false;
   }
+
+  void ReadResource::release() {}
 } // namespace tensorflow {

@@ -24,5 +24,7 @@ namespace tensorflow {
     // Resets the iterator, and returns `true` only if the iterator was successfully reset
     // Non-reset supporting iterators may return false
     virtual bool reset_iter();
+
+    virtual void release();
   };
 } // namespace tensorflow {

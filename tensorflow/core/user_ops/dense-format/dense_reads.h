@@ -28,6 +28,8 @@ namespace tensorflow {
     bool has_qualities() override;
     bool has_metadata() override;
 
+    void release() override;
+
   private:
     DataContainer *bases_, *quals_, *meta_;
     const format::RecordTable *base_idx_, *qual_idx_, *meta_idx_;

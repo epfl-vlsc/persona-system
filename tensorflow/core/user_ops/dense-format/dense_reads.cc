@@ -38,12 +38,7 @@ namespace tensorflow {
 
   DenseReadResource::~DenseReadResource()
   {
-    if (bases_)
-      bases_->release();
-    if (quals_)
-      quals_->release();
-    if (meta_)
-      meta_->release();
+    release();
   }
 
   bool DenseReadResource::reset_iter()
@@ -102,6 +97,15 @@ namespace tensorflow {
     } else {
       return ResourceExhausted("dense record container exhausted");
     }
+  }
+
+  void DenseReadResource::release() {
+    if (bases_)
+      bases_->release();
+    if (quals_)
+      quals_->release();
+    if (meta_)
+      meta_->release();
   }
 
 } // namespace tensorflow {

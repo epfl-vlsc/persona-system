@@ -71,8 +71,12 @@ namespace tensorflow {
 
   FASTQIterator::~FASTQIterator()
   {
-    if (fastq_file_)
-      fastq_file_->release();
+    release();
+  }
+
+  void FASTQIterator::release() {
+      if (fastq_file_)
+        fastq_file_->release();
   }
 
 } // namespace tensorflow {

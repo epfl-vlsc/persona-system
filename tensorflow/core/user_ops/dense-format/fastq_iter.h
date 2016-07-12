@@ -24,6 +24,8 @@ namespace tensorflow {
     bool has_qualities() override;
     bool has_metadata() override;
 
+    void release() override;
+
   private:
 
     Status read_line(const char **line_start, std::size_t *line_length, std::size_t skip_length = 0);
