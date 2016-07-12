@@ -22,6 +22,6 @@ namespace tensorflow {
   }
 
   void MemoryMappedFile::release() {
-    file_.release();
+    file_.reset();
   }
 } // namespace tensorflow {

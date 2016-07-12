@@ -22,9 +22,13 @@ Consumes the input and produces nothing
 
     void Compute(OpKernelContext* ctx) override {
       ResourceContainer<ReadResource> *reads;
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "data", &reads));
+      const Tensor *input;
+      OP_REQUIRES_OK(ctx, ctx->input("data", &input));
+      auto data = input->vec<string>();
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads));
       core::ScopedUnref a(reads);
       ResourceReleaser<ReadResource> b(*reads);
+      auto x = reads->get();
       reads->get()->release();
     }
   };

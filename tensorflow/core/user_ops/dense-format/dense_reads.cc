@@ -100,12 +100,18 @@ namespace tensorflow {
   }
 
   void DenseReadResource::release() {
-    if (bases_)
+    if (bases_) {
+      bases_->get()->release();
       bases_->release();
-    if (quals_)
+    }
+    if (quals_) {
+      quals_->get()->release();
       quals_->release();
-    if (meta_)
+    }
+    if (meta_) {
+      meta_->get()->release();
       meta_->release();
+    }
   }
 
 } // namespace tensorflow {
