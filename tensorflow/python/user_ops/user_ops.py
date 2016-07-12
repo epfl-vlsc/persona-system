@@ -107,7 +107,7 @@ ops.NoGradient(_sink_str)
 @ops.RegisterShape(_sink_str)
 def _SinkShape(op):
   data = op.inputs[0].get_shape()
-  _assert_matrix(data)
+  _assert_vec(data, 2)
   return []
 
 _sm_str = "StagedFileMap"
@@ -291,7 +291,7 @@ def DenseAssembler(dense_read_pool, base_handle, qual_handle, meta_handle, num_r
         base_handle=base_handle,
         qual_handle=qual_handle,
         meta_handle=meta_handle,
-        num_records=num_records
+        num_records=num_records,
         name=name
     )
 
@@ -330,3 +330,8 @@ def _FASTQCreatorOPShape(op):
 _fcp_str = _fc_str + "Pool"
 def FASTQCreatorPool(size=0, bound=False, name=None):
     return gen_user_ops.fastq_creator_pool(size=size, bound=bound, name=name)
+
+ops.NoGradient(_fcp_str)
+@ops.RegisterShape(_fcp_str)
+def _FASTQCreatorPoolOpShape(op):
+    return [tensor_shape.vector(2)]
