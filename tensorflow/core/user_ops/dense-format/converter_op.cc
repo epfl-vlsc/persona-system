@@ -56,7 +56,7 @@ but this is just for the utility than the speed at this point.
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "chunk_buffer_pool", &buf_pool_));
       }
 
-      if (needs_new_file_) {
+      if (!fastq_iter_) {
         OP_REQUIRES_OK(ctx, GetNewFile(ctx));
       }
 
@@ -83,14 +83,15 @@ but this is just for the utility than the speed at this point.
 
       Status status;
       int num_records = 0;
+      auto fiter = fastq_iter_->get();
       for (; num_records < chunk_size_; ++num_records) {
-        status = fastq_iter_.get_next_record(&bases, &bases_length,
-                                             &qualities, &qualities_length,
-                                             &metadata, &metadata_length);
+        status = fiter->get_next_record(&bases, &bases_length,
+                                        &qualities, &qualities_length,
+                                        &metadata, &metadata_length);
         if (status.ok()) {
           qual_builder_.AppendString(qualities, qualities_length, qual);
           meta_builder_.AppendString(metadata, metadata_length, meta);
-          base_builder_.AppendString(bases, bases_length, base);
+          OP_REQUIRES_OK(ctx, base_builder_.AppendString(bases, bases_length, base));
         } else {
           if (IsResourceExhausted(status)) {
             ReleaseFile();
@@ -112,16 +113,16 @@ but this is just for the utility than the speed at this point.
   private:
 
     Status GetNewFile(OpKernelContext *ctx) {
-      ResourceContainer<Data> *fastq_file;
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "fastq_file_handle", &fastq_file));
-      core::ScopedUnref a(fastq_file);
-      fastq_iter_ = FASTQIterator(fastq_file);
-      needs_new_file_ = false;
+      const Tensor *input_handle;
+      TF_RETURN_IF_ERROR(ctx->input("fastq_file_handle", &input_handle));
+      auto v = input_handle->vec<string>();
+      TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(v(0), v(1), &fastq_iter_));
     }
 
     inline void ReleaseFile() {
-      fastq_iter_ = FASTQIterator(); // run the constructor to release
-      needs_new_file_ = true;
+      fastq_iter_->get()->release();
+      fastq_iter_->release();
+      fastq_iter_ = nullptr;
     }
 
     bool compress_;
@@ -129,8 +130,7 @@ but this is just for the utility than the speed at this point.
     // Keep it like this instead of <Data> so that this converter op can close when it's done
     // This keeps memory to a minimum
     ReferencePool<Buffer> *buf_pool_ = nullptr;
-    bool needs_new_file_ = true;
-    FASTQIterator fastq_iter_;
+    ResourceContainer<ReadResource> *fastq_iter_ = nullptr;
     StringColumnBuilder meta_builder_, qual_builder_;
     BaseColumnBuilder base_builder_;
   };

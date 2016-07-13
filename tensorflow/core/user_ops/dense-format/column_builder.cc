@@ -35,5 +35,6 @@ namespace tensorflow {
     size_t converted_size = base_scratch_.size() * sizeof(BinaryBases);
     appendSegment(reinterpret_cast<const char*>(&base_scratch_[0]), converted_size, records_);
     index.push_back(static_cast<char>(converted_size));
+    return Status::OK();
   }
 } // namespace tensorflow {

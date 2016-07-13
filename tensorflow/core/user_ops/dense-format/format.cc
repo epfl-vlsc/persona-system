@@ -121,6 +121,7 @@ BinaryBaseRecord::IntoBases(const char *fastq_base, const std::size_t fastq_base
 
   bb.terminate(base_idx);
   bases.push_back(bb);
+  return Status::OK();
 }
 
 Status BinaryBases::setBase(const char base, size_t position) {

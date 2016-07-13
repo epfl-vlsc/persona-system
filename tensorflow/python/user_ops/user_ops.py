@@ -243,11 +243,14 @@ _dc_str = "DenseConverter"
 ops.NoGradient(_dc_str)
 @ops.RegisterShape(_dc_str)
 def _DenseConverterShape(op):
+
     fastq_shape = op.inputs[0].get_shape()
     buffer_pool_shape = op.inputs[1].get_shape()
     _assert_vec(fastq_shape, 2)
     _assert_vec(buffer_pool_shape, 2)
-    return [tensor_shape.vector(2)] * 3
+    a = [tensor_shape.vector(2)] * 3
+    a.append(tensor_shape.scalar())
+    return a
 
 _dm_str = "DenseMetadata"
 def DenseMetadata(output_dir, record_id, num_records, name=None):
@@ -264,10 +267,15 @@ def _DenseMetadataShape(op):
     return [tensor_shape.scalar()] * 4
 
 _cw_str = "ColumnWriter"
-def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, compress=False, name=None):
+allowed_type_values = set(["base", "qual", "meta", "results"])
+def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, name=None):
+    if record_type not in allowed_type_values:
+        raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
+            given=record_type, expected=allowed_type_values))
     return gen_user_ops.column_writer(
         column_handle=column_handle,
         file_path=file_path,
+        record_type=record_type,
         first_ordinal=first_ordinal,
         num_records=num_records,
         compress=compress,
@@ -281,7 +289,7 @@ def _ColumnWriterShape(op):
     column_handle_shape = op.inputs[0].get_shape()
     _assert_vec(column_handle_shape, 2)
     for i in xrange(1,4):
-        _assert_scalar(ops.inputs[i].get_shape())
+        _assert_scalar(op.inputs[i].get_shape())
     return []
 
 _da_str = "DenseAssembler"

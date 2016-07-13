@@ -8,8 +8,13 @@
 #include "format.h"
 
 namespace tensorflow {
+  using namespace std;
+  using namespace errors;
+  namespace {
+    const string op_name("ColumnWriter");
+  }
 
-  REGISTER_OP("ColumnWriter")
+  REGISTER_OP(op_name.c_str())
   .Attr("compress: bool")
   .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
@@ -17,7 +22,7 @@ namespace tensorflow {
   .Input("file_path: string")
   // TODO these can be collapsed into a vec(3) if that would help performance
   .Input("first_ordinal: int64")
-  .Input("num_records: int64")
+  .Input("num_records: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Writes out a column (just a character buffer) to the location specified by the input.
@@ -30,9 +35,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
 This also assumes that this writer only writes out a single record type.
 Thus we always need 3 of these for the full conversion pipeline
 )doc");
-
-  using namespace std;
-  using namespace errors;
 
   class ColumnWriterOp : public OpKernel {
   public:
@@ -48,11 +50,11 @@ Thus we always need 3 of these for the full conversion pipeline
 
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &s));
       RecordType t;
-      if (s.compare("base")) {
+      if (s.compare("base") == 0) {
         t = RecordType::BASES;
-      } else if (s.compare("qual")) {
+      } else if (s.compare("qual") == 0) {
         t = RecordType::QUALITIES;
-      } else if (s.compare("meta")) {
+      } else if (s.compare("meta") == 0) {
         t = RecordType::COMMENTS;
       } else { // no need to check. we're saved by string enum types if TF
         t = RecordType::ALIGNMENT;
@@ -62,12 +64,14 @@ Thus we always need 3 of these for the full conversion pipeline
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
-      const Tensor *path;
+      const Tensor *path, *column_t;
       OP_REQUIRES_OK(ctx, ctx->input("file_path", &path));
+      OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
       auto filepath = path->scalar<string>()();
+      auto column_vec = column_t->vec<string>();
 
       ResourceContainer<Data> *column;
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "column_handle", &column));
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
       ResourceReleaser<Data> a(*column);
 
       auto data = column->get();
@@ -115,10 +119,6 @@ Thus we always need 3 of these for the full conversion pipeline
       tmp64 = static_cast<uint64_t>(tensor->scalar<int64>()());
       header_.last_ordinal = header_.first_ordinal + tmp64;
 
-      TF_RETURN_IF_ERROR(ctx->input("record_type", &tensor));
-      auto record_type = static_cast<uint8_t>(tensor->scalar<int32>()());
-      header_.record_type = record_type;
-
       int fwrite_ret = fwrite(&header_, sizeof(header_), 1, file_out);
       if (fwrite_ret != 1) {
         // TODO get errno out of the file
@@ -132,4 +132,6 @@ Thus we always need 3 of these for the full conversion pipeline
     vector<char> buf_; // used to compress into
     format::FileHeader header_;
   };
+
+  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), ColumnWriterOp);
 } //  namespace tensorflow {

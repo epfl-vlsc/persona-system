@@ -24,8 +24,8 @@ namespace tensorflow {
   .Input("num_records: int32")
   .Output("first_ordinal: int64")
   .Output("base_path: string")
-  .Output("meta_path: string")
   .Output("qual_path: string")
+  .Output("meta_path: string")
   .Doc(R"doc(
 Provides metadata (paths, ordinal assignments) to the column writers
 when they receive the column files to write out.
