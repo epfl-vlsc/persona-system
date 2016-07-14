@@ -233,8 +233,8 @@ ops.NoGradient(_bp_str)
 def _BufferPoolShape(op):
     return [tensor_shape.vector(2)]
 
-def DenseConverter(fastq_file_handle, chunk_buffer_pool, compress, chunk_size, name=None):
-    return gen_user_ops.dense_converter(compress=compress, chunk_size=chunk_size,
+def DenseConverter(fastq_file_handle, chunk_buffer_pool, chunk_size, name=None):
+    return gen_user_ops.dense_converter(chunk_size=chunk_size,
                                         fastq_file_handle=fastq_file_handle,
                                         chunk_buffer_pool=chunk_buffer_pool,
                                         name=name)

@@ -5,7 +5,6 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "shared_mmap_file_resource.h"
 #include "column_builder.h"
-#include "compression.h"
 #include "buffer.h"
 #include "fastq_iter.h"
 #include <string>
@@ -19,7 +18,6 @@ namespace tensorflow {
   }
 
   REGISTER_OP(op_name.c_str())
-  .Attr("compress: bool")
   .Attr("chunk_size: int")
   .Input("fastq_file_handle: string")
   .Input("chunk_buffer_pool: Ref(string)")
@@ -41,7 +39,6 @@ but this is just for the utility than the speed at this point.
   class DenseConverterOp : public OpKernel {
   public:
     DenseConverterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       OP_REQUIRES(ctx, chunk_size_ > 0,
                   InvalidArgument("Chunk size (", chunk_size_, ") must be strictly >0"));
@@ -125,7 +122,6 @@ but this is just for the utility than the speed at this point.
       fastq_iter_ = nullptr;
     }
 
-    bool compress_;
     int chunk_size_;
     // Keep it like this instead of <Data> so that this converter op can close when it's done
     // This keeps memory to a minimum
