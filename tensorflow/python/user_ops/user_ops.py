@@ -133,37 +133,6 @@ def _StagedFileMapShape(op):
   names_shape[0] += 1
   return [files_shape, names_shape]
 
-_dr_str = "DenseRecordCreator"
-def DenseRecordCreator(bases, qualities, name=None):
-  return gen_user_ops.dense_record_creator(bases=bases, qualities=qualities, name=name)
-ops.NoGradient(_dr_str)
-
-@ops.RegisterShape(_dr_str)
-def _DenseRecordCreatorShape(op):
-  base_shape = op.inputs[0].get_shape()
-  qual_shape = op.inputs[1].get_shape()
-  _assert_matrix(base_shape)
-  _assert_matrix(qual_shape)
-  if base_shape != qual_shape: # to compare number of rows
-    raise Exception("Expected base shape ({b}) to be the same as qual shape ({q})".format(
-      b=base_shape, q=qual_shape))
-  return [base_shape]
-
-_dram_str = "DenseRecordAddMetadata"
-def DenseRecordAddMetadata(dense_records, metadata, name=None):
-  return gen_user_ops.dense_record_add_metadata(dense_data=dense_records, metadata=metadata, name=name)
-ops.NoGradient(_dram_str)
-
-@ops.RegisterShape(_dram_str)
-def _DenseRecordMetadataShape(op):
-  dense_shapes = op.inputs[0].get_shape()
-  metadata_shapes = op.inputs[1].get_shape()
-  _assert_matrix(dense_shapes)
-  _assert_matrix(metadata_shapes)
-  if dense_shapes != metadata_shapes:
-    raise Exception("Dense Shape is {dense}, not equal to metadata shape {md}".format(dense=dense_shapes, md=metadata_shapes))
-  return [dense_shapes]
-
 class SAMWriter(io_ops.WriterBase):
 
     def __init__(self, name=None, out_file=None):
@@ -232,39 +201,6 @@ ops.NoGradient(_bp_str)
 @ops.RegisterShape(_bp_str)
 def _BufferPoolShape(op):
     return [tensor_shape.vector(2)]
-
-def DenseConverter(fastq_file_handle, chunk_buffer_pool, chunk_size, name=None):
-    return gen_user_ops.dense_converter(chunk_size=chunk_size,
-                                        fastq_file_handle=fastq_file_handle,
-                                        chunk_buffer_pool=chunk_buffer_pool,
-                                        name=name)
-
-_dc_str = "DenseConverter"
-ops.NoGradient(_dc_str)
-@ops.RegisterShape(_dc_str)
-def _DenseConverterShape(op):
-
-    fastq_shape = op.inputs[0].get_shape()
-    buffer_pool_shape = op.inputs[1].get_shape()
-    _assert_vec(fastq_shape, 2)
-    _assert_vec(buffer_pool_shape, 2)
-    a = [tensor_shape.vector(2)] * 3
-    a.append(tensor_shape.scalar())
-    return a
-
-_dm_str = "DenseMetadata"
-def DenseMetadata(output_dir, record_id, num_records, name=None):
-    return gen_user_ops.dense_metadata(output_dir=output_dir,
-                                       record_id=record_id,
-                                       num_records=num_records,
-                                       name=name)
-
-ops.NoGradient(_dm_str)
-@ops.RegisterShape(_dm_str)
-def _DenseMetadataShape(op):
-    num_records_shape = op.inputs[0].get_shape()
-    _assert_scalar(num_records_shape)
-    return [tensor_shape.scalar()] * 4
 
 _cw_str = "ColumnWriter"
 allowed_type_values = set(["base", "qual", "meta", "results"])

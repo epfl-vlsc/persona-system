@@ -108,7 +108,6 @@ Thus we always need 3 of these for the full conversion pipeline
   private:
 
     Status WriteHeader(OpKernelContext *ctx, FILE *file_out) {
-      // TODO get all the incoming parameters for the chunk and write them out
       const Tensor *tensor;
       uint64_t tmp64;
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
