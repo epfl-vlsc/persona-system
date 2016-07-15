@@ -57,6 +57,7 @@ class SnapAlignOp : public OpKernel {
       }
 
       //boost::timer::auto_cpu_timer t;
+      auto begin = std::chrono::high_resolution_clock::now();
 
       const Tensor* reads;
       OP_REQUIRES_OK(ctx, ctx->input("read", &reads));
@@ -94,6 +95,8 @@ class SnapAlignOp : public OpKernel {
             read_batch.qualities(i),  // qualities
             read_batch.bases_len(i)  // data len
             );
+        
+        snap_read_.clip(options->clipping);
 
         if (!passesReadFilter(&snap_read_, options_resource_->value())) {
           results.set_first_is_primary(i, true);
@@ -144,6 +147,9 @@ class SnapAlignOp : public OpKernel {
       }
       
       OP_REQUIRES_OK(ctx, ctx->set_output("reads_out", *reads));
+      
+      auto end = std::chrono::high_resolution_clock::now();
+      LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
 
       //LOG(INFO) << "actual: " << num_actual_reads << " total: " << num_reads;
     }
