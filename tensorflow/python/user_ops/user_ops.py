@@ -179,6 +179,15 @@ ops.NoGradient(_pp_str)
 def _ParserPoolShape(op):
     return [tensor_shape.vector(2)]
 
+_drp_str = "DenseReadPool"
+def DenseReadPool(size, size_hint=4194304, name=None):
+    return gen_user_ops.dense_read_pool(size=size, size_hint=size_hint, name=name)
+
+ops.NoGradient(_drp_str)
+@ops.RegisterShape(_drp_str)
+def _DenseReadPoolShape(op):
+    return [tensor_shape.vector(2)]
+
 _mmp_str = "MMapPool"
 def MMapPool(size=0, bound=False, name=None):
     return gen_user_ops.m_map_pool(size=size, bound=bound, name=name)
