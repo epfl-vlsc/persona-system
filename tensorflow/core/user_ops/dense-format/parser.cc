@@ -96,13 +96,7 @@ namespace tensorflow {
     return &a;
   }
 
-  RecordParser::RecordParser(std::size_t size)
-  {
-    buffer_.reserve(size);
-    init_table();
-  }
-
-  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, vector<char> &scratch, vector<char> &index_scratch)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, vector<char> &result)
   {
     using namespace errors;
     using namespace format;
@@ -114,19 +108,13 @@ namespace tensorflow {
     }
     auto file_header = reinterpret_cast<const FileHeader*>(data);
     auto record_type = static_cast<RecordType>(file_header->record_type);
-    string type_string;
     switch (record_type) {
+    case RecordType::BASES:
+    case RecordType::QUALITIES:
+    case RecordType::COMMENTS:
+      break;
     default:
       return Internal("Invalid record type", file_header->record_type);
-    case RecordType::BASES:
-      type_string = "bases";
-      break;
-    case RecordType::QUALITIES:
-      type_string = "qualities";
-      break;
-    case RecordType::COMMENTS:
-      type_string = "metadata";
-      break;
     }
 
     auto payload_start = data + file_header->segment_start;
@@ -136,10 +124,10 @@ namespace tensorflow {
     auto compression_type = static_cast<CompressionType>(file_header->compression_type);
     switch (compression_type) {
     case CompressionType::GZIP:
-      status = decompressGZIP(payload_start, payload_size, buffer_);
+      status = decompressGZIP(payload_start, payload_size, result);
       break;
     case CompressionType::UNCOMPRESSED:
-      status = copySegment(payload_start, payload_size, buffer_);
+      status = copySegment(payload_start, payload_size, result);
       break;
     default:
       status = errors::InvalidArgument("Compressed type '", file_header->compression_type, "' doesn't match to any valid or supported compression enum type");
@@ -148,11 +136,11 @@ namespace tensorflow {
     TF_RETURN_IF_ERROR(status);
 
     const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
-    if (buffer_.size() < index_size * 2) {
-      return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", buffer_.size());
+    if (result.size() < index_size * 2) {
+      return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", result.size());
     }
 
-    records = reinterpret_cast<const RecordTable*>(buffer_.data());
+    records = reinterpret_cast<const RecordTable*>(result.data());
 
     if (verify) {
       size_t data_size = 0;
@@ -161,7 +149,7 @@ namespace tensorflow {
         data_size += records->relative_index[i];
       }
 
-      const size_t expected_size = buffer_.size() - index_size;
+      const size_t expected_size = result.size() - index_size;
       if (data_size != expected_size) {
         if (data_size < expected_size) {
           return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
@@ -174,10 +162,10 @@ namespace tensorflow {
     }
 
     if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
-      scratch.clear(); index_scratch.clear();
+      conversion_scratch_.clear(); index_scratch_.clear();
 
       uint8_t current_record_length;
-      const char* start_ptr = &buffer_[index_size];
+      const char* start_ptr = &result[index_size];
       const BinaryBaseRecord *bases;
 
       for (uint64_t i = 0; i < index_size; ++i) {
@@ -185,86 +173,22 @@ namespace tensorflow {
         bases = reinterpret_cast<const BinaryBaseRecord*>(start_ptr);
         start_ptr += current_record_length;
 
-        TF_RETURN_IF_ERROR(bases->appendToVector(current_record_length, scratch, index_scratch));
+        TF_RETURN_IF_ERROR(bases->appendToVector(current_record_length, conversion_scratch_, index_scratch_));
       }
 
       // append everything in converted_records to the index
-      buffer_.clear();
-      buffer_.reserve(index_scratch.size() + scratch.size());
-      TF_RETURN_IF_ERROR(copySegment(&index_scratch[0], index_scratch.size(), buffer_));
-      TF_RETURN_IF_ERROR(appendSegment(&scratch[0], scratch.size(), buffer_));
-      current_offset_ = index_scratch.size(); // FIXME I think this is wrong
-    } else {
-      current_offset_ = index_size;
+      result.clear();
+      result.reserve(index_scratch_.size() + conversion_scratch_.size());
+      TF_RETURN_IF_ERROR(copySegment(&index_scratch_[0], index_scratch_.size(), result));
+      TF_RETURN_IF_ERROR(appendSegment(&conversion_scratch_[0], conversion_scratch_.size(), result));
     }
 
-    total_records_ = index_size;
-    file_header_ = *file_header;
-    current_record_ = 0;
     return Status::OK();
   }
 
   void RecordParser::reset() {
-    ResetIterator();
-    buffer_.clear();
-    total_records_ = 0;
-    current_offset_ = 0;
-    valid_record_ = false;
+    conversion_scratch_.clear();
+    index_scratch_.clear();
   }
 
-  void RecordParser::ResetIterator()
-  {
-    current_record_ = 0;
-  }
-
-  size_t RecordParser::RecordCount()
-  {
-    return total_records_;
-  }
-
-  bool RecordParser::HasNextRecord()
-  {
-    return current_record_ < total_records_;
-  }
-
-  Status RecordParser::GetNextRecord(const char** value, size_t *length)
-  {
-    using namespace errors;
-    using namespace format;
-
-    if (!HasNextRecord()) {
-      return ResourceExhausted("No more next records available in RecordParser");
-    }
-
-    auto current_record_length = records->relative_index[current_record_];
-    auto start_ptr = &buffer_[current_offset_];
-    *value = start_ptr;
-    *length = current_record_length;
-
-    current_record_++;
-    current_offset_ += current_record_length;
-
-    return Status::OK();
-  }
-
-  Status RecordParser::GetRecordAtIndex(size_t index, const char **value, size_t *length)
-  {
-    using namespace errors;
-    using namespace format;
-
-    if (index >= total_records_ || index < 0) {
-      return Internal("Record access attempt at index ", index, ", with only ", total_records_, " records");
-    }
-
-    size_t i = 0;
-    for (size_t j = 0; j < index; j++) {
-      i += records->relative_index[j];
-    }
-
-    auto record_ptr = &buffer_[i];
-    auto record_len = records->relative_index[index];
-    *value = record_ptr;
-    *length = record_len;
-    return Status::OK();
-  }
 } // namespace tensorflow {

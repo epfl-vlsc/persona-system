@@ -60,18 +60,14 @@ def FASTQDecoder(value, name=None):
 ops.NoGradient("FASTQDecoder")
 
 def DenseReader(file_handle, pool_handle, name=None, verify=False):
-  return gen_user_ops.dense_reader(pool_handle=pool_handle, file_handle=file_handle, verify=verify, name=name)
+  return gen_user_ops.dense_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name)
 
 _dread_str = "DenseReader"
 ops.NoGradient(_dread_str)
 @ops.RegisterShape(_dread_str)
 def _DenseReaderShape(op):
-  # just force the input to be a vector (will raise an exception if incorrect)
   handle_shape = op.inputs[0].get_shape()
-  expected_handle_shape = tensor_shape.vector(2)
-  if handle_shape != expected_handle_shape:
-      raise Exception("dense reader requires handle shape {exp}, but got {actual}".format(
-          exp=expected_handle_shape, actual=handle_shape))
+  _assert_vec(handle_shape, 2)
   input_shape = op.inputs[1].get_shape()
   _assert_matrix(input_shape)
   return [input_shape]
