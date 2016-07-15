@@ -19,6 +19,8 @@ namespace tensorflow {
     explicit DenseReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta);
     ~DenseReadResource() override;
 
+    DenseReadResource& operator=(DenseReadResource &&other);
+
     Status get_next_record(const char **bases, std::size_t *bases_length,
                            const char **qualities, std::size_t *qualities_length,
                            const char **metadata, std::size_t *metadata_length) override;
@@ -35,5 +37,9 @@ namespace tensorflow {
     const format::RecordTable *base_idx_, *qual_idx_, *meta_idx_;
     const char *base_data_, *qual_data_, *meta_data_;
     std::size_t num_records_, record_idx_ = 0;
+
+    DenseReadResource(const DenseReadResource &other) = delete;
+    DenseReadResource& operator=(const DenseReadResource &other) = delete;
+    DenseReadResource(DenseReadResource &&other) = delete;
   };
 } // namespace tensorflow {

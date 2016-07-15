@@ -33,6 +33,32 @@ namespace tensorflow {
     }
   }
 
+  DenseReadResource&
+  DenseReadResource::operator=(DenseReadResource &&other)
+  {
+    bases_ = other.bases_;
+    quals_ = other.quals_;
+    meta_ = other.meta_;
+    base_idx_ = other.base_idx_;
+    qual_idx_ = other.qual_idx_;
+    meta_idx_ = other.meta_idx_;
+    base_data_ = other.base_data_;
+    qual_data_ = other.qual_data_;
+    meta_data_ = other.meta_data_;
+    num_records_ = other.num_records_;
+    record_idx_ = other.record_idx_;
+
+    other.bases_ = nullptr;
+    other.quals_ = nullptr;
+    other.meta_ = nullptr;
+    other.base_data_ = nullptr;
+    other.qual_data_ = nullptr;
+    other.meta_data_ = nullptr;
+    other.base_idx_ = nullptr;
+    other.qual_idx_ = nullptr;
+    other.meta_idx_ = nullptr;
+  }
+
   DenseReadResource::~DenseReadResource()
   {
     release();

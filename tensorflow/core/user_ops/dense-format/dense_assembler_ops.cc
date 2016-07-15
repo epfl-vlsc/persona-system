@@ -1,3 +1,4 @@
+#include <utility>
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/logging.h"
@@ -60,7 +61,7 @@ Intended to be used for DenseAssembler
       auto num_records = num_records_t->scalar<int32>()();
 
       auto dr = dense_reads->get();
-      *dr = DenseReadResource(num_records, base_data, qual_data, meta_data);
+      *dr = move(DenseReadResource(num_records, base_data, qual_data, meta_data));
       OP_REQUIRES_OK(ctx, dense_reads->allocate_output("dense_read_handle", ctx));
     }
   private:
