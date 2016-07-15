@@ -73,8 +73,8 @@ Reads the dense stuff
             auto g = dense_file->get();
             OP_REQUIRES_OK(ctx, rec_parser->get()->ParseNew(g->data(), g->size(), verify_, conversion_scratch_, index_scratch_));
 
-            output_matrix(i, 0) = rec_parser->container();
-            output_matrix(i, 1) = rec_parser->name();
+            output_matrix(i, 0) = dense_file->container();
+            output_matrix(i, 1) = dense_file->name();
           }
       }
     }
