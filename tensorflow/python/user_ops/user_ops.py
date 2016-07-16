@@ -70,7 +70,9 @@ def _DenseReaderShape(op):
   _assert_vec(handle_shape, 2)
   input_shape = op.inputs[1].get_shape()
   _assert_matrix(input_shape)
-  return [input_shape]
+  vec_shape = tensor_shape.vector(input_shape[0])
+  a = [vec_shape] * 2
+  return [input_shape] + a
 
 def FileMMap(filename, handle, name=None):
   return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, name=name)
@@ -170,18 +172,9 @@ def SnapAlign(genome, options, read, name=None):
 
 ops.NoGradient("SnapAlign")
 
-_pp_str = "ParserPool"
-def ParserPool(size, size_hint=4194304, name=None):
-    return gen_user_ops.parser_pool(size=size, size_hint=size_hint, name=name)
-
-ops.NoGradient(_pp_str)
-@ops.RegisterShape(_pp_str)
-def _ParserPoolShape(op):
-    return [tensor_shape.vector(2)]
-
 _drp_str = "DenseReadPool"
-def DenseReadPool(size, size_hint=4194304, name=None):
-    return gen_user_ops.dense_read_pool(size=size, size_hint=size_hint, name=name)
+def DenseReadPool(size=0, bound=False, name=None):
+    return gen_user_ops.dense_read_pool(size=size, bound=bound, name=name)
 
 ops.NoGradient(_drp_str)
 @ops.RegisterShape(_drp_str)
@@ -191,9 +184,8 @@ def _DenseReadPoolShape(op):
 _mmp_str = "MMapPool"
 def MMapPool(size=0, bound=False, name=None):
     return gen_user_ops.m_map_pool(size=size, bound=bound, name=name)
-ops.NoGradient(_mmp_str)
 
-# seems like there should be a better way to do this
+ops.NoGradient(_mmp_str)
 @ops.RegisterShape(_mmp_str)
 def _MMapPoolShape(op):
     return [tensor_shape.vector(2)]
@@ -212,45 +204,45 @@ allowed_type_values = set(["base", "qual", "meta", "results"])
 def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, name=None):
     if record_type not in allowed_type_values:
         raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
-            given=record_type, expected=allowed_type_values))
+          given=record_type, expected=allowed_type_values))
     return gen_user_ops.column_writer(
-        column_handle=column_handle,
-        file_path=file_path,
-        record_type=record_type,
-        first_ordinal=first_ordinal,
-        num_records=num_records,
-        compress=compress,
-        record_id=record_id,
-        name=name
+      column_handle=column_handle,
+      file_path=file_path,
+      record_type=record_type,
+      first_ordinal=first_ordinal,
+      num_records=num_records,
+      compress=compress,
+      record_id=record_id,
+      name=name
     )
 
 ops.NoGradient(_cw_str)
 @ops.RegisterShape(_cw_str)
 def _ColumnWriterShape(op):
-    column_handle_shape = op.inputs[0].get_shape()
-    _assert_vec(column_handle_shape, 2)
-    for i in xrange(1,4):
-        _assert_scalar(op.inputs[i].get_shape())
-    return []
+  column_handle_shape = op.inputs[0].get_shape()
+  _assert_vec(column_handle_shape, 2)
+  for i in xrange(1,4):
+    _assert_scalar(op.inputs[i].get_shape())
+  return []
 
 _da_str = "DenseAssembler"
 def DenseAssembler(dense_read_pool, base_handle, qual_handle, meta_handle, num_records, name=None):
     return gen_user_ops.dense_assembler(
-        dense_read_pool=dense_read_pool,
-        base_handle=base_handle,
-        qual_handle=qual_handle,
-        meta_handle=meta_handle,
-        num_records=num_records,
-        name=name
+      dense_read_pool=dense_read_pool,
+      base_handle=base_handle,
+      qual_handle=qual_handle,
+      meta_handle=meta_handle,
+      num_records=num_records,
+      name=name
     )
 
 ops.NoGradient(_da_str)
 @ops.RegisterShape(_da_str)
 def _DenseAssembleShape(op):
     for i in range(4):
-        op_shape = ops.inputs[i].get_shape()
-        _assert_vec(op_shape, 2)
-    _assert_scalar(ops.inputs[4].get_shape())
+      op_shape = ops.inputs[i].get_shape()
+      _assert_vec(op_shape, 2)
+      _assert_scalar(ops.inputs[4].get_shape())
     return [tensor_shape.vector(2)]
 
 _dap_str = "DenseAssemblerPool"

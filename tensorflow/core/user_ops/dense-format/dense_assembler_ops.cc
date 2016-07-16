@@ -16,7 +16,6 @@ namespace tensorflow {
   }
 
   REGISTER_OP(op_name.c_str())
-  .Input("dense_read_pool: Ref(string)")
   .Input("base_handle: string")
   .Input("qual_handle: string")
   .Input("meta_handle: string")
