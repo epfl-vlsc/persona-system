@@ -14,23 +14,13 @@ namespace tensorflow {
     base_idx_ = reinterpret_cast<const RecordTable*>(b);
     base_data_ = b + idx_offset;
 
-    if (quals) {
-      auto q = quals->get()->data();
-      qual_idx_ = reinterpret_cast<const RecordTable*>(q);
-      qual_data_ = q + idx_offset;
-    } else {
-      qual_idx_ = nullptr;
-      qual_data_ = nullptr;
-    }
+    auto q = quals->get()->data();
+    qual_idx_ = reinterpret_cast<const RecordTable*>(q);
+    qual_data_ = q + idx_offset;
 
-    if (meta) {
-      auto m = meta->get()->data();
-      meta_idx_ = reinterpret_cast<const RecordTable*>(m);
-      meta_data_ = m + idx_offset;
-    } else {
-      meta_idx_ = nullptr;
-      meta_data_ = nullptr;
-    }
+    auto m = meta->get()->data();
+    meta_idx_ = reinterpret_cast<const RecordTable*>(m);
+    meta_data_ = m + idx_offset;
   }
 
   DenseReadResource&
@@ -39,21 +29,26 @@ namespace tensorflow {
     bases_ = other.bases_;
     quals_ = other.quals_;
     meta_ = other.meta_;
+
     base_idx_ = other.base_idx_;
     qual_idx_ = other.qual_idx_;
     meta_idx_ = other.meta_idx_;
+
     base_data_ = other.base_data_;
     qual_data_ = other.qual_data_;
     meta_data_ = other.meta_data_;
+
     num_records_ = other.num_records_;
     record_idx_ = other.record_idx_;
 
     other.bases_ = nullptr;
     other.quals_ = nullptr;
     other.meta_ = nullptr;
+
     other.base_data_ = nullptr;
     other.qual_data_ = nullptr;
     other.meta_data_ = nullptr;
+
     other.base_idx_ = nullptr;
     other.qual_idx_ = nullptr;
     other.meta_idx_ = nullptr;

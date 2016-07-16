@@ -36,10 +36,10 @@ namespace tensorflow {
     void release() override;
 
   private:
-    DataContainer *bases_, *quals_, *meta_;
-    const format::RecordTable *base_idx_, *qual_idx_, *meta_idx_;
-    const char *base_data_, *qual_data_, *meta_data_;
-    std::size_t num_records_, record_idx_ = 0;
+    DataContainer *bases_ = nullptr, *quals_ = nullptr, *meta_ = nullptr;
+    const format::RecordTable *base_idx_ = nullptr, *qual_idx_ = nullptr, *meta_idx_ = nullptr;
+    const char *base_data_ = nullptr, *qual_data_ = nullptr, *meta_data_ = nullptr;
+    std::size_t num_records_ = 0, record_idx_ = 0;
 
     DenseReadResource(const DenseReadResource &other) = delete;
     DenseReadResource& operator=(const DenseReadResource &other) = delete;

@@ -227,23 +227,25 @@ def _ColumnWriterShape(op):
 
 _da_str = "DenseAssembler"
 def DenseAssembler(dense_read_pool, base_handle, qual_handle, meta_handle, num_records, name=None):
-    return gen_user_ops.dense_assembler(
-      dense_read_pool=dense_read_pool,
-      base_handle=base_handle,
-      qual_handle=qual_handle,
-      meta_handle=meta_handle,
-      num_records=num_records,
-      name=name
-    )
+  return gen_user_ops.dense_assembler(
+    dense_read_pool=dense_read_pool,
+    base_handle=base_handle,
+    qual_handle=qual_handle,
+    meta_handle=meta_handle,
+    num_records=num_records,
+    name=name
+  )
 
 ops.NoGradient(_da_str)
 @ops.RegisterShape(_da_str)
-def _DenseAssembleShape(op):
-    for i in range(4):
-      op_shape = ops.inputs[i].get_shape()
-      _assert_vec(op_shape, 2)
-      _assert_scalar(ops.inputs[4].get_shape())
-    return [tensor_shape.vector(2)]
+def _DenseAssemblerShape(op):
+  # getting the input op
+  _assert_vec(op.inputs[0].get_shape(), 2)
+  for i in range(1,4):
+    op_shape = op.inputs[i].get_shape()
+    _assert_vec(op_shape, 2)
+  _assert_scalar(op.inputs[4].get_shape())
+  return [tensor_shape.vector(2)]
 
 _dap_str = "DenseAssemblerPool"
 def DenseAssemblerPool(size=0, bound=False, name=None):
