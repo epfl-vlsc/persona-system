@@ -14,8 +14,8 @@ namespace tensorflow {
       // just use normal insert and not the optimized memcpy
       output.insert(output.end(), segment, segment+segment_size);
     } else {
-      memcpy(&output[0], segment, segment_size);
       output.resize(segment_size);
+      memcpy(&output[0], segment, segment_size);
     }
     return Status::OK();
   }
@@ -29,8 +29,8 @@ namespace tensorflow {
     if (output.capacity() < ideal_length) {
       output.insert(output.end(), segment, segment+segment_size);
     } else {
-      memcpy(&output[output.size()], segment, segment_size);
       output.resize(ideal_length);
+      memcpy(&output[output.size()], segment, segment_size);
     }
     return Status::OK();
   }
