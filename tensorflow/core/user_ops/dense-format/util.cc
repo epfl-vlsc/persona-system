@@ -29,8 +29,9 @@ namespace tensorflow {
     if (output.capacity() < ideal_length) {
       output.insert(output.end(), segment, segment+segment_size);
     } else {
+      auto old_size = output.size();
       output.resize(ideal_length);
-      memcpy(&output[output.size()], segment, segment_size);
+      memcpy(&output[old_size], segment, segment_size);
     }
     return Status::OK();
   }

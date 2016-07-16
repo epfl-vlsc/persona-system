@@ -58,6 +58,7 @@ namespace tensorflow {
         if (run) {
           ret[i] = c;
           usable_characters++;
+          key >>= BinaryBases::base_width;
         }
       }
 
@@ -191,6 +192,10 @@ namespace tensorflow {
   void RecordParser::reset() {
     conversion_scratch_.clear();
     index_scratch_.clear();
+  }
+
+  RecordParser::RecordParser() {
+    init_table();
   }
 
 } // namespace tensorflow {
