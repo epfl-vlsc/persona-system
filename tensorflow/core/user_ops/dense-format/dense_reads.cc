@@ -96,25 +96,15 @@ namespace tensorflow {
       *bases = base_data_;
       base_data_  += base_len;
 
-      if (quals_) {
-        auto qual_len = qual_idx_->relative_index[record_idx_];
-        *qualities_length = qual_len;
-        *qualities = qual_data_;
-        qual_data_ += qual_len;
-      } else {
-        *qualities = nullptr;
-        *qualities_length = 0;
-      }
+      auto qual_len = qual_idx_->relative_index[record_idx_];
+      *qualities_length = qual_len;
+      *qualities = qual_data_;
+      qual_data_ += qual_len;
 
-      if (meta_) {
-        auto meta_len = meta_idx_->relative_index[record_idx_];
-        *metadata_length = meta_len;
-        *metadata = meta_data_;
-        meta_data_ += meta_len;
-      } else {
-        *metadata = nullptr;
-        *metadata_length = 0;
-      }
+      auto meta_len = meta_idx_->relative_index[record_idx_];
+      *metadata_length = meta_len;
+      *metadata = meta_data_;
+      meta_data_ += meta_len;
 
       record_idx_++;
     } else {

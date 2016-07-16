@@ -21,6 +21,9 @@ namespace tensorflow {
 
     DenseReadResource& operator=(DenseReadResource &&other);
 
+    // WARNING: this method assumes that all fields are populated (qual, base, meta)
+    // If this isn't the case but you call this method, segfault / undefinied behavior is likely
+    // this avoids unnecessary conditionals
     Status get_next_record(const char **bases, std::size_t *bases_length,
                            const char **qualities, std::size_t *qualities_length,
                            const char **metadata, std::size_t *metadata_length) override;
