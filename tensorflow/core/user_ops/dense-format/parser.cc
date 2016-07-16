@@ -96,7 +96,7 @@ namespace tensorflow {
     return &a;
   }
 
-  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, vector<char> &result)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, vector<char> &result, uint64_t *first_ordinal, uint32_t *num_records)
   {
     using namespace errors;
     using namespace format;
@@ -183,6 +183,8 @@ namespace tensorflow {
       TF_RETURN_IF_ERROR(appendSegment(&conversion_scratch_[0], conversion_scratch_.size(), result));
     }
 
+    *first_ordinal = file_header->first_ordinal;
+    *num_records = index_size;
     return Status::OK();
   }
 

@@ -21,6 +21,8 @@ namespace tensorflow {
   .Input("buffer_pool: Ref(string)")
   .Input("file_handle: string")
   .Output("processed_buffers: string")
+  .Output("num_records: int32")
+  .Output("first_ordinal: int64")
   .SetIsStateful()
   .Doc(R"doc(
 Read in the dense format from an upstream source (file reader or network reader).
@@ -60,14 +62,22 @@ and file_handle should come from a file_mmap_op
       OP_REQUIRES_OK(ctx, cinfo.Init(ctx->resource_manager(), def()));
       auto rmgr = cinfo.resource_manager();
 
-      Tensor *output;
+      Tensor *output, *num_records_t, *first_ordinals_t;
+      auto fileset_shape = fileset->shape();
+      TensorShape vec_shape({fileset_shape.dim_size(0)});
       OP_REQUIRES_OK(ctx, ctx->allocate_output("processed_buffers", fileset->shape(), &output));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records", vec_shape, &num_records_t));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("first_ordinal", vec_shape, &first_ordinals_t));
       auto output_matrix = output->matrix<string>();
+      auto num_records = num_records_t->vec<int32>();
+      auto first_ordinals = first_ordinals_t->vec<int64>();
 
       // ALl output is set up at this point
 
       ResourceContainer<Data> *dense_input;
       ResourceContainer<Buffer> *output_buffer_rc;
+      uint64_t first_ord;
+      uint32_t num_recs;
 
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
@@ -82,10 +92,13 @@ and file_handle should come from a file_mmap_op
 
         // TODO pass something from from output_file, for parser to fill up
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
-                                                 verify_, output_buffer));
+                                                 verify_, output_buffer, &first_ord, &num_recs));
 
         output_matrix(i, 0) = output_buffer_rc->container();
         output_matrix(i, 1) = output_buffer_rc->name();
+
+        num_records(i) = num_recs;
+        first_ordinals(i) = first_ord;
       }
     }
 
@@ -93,7 +106,6 @@ and file_handle should come from a file_mmap_op
     size_t round_ = 0;
     bool verify_ = false;
     RecordParser rec_parser_;
-    // TODO to use for conversion
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
   };
 
