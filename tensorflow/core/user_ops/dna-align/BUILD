@@ -67,6 +67,9 @@ cc_library(
             "//tensorflow/core/user_ops/dense-format:dense_format",
             ":snap_lib"],
     alwayslink=1,
+    linkopts = [
+             "-lboost_system", "-lboost_timer"
+    ]
 )
 
 cc_library(
