@@ -77,7 +77,7 @@ protected:
 
     auto rp = ref_pool.get();
     while (idx_ < size_) {
-      TF_RETURN_IF_ERROR(AddObjectToPool(ref_pool.get()));
+      TF_RETURN_IF_ERROR(AddObjectToPool(rp));
     }
 
     // put ref_pool into the shared resource
@@ -103,7 +103,6 @@ protected:
     ref_pool->AddResource(std::move(a));
     return Status::OK();
   }
-
 
   virtual std::unique_ptr<T> CreateObject() = 0;
 

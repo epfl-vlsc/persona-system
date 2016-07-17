@@ -88,7 +88,8 @@ and file_handle should come from a file_mmap_op
         OP_REQUIRES_OK(ctx, buffer_pool_->GetResource(&output_buffer_rc));
 
         auto input_data = dense_input->get();
-        auto output_buffer =  output_buffer_rc->get()->get();
+        auto output_ptr = output_buffer_rc->get();
+        auto &output_buffer = output_ptr->get();
 
         // TODO pass something from from output_file, for parser to fill up
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
