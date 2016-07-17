@@ -41,7 +41,7 @@ Consumes the input and produces nothing
                                 &meta, &meta_len);
       } while (s.ok());
 
-      if (IsResourceExhausted(s)) {
+      if (!IsResourceExhausted(s)) {
         OP_REQUIRES_OK(ctx, s);
       }
     }
