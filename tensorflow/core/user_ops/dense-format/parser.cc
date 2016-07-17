@@ -14,6 +14,7 @@ namespace tensorflow {
     volatile bool table_needs_init_ = true;
     const size_t base_width = 3;
     const size_t num_bases = 512; // 2*(enum_bit_width{3} * base_width{3})
+    const auto mask = ~(~0 << format::BinaryBases::base_width);
     array<BaseMapping<base_width>, num_bases> base_table_;
     mutex base_table_mu_;
 
@@ -27,7 +28,6 @@ namespace tensorflow {
       bool run = true, valid = true;
       char c;
       size_t usable_characters = 0;
-      auto mask = ~(~0 << BinaryBases::base_width);
       for (size_t i = 0; run && i < ret.size(); ++i) {
         masked = static_cast<BaseAlphabet>(key & mask);
         switch (masked) {

@@ -65,8 +65,11 @@ Status BinaryBases::appendToVector(vector<char> &output, size_t *num_bases) cons
     appendSegment(val.data(), res->effective_characters(), output);
     length += num_chars;
     // there must be a terminating character in here
-    if (num_chars < val.size()) {
+    auto sz = val.size();
+    if (num_chars < sz) {
       break;
+    } else {
+      bases_copy >>= sz * base_width;
     }
   }
 
