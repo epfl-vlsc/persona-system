@@ -102,6 +102,7 @@ namespace tensorflow {
       meta_data_ += meta_len;
 
       record_idx_++;
+      return Status::OK();
     } else {
       return ResourceExhausted("dense record container exhausted");
     }
