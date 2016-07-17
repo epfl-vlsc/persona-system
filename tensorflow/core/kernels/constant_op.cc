@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -273,5 +273,10 @@ class PlaceholderOp : public OpKernel {
 };
 
 REGISTER_KERNEL_BUILDER(Name("Placeholder").Device(DEVICE_CPU), PlaceholderOp);
+// The following GPU kernel registration is used to address the situation that
+// a placeholder is added in a GPU device context and soft placement is false.
+// Since a placeholder should never be executed, adding these GPU kernels has
+// no effect on graph execution.
+REGISTER_KERNEL_BUILDER(Name("Placeholder").Device(DEVICE_GPU), PlaceholderOp);
 
 }  // namespace tensorflow

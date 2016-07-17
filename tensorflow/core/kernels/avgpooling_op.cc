@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ limitations under the License.
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/numeric_op.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_slice.h"
@@ -274,48 +275,60 @@ class AvgPoolingGradOp : public OpKernel {
     const T* out_backprop_ptr = out_backprop.flat<T>().data();
     T* input_backprop_ptr = output->flat<T>().data();
 
-    for (int64 b = 0; b < out_backprop_batch; ++b) {
-      for (int64 r = 0; r < out_backprop_rows; ++r) {
-        // Calculates row broadcast size.  For SAME padding, current
-        // index could be in the padding area, and r*row_stride +
-        // window_rows could be beyond the input tensor's boundary. In
-        // such cases, change the starting index and reduce the
-        // broadcast size.
-        int rindex, rsize;
-        OP_REQUIRES_OK(context,
-                       GetBroadcastSize(r, in_rows, window_rows, row_stride,
-                                        pad_rows, &rindex, &rsize));
-        for (int64 c = 0; c < out_backprop_cols; ++c) {
-          // Calculates col broadcast size.  For SAME padding, current
-          // index could be in the padding area, and c*col_stride +
-          // window_cols could be beyond the input tensor's boundary. In
+    auto shard = [context, out_backprop_ptr, input_backprop_ptr,
+                  out_backprop_rows, out_backprop_cols, out_backprop_depth,
+                  in_rows, in_cols, window_rows, window_cols, row_stride,
+                  col_stride, pad_rows, pad_cols](int64 start, int64 limit) {
+      for (int64 b = start; b < limit; ++b) {
+        for (int64 r = 0; r < out_backprop_rows; ++r) {
+          // Calculates row broadcast size.  For SAME padding, current
+          // index could be in the padding area, and r*row_stride +
+          // window_rows could be beyond the input tensor's boundary. In
           // such cases, change the starting index and reduce the
           // broadcast size.
-          int cindex, csize;
+          int rindex, rsize;
           OP_REQUIRES_OK(context,
-                         GetBroadcastSize(c, in_cols, window_cols, col_stride,
-                                          pad_cols, &cindex, &csize));
+                         GetBroadcastSize(r, in_rows, window_rows, row_stride,
+                                          pad_rows, &rindex, &rsize));
+          for (int64 c = 0; c < out_backprop_cols; ++c) {
+            // Calculates col broadcast size.  For SAME padding, current
+            // index could be in the padding area, and c*col_stride +
+            // window_cols could be beyond the input tensor's boundary. In
+            // such cases, change the starting index and reduce the
+            // broadcast size.
+            int cindex, csize;
+            OP_REQUIRES_OK(context,
+                           GetBroadcastSize(c, in_cols, window_cols, col_stride,
+                                            pad_cols, &cindex, &csize));
 
-          T divide_coeff = 1.0 / (rsize * csize);
-          int64 output_index =
-              (b * out_backprop_rows + r) * out_backprop_cols + c;
-          for (int64 r_dst = rindex; r_dst < rindex + rsize; ++r_dst) {
-            for (int64 c_dst = cindex; c_dst < cindex + csize; ++c_dst) {
-              int64 input_index = (b * in_rows + r_dst) * in_cols + c_dst;
-              const T* output_offset =
-                  out_backprop_ptr + output_index * out_backprop_depth;
-              T* input_offset =
-                  input_backprop_ptr + input_index * out_backprop_depth;
-              for (int64 d = 0; d < out_backprop_depth; ++d) {
-                *input_offset += *output_offset * divide_coeff;
-                ++output_offset;
-                ++input_offset;
+            T divide_coeff = 1.0 / (rsize * csize);
+            int64 output_index =
+                (b * out_backprop_rows + r) * out_backprop_cols + c;
+            for (int64 r_dst = rindex; r_dst < rindex + rsize; ++r_dst) {
+              for (int64 c_dst = cindex; c_dst < cindex + csize; ++c_dst) {
+                int64 input_index = (b * in_rows + r_dst) * in_cols + c_dst;
+                const T* output_offset =
+                    out_backprop_ptr + output_index * out_backprop_depth;
+                T* input_offset =
+                    input_backprop_ptr + input_index * out_backprop_depth;
+                for (int64 d = 0; d < out_backprop_depth; ++d) {
+                  *input_offset += *output_offset * divide_coeff;
+                  ++output_offset;
+                  ++input_offset;
+                }
               }
             }
           }
         }
       }
-    }
+    };
+
+    const DeviceBase::CpuWorkerThreads& worker_threads =
+        *(context->device()->tensorflow_cpu_worker_threads());
+    const int64 shard_cost =
+        window_rows * window_cols * depth_window * in_rows * in_rows * in_cols;
+    Shard(worker_threads.num_threads, worker_threads.workers,
+          out_backprop_batch, shard_cost, shard);
   }
 
  private:
@@ -325,16 +338,15 @@ class AvgPoolingGradOp : public OpKernel {
   TensorFormat data_format_;
 };
 
-REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")
-                            .Device(DEVICE_CPU)
-                            .TypeConstraint<float>("T")
-                            .HostMemory("orig_input_shape"),
-                        AvgPoolingGradOp<CPUDevice, float>);
-REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")
-                            .Device(DEVICE_CPU)
-                            .TypeConstraint<double>("T")
-                            .HostMemory("orig_input_shape"),
-                        AvgPoolingGradOp<CPUDevice, double>);
+#define REGISTER_CPU_KERNEL(T)                                 \
+  REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")                  \
+                              .Device(DEVICE_CPU)              \
+                              .TypeConstraint<T>("T")          \
+                              .HostMemory("orig_input_shape"), \
+                          AvgPoolingGradOp<CPUDevice, T>);
+
+TF_CALL_float(REGISTER_CPU_KERNEL);
+TF_CALL_double(REGISTER_CPU_KERNEL);
 
 #if GOOGLE_CUDA
 

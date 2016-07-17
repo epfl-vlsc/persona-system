@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,6 +31,18 @@ class IdentityReaderTest(tf.test.TestCase):
     k, v = sess.run([key, value])
     self.assertAllEqual(expected, k)
     self.assertAllEqual(expected, v)
+
+  def testReadUpTo(self):
+    # Note that this just tests the default ReaderReadUpTo
+    # since it is not overriden for IdentityReader.
+    with self.test_session() as sess:
+      reader = tf.IdentityReader("test_reader")
+      queue = tf.FIFOQueue(99, [tf.string], shapes=())
+      keys, values = reader.read_up_to(queue, 3)
+      queue.enqueue_many([["A", "B", "C"]]).run()
+      k, v = sess.run([keys, values])
+      self.assertAllEqual([b"A", b"B", b"C"], k)
+      self.assertAllEqual([b"A", b"B", b"C"], v)
 
   def testOneEpoch(self):
     with self.test_session() as sess:

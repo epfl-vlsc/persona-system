@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2016 Google Inc. All Rights Reserved.
+# Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -178,6 +178,9 @@ if [[ "${DO_PIP_BUILD}" == "1" ]]; then
   export TF_BUILD_PYTHON_VERSION="PYTHON2"
   export TF_BUILD_IS_OPT="OPT"
   export TF_BUILD_IS_PIP="PIP"
+
+  export TF_BUILD_APPEND_CI_DOCKER_EXTRA_PARAMS=\
+"-e TF_CUDA_COMPUTE_CAPABILITIES=3.0,3.5,5.2"
 
   pushd "${SCRIPT_DIR}/../../../"
   rm -rf pip_test/whl &&

@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -376,14 +376,13 @@ class DepthwiseConv2dNativeOp : public BinaryOp<T> {
   TF_DISALLOW_COPY_AND_ASSIGN(DepthwiseConv2dNativeOp);
 };
 
-REGISTER_KERNEL_BUILDER(
-    Name("DepthwiseConv2dNative").Device(DEVICE_CPU).TypeConstraint<float>("T"),
-    DepthwiseConv2dNativeOp<CPUDevice, float>);
+#define REGISTER_CPU_KERNEL(T)                                                 \
+  REGISTER_KERNEL_BUILDER(                                                     \
+      Name("DepthwiseConv2dNative").Device(DEVICE_CPU).TypeConstraint<T>("T"), \
+      DepthwiseConv2dNativeOp<CPUDevice, T>);
 
-REGISTER_KERNEL_BUILDER(Name("DepthwiseConv2dNative")
-                            .Device(DEVICE_CPU)
-                            .TypeConstraint<double>("T"),
-                        DepthwiseConv2dNativeOp<CPUDevice, double>);
+TF_CALL_float(REGISTER_CPU_KERNEL);
+TF_CALL_double(REGISTER_CPU_KERNEL);
 
 #if GOOGLE_CUDA
 REGISTER_KERNEL_BUILDER(

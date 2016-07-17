@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,26 +32,30 @@ Typical usage example:
 
   ```python
   # Define features and transformations
-  country = sparse_column_with_keys("country", ["US", "BRA", ...])
-  country_embedding = embedding_column(query_word, dimension=3, combiner="sum")
-  query_word = sparse_column_with_hash_bucket(
-    "query_word", hash_bucket_size=int(1e6))
-  query_embedding = embedding_column(query_word, dimension=16, combiner="sum")
-  query_country = crossed_column([query_word, country],
-                                 hash_bucket_size=int(1e6))
+  country = sparse_column_with_keys(column_name="native_country",
+                                    keys=["US", "BRA", ...])
+  country_emb = embedding_column(sparse_id_column=country, dimension=3,
+                                 combiner="sum")
+  occupation = sparse_column_with_hash_bucket(column_name="occupation",
+                                              hash_bucket_size=1000)
+  occupation_emb = embedding_column(sparse_id_column=occupation, dimension=16,
+                                   combiner="sum")
+  occupation_x_country = crossed_column(columns=[occupation, country],
+                                        hash_bucket_size=10000)
   age = real_valued_column("age")
-  age_bucket = bucketized_column(age,
-                                 boundaries=[18+i*5 for i in range(10)])
+  age_buckets = bucketized_column(
+      source_column=age,
+      boundaries=[18, 25, 30, 35, 40, 45, 50, 55, 60, 65])
 
-  my_features = [query_embedding, age_bucket, country_embedding]
+  my_features = [occupation_emb, age_buckets, country_emb]
   # Building model via layers
-  columns_to_tensor = tf.contrib.layers.parse_feature_columns_from_examples(
+  columns_to_tensor = parse_feature_columns_from_examples(
       serialized=my_data,
       feature_columns=my_features)
-  first_layer = tf.contrib.layer.input_from_feature_column(
-      columns_to_tensor,
+  first_layer = input_from_feature_columns(
+      columns_to_tensors=columns_to_tensor,
       feature_columns=my_features)
-  second_layer = tf.contrib.layer.fully_connected(first_layer, ...)
+  second_layer = fully_connected(first_layer, ...)
 
   # Building model via tf.learn.estimators
   estimator = DNNLinearCombinedClassifier(
@@ -344,7 +348,7 @@ class _SparseColumnHashed(_SparseColumn):
 
   def insert_transformed_feature(self, columns_to_tensors):
     """Handles sparse column to id conversion."""
-    sparse_id_values = string_ops.string_to_hash_bucket(
+    sparse_id_values = string_ops.string_to_hash_bucket_fast(
         columns_to_tensors[self.name].values,
         self.bucket_size,
         name=self.name + "_lookup")
@@ -543,7 +547,6 @@ class _RealValuedColumn(_FeatureColumn, collections.namedtuple(
   def __new__(cls, column_name, dimension, default_value, dtype):
     if default_value is not None:
       default_value = tuple(default_value)
-
     return super(_RealValuedColumn, cls).__new__(cls, column_name, dimension,
                                                  default_value, dtype)
 
@@ -565,8 +568,13 @@ class _RealValuedColumn(_FeatureColumn, collections.namedtuple(
     return "{}".format(self)
 
   def insert_transformed_feature(self, columns_to_tensors):
-    # No transformation is needed for _RealValuedColumn.
-    columns_to_tensors[self] = columns_to_tensors[self.name]
+    # No transformation is needed for _RealValuedColumn except reshaping.
+    input_tensor = columns_to_tensors[self.name]
+    batch_size = input_tensor.get_shape().as_list()[0]
+    batch_size = int(batch_size) if batch_size else -1
+    flattened_shape = [batch_size, self.dimension]
+    columns_to_tensors[self] = array_ops.reshape(
+        math_ops.to_float(input_tensor), flattened_shape)
 
   # pylint: disable=unused-argument
   def to_dnn_input_layer(self,
@@ -738,8 +746,10 @@ class _BucketizedColumn(_FeatureColumn, collections.namedtuple(
 
   def insert_transformed_feature(self, columns_to_tensors):
     # Bucketize the source column.
+    if self.source_column not in columns_to_tensors:
+      self.source_column.insert_transformed_feature(columns_to_tensors)
     columns_to_tensors[self] = bucketization_op.bucketize(
-        columns_to_tensors[self.source_column.name],
+        columns_to_tensors[self.source_column],
         boundaries=list(self.boundaries))
 
   # pylint: disable=unused-argument
@@ -932,13 +942,14 @@ class _CrossedColumn(_FeatureColumn, collections.namedtuple(
         trainable, self.name + "_weights")
 
 
-def crossed_column(columns, hash_bucket_size):
+def crossed_column(columns, hash_bucket_size, combiner="sum"):
   """Creates a _CrossedColumn.
 
   Args:
     columns: An iterable of _FeatureColumn. Items can be an instance of
       _SparseColumn, _CrossedColumn, or _BucketizedColumn.
     hash_bucket_size: An int that is > 1. The number of buckets.
+    combiner: A combiner string, supports sum, mean, sqrtn.
 
   Returns:
     A _CrossedColumn.
@@ -950,7 +961,7 @@ def crossed_column(columns, hash_bucket_size):
     ValueError: if hash_bucket_size is not > 1 or
       len(columns) is not > 1.
   """
-  return _CrossedColumn(columns, hash_bucket_size)
+  return _CrossedColumn(columns, hash_bucket_size, combiner=combiner)
 
 
 def _get_feature_config(feature_column):
@@ -968,7 +979,7 @@ def _get_feature_config(feature_column):
                   "Given column is {}".format(feature_column))
 
 
-def create_dict_for_parse_example(feature_columns):
+def create_feature_spec_for_parsing(feature_columns):
   """Helper that prepares features config from input feature_columns.
 
   The returned feature config can be used as arg 'features' in tf.parse_example.
@@ -986,10 +997,10 @@ def create_dict_for_parse_example(feature_columns):
   feature_columns = set([age, click_bucket, country_x_click])
   batch_examples = tf.parse_example(
       serialized_examples,
-      create_dict_for_parse_example(feature_columns))
+      create_feature_spec_for_parsing(feature_columns))
   ```
 
-  For the above example, create_dict_for_parse_example would return the dict:
+  For the above example, create_feature_spec_for_parsing would return the dict:
   {"age": parsing_ops.FixedLenFeature([1], dtype=tf.float32),
    "historical_click_ratio": parsing_ops.FixedLenFeature([1], dtype=tf.float32),
    "country": parsing_ops.VarLenFeature(tf.string)}
@@ -1017,7 +1028,7 @@ def make_place_holder_tensors_for_base_features(feature_columns):
     placeholder Tensors (dense columns).
   """
   # Get dict mapping features to FixedLenFeature or VarLenFeature values.
-  dict_for_parse_example = create_dict_for_parse_example(feature_columns)
+  dict_for_parse_example = create_feature_spec_for_parsing(feature_columns)
   placeholders = {}
   for column_name, column_type in dict_for_parse_example.items():
     if isinstance(column_type, parsing_ops.VarLenFeature):

@@ -42,7 +42,7 @@ at `tensorflow/contrib/makefile/gen/bin/benchmark`. To run the executable, use:
 tensorflow/contrib/makefile/gen/bin/benchmark --graph=tensorflow_inception_graph.pb
 ```
 
-You should download the example graph from [http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz](http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz).
+You should download the example graph from [https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip](https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip).
 
 ## Supported Systems
 
@@ -129,6 +129,34 @@ to register ops and kernels.
 
 The example Xcode project in tensorflow/contrib/ios_example shows how to use the
 static library in a simple app.
+
+## Raspberry Pi
+
+Building on the Raspberry Pi is similar to a normal Linux system, though we
+recommend starting by compiling and installing protobuf:
+
+```bash
+cd tensorflow/contrib/makefile/downloads/protobuf/
+./autogen.sh 
+./configure
+make
+sudo make install
+cd ../../../../..
+```
+
+Once that's done, you can use make to build the library and example:
+
+```bash
+make -f tensorflow/contrib/makefile/Makefile HOST_OS=PI TARGET=PI OPTFLAGS="-Os"
+```
+
+If you're only interested in building for Raspberry Pi's 2 and 3, you can supply
+some extra optimization flags to give you code that will run faster:
+
+```bash
+make -f tensorflow/contrib/makefile/Makefile HOST_OS=PI TARGET=PI \
+OPTFLAGS="-Os -mfpu=neon-vfpv4 -funsafe-math-optimizations -ftree-vectorize"
+```
 
 ## Dependencies
 

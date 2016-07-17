@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@ CudaContext* ExtractCudaContext(CUDAExecutor *cuda_exec);
 CUDAExecutor *ExtractCudaExecutor(StreamExecutor *stream_exec);
 
 ScopedActivateExecutorContext::ScopedActivateExecutorContext(
-    CUDAExecutor *cuda_exec)
-    : cuda_exec_(cuda_exec),
+    CUDAExecutor *cuda_exec):
       driver_scoped_activate_context_(
           new ScopedActivateContext{ExtractCudaContext(cuda_exec)}) { }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2016 Google Inc. All Rights Reserved.
+# Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -85,6 +85,7 @@ PY_TEST_BLACKLIST="${PY_TEST_BLACKLIST}:"\
 "tensorflow/contrib/quantization/python/dequantize_op_test.py:"\
 "tensorflow/contrib/quantization/python/quantized_conv_ops_test.py:"\
 "tensorflow/contrib/quantization/tools/quantize_graph_test.py:"\
+"tensorflow/contrib/session_bundle/exporter_test.py:"\
 "tensorflow/python/platform/default/_resource_loader_test.py:"\
 "tensorflow/python/platform/default/flags_test.py:"\
 "tensorflow/python/platform/default/logging_test.py:"\

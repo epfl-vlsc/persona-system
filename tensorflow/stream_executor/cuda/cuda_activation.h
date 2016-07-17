@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,8 +51,6 @@ class ScopedActivateExecutorContext {
   ~ScopedActivateExecutorContext();
 
  private:
-  // The CUDA executor implementation whose context is activated.
-  CUDAExecutor* cuda_exec_;
 
   // The cuda.h-using datatype that we wrap.
   ScopedActivateContext* driver_scoped_activate_context_;

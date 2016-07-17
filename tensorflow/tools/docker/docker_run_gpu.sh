@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,12 @@
 
 
 set -e
+
+echo "===== DEPRECATED ===== DEPRECATED ===== DEPRECATED ===== DEPRECATED ====="
+echo "DEPRECATED: Please use https://github.com/NVIDIA/nvidia-docker instead!"
+echo "            It does pretty much the same thing but better and it is"
+echo "            supported by NVidia."
+echo "========================================================================="
 
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
 

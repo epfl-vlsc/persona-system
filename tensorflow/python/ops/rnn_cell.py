@@ -1,4 +1,4 @@
-# Copyright 2015 Google Inc. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,31 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Module for constructing RNN Cells."""
+"""Module for constructing RNN Cells.
+
+## Base interface for all RNN Cells
+
+@@RNNCell
+
+## RNN Cells for use with TensorFlow's core RNN methods
+
+@@BasicRNNCell
+@@BasicLSTMCell
+@@GRUCell
+@@LSTMCell
+
+## Classes storing split `RNNCell` state
+
+@@LSTMStateTuple
+
+## RNN Cell wrappers (RNNCells that wrap other RNNCells)
+
+@@MultiRNNCell
+@@DropoutWrapper
+@@EmbeddingWrapper
+@@InputProjectionWrapper
+@@OutputProjectionWrapper
+"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -745,6 +769,10 @@ class EmbeddingWrapper(RNNCell):
   def state_size(self):
     return self._cell.state_size
 
+  @property
+  def output_size(self):
+    return self._cell.output_size
+
   def __call__(self, inputs, state, scope=None):
     """Run the cell on embedded inputs."""
     with vs.variable_scope(scope or type(self).__name__):  # "EmbeddingWrapper"
@@ -827,7 +855,7 @@ class MultiRNNCell(RNNCell):
     return cur_inp, new_states
 
 
-class SlimRNNCell(RNNCell):
+class _SlimRNNCell(RNNCell):
   """A simple wrapper for slim.rnn_cells."""
 
   def __init__(self, cell_fn):

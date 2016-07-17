@@ -1,4 +1,4 @@
-/* Copyright 2015 Google Inc. All Rights Reserved.
+/* Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/util/mirror_pad_mode.h"
+#include "tensorflow/core/util/padding.h"
 
 namespace tensorflow {
 
@@ -152,11 +153,7 @@ memory_region_name: Name of readonly memory region used by the tensor, see
 )doc");
 
 // --------------------------------------------------------------------------
-REGISTER_OP("ZerosLike")
-    .Input("x: T")
-    .Output("y: T")
-    .Attr("T: type")
-    .Doc(R"doc(
+REGISTER_OP("ZerosLike").Input("x: T").Output("y: T").Attr("T: type").Doc(R"doc(
 Returns a tensor of zeros with the same shape and type as x.
 
 x: a tensor of type T.
@@ -705,10 +702,7 @@ shape: Defines the shape of the output tensor.
 )Doc");
 
 // --------------------------------------------------------------------------
-REGISTER_OP("InvertPermutation")
-    .Input("x: int32")
-    .Output("y: int32")
-    .Doc(R"doc(
+REGISTER_OP("InvertPermutation").Input("x: int32").Output("y: int32").Doc(R"doc(
 Computes the inverse permutation of a tensor.
 
 This operation computes the inverse of an index permutation. It takes a 1-D
@@ -1016,10 +1010,7 @@ each repeated tile of `input` into `output`.
 )doc");
 
 // --------------------------------------------------------------------------
-REGISTER_OP("Where")
-    .Input("input: bool")
-    .Output("index: int64")
-    .Doc(R"doc(
+REGISTER_OP("Where").Input("input: bool").Output("index: int64").Doc(R"doc(
 Returns locations of true values in a boolean tensor.
 
 This operation returns the coordinates of true elements in `input`. The
@@ -1713,6 +1704,42 @@ x = [[ [1],   [2],  [5],  [6]],
 block_size: The size of the spatial block, same as in Space2Depth.
 )doc");
 
+// --------------------------------------------------------------------------
+
+REGISTER_OP("ExtractImagePatches")
+    .Input("images: T")
+    .Output("patches: T")
+    .Attr("ksizes: list(int) == 4")
+    .Attr("strides: list(int) == 4")
+    .Attr("rates: list(int) == 4")
+    .Attr("T: realnumbertype")
+    .Attr(GetPaddingAttrString())
+    .Doc(R"doc(
+Extract `patches` from `images` and puth them in the "depth" output dimension.
+
+images: 4-D Tensor with shape `[batch, in_rows, in_cols, depth]`.
+patches: 4-D Tensor with shape `[batch, out_rows, out_cols, ksize_rows *
+  ksize_cols * depth]` containing image patches with size
+  `ksize_rows x ksize_cols x depth` vectorized in the "depth" dimension.
+ksizes: The size of the sliding window for each dimension of `images`.
+strides: 1-D of length 4. How far the centers of two consecutive patches are in
+  the images. Must be: `[1, stride_rows, stride_cols, 1]`.
+rates: 1-D of length 4. Must be: `[1, rate_rows, rate_cols, 1]`. This is the
+  input stride, specifying how far two consecutive patch samples are in the
+  input. Equivalent to extracting patches with
+  `patch_sizes_eff = patch_sizes + (patch_sizes - 1) * (rates - 1), followed by
+  subsampling them spatially by a factor of `rates`.
+padding: The type of padding algorithm to use.
+
+We specify the size-related attributes as:
+
+      ksizes = [1, ksize_rows, ksize_cols, 1]
+      strides = [1, strides_rows, strides_cols, 1]
+      rates = [1, rates_rows, rates_cols, 1]
+)doc");
+
+// --------------------------------------------------------------------------
+
 REGISTER_OP("Bitcast")
     .Input("input: T")
     .Output("output: type")
@@ -1730,6 +1757,9 @@ shape changes from [...] to [..., sizeof(`T`)/sizeof(`type`)].
 If `T` is smaller than `type`, the operator requires that the rightmost
 dimension be equal to sizeof(`type`)/sizeof(`T`). The shape then goes from
 [..., sizeof(`type`)/sizeof(`T`)] to [...].
+
+NOTE: Bitcast is implemented as a low-level cast, so machines with different
+endian orderings will give different results.
 )doc");
 
 REGISTER_OP("OneHot")
@@ -1839,6 +1869,77 @@ on_value: A scalar defining the value to fill in output when `indices[j] = i`.
 off_value: A scalar defining the value to fill in output when `indices[j] != i`.
 axis: The axis to fill (default: -1, a new inner-most axis).
 output: The one-hot tensor.
+)doc");
+
+// EXPERIMENTAL. DO NOT USE OR DEPEND ON THIS YET.
+REGISTER_OP("_QuantizeAndDequantize")
+    .Input("input: T")
+    .Attr("signed_input: bool = true")
+    .Attr("num_bits: int32 = 8")
+    .Attr("range_given: bool = false")
+    .Attr("input_min: float = 0")
+    .Attr("input_max: float = 0")
+    .Output("output: T")
+    .Attr("T: {float, double}")
+    .Doc(R"doc(
+Quantizes then dequantizes a tensor.
+
+This op simulates the precision loss from the quantized forward pass by:
+1. Quantizing the tensor to fixed point numbers, which should match the target
+   quantization method when it is used in inference.
+2. Dequantizing it back to floating point numbers for the following ops, most
+   likely matmul.
+
+There are different ways to quantize. This version does not use the full range
+of the output type, choosing to elide the lowest possible value for symmetry
+(e.g., output range is -127 to 127, not -128 to 127 for signed 8 bit
+quantization), so that 0.0 maps to 0.
+
+To perform this op, we first find the range of values in our tensor. The range
+we use is always centered on 0, so we find m such that
+
+1. m = max(abs(input_min), abs(input_max)) if range_given is true,
+2. m = max(max(abs(min_elem(input)), abs(max_elem(input))) otherwise.
+
+Our input tensor range is then [-m, m].
+
+Next, we choose our fixed-point quantization buckets, [min_fixed, max_fixed].
+If signed_input is true, this is
+
+  [min_fixed, max_fixed ] =
+      [-(1 << (num_bits - 1) - 1), (1 << (num_bits - 1)) - 1].
+
+Otherwise, if signed_input is false, the fixed-point range is
+
+  [min_fixed, max_fixed] = [0, (1 << num_bits) - 1].
+
+From this we compute our scaling factor, s:
+
+  s = (max_fixed - min_fixed) / (2 * m).
+
+Now we can quantize and dequantize the elements of our tensor.  An element e
+is transformed into e':
+
+  e' = (e * s).round_to_nearest() / s.
+
+Note that we have a different number of buckets in the signed vs. unsigned
+cases.  For example, if num_bits == 8, we get 254 buckets in the signed case
+vs. 255 in the unsigned case.
+
+For example, suppose num_bits = 8 and m = 1.  Then
+
+  [min_fixed, max_fixed] = [-127, 127], and
+  s = (127 + 127) / 2 = 127.
+
+Given the vector {-1, -0.5, 0, 0.3}, this is quantized to
+{-127, -63, 0, 38}, and dequantized to {-1, -63.0/127, 0, 38.0/127}.
+
+input: Tensor to quantize and then dequantize.
+signed_input: If the quantization is signed or unsigned.
+num_bits: The bitwidth of the quantization.
+range_given: If the range is given or should be computed from the tensor.
+input_min: If range is given, this is the min of the range.
+input_max: If range is given, this is the max of the range.
 )doc");
 
 }  // namespace tensorflow

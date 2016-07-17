@@ -1,4 +1,3 @@
-# pylint: disable=g-bad-file-header
 # Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,8 +118,8 @@ class GraphIOTest(tf.test.TestCase):
           _VALID_FILE_PATTERN, batch_size, features, randomize_input=False,
           queue_capacity=queue_capacity, reader_num_threads=2,
           parser_num_threads=2, name=name)
-      self.assertEquals("%s/parse_example_batch_join:0" % name,
-                        features["feature"].name)
+      self.assertEqual("%s/parse_example_batch_join:0" % name,
+                       features["feature"].name)
       file_name_queue_name = "%s/file_name_queue" % name
       file_names_name = "%s/input" % file_name_queue_name
       example_queue_name = "%s/fifo_queue" % name
@@ -148,7 +147,7 @@ class GraphIOTest(tf.test.TestCase):
           reader=tf.TFRecordReader, randomize_input=True,
           num_epochs=1,
           queue_capacity=queue_capacity, name=name)
-      self.assertEquals("%s:0" % name, inputs.name)
+      self.assertEqual("%s:0" % name, inputs.name)
       file_name_queue_name = "%s/file_name_queue" % name
       file_name_queue_limit_name = (
           "%s/limit_epochs/epochs" % file_name_queue_name)
@@ -177,7 +176,7 @@ class GraphIOTest(tf.test.TestCase):
           _VALID_FILE_PATTERN, batch_size,
           reader=tf.TFRecordReader, randomize_input=True,
           queue_capacity=queue_capacity, name=name)
-      self.assertEquals("%s:0" % name, inputs.name)
+      self.assertEqual("%s:0" % name, inputs.name)
       file_name_queue_name = "%s/file_name_queue" % name
       file_names_name = "%s/input" % file_name_queue_name
       example_queue_name = "%s/random_shuffle_queue" % name

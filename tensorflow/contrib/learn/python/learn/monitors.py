@@ -1,4 +1,3 @@
-# pylint: disable=g-bad-file-header
 # Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -51,7 +50,7 @@ class BaseMonitor(object):
   def epoch_end(self, epoch):
     pass
 
-  def step_begin(self, step, tensors):  # pylint: disable=unused-argument
+  def step_begin(self, step):  # pylint: disable=unused-argument
     """Callback before training step begins.
 
     Use this callback to:
@@ -59,12 +58,11 @@ class BaseMonitor(object):
 
     Args:
       step: int, global step of the model.
-      tensors: list of `Tensors` that going to be passed to session.run.
 
     Returns:
-      Dict of `Tensors` that going to be ran.
+      List of `Tensors` that going to be ran.
     """
-    return tensors
+    return []
 
   def step_end(self, step, output):  # pylint: disable=unused-argument
     """Callback after training step finished.
@@ -86,7 +84,7 @@ class BaseMonitor(object):
 
 
 class EveryN(BaseMonitor):
-  """Base class for monitors that execute callbacks every n steps / seconds.
+  """Base class for monitors that execute callbacks every n steps.
 
   Parameters:
     every_n_steps: int, calls `every_n_step_{begin,end}` every this many steps.
@@ -100,38 +98,48 @@ class EveryN(BaseMonitor):
     self._every_n_steps = every_n_steps
     self._first_n_steps = first_n_steps
     self._max_steps = None
+    self._last_step = 0
 
   def begin(self, max_steps=None):
     self._max_steps = max_steps
 
-  def every_n_step_begin(self, step, tensors):  # pylint: disable=unused-argument
-    return tensors
+  def every_n_step_begin(self, step):  # pylint: disable=unused-argument
+    return []
 
   def every_n_step_end(self, step, outputs):  # pylint: disable=unused-argument
     return False
 
-  def step_begin(self, step, tensors):
-    if (step <= self._first_n_steps or step % self._every_n_steps == 0 or
+  def step_begin(self, step):
+    if (step <= self._first_n_steps or
+        step >= (self._every_n_steps + self._last_step) or
         step == self._max_steps):
-      tensors = self.every_n_step_begin(step, tensors)
-    return tensors
+      return self.every_n_step_begin(step)
+    return []
 
   def step_end(self, step, output):
     to_stop = False
-    if (step <= self._first_n_steps or step % self._every_n_steps == 0 or
+    if (step <= self._first_n_steps or
+        step >= (self._every_n_steps + self._last_step) or
         step == self._max_steps):
+      self._last_step = step
       to_stop = self.every_n_step_end(step, output)
     return to_stop
 
 
 class PrintTensor(EveryN):
+  """Prints given tensors every N steps.
+
+  Print the tensors provided in `tensor_names` `every_n`
+  steps, starting with the `first_n`th step.
+
+  """
 
   def __init__(self, tensor_names, every_n=100, first_n=1):
     super(PrintTensor, self).__init__(every_n, first_n)
     self._tensor_names = tensor_names
 
-  def every_n_step_begin(self, unused_step, tensors):
-    return tensors + self._tensor_names
+  def every_n_step_begin(self, unused_step):
+    return self._tensor_names
 
   def every_n_step_end(self, step, outputs):
     stats = []
@@ -142,7 +150,7 @@ class PrintTensor(EveryN):
 
 
 class SummarySaver(EveryN):
-  """Saves summary every N seconds."""
+  """Saves a summary every N steps."""
 
   def __init__(self, summary_op, save_steps=100, output_dir=None,
                summary_writer=None):
@@ -157,8 +165,8 @@ class SummarySaver(EveryN):
     super(SummarySaver, self).set_estimator(estimator)
     self._summary_writer = summary_io.SummaryWriter(self._estimator.model_dir)
 
-  def every_n_step_begin(self, unused_step, tensors):
-    return tensors + [self._summary_op]
+  def every_n_step_begin(self, unused_step):
+    return [self._summary_op]
 
   def every_n_step_end(self, step, outputs):
     summary_strs = outputs[self._summary_op.name]
@@ -179,7 +187,8 @@ class ValidationMonitor(EveryN):
 
   def __init__(self, x=None, y=None, input_fn=None,
                every_n_steps=100, early_stopping_rounds=None):
-    super(ValidationMonitor, self).__init__(every_n_steps=every_n_steps)
+    super(ValidationMonitor, self).__init__(every_n_steps=every_n_steps,
+                                            first_n_steps=-1)
     if x is None and input_fn is None:
       raise ValueError("Either x or input_fn should be provided.")
     self.x = x
@@ -219,8 +228,8 @@ class CaptureVariable(EveryN):
     self.var_name = var_name
     self.var_values = []
 
-  def every_n_step_begin(self, unused_step, tensors):
-    return tensors + [self.var_name]
+  def every_n_step_begin(self, unused_step):
+    return [self.var_name]
 
   def every_n_step_end(self, step, outputs):
     self.var_values.append(outputs[self.var_name])
