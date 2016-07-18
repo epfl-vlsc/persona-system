@@ -183,12 +183,16 @@ def SnapAlign(genome, options, read, name=None):
 
 ops.NoGradient("SnapAlign")
 
+_sad_string = "SnapAlignDense"
 def SnapAlignDense(genome, options, buffer_pool, read, name=None):
 
     return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
             buffer_pool=buffer_pool, read=read, name=name)
 
-ops.NoGradient("SnapAlignDense")
+ops.NoGradient(_sad_string)
+@ops.RegisterShape(_sad_string)
+def _SnapAlignDense(op):
+    return [tensor_shape.vector(2)]
 
 _drp_str = "DenseReadPool"
 def DenseReadPool(size=0, bound=False, name=None):
