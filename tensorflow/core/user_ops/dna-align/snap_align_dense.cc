@@ -117,7 +117,6 @@ class SnapAlignDenseOp : public OpKernel {
           snap_read.init(metadata, metadata_len, bases, qualities, bases_len);
           snap_read.clip(options->clipping);
           input_reads_.push_back(snap_read);
-          LOG(INFO) << "read: " << bases << " meta: " << metadata;
         }
       }
 
@@ -164,8 +163,8 @@ class SnapAlignDenseOp : public OpKernel {
               &input_reads_[i], alignment_results, alignment_results.size(), first_is_primary, format,
               options->useM, lvc_, genome, cigarString_, flag_));
 
-        LOG(INFO) << " result: location " << alignment_results[0].location <<
-          " direction: " << alignment_results[0].direction << " score " << alignment_results[0].score << " cigar: " << cigarString_ << " mapq: " << alignment_results[0].mapq;
+        /*LOG(INFO) << " result: location " << alignment_results[0].location <<
+          " direction: " << alignment_results[0].direction << " score " << alignment_results[0].score << " cigar: " << cigarString_ << " mapq: " << alignment_results[0].mapq;*/
 
         result_builder_.AppendAlignmentResult(alignment_results[0], cigarString_, alignment_result_buffer);
 
