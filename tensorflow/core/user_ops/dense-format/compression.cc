@@ -42,6 +42,7 @@ Status decompressGZIP(const char* segment,
   // TODO this only supports decompress write, not appending
   // this is an easy change to make, but requires some more "math"
   output.clear(); // just to be sure, in case the caller didn't do it
+  output.reserve(32); // make sure that we don't call with a buffer of 0 bytes and get a Z_STREAM_ERROR
   static const int init_flags = window_bits | ENABLE_ZLIB_GZIP;
   z_stream strm = {0};
   strm.zalloc = Z_NULL;
