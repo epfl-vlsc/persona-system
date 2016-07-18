@@ -32,17 +32,20 @@ Consumes the input and produces nothing
       ResourceReleaser<ReadResource> b(*reads);
       auto rs = reads->get();
 
-      auto s = Status::OK();
-      const char *base, *qual, *meta;
-      size_t base_len, qual_len, meta_len;
-      do {
-        s = rs->get_next_record(&base, &base_len,
-                                &qual, &qual_len,
-                                &meta, &meta_len);
-      } while (s.ok());
+      { // Need this scope to make sure ReadResourceReleaser fires before `b` (the other scoped releaser)
+        ReadResourceReleaser r(*rs);
+        auto s = Status::OK();
+        const char *base, *qual, *meta;
+        size_t base_len, qual_len, meta_len;
+        do {
+          s = rs->get_next_record(&base, &base_len,
+                                  &qual, &qual_len,
+                                  &meta, &meta_len);
+        } while (s.ok());
 
-      if (!IsResourceExhausted(s)) {
-        OP_REQUIRES_OK(ctx, s);
+        if (!IsResourceExhausted(s)) {
+          OP_REQUIRES_OK(ctx, s);
+        }
       }
     }
   };

@@ -16,4 +16,13 @@ namespace tensorflow {
   }
 
   void ReadResource::release() {}
+
+  ReadResourceReleaser::ReadResourceReleaser(ReadResource &r) : rr_(r) {}
+
+  ReadResourceReleaser::~ReadResourceReleaser()
+  {
+    rr_.release();
+  }
+
+
 } // namespace tensorflow {

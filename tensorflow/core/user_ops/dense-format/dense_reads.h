@@ -17,7 +17,6 @@ namespace tensorflow {
     explicit DenseReadResource() = default;
 
     explicit DenseReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta);
-    ~DenseReadResource() override;
 
     DenseReadResource& operator=(DenseReadResource &&other);
 

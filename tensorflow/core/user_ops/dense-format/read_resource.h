@@ -27,4 +27,14 @@ namespace tensorflow {
 
     virtual void release();
   };
+
+  class ReadResourceReleaser
+  {
+  public:
+    ReadResourceReleaser(ReadResource &r);
+    ~ReadResourceReleaser();
+
+  private:
+    ReadResource &rr_;
+  };
 } // namespace tensorflow {

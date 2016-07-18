@@ -13,7 +13,6 @@ namespace tensorflow {
 
     explicit FASTQIterator(ResourceContainer<Data> *fastq_file);
     FASTQIterator() = default;
-    ~FASTQIterator() override;
     FASTQIterator& operator=(FASTQIterator &&other);
 
     Status get_next_record(const char **bases, std::size_t *bases_length,

@@ -54,11 +54,6 @@ namespace tensorflow {
     other.meta_idx_ = nullptr;
   }
 
-  DenseReadResource::~DenseReadResource()
-  {
-    release();
-  }
-
   bool DenseReadResource::reset_iter()
   {
     record_idx_ = 0;
