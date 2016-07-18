@@ -11,5 +11,5 @@ namespace tensorflow {
 
   Status appendSegment(const char* segment,
                        const std::size_t segment_size,
-                       std::vector<char> &output);
+                       std::vector<char> &output, bool double_capacity=false);
 } // namespace tensorflow {
