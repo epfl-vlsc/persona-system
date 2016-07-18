@@ -97,13 +97,24 @@ def _S3ReaderShape(op):
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_sr_str)
 
-_sink_str = "SinkOp"
-def Sink(data, name=None):
-  return gen_user_ops.sink(data=data, name=name)
-ops.NoGradient(_sink_str)
+_read_sink_str = "ReadSink"
+def ReadSink(data, name=None):
+  return gen_user_ops.read_sink(data=data, name=name)
+ops.NoGradient(_read_sink_str)
 
-@ops.RegisterShape(_sink_str)
-def _SinkShape(op):
+@ops.RegisterShape(_read_sink_str)
+def _ReadSinkShape(op):
+  data = op.inputs[0].get_shape()
+  _assert_vec(data, 2)
+  return []
+
+_buf_sink_str = "BufferSink"
+def BufferSink(data, name=None):
+  return gen_user_ops.buffer_sink(data=data, name=name)
+ops.NoGradient(_buf_sink_str)
+
+@ops.RegisterShape(_buf_sink_str)
+def _BufferSinkShape(op):
   data = op.inputs[0].get_shape()
   _assert_vec(data, 2)
   return []

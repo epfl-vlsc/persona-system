@@ -10,17 +10,17 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
 
-  REGISTER_OP("Sink")
+  REGISTER_OP("ReadSink")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Input("data: string")
   .Doc(R"doc(
-Consumes the input and produces nothing
+Consumes the input read Resource and produces nothing
 )doc");
 
-  class SinkOp : public OpKernel {
+  class ReadSinkOp : public OpKernel {
   public:
-    SinkOp(OpKernelConstruction* context) : OpKernel(context) {}
+    ReadSinkOp(OpKernelConstruction* context) : OpKernel(context) {}
 
     void Compute(OpKernelContext* ctx) override {
       ResourceContainer<ReadResource> *reads;
@@ -51,5 +51,5 @@ Consumes the input and produces nothing
   };
 
 
-REGISTER_KERNEL_BUILDER(Name("Sink").Device(DEVICE_CPU), SinkOp);
+REGISTER_KERNEL_BUILDER(Name("ReadSink").Device(DEVICE_CPU), ReadSinkOp);
 } // namespace tensorflow {
