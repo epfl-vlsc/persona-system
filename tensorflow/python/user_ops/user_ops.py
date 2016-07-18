@@ -183,6 +183,12 @@ def SnapAlign(genome, options, read, name=None):
 
 ops.NoGradient("SnapAlign")
 
+def SnapAlignDense(genome, options, read, name=None):
+
+    return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options, read=read, name=name)
+
+ops.NoGradient("SnapAlignDense")
+
 _drp_str = "DenseReadPool"
 def DenseReadPool(size=0, bound=False, name=None):
     return gen_user_ops.dense_read_pool(size=size, bound=bound, name=name)
