@@ -128,6 +128,8 @@ class SnapAlignDenseOp : public OpKernel {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       }
 
+      auto begin = std::chrono::high_resolution_clock::now();
+
       ResourceContainer<Buffer> *buffer_resource_container;
       OP_REQUIRES_OK(ctx, GetResultBuffer(ctx, &buffer_resource_container));
       auto &alignment_result_buffer = buffer_resource_container->get()->get();
@@ -175,6 +177,8 @@ class SnapAlignDenseOp : public OpKernel {
 #ifdef NEW_OUTPUT
       result_builder_.AppendAndFlush(alignment_result_buffer);
 #endif
+      auto end = std::chrono::high_resolution_clock::now();
+      LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
     }
 
   private:
