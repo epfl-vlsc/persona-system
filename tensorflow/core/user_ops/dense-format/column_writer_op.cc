@@ -3,6 +3,7 @@
 #include "data.h"
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 #include "compression.h"
 #include "format.h"
@@ -59,6 +60,7 @@ Thus we always need 3 of these for the full conversion pipeline
       } else { // no need to check. we're saved by string enum types if TF
         t = RecordType::ALIGNMENT;
       }
+      record_suffix = "." + s;
       header_.record_type = static_cast<uint8_t>(t);
     }
 
@@ -76,10 +78,12 @@ Thus we always need 3 of these for the full conversion pipeline
 
       auto data = column->get();
 
-      FILE *file_out = fopen(filepath.c_str(), "wb");
+      string full_path(filepath + record_suffix);
+
+      FILE *file_out = fopen(full_path.c_str(), "wb");
       // TODO get errno out of file
       OP_REQUIRES(ctx, file_out != NULL,
-                  Internal("Unable to open file at path:", filepath));
+                  Internal("Unable to open file at path:", full_path));
 
       OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out));
 
@@ -128,6 +132,7 @@ Thus we always need 3 of these for the full conversion pipeline
     }
 
     bool compress_;
+    string record_suffix;
     vector<char> buf_; // used to compress into
     format::FileHeader header_;
   };
