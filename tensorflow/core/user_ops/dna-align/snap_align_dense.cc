@@ -49,13 +49,14 @@ class SnapAlignDenseOp : public OpKernel {
 
       base_aligner_ = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
 
-      AlignerOptions* options = options_resource_->value();
+      options_ = options_resource_->value();
+      genome_ = index_resource_->get_genome();
 
-      if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+      if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
         num_secondary_alignments_ = 0;
       } else {
-        num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine,
-            options->seedCoverage, MAX_READ_LENGTH, options->maxHits, index_resource_->get_index()->getSeedLength());
+        num_secondary_alignments_ = BaseAligner::getMaxSecondaryResults(options_->numSeedsFromCommandLine,
+            options_->seedCoverage, MAX_READ_LENGTH, options_->maxHits, index_resource_->get_index()->getSeedLength());
       }
 
       return Status::OK();
@@ -99,9 +100,10 @@ class SnapAlignDenseOp : public OpKernel {
       return input_reads_.size();
     }
 
-    size_t InitializeReadsDense(ReadResource *reads, AlignerOptions* options)
+    size_t InitializeReadsDense(ReadResource *reads)
     {
       reads->reset_iter();
+      input_reads_.clear(); input_reads_.reserve(100000);
       Status status;
 
       while (status.ok())
@@ -115,7 +117,7 @@ class SnapAlignDenseOp : public OpKernel {
         {
           Read snap_read;
           snap_read.init(metadata, metadata_len, bases, qualities, bases_len);
-          snap_read.clip(options->clipping);
+          snap_read.clip(options_->clipping);
           input_reads_.push_back(snap_read);
         }
       }
@@ -128,6 +130,7 @@ class SnapAlignDenseOp : public OpKernel {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       }
 
+      LOG(INFO) << "preparing...";
       auto begin = std::chrono::high_resolution_clock::now();
 
       ResourceContainer<Buffer> *buffer_resource_container;
@@ -140,30 +143,29 @@ class SnapAlignDenseOp : public OpKernel {
       auto data = read_input->vec<string>(); // data(0) = container, data(1) = name 
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads)); 
 
-      auto options = options_resource_->value();
-      size_t num_actual_reads =  InitializeReadsDense(reads->get(), options); 
+      size_t num_actual_reads =  InitializeReadsDense(reads->get()); 
 
+      LOG(INFO) << "aligner doing " << num_actual_reads << " reads";
       vector<SingleAlignmentResult> alignment_results;
 
       bool first_is_primary;
       cigarString_.clear();
 
       for (size_t i = 0; i < num_actual_reads; ++i) {
-        OP_REQUIRES_OK(ctx, snap_wrapper::alignSingle(base_aligner_, options, &input_reads_[i],
+        OP_REQUIRES_OK(ctx, snap_wrapper::alignSingle(base_aligner_, options_, &input_reads_[i],
               &alignment_results, num_secondary_alignments_, first_is_primary));
 
         size_t num_results = alignment_results.size();
         OP_REQUIRES(ctx, num_results == 1, Internal("New format only supports exactly 1 result. Time to fix it :)"));
 
-        const Genome *genome = index_resource_->get_genome();
-        SAMFormat format(options->useM);
+        SAMFormat format(options_->useM);
         flag_ = 0;
 
         // compute the CIGAR strings and flags
         // input_reads[i] holds the current snap_read
         OP_REQUIRES_OK(ctx, snap_wrapper::computeCigarFlags(
               &input_reads_[i], alignment_results, alignment_results.size(), first_is_primary, format,
-              options->useM, lvc_, genome, cigarString_, flag_));
+              options_->useM, lvc_, genome_, cigarString_, flag_));
 
         /*LOG(INFO) << " result: location " << alignment_results[0].location <<
           " direction: " << alignment_results[0].direction << " score " << alignment_results[0].score << " cigar: " << cigarString_ << " mapq: " << alignment_results[0].mapq;*/
@@ -173,10 +175,11 @@ class SnapAlignDenseOp : public OpKernel {
         alignment_results.clear();
 
       }
+      LOG(INFO) << "done aligning";
 
-#ifdef NEW_OUTPUT
       result_builder_.AppendAndFlush(alignment_result_buffer);
-#endif
+      
+      LOG(INFO) << "done append";
       auto end = std::chrono::high_resolution_clock::now();
       LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
     }
@@ -188,6 +191,8 @@ class SnapAlignDenseOp : public OpKernel {
     GenomeIndexResource* index_resource_ = nullptr;
     AlignerOptionsResource* options_resource_ = nullptr;
     const FileFormat *format_;
+    const Genome *genome_; 
+    AlignerOptions* options_;
 
     string cigarString_;
     AlignmentResultBuilder result_builder_;

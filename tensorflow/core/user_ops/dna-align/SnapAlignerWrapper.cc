@@ -200,10 +200,10 @@ namespace snap_wrapper {
           basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
           genomeLocation, useM, &editDistance, &cigarBufUsed, o_addFrontClipping);
           
-      	if (*o_addFrontClipping != 0) {
+      	/*if (*o_addFrontClipping != 0) {
           // TODO: check type of error
           return tensorflow::errors::ResourceExhausted("buffer too full in SNAP writeRead"); 
-    		}
+    		}*/
 
 				// *o_editDistance -> editDistance
 				if (editDistance == -2) {
