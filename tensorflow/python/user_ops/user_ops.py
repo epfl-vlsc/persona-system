@@ -59,8 +59,10 @@ def FASTQDecoder(value, name=None):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, pool_handle, name=None, verify=False):
-  return gen_user_ops.dense_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name)
+def DenseReader(file_handle, pool_handle, reserve=8192, name=None, verify=False):
+  if reserve < 1:
+    raise Exception ("Dense reader 'reserve' param must be strictly positive. Got {}".format(reserve))
+  return gen_user_ops.dense_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name, reserve=reserve)
 
 _dread_str = "DenseReader"
 ops.NoGradient(_dread_str)

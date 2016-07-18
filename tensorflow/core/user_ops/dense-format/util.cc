@@ -22,10 +22,17 @@ namespace tensorflow {
 
   Status appendSegment(const char* segment,
                        const size_t segment_size,
-                       vector<char> &output)
+                       vector<char> &output, bool double_capacity)
   {
     size_t ideal_length = segment_size + output.size();
-    output.reserve(ideal_length);
+    if (double_capacity) {
+      output.reserve(1); // just to make sure we don't multiply by 0!
+      while (output.capacity() < ideal_length) {
+        output.reserve(output.capacity() * 2);
+      }
+    } else {
+      output.reserve(ideal_length);
+    }
     if (output.capacity() < ideal_length) {
       output.insert(output.end(), segment, segment+segment_size);
     } else {
