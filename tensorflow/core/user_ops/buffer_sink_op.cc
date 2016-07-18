@@ -23,13 +23,15 @@ Consumes the buffer input and produces nothing
     BufferSinkOp(OpKernelConstruction* context) : OpKernel(context) {}
 
     void Compute(OpKernelContext* ctx) override {
-      ResourceContainer<Buffer> *buf;
+      ResourceContainer<Data> *buf;
       const Tensor *input;
       OP_REQUIRES_OK(ctx, ctx->input("data", &input));
       auto data = input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &buf));
       core::ScopedUnref a(buf);
-      ResourceReleaser<Buffer> b(*buf);
+      {
+        ResourceReleaser<Data> b(*buf); // make sure destructs first
+      }
     }
   };
 
