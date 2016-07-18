@@ -183,9 +183,10 @@ def SnapAlign(genome, options, read, name=None):
 
 ops.NoGradient("SnapAlign")
 
-def SnapAlignDense(genome, options, read, name=None):
+def SnapAlignDense(genome, options, buffer_pool, read, name=None):
 
-    return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options, read=read, name=name)
+    return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
+            buffer_pool=buffer_pool, read=read, name=name)
 
 ops.NoGradient("SnapAlignDense")
 

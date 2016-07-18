@@ -106,14 +106,15 @@ class SnapAlignDenseOp : public OpKernel {
 
     while (status.ok())
     {
-      const char **bases, **qualities, **metadata;
-      std::size_t *bases_len, *qualities_len, *metadata_len; 
-      status = reads->get_next_record(bases, bases_len, qualities, qualities_len, metadata, metadata_len);
+      const char *bases, *qualities, *metadata;
+      std::size_t bases_len, qualities_len, metadata_len; 
+      status = reads->get_next_record(&bases, &bases_len, &qualities, 
+          &qualities_len, &metadata, &metadata_len);
 
       if (status.ok())
       {
         Read snap_read;
-        snap_read.init(*metadata, *metadata_len, *bases, *qualities, *bases_len);
+        snap_read.init(metadata, metadata_len, bases, qualities, bases_len);
         input_reads_.push_back(snap_read);
       }
     }
