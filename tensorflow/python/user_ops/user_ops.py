@@ -59,8 +59,10 @@ def FASTQDecoder(value, name=None):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, pool_handle, name=None, verify=False):
-  return gen_user_ops.dense_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name)
+def DenseReader(file_handle, pool_handle, reserve=8192, name=None, verify=False):
+  if reserve < 1:
+    raise Exception ("Dense reader 'reserve' param must be strictly positive. Got {}".format(reserve))
+  return gen_user_ops.dense_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name, reserve=reserve)
 
 _dread_str = "DenseReader"
 ops.NoGradient(_dread_str)
@@ -183,11 +185,16 @@ def SnapAlign(genome, options, read, name=None):
 
 ops.NoGradient("SnapAlign")
 
-def SnapAlignDense(genome, options, read, name=None):
+_sad_string = "SnapAlignDense"
+def SnapAlignDense(genome, options, buffer_pool, read, name=None):
 
-    return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options, read=read, name=name)
+    return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
+            buffer_pool=buffer_pool, read=read, name=name)
 
-ops.NoGradient("SnapAlignDense")
+ops.NoGradient(_sad_string)
+@ops.RegisterShape(_sad_string)
+def _SnapAlignDense(op):
+    return [tensor_shape.vector(2)]
 
 _drp_str = "DenseReadPool"
 def DenseReadPool(size=0, bound=False, name=None):

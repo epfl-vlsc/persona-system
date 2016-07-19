@@ -9,6 +9,7 @@
 #include "parser.h"
 #include "buffer.h"
 #include <vector>
+#include <cstdint>
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 
@@ -18,6 +19,7 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("verify: bool = false")
+  .Attr("reserve: int32 = 8192")
   .Input("buffer_pool: Ref(string)")
   .Input("file_handle: string")
   .Output("processed_buffers: string")
@@ -31,6 +33,8 @@ Outputs a handle to the buffer containing the processed data
 
 Input buffer_pool is a handle to a tensorflow::BufferPoolOp result tensor,
 and file_handle should come from a file_mmap_op
+
+reserve: the number of bytes to call 'reserve' on the vector.
   )doc");
 
   using namespace std;
@@ -43,6 +47,10 @@ and file_handle should come from a file_mmap_op
       if (verify_) {
         LOG(DEBUG) << name() << " enabled verification\n";
       }
+
+      int32_t i;
+      OP_REQUIRES_OK(context, context->GetAttr("reserve", &i));
+      reserve_bytes_ = static_cast<decltype(reserve_bytes_)>(i);
     }
 
     ~DenseReaderOp() {
@@ -90,6 +98,7 @@ and file_handle should come from a file_mmap_op
         auto input_data = dense_input->get();
         auto output_ptr = output_buffer_rc->get();
         auto &output_buffer = output_ptr->get();
+        output_buffer.reserve(reserve_bytes_);
 
         // TODO pass something from from output_file, for parser to fill up
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
@@ -107,6 +116,7 @@ and file_handle should come from a file_mmap_op
     size_t round_ = 0;
     bool verify_ = false;
     RecordParser rec_parser_;
+    size_t reserve_bytes_;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
   };
 

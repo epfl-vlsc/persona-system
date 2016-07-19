@@ -102,7 +102,7 @@ namespace snap_wrapper {
   tensorflow::Status computeCigarFlags(
     // input
     Read *read,
-    std::vector<SingleAlignmentResult> &results,
+    SingleAlignmentResult* results,
     int nResults,
     bool firstIsPrimary,
     const SAMFormat &format,
@@ -116,6 +116,8 @@ namespace snap_wrapper {
   {  
     // Adapted from SNAP, but not using the writeRead method, as we need only
     // the cigar string and the flag, not also writing the output to the buffer
+    if (nResults != 1)
+      return errors::Internal("ComputeCigarFlags received more than one result.");
     
     for (int i = 0; i < nResults; i++) {
       if (results[i].status == NotFound) {
@@ -200,10 +202,10 @@ namespace snap_wrapper {
           basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
           genomeLocation, useM, &editDistance, &cigarBufUsed, o_addFrontClipping);
           
-      	if (*o_addFrontClipping != 0) {
+      	/*if (*o_addFrontClipping != 0) {
           // TODO: check type of error
           return tensorflow::errors::ResourceExhausted("buffer too full in SNAP writeRead"); 
-    		}
+    		}*/
 
 				// *o_editDistance -> editDistance
 				if (editDistance == -2) {
