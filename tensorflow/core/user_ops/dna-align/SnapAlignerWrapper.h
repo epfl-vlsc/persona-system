@@ -27,7 +27,7 @@ namespace snap_wrapper {
     Status computeCigarFlags(
         // inputs
         Read *read,
-        std::vector<SingleAlignmentResult> &results,
+        SingleAlignmentResult* results,
         int nResults,
         bool firstIsPrimary, 
         const SAMFormat &format,

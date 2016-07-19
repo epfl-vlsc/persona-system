@@ -102,7 +102,7 @@ namespace snap_wrapper {
   tensorflow::Status computeCigarFlags(
     // input
     Read *read,
-    std::vector<SingleAlignmentResult> &results,
+    SingleAlignmentResult* results,
     int nResults,
     bool firstIsPrimary,
     const SAMFormat &format,
@@ -116,6 +116,8 @@ namespace snap_wrapper {
   {  
     // Adapted from SNAP, but not using the writeRead method, as we need only
     // the cigar string and the flag, not also writing the output to the buffer
+    if (nResults != 1)
+      return errors::Internal("ComputeCigarFlags received more than one result.");
     
     for (int i = 0; i < nResults; i++) {
       if (results[i].status == NotFound) {
