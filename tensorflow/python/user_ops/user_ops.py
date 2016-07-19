@@ -89,13 +89,18 @@ def _FileMMapShape(op):
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_fm_str)
 
-def S3Reader(access_key, secret_key, host, bucket, queue, pool, name=None):
+def S3Reader(access_key, secret_key, host, bucket, lookup_key, pool, name=None):
   return gen_user_ops.s3_reader(access_key=access_key, secret_key=secret_key, host=host,
-                                bucket=bucket, queue_handle=queue, pool_handle=pool, name=name)
+                                bucket=bucket, key=lookup_key, pool_handle=pool, name=name)
 
 _sr_str = "S3Reader"
 @ops.RegisterShape(_sr_str)
 def _S3ReaderShape(op):
+  handle_shape = op.inputs[0].get_shape()
+  _assert_vec(handle_shape, 2)
+
+  key_shape = op.inputs[1].get_shape()
+  _assert_scalar(key_shape)
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_sr_str)
 
