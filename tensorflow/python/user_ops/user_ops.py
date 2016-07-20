@@ -94,7 +94,7 @@ def S3Reader(access_key, secret_key, host, bucket, queue, pool, name=None):
 _sr_str = "S3Reader"
 @ops.RegisterShape(_sr_str)
 def _S3ReaderShape(op):
-  return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
+  return [tensor_shape.vector(2), tensor_shape.vector(1)]
 ops.NoGradient(_sr_str)
 
 _read_sink_str = "ReadSink"

@@ -86,10 +86,10 @@ file_name: a Tensor() of string for the unique key for this file
 
       // Output tensors
       Tensor *output_tensor;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));
-      auto output_matrix = output_tensor->matrix<string>();
-      output_matrix(0, 0) = rec_buffer->container();
-      output_matrix(0, 1) = rec_buffer->name();
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({2}), &output_tensor));
+      auto output_vector = output_tensor->vec<string>();
+      output_vector(0) = rec_buffer->container();
+      output_vector(1) = rec_buffer->name();
 
       Tensor *file_name;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
