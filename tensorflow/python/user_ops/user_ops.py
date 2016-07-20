@@ -89,13 +89,18 @@ def _FileMMapShape(op):
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_fm_str)
 
-def S3Reader(access_key, secret_key, host, bucket, queue, pool, name=None):
+def S3Reader(access_key, secret_key, host, bucket, lookup_key, pool, name=None):
   return gen_user_ops.s3_reader(access_key=access_key, secret_key=secret_key, host=host,
-                                bucket=bucket, queue_handle=queue, pool_handle=pool, name=name)
+                                bucket=bucket, key=lookup_key, pool_handle=pool, name=name)
 
 _sr_str = "S3Reader"
 @ops.RegisterShape(_sr_str)
 def _S3ReaderShape(op):
+  handle_shape = op.inputs[0].get_shape()
+  _assert_vec(handle_shape, 2)
+
+  key_shape = op.inputs[1].get_shape()
+  _assert_scalar(key_shape)
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_sr_str)
 
@@ -302,3 +307,19 @@ ops.NoGradient(_fcp_str)
 @ops.RegisterShape(_fcp_str)
 def _FASTQCreatorPoolOpShape(op):
     return [tensor_shape.vector(2)]
+
+_gz_str = "GZIPDecomp"
+
+def GZIPDecompressor(buffer_pool, data_handle, name=None):
+  return gen_user_ops.gzip_decomp(buffer_pool=buffer_pool,
+                                  data_handle=data_handle,
+                                  name=name)
+
+ops.NoGradient(_gz_str)
+@ops.RegisterShape(_gz_str)
+def _GZIPDecompShape(op):
+  pool_shape = op.inputs[0].get_shape()
+  data_shape = op.inputs[1].get_shape()
+  _assert_vec(pool_shape, 2)
+  _assert_vec(data_shape, 2)
+  return [data_shape]

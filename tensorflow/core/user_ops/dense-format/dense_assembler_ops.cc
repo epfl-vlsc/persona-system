@@ -77,7 +77,7 @@ Intended to be used for DenseAssembler
     }
   private:
 
-    Status InitializePool(OpKernelContext* ctx) {
+    inline Status InitializePool(OpKernelContext* ctx) {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "dense_read_pool", &drr_pool_));
       return Status::OK();
     }
