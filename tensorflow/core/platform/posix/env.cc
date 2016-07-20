@@ -45,6 +45,20 @@ class StdThread : public Thread {
       : thread_(fn) {}
   ~StdThread() { thread_.join(); }
 
+  Status SetAffinity(int cpu_index) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(i, &cpuset);
+    int rc = pthread_setaffinity_np(thread_.native_handle(),
+                                    sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+      return errors::Internal("Problem setting thread affinity in ",
+          "StdThread class.");
+    } else {
+      return Status::OK;
+    }
+  }
+
  private:
   std::thread thread_;
 };

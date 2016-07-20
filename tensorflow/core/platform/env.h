@@ -32,7 +32,10 @@ limitations under the License.
 
 namespace tensorflow {
 
-class Thread;
+class Thread {
+  public:
+    virtual Status SetAffinity(int cpu_index) { return Status::OK; }
+};
 struct ThreadOptions;
 
 /// \brief An interface used by the tensorflow implementation to
