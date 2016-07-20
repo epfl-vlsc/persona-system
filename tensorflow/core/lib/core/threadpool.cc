@@ -105,8 +105,13 @@ ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
   CHECK_GE(num_threads, 1);
   impl_.reset(
       new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads));
-  impl_special_.reset(
-      new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special));
+  if (num_threads_special > 0) {
+    impl_special_.reset(
+                        new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special));
+  } else {
+    // TODO may be default behavior of unique_ptr
+    impl_special_.reset(nullptr);
+  }
 }
 
 ThreadPool::~ThreadPool() {}
@@ -118,6 +123,7 @@ void ThreadPool::Schedule(std::function<void()> fn) {
 
 void ThreadPool::ScheduleSpecial(std::function<void()> fn) {
   CHECK(fn != nullptr);
+  CHECK(impl_special_.get() != nullptr);
   // TODO schedule in the second pool
   impl_special_->Schedule(std::move(fn));
 }
