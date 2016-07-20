@@ -96,14 +96,17 @@ struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
   const int num_threads_;
 };
 
-ThreadPool::ThreadPool(Env* env, const string& name, int num_threads)
-    : ThreadPool(env, ThreadOptions(), name, num_threads) {}
+  ThreadPool::ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special)
+    : ThreadPool(env, ThreadOptions(), name, num_threads, num_threads_special) {}
 
 ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
-                       const string& name, int num_threads) {
+                       const string& name, int num_threads, int num_threads_special) {
+  // TODO(SW) do fancy stuff here to make sure the threads run on distinct cores (in the future)
   CHECK_GE(num_threads, 1);
   impl_.reset(
       new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads));
+  impl_special_.reset(
+      new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special));
 }
 
 ThreadPool::~ThreadPool() {}
@@ -116,7 +119,7 @@ void ThreadPool::Schedule(std::function<void()> fn) {
 void ThreadPool::ScheduleSpecial(std::function<void()> fn) {
   CHECK(fn != nullptr);
   // TODO schedule in the second pool
-  //impl_->Schedule(std::move(fn));
+  impl_special_->Schedule(std::move(fn));
 }
 
 void ThreadPool::ParallelFor(int64 total, int64 cost_per_unit,
