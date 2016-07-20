@@ -48,14 +48,14 @@ class StdThread : public Thread {
   Status SetAffinity(int cpu_index) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(i, &cpuset);
+    CPU_SET(cpu_index, &cpuset);
     int rc = pthread_setaffinity_np(thread_.native_handle(),
                                     sizeof(cpu_set_t), &cpuset);
     if (rc != 0) {
       return errors::Internal("Problem setting thread affinity in ",
           "StdThread class.");
     } else {
-      return Status::OK;
+      return Status::OK();
     }
   }
 
