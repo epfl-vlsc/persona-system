@@ -127,12 +127,12 @@ class SnapAlignDenseOp : public OpKernel {
           /*LOG(INFO) << " result: location " << primaryResult.location <<
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString_ << " mapq: " << primaryResult.mapq;*/
 
-          //result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
+          result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
 
         }
         //LOG(INFO) << "done aligning";
 
-        //result_builder_.AppendAndFlush(alignment_result_buffer);
+        result_builder_.AppendAndFlush(alignment_result_buffer);
         
         //LOG(INFO) << "done append";
         //auto end = std::chrono::high_resolution_clock::now();
