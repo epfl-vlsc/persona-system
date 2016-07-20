@@ -62,7 +62,6 @@ cc_library(
     deps = [
             "//tensorflow/core:framework",
             ":snap_protos_cc",
-            ":snap_tensor_decoders",
             "//tensorflow/core/user_ops/object-pool:object_pool",
             "//tensorflow/core/user_ops/dense-format:dense_format",
             ":snap_lib"],

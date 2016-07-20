@@ -1,5 +1,4 @@
-#ifndef TENSORFLOW_CORE_USEROPS_DENSE_FORMAT_DECOMPRESS_H_
-#define TENSORFLOW_CORE_USEROPS_DENSE_FORMAT_DECOMPRESS_H_
+#pragma once
 
 #include "tensorflow/core/lib/core/errors.h"
 
@@ -16,5 +15,3 @@ Status decompressGZIP(const char* segment,
                      std::vector<char> &output);
 
 } // namespace tensorflow
-
-#endif

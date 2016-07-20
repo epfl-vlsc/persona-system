@@ -7,8 +7,8 @@ namespace tensorflow {
 
   void AlignmentResultBuilder::AppendAlignmentResult(const SingleAlignmentResult &result, const string &var_string, vector<char> &index)
   {
-    appendSegment(reinterpret_cast<const char*>(&result), sizeof(result), records_);
-    appendSegment(var_string.data(), var_string.size(), records_);
+    appendSegment(reinterpret_cast<const char*>(&result), sizeof(result), records_, true);
+    appendSegment(var_string.data(), var_string.size(), records_, true);
     size_t index_entry = sizeof(result) + var_string.size();
     // TODO just assume it's a good size for now
     index.push_back(static_cast<char>(index_entry));

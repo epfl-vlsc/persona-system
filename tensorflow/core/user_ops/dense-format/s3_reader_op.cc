@@ -21,8 +21,8 @@ namespace tensorflow {
   .Attr("secret_key: string")
   .Attr("host: string")
   .Attr("bucket: string")
-  .Input("queue_handle: Ref(string)")
   .Input("pool_handle: Ref(string)")
+  .Input("key: string")
   .Output("file_handle: string")
   .Output("file_name: string")
   .SetIsStateful()
@@ -65,21 +65,22 @@ file_name: a Tensor() of string for the unique key for this file
       S3_initialize("s3", S3_INIT_ALL, host.c_str());
     }
 
+    ~S3ReaderOp()
+    {
+      core::ScopedUnref unref_pool(ref_pool_);
+    }
+
     void Compute(OpKernelContext* ctx) override {
-      // Get files to download from the queue
-      QueueInterface* queue;
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "queue_handle", &queue));
-      core::ScopedUnref unref_me(queue);
+      if (!ref_pool_) {
+        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool_));
+      }
 
-      OP_REQUIRES_OK(ctx, GetNextFilename(queue, &file_key, ctx));
-
-      // Get the buffer to write the file into from the buffer pool
-      ReferencePool<Buffer> *ref_pool;
-      OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "pool_handle", &ref_pool));
-      core::ScopedUnref unref_pool(ref_pool);
+      const Tensor *key_t;
+      OP_REQUIRES_OK(ctx, ctx->input("key", &key_t));
+      file_key = key_t->scalar<string>()();
 
       ResourceContainer<Buffer> *rec_buffer;
-      OP_REQUIRES_OK(ctx, ref_pool->GetResource(&rec_buffer));
+      OP_REQUIRES_OK(ctx, ref_pool_->GetResource(&rec_buffer));
       rec_buffer->get()->reset();
 
       S3_get_object(&bucketContext, file_key.c_str(), NULL, 0, 0, NULL, &getObjectHandler, rec_buffer);
@@ -108,6 +109,8 @@ file_name: a Tensor() of string for the unique key for this file
     S3ResponseHandler responseHandler;
     S3GetObjectHandler getObjectHandler;
 
+    ReferencePool<Buffer> *ref_pool_;
+
     static S3Status responsePropertiesCallback(
                     const S3ResponseProperties *properties,
                     void *callbackData)
@@ -130,30 +133,6 @@ file_name: a Tensor() of string for the unique key for this file
       return S3StatusOK;
     }
 
-    Status GetNextFilename(QueueInterface *queue, string *filename, OpKernelContext *ctx) {
-      Notification n;
-      queue->TryDequeue(ctx, [ctx, &n, filename](const QueueInterface::Tuple& tuple) {
-        if (ctx->status().ok()) {
-          if (tuple.size() != 1) {
-            ctx->SetStatus(errors::InvalidArgument("Expected single component queue"));
-          } else if (tuple[0].dtype() != DT_STRING) {
-            ctx->SetStatus(errors::InvalidArgument("Expected queue with single string component"));
-          } else if (tuple[0].NumElements() != 1) {
-            ctx->SetStatus(errors::InvalidArgument("Expected to dequeue a one-element string tensor"));
-          } else {
-            *filename = tuple[0].flat<string>()(0);
-          }
-        }
-        n.Notify();
-      });
-
-      n.WaitForNotification();
-
-      if (!ctx->status().ok()) {
-        return ctx->status();
-      }
-      return Status::OK();
-    }
   };
 
   REGISTER_KERNEL_BUILDER(Name("S3Reader").Device(DEVICE_CPU), S3ReaderOp);
