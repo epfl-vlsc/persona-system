@@ -21,6 +21,7 @@ limitations under the License.
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/tracing.h"
+#include "tensorflow/core/platform/host_info.h"
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
@@ -36,17 +37,30 @@ struct EigenEnvironment {
   Env* const env_;
   const ThreadOptions thread_options_;
   const string name_;
+  int current_cpu_;
 
   EigenEnvironment(Env* env, const ThreadOptions& thread_options,
                    const string& name)
-      : env_(env), thread_options_(thread_options), name_(name) {}
+      : env_(env), thread_options_(thread_options), name_(name) {
+      current_cpu_ = 0;
+  }
 
   EnvThread* CreateThread(std::function<void()> f) {
-    return env_->StartThread(thread_options_, name_, [=]() {
+    Thread* t = env_->StartThread(thread_options_, name_, [=]() {
       // Set the processor flag to flush denormals to zero
       port::ScopedFlushDenormal flush;
       f();
     });
+    if (current_cpu_ > port::NumSchedulableCPUs()) {
+      LOG(INFO) << "uh oh, trying to set affinity on core " << 
+        current_cpu_ << ", which is greater than " << port::NumSchedulableCPUs();
+    }
+    Status status = t->SetAffinity(current_cpu_);
+    current_cpu_++;
+    if (!status.ok()) {
+      LOG(INFO) << "Set affinity failed in impl create thread";
+    }
+    return t;
   }
 
   Task CreateTask(std::function<void()> f) {
