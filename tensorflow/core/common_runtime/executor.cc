@@ -665,7 +665,7 @@ class ExecutorState {
   FunctionCallFrame* call_frame_;
   const ExecutorImpl* impl_;
   CancellationManager* cancellation_manager_;
-  Executor::Args::Runner runner_;
+  Executor::Args::Runner runner_, runner_special_;
 
   // Owned.
 
@@ -816,6 +816,7 @@ ExecutorState::ExecutorState(const Executor::Args& args, ExecutorImpl* impl)
       impl_(impl),
       cancellation_manager_(args.cancellation_manager),
       runner_(args.runner),
+      runner_special_(args.runner_special),
       num_outstanding_ops_(0) {
   // We start the entire execution in iteration 0 of the root frame
   // so let us create the root frame and the state for iteration 0.
