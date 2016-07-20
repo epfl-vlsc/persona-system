@@ -185,6 +185,9 @@ struct NodeItem {
   // The kernel for this node.
   OpKernel* kernel = nullptr;
 
+  // TODO(bioflow) TODO(SW)
+  // if we want to pin this item to a specific core / thread, save state in this struct
+
   bool kernel_is_expensive = false;  // True iff kernel->IsExpensive()
   bool kernel_is_special = false;
   bool kernel_is_async = false;      // True iff kernel->AsAsync() != nullptr
@@ -1563,8 +1566,13 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
       if (curr_expensive_node) {
         // Dispatch to another thread since there is plenty of work to
         // do for this thread.
-        runner_(std::bind(&ME::Process, this, *curr_expensive_node,
-                          scheduled_usec));
+        if (item.kernel_is_special) {
+          runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
+                                    scheduled_usec));
+        } else {
+          runner_(std::bind(&ME::Process, this, *curr_expensive_node,
+                            scheduled_usec));
+        }
       }
       curr_expensive_node = &tagged_node;
     }
