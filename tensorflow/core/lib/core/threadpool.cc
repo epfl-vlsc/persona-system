@@ -113,6 +113,12 @@ void ThreadPool::Schedule(std::function<void()> fn) {
   impl_->Schedule(std::move(fn));
 }
 
+void ThreadPool::ScheduleSpecial(std::function<void()> fn) {
+  CHECK(fn != nullptr);
+  // TODO schedule in the second pool
+  //impl_->Schedule(std::move(fn));
+}
+
 void ThreadPool::ParallelFor(int64 total, int64 cost_per_unit,
                              std::function<void(int64, int64)> fn) {
   impl_->ParallelFor(total, cost_per_unit, std::move(fn));

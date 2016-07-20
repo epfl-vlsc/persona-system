@@ -47,6 +47,9 @@ class ThreadPool {
   // Schedule fn() for execution in the pool of threads.
   void Schedule(std::function<void()> fn);
 
+  // Schedule fn() for execution in the SPECIAL pool of threads.
+  void ScheduleSpecial(std::function<void()> fn);
+
   // ParallelFor shards the "total" unit of work assuming each unit of work
   // having roughly "cost_per_unit" cost, in cycles. Each unit of work is
   // indexed 0, 1, ..., total - 1. Each shard contains 1 or more units of work

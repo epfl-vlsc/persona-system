@@ -140,6 +140,21 @@ void DirectSession::SchedClosure(thread::ThreadPool* pool,
 #endif  // __ANDROID__
 }
 
+void DirectSession::SchedClosureSpecial(thread::ThreadPool* pool,
+                                        std::function<void()> c) {
+  // TODO(sanjay): Get rid of __ANDROID__ path
+#ifdef __ANDROID__
+  // On Android, there is no implementation of ThreadPool that takes
+  // std::function, only Closure, which we cannot easily convert.
+  //
+  // Instead, we just run the function in-line, which is currently
+  // safe given the reasoning above.
+  c();
+#else
+  pool->ScheduleSpecial(c);
+#endif  // __ANDROID__
+}
+
 DirectSession::DirectSession(const SessionOptions& options,
                              const DeviceMgr* device_mgr)
     : options_(options),
@@ -318,6 +333,9 @@ Status DirectSession::Run(const RunOptions& run_options,
   args.cancellation_manager = cancellation_manager_;
   args.runner = [this, pool](Executor::Args::Closure c) {
     SchedClosure(pool, c);
+  };
+  args.runner_special = [this, pool](Executor::Args::Closure c) {
+    SchedClosureSpecial(pool, c);
   };
   args.session_state = &session_state_;
   args.tensor_store = &run_state.tensor_store;
