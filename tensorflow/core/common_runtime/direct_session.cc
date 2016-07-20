@@ -72,7 +72,7 @@ thread::ThreadPool* NewThreadPoolFromSessionOptions(
     const SessionOptions& options) {
   const int32 num_threads = NumInterOpThreadsFromSessionOptions(options);
   VLOG(1) << "Direct session inter op parallelism threads: " << num_threads;
-  return new thread::ThreadPool(options.env, "Compute", num_threads);
+  return new thread::ThreadPool(options.env, "Compute", num_threads, options.config.special_op_threads());
 }
 
 thread::ThreadPool* NewThreadPoolFromThreadPoolOptions(
