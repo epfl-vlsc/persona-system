@@ -186,6 +186,7 @@ struct NodeItem {
   OpKernel* kernel = nullptr;
 
   bool kernel_is_expensive = false;  // True iff kernel->IsExpensive()
+  bool kernel_is_special = false;
   bool kernel_is_async = false;      // True iff kernel->AsAsync() != nullptr
   bool is_merge = false;             // True iff IsMerge(node)
 
@@ -336,6 +337,7 @@ Status ExecutorImpl::Initialize() {
     }
     CHECK(item->kernel);
     item->kernel_is_expensive = item->kernel->IsExpensive();
+    item->kernel_is_special = item->kernel->IsSpecial();
     item->kernel_is_async = (item->kernel->AsAsync() != nullptr);
     item->is_merge = IsMerge(n);
 
