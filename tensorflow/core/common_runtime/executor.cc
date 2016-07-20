@@ -1577,6 +1577,7 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
       curr_expensive_node = &tagged_node;
     }
   }
+
   if (curr_expensive_node) {
     if (inline_ready->empty()) {
       // Tail recursion optimization
@@ -1584,8 +1585,13 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
     } else {
       // There are inline nodes to run already. We dispatch this expensive
       // node to other thread.
-      runner_(
-          std::bind(&ME::Process, this, *curr_expensive_node, scheduled_usec));
+      if (nodes[curr_expensive_node->node->id()].kernel_is_special) {
+        runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
+                                  scheduled_usec));
+      } else {
+        runner_(std::bind(&ME::Process, this, *curr_expensive_node,
+                          scheduled_usec));
+      }
     }
   }
 }
