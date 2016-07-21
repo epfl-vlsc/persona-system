@@ -31,7 +31,6 @@ class SnapAlignDenseOp : public OpKernel {
     explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", 
               &is_special_));
-      LOG(INFO) << "this base aligner special: " << IsSpecial();
     }
 
     ~SnapAlignDenseOp() override {
