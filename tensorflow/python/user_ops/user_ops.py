@@ -101,7 +101,7 @@ def _S3ReaderShape(op):
 
   key_shape = op.inputs[1].get_shape()
   _assert_scalar(key_shape)
-  return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
+  return [tensor_shape.vector(2), tensor_shape.vector(1)]
 ops.NoGradient(_sr_str)
 
 _read_sink_str = "ReadSink"

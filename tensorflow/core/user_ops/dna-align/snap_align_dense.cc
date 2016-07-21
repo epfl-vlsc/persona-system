@@ -20,6 +20,7 @@
 #include "genome_index_resource.h"
 #include "aligner_options_resource.h"
 #include "tensorflow/core/user_ops/dense-format/read_resource.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
 namespace tensorflow {
 using namespace std;
@@ -90,6 +91,7 @@ class SnapAlignDenseOp : public OpKernel {
       ResourceReleaser<ReadResource> b(*reads_container);
       auto reads = reads_container->get();
       {
+        auto start = clock();
         ReadResourceReleaser r(*reads);
         bool first_is_primary;
         cigarString_.clear();
@@ -137,6 +139,7 @@ class SnapAlignDenseOp : public OpKernel {
         //LOG(INFO) << "done append";
         //auto end = std::chrono::high_resolution_clock::now();
         //LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
+        tracepoint(bioflow_provider, snap_align_kernel, clock() - start);
       }
     }
 
