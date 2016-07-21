@@ -1548,6 +1548,7 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
   if (stats_collector_) {
     scheduled_usec = nodestats::NowInUsec();
   }
+  
   if (inline_ready == nullptr) {
     // Schedule to run all the ready ops in thread pool.
     for (auto& tagged_node : ready) {
@@ -1565,9 +1566,6 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
   const TaggedNode* curr_expensive_node = nullptr;
   for (auto& tagged_node : ready) {
     const NodeItem& item = nodes[tagged_node.node->id()];
-    /*(if (item.kernel_is_special) {
-      LOG(INFO) << "running special node!";
-    }*/
     if (tagged_node.is_dead || !item.kernel_is_expensive) {
       // Inline this inexpensive node.
       inline_ready->push_back(tagged_node);
@@ -1589,19 +1587,25 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
   }
 
   if (curr_expensive_node) {
-    if (inline_ready->empty()) {
-      // Tail recursion optimization
-      inline_ready->push_back(*curr_expensive_node);
+    if (nodes[curr_expensive_node->node->id()].kernel_is_special) {
+      //LOG(INFO) << "running special instead of inlining !";
+      runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
+                                scheduled_usec));
     } else {
-      // There are inline nodes to run already. We dispatch this expensive
-      // node to other thread.
-      if (nodes[curr_expensive_node->node->id()].kernel_is_special) {
-        //LOG(INFO) << "running special !";
-        runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
-                                  scheduled_usec));
+      if (inline_ready->empty()) {
+        // Tail recursion optimization
+        inline_ready->push_back(*curr_expensive_node);
       } else {
-        runner_(std::bind(&ME::Process, this, *curr_expensive_node,
-                          scheduled_usec));
+        // There are inline nodes to run already. We dispatch this expensive
+        // node to other thread.
+        if (nodes[curr_expensive_node->node->id()].kernel_is_special) {
+          //LOG(INFO) << "running special !";
+          runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
+                                    scheduled_usec));
+        } else {
+          runner_(std::bind(&ME::Process, this, *curr_expensive_node,
+                            scheduled_usec));
+        }
       }
     }
   }
