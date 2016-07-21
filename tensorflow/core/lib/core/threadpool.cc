@@ -21,6 +21,7 @@ limitations under the License.
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/tracing.h"
+#include "tensorflow/core/platform/host_info.h"
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
@@ -36,17 +37,30 @@ struct EigenEnvironment {
   Env* const env_;
   const ThreadOptions thread_options_;
   const string name_;
+  int current_cpu_;
 
   EigenEnvironment(Env* env, const ThreadOptions& thread_options,
                    const string& name)
-      : env_(env), thread_options_(thread_options), name_(name) {}
+      : env_(env), thread_options_(thread_options), name_(name) {
+      current_cpu_ = 0;
+  }
 
   EnvThread* CreateThread(std::function<void()> f) {
-    return env_->StartThread(thread_options_, name_, [=]() {
+    Thread* t = env_->StartThread(thread_options_, name_, [=]() {
       // Set the processor flag to flush denormals to zero
       port::ScopedFlushDenormal flush;
       f();
     });
+    if (current_cpu_ > port::NumSchedulableCPUs()) {
+      LOG(INFO) << "uh oh, trying to set affinity on core " << 
+        current_cpu_ << ", which is greater than " << port::NumSchedulableCPUs();
+    }
+    Status status = t->SetAffinity(current_cpu_);
+    current_cpu_++;
+    if (!status.ok()) {
+      LOG(INFO) << "Set affinity failed in impl create thread";
+    }
+    return t;
   }
 
   Task CreateTask(std::function<void()> f) {
@@ -96,14 +110,22 @@ struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
   const int num_threads_;
 };
 
-ThreadPool::ThreadPool(Env* env, const string& name, int num_threads)
-    : ThreadPool(env, ThreadOptions(), name, num_threads) {}
+  ThreadPool::ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special)
+    : ThreadPool(env, ThreadOptions(), name, num_threads, num_threads_special) {}
 
 ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
-                       const string& name, int num_threads) {
+                       const string& name, int num_threads, int num_threads_special) {
+  // TODO(SW) do fancy stuff here to make sure the threads run on distinct cores (in the future)
   CHECK_GE(num_threads, 1);
   impl_.reset(
       new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads));
+  if (num_threads_special > 0) {
+    impl_special_.reset(
+                        new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special));
+  } else {
+    // TODO may be default behavior of unique_ptr
+    impl_special_.reset(nullptr);
+  }
 }
 
 ThreadPool::~ThreadPool() {}
@@ -111,6 +133,13 @@ ThreadPool::~ThreadPool() {}
 void ThreadPool::Schedule(std::function<void()> fn) {
   CHECK(fn != nullptr);
   impl_->Schedule(std::move(fn));
+}
+
+void ThreadPool::ScheduleSpecial(std::function<void()> fn) {
+  CHECK(fn != nullptr);
+  CHECK(impl_special_.get() != nullptr);
+  // TODO schedule in the second pool
+  impl_special_->Schedule(std::move(fn));
 }
 
 void ThreadPool::ParallelFor(int64 total, int64 cost_per_unit,

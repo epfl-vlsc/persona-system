@@ -68,6 +68,8 @@ class SnapAlignDenseOp : public OpKernel {
       return Status::OK();
     }
 
+    bool IsSpecial() override { return true; }
+
     void Compute(OpKernelContext* ctx) override {
       if (base_aligner_ == nullptr) {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));

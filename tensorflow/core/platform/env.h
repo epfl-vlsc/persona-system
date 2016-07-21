@@ -277,6 +277,8 @@ class Thread {
 
   /// Blocks until the thread of control stops running.
   virtual ~Thread();
+  
+  virtual Status SetAffinity(int cpu_index) { return Status::OK(); }
 
  private:
   /// No copying allowed
