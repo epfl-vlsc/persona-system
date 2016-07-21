@@ -40,10 +40,9 @@ struct EigenEnvironment {
   int current_cpu_;
 
   EigenEnvironment(Env* env, const ThreadOptions& thread_options,
-                   const string& name)
-      : env_(env), thread_options_(thread_options), name_(name) {
-      current_cpu_ = 0;
-  }
+                   const string& name, int affinity_start)
+      : env_(env), thread_options_(thread_options), name_(name),
+        current_cpu_(affinity_start){}
 
   EnvThread* CreateThread(std::function<void()> f) {
     Thread* t = env_->StartThread(thread_options_, name_, [=]() {
@@ -55,6 +54,7 @@ struct EigenEnvironment {
       LOG(INFO) << "uh oh, trying to set affinity on core " << 
         current_cpu_ << ", which is greater than " << port::NumSchedulableCPUs();
     }
+    //LOG(INFO) << "Setting thread affinity to core: " << current_cpu_;
     Status status = t->SetAffinity(current_cpu_);
     current_cpu_++;
     if (!status.ok()) {
@@ -86,9 +86,9 @@ struct EigenEnvironment {
 
 struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
   Impl(Env* env, const ThreadOptions& thread_options, const string& name,
-       int num_threads)
+       int num_threads, int affinity_start)
       : Eigen::ThreadPoolTempl<EigenEnvironment>(
-            num_threads, EigenEnvironment(env, thread_options, name)),
+            num_threads, EigenEnvironment(env, thread_options, name, affinity_start)),
         num_threads_(num_threads) {}
 
   void ParallelFor(int64 total, int64 cost_per_unit,
@@ -115,13 +115,12 @@ struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
 
 ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
                        const string& name, int num_threads, int num_threads_special) {
-  // TODO(SW) do fancy stuff here to make sure the threads run on distinct cores (in the future)
   CHECK_GE(num_threads, 1);
   impl_.reset(
-      new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads));
+      new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads, 0));
   if (num_threads_special > 0) {
     impl_special_.reset(
-                        new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special));
+      new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special, num_threads));
   } else {
     // TODO may be default behavior of unique_ptr
     impl_special_.reset(nullptr);

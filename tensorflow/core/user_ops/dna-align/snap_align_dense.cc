@@ -28,7 +28,11 @@ using namespace errors;
 
 class SnapAlignDenseOp : public OpKernel {
   public:
-    explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
+    explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", 
+              &is_special_));
+      LOG(INFO) << "this base aligner special: " << IsSpecial();
+    }
 
     ~SnapAlignDenseOp() override {
       core::ScopedUnref index_unref(index_resource_);
@@ -68,7 +72,7 @@ class SnapAlignDenseOp : public OpKernel {
       return Status::OK();
     }
 
-    bool IsSpecial() override { return true; }
+    bool IsSpecial() override { return is_special_; }
 
     void Compute(OpKernelContext* ctx) override {
       if (base_aligner_ == nullptr) {
@@ -160,12 +164,14 @@ class SnapAlignDenseOp : public OpKernel {
     AlignmentResultBuilder result_builder_;
     int flag_;
     LandauVishkinWithCigar lvc_;
+    bool is_special_ = true;
 
     vector<Read> input_reads_; // a vector to pass to SNAP
 };
 
 
 REGISTER_OP("SnapAlignDense")
+  .Attr("is_special: bool = true")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_pool: Ref(string)")

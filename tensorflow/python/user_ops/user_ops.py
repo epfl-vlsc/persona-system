@@ -191,10 +191,10 @@ def SnapAlign(genome, options, read, name=None):
 ops.NoGradient("SnapAlign")
 
 _sad_string = "SnapAlignDense"
-def SnapAlignDense(genome, options, buffer_pool, read, name=None):
+def SnapAlignDense(genome, options, buffer_pool, read, is_special=True, name=None):
 
     return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
-            buffer_pool=buffer_pool, read=read, name=name)
+            buffer_pool=buffer_pool, read=read, is_special=is_special, name=name)
 
 ops.NoGradient(_sad_string)
 @ops.RegisterShape(_sad_string)
