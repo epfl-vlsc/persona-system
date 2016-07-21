@@ -9,17 +9,19 @@
 
 #include <lttng/tracepoint.h>
 #include <cstdint>
+#include <ctime>
 
 // All of your tracepoint definitions must go before the endif!
 
-#define DURATION_ARGS TP_ARGS(uint32_t, event_duration)
+#define DURATION_ARGS TP_ARGS(clock_t, event_duration)
 
+// This event outputs the duration in microseconds
 TRACEPOINT_EVENT_CLASS(
                        bioflow_provider,
                        duration,
                        DURATION_ARGS,
                        TP_FIELDS(
-                                 ctf_integer(uint32_t, duration, event_duration)
+                                 ctf_integer(uint32_t, duration, (event_duration * 1000000) / CLOCKS_PER_SEC)
                                  )
 )
 
@@ -33,6 +35,7 @@ TRACEPOINT_EVENT_CLASS(
 
 BIOFLOW_DURATION_INSTANCE(decompression)
 BIOFLOW_DURATION_INSTANCE(file_mmap)
+BIOFLOW_DURATION_INSTANCE(base_conversion)
 
 #endif
 
