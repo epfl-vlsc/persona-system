@@ -8,7 +8,6 @@
 #include "compression.h"
 #include "parser.h"
 #include "buffer.h"
-#include "dense_trace.h"
 #include <vector>
 #include <cstdint>
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
@@ -62,7 +61,6 @@ reserve: the number of bytes to call 'reserve' on the vector.
       if (!buffer_pool_) {
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_pool", &buffer_pool_));
       }
-      tracepoint(dense_trace_provider, simple_counter, 42);
 
       const Tensor *fileset;
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &fileset));
