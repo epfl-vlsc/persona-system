@@ -1,7 +1,17 @@
 #include "read_resource.h"
+#include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
+  using namespace std;
+  using namespace errors;
+
   ReadResource::~ReadResource() {}
+
+  Status ReadResource::get_next_record(const char **bases, std::size_t *bases_length,
+                                const char **qualities, std::size_t *qualities_length)
+  {
+    return Unimplemented("partial record reading not suppported");
+  }
 
   bool ReadResource::has_qualities() {
     return false;
@@ -23,6 +33,5 @@ namespace tensorflow {
   {
     rr_.release();
   }
-
 
 } // namespace tensorflow {

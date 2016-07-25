@@ -100,19 +100,18 @@ class SnapAlignDenseOp : public OpKernel {
         ReadResourceReleaser r(*reads);
         bool first_is_primary;
         cigarString_.clear();
-        const char *bases, *qualities, *metadata;
-        std::size_t bases_len, qualities_len, metadata_len; 
+        const char *bases, *qualities;
+        std::size_t bases_len, qualities_len;
         SingleAlignmentResult primaryResult;
         int num_secondary_alignments = 0;
         int num_secondary_results;
         SAMFormat format(options_->useM);
 
-        while (reads->get_next_record(&bases, &bases_len, &qualities, 
-            &qualities_len, &metadata, &metadata_len).ok()) {
+        while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
-          snap_read_.init(metadata, metadata_len, bases, qualities, bases_len);
+          snap_read_.init(nullptr, 0, bases, qualities, bases_len);
           snap_read_.clip(options_->clipping);
-          
+
           base_aligner_->AlignRead(
             &snap_read_,
             &primaryResult,
@@ -140,7 +139,7 @@ class SnapAlignDenseOp : public OpKernel {
         //LOG(INFO) << "done aligning";
 
         result_builder_.AppendAndFlush(alignment_result_buffer);
-        
+
         //LOG(INFO) << "done append";
         //auto end = std::chrono::high_resolution_clock::now();
         //LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;

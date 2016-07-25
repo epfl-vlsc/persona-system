@@ -279,6 +279,27 @@ def _DenseAssemblerShape(op):
   _assert_scalar(op.inputs[4].get_shape())
   return [tensor_shape.vector(2)]
 
+_nmda_str = "NoMetaDenseAssembler"
+def NoMetaDenseAssembler(dense_read_pool, base_handle, qual_handle, num_records, name=None):
+  return gen_user_ops.no_meta_dense_assembler(
+    dense_read_pool=dense_read_pool,
+    base_handle=base_handle,
+    qual_handle=qual_handle,
+    num_records=num_records,
+    name=name
+  )
+
+ops.NoGradient(_nmda_str)
+@ops.RegisterShape(_nmda_str)
+def _NoMetaDenseAssemblerShape(op):
+  # getting the input op
+  _assert_vec(op.inputs[0].get_shape(), 2)
+  for i in range(1,3):
+    op_shape = op.inputs[i].get_shape()
+    _assert_vec(op_shape, 2)
+  _assert_scalar(op.inputs[3].get_shape())
+  return [tensor_shape.vector(2)]
+
 _dap_str = "DenseAssemblerPool"
 def DenseAssemblerPool(size=0, bound=False, name=None):
     return gen_user_ops.dense_assembler_pool(size=size, bound=bound, name=name)
