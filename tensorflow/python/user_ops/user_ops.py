@@ -121,6 +121,15 @@ def _BufferSinkShape(op):
   _assert_vec(data, 2)
   return []
 
+_dt_string = "DenseTester"
+def DenseTester(dense_buffer, genome_handle, sam_filename, name=None):
+  return gen_user_ops.dense_tester(dense_buffer=dense_buffer, genome_handle=genome_handle, sam_filename=sam_filename, name=name)
+ops.NoGradient(_dt_string)
+
+@ops.RegisterShape(_dt_string)
+def _DenseTester(op):
+    return [tensor_shape.vector(2)]
+
 _sm_str = "StagedFileMap"
 def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
   return gen_user_ops.staged_file_map(filename=filename, pool_handle=handle,
