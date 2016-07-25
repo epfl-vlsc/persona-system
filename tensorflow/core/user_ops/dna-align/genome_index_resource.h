@@ -6,6 +6,7 @@
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/GenomeIndex.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 
@@ -20,7 +21,8 @@ class GenomeIndexResource : public ResourceBase {
 
         void init(string path) {
             // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
-            value_ = GenomeIndex::loadFromDirectory(const_cast<char*>(path.c_str()), false, false);
+            LOG(INFO) << "loading genome index";
+            value_ = GenomeIndex::loadFromDirectory(const_cast<char*>(path.c_str()), true, true);
         }
 
         string DebugString() override {
