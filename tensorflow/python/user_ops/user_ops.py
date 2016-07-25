@@ -89,14 +89,19 @@ def _FileMMapShape(op):
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
 ops.NoGradient(_fm_str)
 
-def S3Reader(access_key, secret_key, host, bucket, queue, pool, name=None):
+def S3Reader(access_key, secret_key, host, bucket, lookup_key, pool, name=None):
   return gen_user_ops.s3_reader(access_key=access_key, secret_key=secret_key, host=host,
-                                bucket=bucket, queue_handle=queue, pool_handle=pool, name=name)
+                                bucket=bucket, key=lookup_key, pool_handle=pool, name=name)
 
 _sr_str = "S3Reader"
 @ops.RegisterShape(_sr_str)
 def _S3ReaderShape(op):
-  return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
+  handle_shape = op.inputs[0].get_shape()
+  _assert_vec(handle_shape, 2)
+
+  key_shape = op.inputs[1].get_shape()
+  _assert_scalar(key_shape)
+  return [tensor_shape.vector(2), tensor_shape.vector(1)]
 ops.NoGradient(_sr_str)
 
 _read_sink_str = "ReadSink"
@@ -195,10 +200,10 @@ def SnapAlign(genome, options, read, name=None):
 ops.NoGradient("SnapAlign")
 
 _sad_string = "SnapAlignDense"
-def SnapAlignDense(genome, options, buffer_pool, read, name=None):
+def SnapAlignDense(genome, options, buffer_pool, read, is_special=True, name=None):
 
     return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
-            buffer_pool=buffer_pool, read=read, name=name)
+            buffer_pool=buffer_pool, read=read, is_special=is_special, name=name)
 
 ops.NoGradient(_sad_string)
 @ops.RegisterShape(_sad_string)
@@ -234,10 +239,12 @@ def _BufferPoolShape(op):
 
 _cw_str = "ColumnWriter"
 allowed_type_values = set(["base", "qual", "meta", "results"])
-def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, name=None):
+def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, output_dir="", name=None):
     if record_type not in allowed_type_values:
         raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
           given=record_type, expected=allowed_type_values))
+    if output_dir != "" and output_dir[-1] != "/":
+      output_dir += "/"
     return gen_user_ops.column_writer(
       column_handle=column_handle,
       file_path=file_path,
@@ -246,6 +253,7 @@ def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id
       num_records=num_records,
       compress=compress,
       record_id=record_id,
+      output_dir=output_dir,
       name=name
     )
 
@@ -254,7 +262,7 @@ ops.NoGradient(_cw_str)
 def _ColumnWriterShape(op):
   column_handle_shape = op.inputs[0].get_shape()
   _assert_vec(column_handle_shape, 2)
-  for i in xrange(1,4):
+  for i in range(1,4):
     _assert_scalar(op.inputs[i].get_shape())
   return []
 
@@ -298,7 +306,7 @@ def FASTQCreator(data_handle, pool_handle, name=None):
 ops.NoGradient(_fc_str)
 @ops.RegisterShape(_fc_str)
 def _FASTQCreatorOPShape(op):
-    for i in xrange(2):
+    for i in range(2):
         a = op.inputs[i].get_shape()
         _assert_vec(a, 2)
     return [tensor_shape.vector(2)]
@@ -311,3 +319,19 @@ ops.NoGradient(_fcp_str)
 @ops.RegisterShape(_fcp_str)
 def _FASTQCreatorPoolOpShape(op):
     return [tensor_shape.vector(2)]
+
+_gz_str = "GZIPDecomp"
+
+def GZIPDecompressor(buffer_pool, data_handle, name=None):
+  return gen_user_ops.gzip_decomp(buffer_pool=buffer_pool,
+                                  data_handle=data_handle,
+                                  name=name)
+
+ops.NoGradient(_gz_str)
+@ops.RegisterShape(_gz_str)
+def _GZIPDecompShape(op):
+  pool_shape = op.inputs[0].get_shape()
+  data_shape = op.inputs[1].get_shape()
+  _assert_vec(pool_shape, 2)
+  _assert_vec(data_shape, 2)
+  return [data_shape]

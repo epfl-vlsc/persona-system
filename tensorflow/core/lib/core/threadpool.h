@@ -31,14 +31,14 @@ class ThreadPool {
   // env->StartThread() is used to create individual threads.
   //
   // REQUIRES: num_threads > 0
-  ThreadPool(Env* env, const string& name, int num_threads);
+  ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special = 0);
 
   // Construct a pool that contains "num_threads" threads with specified "name".
   // env->StartThread() is used to create individual threads.
   //
   // REQUIRES: num_threads > 0
   ThreadPool(Env* env, const ThreadOptions& thread_options, const string& name,
-             int num_threads);
+             int num_threads, int num_threads_special);
 
   // Wait until all scheduled work has finished and then destroy the
   // set of threads.
@@ -46,6 +46,9 @@ class ThreadPool {
 
   // Schedule fn() for execution in the pool of threads.
   void Schedule(std::function<void()> fn);
+
+  // Schedule fn() for execution in the SPECIAL pool of threads.
+  void ScheduleSpecial(std::function<void()> fn);
 
   // ParallelFor shards the "total" unit of work assuming each unit of work
   // having roughly "cost_per_unit" cost, in cycles. Each unit of work is
@@ -60,7 +63,7 @@ class ThreadPool {
   struct Impl;
 
  private:
-  std::unique_ptr<Impl> impl_;
+  std::unique_ptr<Impl> impl_, impl_special_;
   TF_DISALLOW_COPY_AND_ASSIGN(ThreadPool);
 };
 

@@ -106,6 +106,8 @@ class OpKernel {
   // to "inline" inexpensive kernels.
   virtual bool IsExpensive() { return true; }
 
+  virtual bool IsSpecial() { return false; }
+
   // Accessors.
   const NodeDef& def() const { return def_; }
   const string& name() const { return def_.name(); }

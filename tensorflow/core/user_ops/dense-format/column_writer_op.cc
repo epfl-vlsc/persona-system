@@ -19,6 +19,7 @@ namespace tensorflow {
   .Attr("compress: bool")
   .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
+  .Attr("output_dir: string = ''")
   .Input("column_handle: string")
   .Input("file_path: string")
   // TODO these can be collapsed into a vec(3) if that would help performance
@@ -60,8 +61,13 @@ Thus we always need 3 of these for the full conversion pipeline
       } else { // no need to check. we're saved by string enum types if TF
         t = RecordType::ALIGNMENT;
       }
-      record_suffix = "." + s;
+      record_suffix_ = "." + s;
       header_.record_type = static_cast<uint8_t>(t);
+
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &s));
+      if (!s.empty()) {
+        record_prefix_ = s;
+      }
     }
 
     void Compute(OpKernelContext* ctx) override {
@@ -78,7 +84,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
       auto data = column->get();
 
-      string full_path(filepath + record_suffix);
+      string full_path(record_prefix_ + filepath + record_suffix_);
 
       FILE *file_out = fopen(full_path.c_str(), "wb");
       // TODO get errno out of file
@@ -132,7 +138,7 @@ Thus we always need 3 of these for the full conversion pipeline
     }
 
     bool compress_;
-    string record_suffix;
+    string record_suffix_, record_prefix_;
     vector<char> buf_; // used to compress into
     format::FileHeader header_;
   };

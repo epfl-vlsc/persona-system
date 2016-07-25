@@ -3,7 +3,7 @@
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
-#include "scope_timer.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
 namespace tensorflow {
 
@@ -71,8 +71,10 @@ bundle_name: [{this map op's name}] + upstream_name
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
+      auto start = clock();
       ReadOnlyMemoryRegion *rmr;
       OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
+      tracepoint(bioflow, file_mmap, clock() - start);
       mmf->get()->own(rmr);
 
       Tensor *file_handles, *file_names;

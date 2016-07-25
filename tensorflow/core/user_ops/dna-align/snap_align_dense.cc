@@ -20,6 +20,7 @@
 #include "genome_index_resource.h"
 #include "aligner_options_resource.h"
 #include "tensorflow/core/user_ops/dense-format/read_resource.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
 namespace tensorflow {
 using namespace std;
@@ -27,7 +28,10 @@ using namespace errors;
 
 class SnapAlignDenseOp : public OpKernel {
   public:
-    explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
+    explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", 
+              &is_special_));
+    }
 
     ~SnapAlignDenseOp() override {
       core::ScopedUnref index_unref(index_resource_);
@@ -67,6 +71,8 @@ class SnapAlignDenseOp : public OpKernel {
       return Status::OK();
     }
 
+    bool IsSpecial() override { return is_special_; }
+
     void Compute(OpKernelContext* ctx) override {
       if (base_aligner_ == nullptr) {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
@@ -83,55 +89,63 @@ class SnapAlignDenseOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->input("read", &read_input)); 
       auto data = read_input->vec<string>(); // data(0) = container, data(1) = name 
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container)); 
-      ReadResource* reads = reads_container->get();
       //LOG(INFO) << "aligner doing " << num_actual_reads << " reads";
 
-      bool first_is_primary;
-      cigarString_.clear();
-      const char *bases, *qualities, *metadata;
-      std::size_t bases_len, qualities_len, metadata_len; 
-      SingleAlignmentResult primaryResult;
-      int num_secondary_alignments = 0;
-      int num_secondary_results;
-      SAMFormat format(options_->useM);
 
-      while (reads->get_next_record(&bases, &bases_len, &qualities, 
-          &qualities_len, &metadata, &metadata_len).ok()) {
+      core::ScopedUnref a(reads_container);
+      ResourceReleaser<ReadResource> b(*reads_container);
+      auto reads = reads_container->get();
+      {
+        auto start = clock();
+        ReadResourceReleaser r(*reads);
+        bool first_is_primary;
+        cigarString_.clear();
+        const char *bases, *qualities, *metadata;
+        std::size_t bases_len, qualities_len, metadata_len; 
+        SingleAlignmentResult primaryResult;
+        int num_secondary_alignments = 0;
+        int num_secondary_results;
+        SAMFormat format(options_->useM);
 
-        snap_read_.init(metadata, metadata_len, bases, qualities, bases_len);
-        snap_read_.clip(options_->clipping);
+        while (reads->get_next_record(&bases, &bases_len, &qualities, 
+            &qualities_len, &metadata, &metadata_len).ok()) {
+
+          snap_read_.init(metadata, metadata_len, bases, qualities, bases_len);
+          snap_read_.clip(options_->clipping);
+          
+          base_aligner_->AlignRead(
+            &snap_read_,
+            &primaryResult,
+            options_->maxSecondaryAlignmentAdditionalEditDistance,
+            num_secondary_alignments * sizeof(SingleAlignmentResult),
+            &num_secondary_results,
+            num_secondary_alignments,
+            nullptr //secondaryResults
+          );
+
+          flag_ = 0;
+
+          // compute the CIGAR strings and flags
+          // input_reads[i] holds the current snap_read
+          OP_REQUIRES_OK(ctx, snap_wrapper::computeCigarFlags(
+                &snap_read_, &primaryResult, 1, first_is_primary, format,
+                options_->useM, lvc_, genome_, cigarString_, flag_));
+
+          /*LOG(INFO) << " result: location " << primaryResult.location <<
+            " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString_ << " mapq: " << primaryResult.mapq;*/
+
+          result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
+
+        }
+        //LOG(INFO) << "done aligning";
+
+        result_builder_.AppendAndFlush(alignment_result_buffer);
         
-        base_aligner_->AlignRead(
-          &snap_read_,
-          &primaryResult,
-          options_->maxSecondaryAlignmentAdditionalEditDistance,
-          num_secondary_alignments * sizeof(SingleAlignmentResult),
-          &num_secondary_results,
-          num_secondary_alignments,
-          nullptr //secondaryResults
-        );
-
-        flag_ = 0;
-
-        // compute the CIGAR strings and flags
-        // input_reads[i] holds the current snap_read
-        OP_REQUIRES_OK(ctx, snap_wrapper::computeCigarFlags(
-              &snap_read_, &primaryResult, 1, first_is_primary, format,
-              options_->useM, lvc_, genome_, cigarString_, flag_));
-
-        /*LOG(INFO) << " result: location " << primaryResult.location <<
-          " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString_ << " mapq: " << primaryResult.mapq;*/
-
-        //result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
-
+        //LOG(INFO) << "done append";
+        //auto end = std::chrono::high_resolution_clock::now();
+        //LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
+        tracepoint(bioflow, snap_align_kernel, clock() - start);
       }
-      //LOG(INFO) << "done aligning";
-
-      //result_builder_.AppendAndFlush(alignment_result_buffer);
-      
-      //LOG(INFO) << "done append";
-      //auto end = std::chrono::high_resolution_clock::now();
-      //LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
     }
 
   private:
@@ -149,12 +163,14 @@ class SnapAlignDenseOp : public OpKernel {
     AlignmentResultBuilder result_builder_;
     int flag_;
     LandauVishkinWithCigar lvc_;
+    bool is_special_ = true;
 
     vector<Read> input_reads_; // a vector to pass to SNAP
 };
 
 
 REGISTER_OP("SnapAlignDense")
+  .Attr("is_special: bool = true")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_pool: Ref(string)")

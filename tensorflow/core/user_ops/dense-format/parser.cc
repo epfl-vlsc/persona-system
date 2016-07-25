@@ -5,6 +5,7 @@
 #include "util.h"
 #include "format.h"
 #include "tensorflow/core/platform/mutex.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include <cstdint>
 
 namespace tensorflow {
@@ -123,6 +124,7 @@ namespace tensorflow {
 
     Status status;
     auto compression_type = static_cast<CompressionType>(file_header->compression_type);
+    auto start = clock();
     switch (compression_type) {
     case CompressionType::GZIP:
       status = decompressGZIP(payload_start, payload_size, result);
@@ -134,6 +136,7 @@ namespace tensorflow {
       status = errors::InvalidArgument("Compressed type '", file_header->compression_type, "' doesn't match to any valid or supported compression enum type");
       break;
     }
+    tracepoint(bioflow, decompression, clock() - start);
     TF_RETURN_IF_ERROR(status);
 
     const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
@@ -163,6 +166,7 @@ namespace tensorflow {
     }
 
     if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
+      start = clock();
       conversion_scratch_.clear(); index_scratch_.clear();
 
       uint8_t current_record_length;
@@ -182,6 +186,7 @@ namespace tensorflow {
       result.reserve(index_scratch_.size() + conversion_scratch_.size());
       TF_RETURN_IF_ERROR(copySegment(&index_scratch_[0], index_scratch_.size(), result));
       TF_RETURN_IF_ERROR(appendSegment(&conversion_scratch_[0], conversion_scratch_.size(), result));
+      tracepoint(bioflow, base_conversion, clock() - start);
     }
 
     *first_ordinal = file_header->first_ordinal;
