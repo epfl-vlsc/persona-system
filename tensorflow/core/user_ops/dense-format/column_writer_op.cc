@@ -121,11 +121,11 @@ Thus we always need 3 of these for the full conversion pipeline
       const Tensor *tensor;
       uint64_t tmp64;
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
-      tmp64 = static_cast<uint64_t>(tensor->scalar<int64>()());
+      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int64>()());
       header_.first_ordinal = tmp64;
 
       TF_RETURN_IF_ERROR(ctx->input("num_records", &tensor));
-      tmp64 = static_cast<uint64_t>(tensor->scalar<int32>()());
+      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int32>()());
       header_.last_ordinal = header_.first_ordinal + tmp64;
 
       int fwrite_ret = fwrite(&header_, sizeof(header_), 1, file_out);
