@@ -136,10 +136,10 @@ namespace tensorflow {
       status = errors::InvalidArgument("Compressed type '", file_header->compression_type, "' doesn't match to any valid or supported compression enum type");
       break;
     }
-    tracepoint(bioflow, decompression, clock() - start);
+    const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
+    tracepoint(bioflow, decompression, clock() - start, file_header->first_ordinal, index_size);
     TF_RETURN_IF_ERROR(status);
 
-    const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
     if (result.size() < index_size * 2) {
       return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", result.size());
     }
@@ -186,7 +186,7 @@ namespace tensorflow {
       result.reserve(index_scratch_.size() + conversion_scratch_.size());
       TF_RETURN_IF_ERROR(copySegment(&index_scratch_[0], index_scratch_.size(), result));
       TF_RETURN_IF_ERROR(appendSegment(&conversion_scratch_[0], conversion_scratch_.size(), result));
-      tracepoint(bioflow, base_conversion, clock() - start);
+      tracepoint(bioflow, base_conversion, clock() - start, file_header->first_ordinal, index_size);
     }
 
     *first_ordinal = file_header->first_ordinal;
