@@ -1,5 +1,5 @@
 #undef TRACEPOINT_PROVIDER
-#define TRACEPOINT_PROVIDER bioflow_provider
+#define TRACEPOINT_PROVIDER bioflow
 
 #undef TRACEPOINT_INCLUDE
 #define TRACEPOINT_INCLUDE "tensorflow/core/user_ops/lttng/tracepoints.h"
@@ -17,7 +17,7 @@
 
 // This event outputs the duration in microseconds
 TRACEPOINT_EVENT_CLASS(
-                       bioflow_provider,
+                       bioflow,
                        duration,
                        DURATION_ARGS,
                        TP_FIELDS(
@@ -25,13 +25,13 @@ TRACEPOINT_EVENT_CLASS(
                                  )
 )
 
-#define BIOFLOW_DURATION_INSTANCE(_name_)         \
-  TRACEPOINT_EVENT_INSTANCE(                      \
-                            bioflow_provider,     \
-                            duration,             \
-                            _name_,               \
-                            DURATION_ARGS         \
-                                                )
+#define BIOFLOW_DURATION_INSTANCE(_name_)           \
+  TRACEPOINT_EVENT_INSTANCE(                        \
+                            bioflow,                \
+                            duration,               \
+                            _name_,                 \
+                            DURATION_ARGS           \
+                                                  )
 
 BIOFLOW_DURATION_INSTANCE(decompression)
 BIOFLOW_DURATION_INSTANCE(file_mmap)
