@@ -16,6 +16,10 @@ namespace tensorflow {
     return appendSegment(content, content_size, buf_);
   }
 
+  Status Buffer::AppendBufferDouble(const char* content, size_t content_size) {
+    return appendSegment(content, content_size, buf_, true);
+  }
+
   const char* Buffer::data() const {
     return &buf_[0];
   }

@@ -9,6 +9,7 @@ namespace tensorflow {
   DenseReadResource::DenseReadResource(size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta) :
     bases_(bases), quals_(quals), meta_(meta), num_records_(num_records)
   {
+    // TODO probably chain this with the other constructor
     auto idx_offset = num_records * sizeof(RecordTable::IndexValue);
     auto b = bases->get()->data();
     base_idx_ = reinterpret_cast<const RecordTable*>(b);
@@ -21,6 +22,18 @@ namespace tensorflow {
     auto m = meta->get()->data();
     meta_idx_ = reinterpret_cast<const RecordTable*>(m);
     meta_data_ = m + idx_offset;
+  }
+
+  DenseReadResource::DenseReadResource(size_t num_records, DataContainer *bases, DataContainer *quals) : bases_(bases), quals_(quals), num_records_(num_records)
+  {
+    auto idx_offset = num_records * sizeof(RecordTable::IndexValue);
+    auto b = bases->get()->data();
+    base_idx_ = reinterpret_cast<const RecordTable*>(b);
+    base_data_ = b + idx_offset;
+
+    auto q = quals->get()->data();
+    qual_idx_ = reinterpret_cast<const RecordTable*>(q);
+    qual_data_ = q + idx_offset;
   }
 
   DenseReadResource&
@@ -74,6 +87,28 @@ namespace tensorflow {
   bool DenseReadResource::has_metadata()
   {
     return meta_ != nullptr;
+  }
+
+  Status DenseReadResource::get_next_record(const char **bases, std::size_t *bases_length,
+                                            const char **qualities, std::size_t *qualities_length)
+  {
+    if (record_idx_ < num_records_) {
+      auto base_len = base_idx_->relative_index[record_idx_];
+      *bases_length = base_len;
+      *bases = base_data_;
+      base_data_  += base_len;
+
+      auto qual_len = qual_idx_->relative_index[record_idx_];
+      *qualities_length = qual_len;
+      *qualities = qual_data_;
+      qual_data_ += qual_len;
+
+      record_idx_++;
+      return Status::OK();
+    } else {
+      return ResourceExhausted("dense record container exhausted");
+    }
+
   }
 
   Status DenseReadResource::get_next_record(const char **bases, std::size_t *bases_length,

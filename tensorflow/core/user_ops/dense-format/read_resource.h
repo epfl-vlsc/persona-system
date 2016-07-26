@@ -17,6 +17,9 @@ namespace tensorflow {
                                    const char **qualities, std::size_t *qualities_length,
                                    const char **metadata, std::size_t *metadata_length) = 0;
 
+    virtual Status get_next_record(const char **bases, std::size_t *bases_length,
+                                   const char **qualities, std::size_t *qualities_length);
+
     virtual bool has_qualities();
     virtual bool has_metadata();
 

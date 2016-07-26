@@ -22,7 +22,10 @@ class GenomeIndexResource : public ResourceBase {
         void init(string path) {
             // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
             LOG(INFO) << "loading genome index";
+            auto begin = std::chrono::high_resolution_clock::now();
             value_ = GenomeIndex::loadFromDirectory(const_cast<char*>(path.c_str()), true, true);
+            auto end = std::chrono::high_resolution_clock::now();
+            LOG(INFO) << "genome load time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
         }
 
         string DebugString() override {

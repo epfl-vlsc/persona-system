@@ -17,6 +17,7 @@ namespace tensorflow {
     explicit DenseReadResource() = default;
 
     explicit DenseReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta);
+    explicit DenseReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals);
 
     DenseReadResource& operator=(DenseReadResource &&other);
 
@@ -26,6 +27,9 @@ namespace tensorflow {
     Status get_next_record(const char **bases, std::size_t *bases_length,
                            const char **qualities, std::size_t *qualities_length,
                            const char **metadata, std::size_t *metadata_length) override;
+
+    Status get_next_record(const char **bases, std::size_t *bases_length,
+                           const char **qualities, std::size_t *qualities_length) override;
 
     bool reset_iter() override;
 
