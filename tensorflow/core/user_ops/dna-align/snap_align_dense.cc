@@ -28,7 +28,10 @@ using namespace errors;
 
 class SnapAlignDenseOp : public OpKernel {
   public:
-    explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
+    explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", 
+              &is_special_));
+    }
 
     ~SnapAlignDenseOp() override {
       core::ScopedUnref index_unref(index_resource_);
@@ -68,7 +71,7 @@ class SnapAlignDenseOp : public OpKernel {
       return Status::OK();
     }
 
-    bool IsSpecial() override { return true; }
+    bool IsSpecial() override { return is_special_; }
 
     void Compute(OpKernelContext* ctx) override {
       if (base_aligner_ == nullptr) {
@@ -97,19 +100,18 @@ class SnapAlignDenseOp : public OpKernel {
         ReadResourceReleaser r(*reads);
         bool first_is_primary;
         cigarString_.clear();
-        const char *bases, *qualities, *metadata;
-        std::size_t bases_len, qualities_len, metadata_len; 
+        const char *bases, *qualities;
+        std::size_t bases_len, qualities_len;
         SingleAlignmentResult primaryResult;
         int num_secondary_alignments = 0;
         int num_secondary_results;
         SAMFormat format(options_->useM);
 
-        while (reads->get_next_record(&bases, &bases_len, &qualities, 
-            &qualities_len, &metadata, &metadata_len).ok()) {
+        while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
-          snap_read_.init(metadata, metadata_len, bases, qualities, bases_len);
+          snap_read_.init(nullptr, 0, bases, qualities, bases_len);
           snap_read_.clip(options_->clipping);
-          
+
           base_aligner_->AlignRead(
             &snap_read_,
             &primaryResult,
@@ -137,11 +139,11 @@ class SnapAlignDenseOp : public OpKernel {
         //LOG(INFO) << "done aligning";
 
         result_builder_.AppendAndFlush(alignment_result_buffer);
-        
+
         //LOG(INFO) << "done append";
         //auto end = std::chrono::high_resolution_clock::now();
         //LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
-        tracepoint(bioflow_provider, snap_align_kernel, clock() - start);
+        tracepoint(bioflow, snap_align_kernel, clock() - start);
       }
     }
 
@@ -160,12 +162,14 @@ class SnapAlignDenseOp : public OpKernel {
     AlignmentResultBuilder result_builder_;
     int flag_;
     LandauVishkinWithCigar lvc_;
+    bool is_special_ = true;
 
     vector<Read> input_reads_; // a vector to pass to SNAP
 };
 
 
 REGISTER_OP("SnapAlignDense")
+  .Attr("is_special: bool = true")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_pool: Ref(string)")

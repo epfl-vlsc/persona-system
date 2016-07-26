@@ -208,10 +208,10 @@ def SnapAlign(genome, options, read, name=None):
 ops.NoGradient("SnapAlign")
 
 _sad_string = "SnapAlignDense"
-def SnapAlignDense(genome, options, buffer_pool, read, name=None):
+def SnapAlignDense(genome, options, buffer_pool, read, is_special=True, name=None):
 
     return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
-            buffer_pool=buffer_pool, read=read, name=name)
+            buffer_pool=buffer_pool, read=read, is_special=is_special, name=name)
 
 ops.NoGradient(_sad_string)
 @ops.RegisterShape(_sad_string)
@@ -247,10 +247,12 @@ def _BufferPoolShape(op):
 
 _cw_str = "ColumnWriter"
 allowed_type_values = set(["base", "qual", "meta", "results"])
-def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, name=None):
+def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, output_dir="", name=None):
     if record_type not in allowed_type_values:
         raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
           given=record_type, expected=allowed_type_values))
+    if output_dir != "" and output_dir[-1] != "/":
+      output_dir += "/"
     return gen_user_ops.column_writer(
       column_handle=column_handle,
       file_path=file_path,
@@ -259,6 +261,7 @@ def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id
       num_records=num_records,
       compress=compress,
       record_id=record_id,
+      output_dir=output_dir,
       name=name
     )
 
@@ -267,7 +270,7 @@ ops.NoGradient(_cw_str)
 def _ColumnWriterShape(op):
   column_handle_shape = op.inputs[0].get_shape()
   _assert_vec(column_handle_shape, 2)
-  for i in xrange(1,4):
+  for i in range(1,4):
     _assert_scalar(op.inputs[i].get_shape())
   return []
 
@@ -293,6 +296,27 @@ def _DenseAssemblerShape(op):
   _assert_scalar(op.inputs[4].get_shape())
   return [tensor_shape.vector(2)]
 
+_nmda_str = "NoMetaDenseAssembler"
+def NoMetaDenseAssembler(dense_read_pool, base_handle, qual_handle, num_records, name=None):
+  return gen_user_ops.no_meta_dense_assembler(
+    dense_read_pool=dense_read_pool,
+    base_handle=base_handle,
+    qual_handle=qual_handle,
+    num_records=num_records,
+    name=name
+  )
+
+ops.NoGradient(_nmda_str)
+@ops.RegisterShape(_nmda_str)
+def _NoMetaDenseAssemblerShape(op):
+  # getting the input op
+  _assert_vec(op.inputs[0].get_shape(), 2)
+  for i in range(1,3):
+    op_shape = op.inputs[i].get_shape()
+    _assert_vec(op_shape, 2)
+  _assert_scalar(op.inputs[3].get_shape())
+  return [tensor_shape.vector(2)]
+
 _dap_str = "DenseAssemblerPool"
 def DenseAssemblerPool(size=0, bound=False, name=None):
     return gen_user_ops.dense_assembler_pool(size=size, bound=bound, name=name)
@@ -311,7 +335,7 @@ def FASTQCreator(data_handle, pool_handle, name=None):
 ops.NoGradient(_fc_str)
 @ops.RegisterShape(_fc_str)
 def _FASTQCreatorOPShape(op):
-    for i in xrange(2):
+    for i in range(2):
         a = op.inputs[i].get_shape()
         _assert_vec(a, 2)
     return [tensor_shape.vector(2)]

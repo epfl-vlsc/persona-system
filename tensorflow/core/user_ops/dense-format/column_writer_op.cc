@@ -19,6 +19,7 @@ namespace tensorflow {
   .Attr("compress: bool")
   .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
+  .Attr("output_dir: string = ''")
   .Input("column_handle: string")
   .Input("file_path: string")
   // TODO these can be collapsed into a vec(3) if that would help performance
@@ -60,8 +61,13 @@ Thus we always need 3 of these for the full conversion pipeline
       } else { // no need to check. we're saved by string enum types if TF
         t = RecordType::ALIGNMENT;
       }
-      record_suffix = "." + s;
+      record_suffix_ = "." + s;
       header_.record_type = static_cast<uint8_t>(t);
+
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &s));
+      if (!s.empty()) {
+        record_prefix_ = s;
+      }
     }
 
     void Compute(OpKernelContext* ctx) override {
@@ -78,7 +84,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
       auto data = column->get();
 
-      string full_path(filepath + record_suffix);
+      string full_path(record_prefix_ + filepath + record_suffix_);
 
       FILE *file_out = fopen(full_path.c_str(), "wb");
       // TODO get errno out of file
@@ -115,11 +121,11 @@ Thus we always need 3 of these for the full conversion pipeline
       const Tensor *tensor;
       uint64_t tmp64;
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
-      tmp64 = static_cast<uint64_t>(tensor->scalar<int64>()());
+      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int64>()());
       header_.first_ordinal = tmp64;
 
       TF_RETURN_IF_ERROR(ctx->input("num_records", &tensor));
-      tmp64 = static_cast<uint64_t>(tensor->scalar<int64>()());
+      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int32>()());
       header_.last_ordinal = header_.first_ordinal + tmp64;
 
       int fwrite_ret = fwrite(&header_, sizeof(header_), 1, file_out);
@@ -132,7 +138,7 @@ Thus we always need 3 of these for the full conversion pipeline
     }
 
     bool compress_;
-    string record_suffix;
+    string record_suffix_, record_prefix_;
     vector<char> buf_; // used to compress into
     format::FileHeader header_;
   };
