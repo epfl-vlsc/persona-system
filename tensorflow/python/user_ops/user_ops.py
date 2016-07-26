@@ -104,6 +104,23 @@ def _S3ReaderShape(op):
   return [tensor_shape.vector(2), tensor_shape.vector(1)]
 ops.NoGradient(_sr_str)
 
+def CephReader(cluster_name, user_name, pool_name, ceph_conf_path, read_size, buffer_handle, queue_key, name=None):
+  return gen_user_ops.ceph_reader(cluster_name=cluster_name, user_name=user_name,
+                                  pool_name=pool_name, ceph_conf_path=ceph_conf_path, read_size=read_size,
+                                  buffer_handle=buffer_handle, queue_key=queue_key)
+
+_cr_str = "CephReader"
+@ops.RegisterShape(_cr_str)
+def _CephReaderShape(op):
+  handle_shape = op.inputs[0].get_shape()
+  _assert_vec(handle_shape, 2)
+
+  key_shape = op.inputs[1].get_shape()
+  _assert_scalar(key_shape)
+  return [tensor_shape.vector(2), tensor_shape.vector(1)]
+ops.NoGradient(_cr_str)
+
+
 _read_sink_str = "ReadSink"
 def ReadSink(data, name=None):
   return gen_user_ops.read_sink(data=data, name=name)
