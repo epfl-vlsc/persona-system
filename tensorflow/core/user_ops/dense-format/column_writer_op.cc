@@ -80,6 +80,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
       ResourceContainer<Data> *column;
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
+      core::ScopedUnref column_releaser(column);
       ResourceReleaser<Data> a(*column);
 
       auto data = column->get();
