@@ -127,13 +127,14 @@ def _BufferSinkShape(op):
   return []
 
 _dt_string = "DenseTester"
-def DenseTester(dense_buffer, genome_handle, sam_filename, name=None):
-  return gen_user_ops.dense_tester(dense_buffer=dense_buffer, genome_handle=genome_handle, sam_filename=sam_filename, name=name)
+def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
+  return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records, 
+                                   genome_handle=genome_handle, sam_filename=sam_filename, name=name)
 ops.NoGradient(_dt_string)
 
 @ops.RegisterShape(_dt_string)
 def _DenseTester(op):
-    return [tensor_shape.vector(2)]
+    return [tensor_shape.scalar(), tensor_shape.vector(2)]
 
 _sm_str = "StagedFileMap"
 def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):

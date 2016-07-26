@@ -73,13 +73,12 @@ namespace format {
   };
 
   struct __attribute__((packed)) AlignmentResult {
-    uint8_t cigar_len = 0;
-    uint16_t flag = 0; // replaces status and direction
-    int score = 0;
-    int mapq = 0;
-    int64_t location = 0; // POS field in SAM format
+    uint16_t flag_ = 0; // replaces status and direction
+    int score_ = 0;
+    int mapq_ = 0;
+    int64_t location_ = 0; // POS field in SAM format
 
-    void convertFromSNAP(const SingleAlignmentResult &result);
+    void convertFromSNAP(const SingleAlignmentResult &result, const int flag);
    };
 
   struct __attribute__((packed)) BinaryBases {

@@ -3,6 +3,7 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
+#include "tensorflow/core/user_ops/dense-format/format.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "GenomeIndex.h"
 #include "genome_index_resource.h"
@@ -21,17 +22,22 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("sam_filename: string = ''")
-  .Input("dense_buffer: string")
+  .Input("num_records: int32")
+  .Input("dense_records: string")
   .Input("genome_handle: Ref(string)")
-  .Output("result_buf_handle: string")
+  .Output("num_records_out: int32")
+  .Output("dense_records_out: string")
   .Doc(R"doc(
   Compares the dense format output with the SAM format output
 )doc");
 
   class DenseTesterOp : public OpKernel {
   public:
+    
     DenseTesterOp(OpKernelConstruction* context) : OpKernel(context) {
-      OP_REQUIRES_OK(context, context->GetAttr("sam_filename", &sam_filename));
+      OP_REQUIRES_OK(context, context->GetAttr("sam_filename", &sam_filename_));
+
+      genome_resource_ = NULL;
     }
 		
     _int64 getFileSize(const char *fileName) {
@@ -45,94 +51,103 @@ namespace tensorflow {
 
     void Compute(OpKernelContext* ctx) override {
 
-//    Get the dense format results in dense_buf
-//    data(0) = container, data(1) = name
-    	ResourceContainer<Data> *dense_buf;
-      const Tensor *dense_input;
-      OP_REQUIRES_OK(ctx, ctx->input("dense_buffer", &dense_input));
-      auto dense_data = dense_input->vec<string>();
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(dense_data(0), dense_data(1), &dense_buf));
+      // Get the dense format results in dense_records
+      // rec_data(0) = container, rec_data(1) = name
+    	ResourceContainer<Data> *records;
+      const Tensor *rec_input;
+      OP_REQUIRES_OK(ctx, ctx->input("dense_records", &rec_input));
+      auto rec_input_vec = rec_input->vec<string>();
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
+      auto rec_data = records->get()->data();
 
-      OP_REQUIRES_OK(ctx,
+      // Get number of records per chunk
+      const Tensor *tensor;
+      OP_REQUIRES_OK(ctx, ctx->input("num_records", &tensor));
+      auto num_records = tensor->scalar<int32>()();
+
+            // Outputs the "dense_records" input
+      const TensorShape rec_handle_shape({2});
+      Tensor *rec_handle;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("dense_records_out", rec_handle_shape, &rec_handle));
+      auto rec_handle_vec = rec_handle->vec<string>();
+      rec_handle_vec(0) = rec_input_vec(0);
+      rec_handle_vec(1) = rec_input_vec(1); 
+
+      // Outputs the "num_records" input
+      Tensor *num_rec_handle;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape(), &num_rec_handle));
+      auto num_rec_out = num_rec_handle->template scalar<int32>();
+      num_rec_out() = num_records;
+    
+      if (NULL == genome_resource_)
+      {
+        // One-time init
+        OP_REQUIRES_OK(ctx,
           GetResourceFromContext(ctx, "genome_handle", &genome_resource_));
-			
-			// creating an output just to feed the BufferSinkOp, which should be the same as the "dense_buffer input"
-      const TensorShape handle_shape_({2});
-      Tensor *handle;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("result_buf_handle", handle_shape_, &handle));
-      auto handle_vec = handle->vec<string>();
-      handle_vec(0) = dense_data(0);
-      handle_vec(1) = dense_data(1); 
-			
-      const Genome *genome = genome_resource_->get_genome();
-      
-      // populate a context necessary for reading the SAM file
-      ReaderContext readerContext;
-      readerContext.genome = genome;
-      readerContext.ignoreSecondaryAlignments = true;
-      readerContext.ignoreSupplementaryAlignments = true;
-      readerContext.clipping = NoClipping;
-      readerContext.defaultReadGroup = "";
-      readerContext.header = NULL;
-      readerContext.headerLength = 0;
-      readerContext.headerBytes = 0;
+        const Genome *genome = genome_resource_->get_genome();
 
-      _int64 sam_filesize = getFileSize(sam_filename.c_str());
-      SAMReader *reader;
-      reader = SAMReader::create(DataSupplier::Default, sam_filename.c_str(), 2, readerContext, 0, sam_filesize);
-      
-      // will be populated in SAMReader::getNextRead
-      AlignmentResult alignmentResult;
-      GenomeLocation genomeLocation;
-      Direction direction; // do we need it? else = NULL
-      unsigned mapQ;
-      unsigned flag;
-      const char *cigar;
+        // Populate a context necessary for reading the SAM file
+        readerContext_.genome = genome;
+        readerContext_.ignoreSecondaryAlignments = true;
+        readerContext_.ignoreSupplementaryAlignments = true;
+        readerContext_.clipping = NoClipping;
+        readerContext_.defaultReadGroup = "";
+        readerContext_.header = NULL;
+        readerContext_.headerLength = 0;
+        readerContext_.headerBytes = 0;
 
-      Read *read;
-      int i = 0;
-      while (reader->getNextRead(read, &alignmentResult, &genomeLocation, &direction, &mapQ, &flag, &cigar)) {
-        std::cout << "The read with number " << i << " has the mapQ " << mapQ << std::endl;
-        i++;
+        _int64 sam_filesize = getFileSize(sam_filename_.c_str());
+        reader_ = SAMReader::create(DataSupplier::Default, sam_filename_.c_str(), 2, readerContext_, 0, sam_filesize);
       }
 
-/*
-      const Genome *genome = genome_resource_->get_genome();
-      ReaderContext readerContext;
-      readerContext.genome = genome;
-      readerContext.ignoreSecondaryAlignments = true;
-      readerContext.ignoreSupplementaryAlignments = true;
-      
-      // TODO: what about the other parameters?
-      readerContext.clipping = NoClipping;
-      readerContext.defaultReadGroup = "";
-      readerContext.header = NULL;
-      readerContext.headerLength = 0;
-      readerContext.headerBytes = 0;
+      // Will be populated in SAMReader::getNextRead
+      AlignmentResult sam_alignmentResult;
+      GenomeLocation sam_genomeLocation;
+      Direction sam_direction; 
+      unsigned sam_mapQ;
+      unsigned sam_flag;
+      const char *sam_cigar;
 
-      
-      
+      for (int i = 0; i < num_records; i++) {
+        if (! reader_->getNextRead(&sam_read_, &sam_alignmentResult, &sam_genomeLocation, 
+            &sam_direction, &sam_mapQ, &sam_flag, &sam_cigar)) {
+          std::cout << "Could not get read from SAM file!" << std::endl;
+        }
+        
+        size_t record_size = static_cast<size_t>(*(rec_data + i)); // indices are stored as char
+        size_t var_string_size = record_size - sizeof(format::AlignmentResult);
+        
+        const format::AlignmentResult *dense_result = 
+              reinterpret_cast<const format::AlignmentResult *>(rec_data + num_records + i * record_size);
+        std::string dense_cigar(reinterpret_cast<const char*>(rec_data + sizeof(format::AlignmentResult)), var_string_size);
 
-      //      while (getNextRead(&sam_read_, alignmentResult, genomeLocation, direction, mapQ, flag, true, &cigar)) {
-//          // do something
-//      }
+        if (sam_genomeLocation != dense_result->location_) {
+          std::cout << "For record " << i << " the SAM location is " << sam_genomeLocation 
+              << " and the dense location is " << dense_result->location_ << std::endl;
+        }
+        
+        if (sam_mapQ != dense_result->mapq_) {
+          std::cout << "For record " << i << " the SAM mapQ is " << sam_mapQ 
+              << " and the dense mapQ is " << dense_result->mapq_ << std::endl;
+        }
 
-//      SAMReader::getNextRead(
-//        Read *read, // this is where all the data will be - isSET
-//        AlignmentResult *alignmentResult, // isSET (i think)
-//        GenomeLocation *genomeLocation, // isSET
-//        Direction *direction, // isSET
-//        unsigned *mapQ, 
-//        unsigned *flag,
-//        bool ignoreEndOfRange, // not used anywhere??
-//        const char **cigar)
-*/
-  }
+        if (sam_flag != dense_result->flag_) {
+          std::cout << "For record " << i << " the SAM flag is " << sam_flag 
+              << " and the dense flag is " << dense_result->flag_ << std::endl;
+        }
+
+        if (! dense_cigar.compare(sam_cigar)) {
+          std::cout << "For record " << i << " the SAM cigar is " << sam_cigar 
+              << " and the dense flag is " << dense_cigar << std::endl;
+        }
+      }
+    }
 
   private:     
-    string sam_filename;
+    string sam_filename_;
     GenomeIndexResource* genome_resource_;
-    ResourceContainer<Buffer> *sam_buf_;
+    ReaderContext readerContext_;
+    SAMReader *reader_;
     Read sam_read_;
   };
 
