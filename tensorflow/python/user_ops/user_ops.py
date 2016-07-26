@@ -120,6 +120,21 @@ def _CephReaderShape(op):
   return [tensor_shape.vector(2), tensor_shape.vector(1)]
 ops.NoGradient(_cr_str)
 
+def CephWriter(cluster_name, user_name, pool_name, ceph_conf_path, column_handle, file_name, name=None):
+  return gen_user_ops.ceph_reader(cluster_name=cluster_name, user_name=user_name,
+                                  pool_name=pool_name, ceph_conf_path=ceph_conf_path, 
+                                  column_handle=column_handle, file_name=file_name)
+
+_cw_str = "CephWriter"
+@ops.RegisterShape(_cw_str)
+def _CephWriterShape(op):
+  handle_shape = op.inputs[0].get_shape()
+  _assert_vec(handle_shape, 2)
+
+  key_shape = op.inputs[1].get_shape()
+  _assert_scalar(key_shape)
+  return []
+ops.NoGradient(_cw_str)
 
 _read_sink_str = "ReadSink"
 def ReadSink(data, name=None):
