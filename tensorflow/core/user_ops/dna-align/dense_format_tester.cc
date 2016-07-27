@@ -140,6 +140,8 @@ namespace tensorflow {
           std::cout << "For record " << i << " the SAM cigar is " << sam_cigar 
               << " and the dense flag is " << dense_cigar << std::endl;
         }
+
+        std::cout << "Dummy" << std::endl;
       }
     }
 
