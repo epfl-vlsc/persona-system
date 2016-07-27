@@ -19,8 +19,8 @@ Status resize_output(z_stream &strm, vector<char> &output, size_t extend_len) {
 
   if (strm.avail_out == 0) {
     auto new_cap = output.capacity() + extend_len;
-    output.resize(output.capacity());
     output.reserve(new_cap);
+    output.resize(output.capacity());
     if (output.capacity() < new_cap) {
       s = Internal("Unable to reserve more capacity in a buffer");
     } else {
