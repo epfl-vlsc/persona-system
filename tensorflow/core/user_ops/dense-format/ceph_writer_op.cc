@@ -24,10 +24,11 @@ namespace tensorflow {
   .Attr("cluster_name: string")
   .Attr("user_name: string")
   .Attr("pool_name: string")
-  .Attr("compress: bool")
   .Attr("ceph_conf_path: string")
+  .Attr("compress: bool")
   .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
+  .Attr("output_dir: string = ''")
   .Input("column_handle: string")
   .Input("file_name: string")
   .Input("first_ordinal: int64")
@@ -131,9 +132,9 @@ file_name: a Tensor() of string for the unique key for this file
       auto column_vec = column_t->vec<string>();
 
       ResourceContainer<Data> *column;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), 
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0),
             column_vec(1), &column));
-    
+
       output_buf_.clear();
       OP_REQUIRES_OK(ctx, WriteHeader(ctx, output_buf_));
       auto s = Status::OK();
@@ -143,12 +144,12 @@ file_name: a Tensor() of string for the unique key for this file
         // compressGZIP already calls buf_.clear()
         s = compressGZIP(data->data(), data->size(), compress_buf_);
         if (s.ok()) {
-          OP_REQUIRES_OK(ctx, appendSegment(&compress_buf_[0], 
+          OP_REQUIRES_OK(ctx, appendSegment(&compress_buf_[0],
                 compress_buf_.size(), output_buf_, true));
           CephWriteColumn(file_key, &output_buf_[0], output_buf_.size());
         }
       } else {
-        OP_REQUIRES_OK(ctx, appendSegment(data->data(), data->size(), 
+        OP_REQUIRES_OK(ctx, appendSegment(data->data(), data->size(),
               output_buf_, true));
         CephWriteColumn(file_key, &output_buf_[0], output_buf_.size());
       }
