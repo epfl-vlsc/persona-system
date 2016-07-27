@@ -98,7 +98,7 @@ class SnapAlignDenseOp : public OpKernel {
       {
         auto start = clock();
         ReadResourceReleaser r(*reads);
-        bool first_is_primary;
+        bool first_is_primary = true;
         cigarString_.clear();
         const char *bases, *qualities;
         std::size_t bases_len, qualities_len;
