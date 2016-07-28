@@ -106,6 +106,8 @@ class SnapAlignDenseOp : public OpKernel {
         int num_secondary_alignments = 0;
         int num_secondary_results;
         SAMFormat format(options_->useM);
+        
+        int i = 0;
 
         while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
@@ -135,6 +137,8 @@ class SnapAlignDenseOp : public OpKernel {
 
 //          result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
           result_builder_.AppendAlignmentResult(primaryResult, cigarString_, flag_, alignment_result_buffer);
+
+          i++;
         }
         //LOG(INFO) << "done aligning";
 

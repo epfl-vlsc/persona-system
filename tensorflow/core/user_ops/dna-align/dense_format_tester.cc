@@ -108,6 +108,8 @@ namespace tensorflow {
       unsigned sam_flag;
       const char *sam_cigar;
 
+      const char *curr_record = rec_data + num_records; // skip the indices
+
       for (int i = 0; i < num_records; i++) {
         if (! reader_->getNextRead(&sam_read_, &sam_alignmentResult, &sam_genomeLocation, 
             &sam_direction, &sam_mapQ, &sam_flag, &sam_cigar)) {
@@ -116,10 +118,10 @@ namespace tensorflow {
         
         size_t record_size = static_cast<size_t>(*(rec_data + i)); // indices are stored as char
         size_t var_string_size = record_size - sizeof(format::AlignmentResult);
-        
+
         const format::AlignmentResult *dense_result = 
-              reinterpret_cast<const format::AlignmentResult *>(rec_data + num_records + i * record_size);
-        std::string dense_cigar(reinterpret_cast<const char*>(rec_data + sizeof(format::AlignmentResult)), var_string_size);
+              reinterpret_cast<const format::AlignmentResult *>(curr_record);
+        std::string dense_cigar(reinterpret_cast<const char*>(curr_record + sizeof(format::AlignmentResult)), var_string_size);
 
         if (sam_genomeLocation != dense_result->location_) {
           std::cout << "For record " << i << " the SAM location is " << sam_genomeLocation 
@@ -141,7 +143,7 @@ namespace tensorflow {
               << " and the dense flag is " << dense_cigar << std::endl;
         }
 
-        std::cout << "Dummy" << std::endl;
+        curr_record = curr_record + record_size;
       }
     }
 
