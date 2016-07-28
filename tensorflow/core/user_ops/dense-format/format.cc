@@ -175,17 +175,12 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
   }
 }
 
-  void AlignmentResult::convertFromSNAP(const SingleAlignmentResult &result)
+  void AlignmentResult::convertFromSNAP(const SingleAlignmentResult &result, const int flag)
   {
-    // TODO: populate the cigar and flag fields
-    cigar_len = 0;
-    flag = 0;
-    score = result.score;
-    mapq = result.mapq;
-    location = result.location; // TODO: check if the same as POS
-
-    // TODO(Laura): fill this in to populate the fields
-    // make sure all fields get assigned or zeroed-out
+    flag_ = flag;
+    score_ = result.score;
+    mapq_ = result.mapq;
+    location_ = result.location; 
   }
 
 } // namespace format

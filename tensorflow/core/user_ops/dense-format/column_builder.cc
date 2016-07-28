@@ -13,6 +13,18 @@ namespace tensorflow {
     // TODO just assume it's a good size for now
     index.push_back(static_cast<char>(index_entry));
   }
+  
+  void AlignmentResultBuilder::AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, 
+      const int flag, std::vector<char> &index)
+  {
+    format::AlignmentResult converted_result;
+    converted_result.convertFromSNAP(result, flag);
+    
+    appendSegment(reinterpret_cast<const char*>(&converted_result), sizeof(converted_result), records_, true);
+    appendSegment(var_string.data(), var_string.size(), records_, true);
+    size_t index_entry = sizeof(converted_result) + var_string.size();
+    index.push_back(static_cast<char>(index_entry));
+  }
 
   void ColumnBuilder::AppendAndFlush(vector<char> &idx_buf)
   {
