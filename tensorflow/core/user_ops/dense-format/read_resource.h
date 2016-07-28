@@ -1,6 +1,8 @@
 #pragma once
 
 #include "tensorflow/core/lib/core/status.h"
+#include <vector>
+#include <memory>
 
 namespace tensorflow {
 
@@ -29,6 +31,8 @@ namespace tensorflow {
     virtual bool reset_iter();
 
     virtual void release();
+
+    virtual Status split(std::size_t chunk, std::vector<std::unique_ptr<ReadResource>> &split_resources);
   };
 
   class ReadResourceReleaser
