@@ -29,8 +29,8 @@ using namespace errors;
 class SnapAlignDenseOp : public OpKernel {
   public:
     explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", 
-              &is_special_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", &is_special_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
     }
 
     ~SnapAlignDenseOp() override {
@@ -91,6 +91,7 @@ class SnapAlignDenseOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container)); 
       //LOG(INFO) << "aligner doing " << num_actual_reads << " reads";
 
+      // TODO call reads->split(chunk_size, ...) here
 
       core::ScopedUnref a(reads_container);
       ResourceReleaser<ReadResource> b(*reads_container);
@@ -168,7 +169,7 @@ class SnapAlignDenseOp : public OpKernel {
   private:
     BaseAligner* base_aligner_ = nullptr;
     ReferencePool<Buffer> *buf_pool_ = nullptr;
-    int num_secondary_alignments_ = 0;
+    int num_secondary_alignments_ = 0, chunk_size_;
     GenomeIndexResource* index_resource_ = nullptr;
     AlignerOptionsResource* options_resource_ = nullptr;
     const FileFormat *format_;
@@ -183,11 +184,13 @@ class SnapAlignDenseOp : public OpKernel {
     bool is_special_ = true;
 
     vector<Read> input_reads_; // a vector to pass to SNAP
+    vector<unique_ptr<ReadResource>> chunk_handles_;
 };
 
 
 REGISTER_OP("SnapAlignDense")
   .Attr("is_special: bool = true")
+  .Attr("chunk_size: int = 10000")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_pool: Ref(string)")
@@ -199,6 +202,8 @@ Loads the SNAP-based hash table into memory on construction to perform
 generation of alignment candidates.
 output: a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
+
+chunk_size is the number of records to chunk incoming dense reads into
 )doc");
 
 
