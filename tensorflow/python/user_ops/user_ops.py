@@ -121,11 +121,11 @@ def _CephReaderShape(op):
 ops.NoGradient(_cr_str)
 
 def CephWriter(cluster_name, user_name, pool_name, ceph_conf_path, compress,
-        record_id, record_type, output_dir, column_handle, file_name, first_ordinal,
+        record_id, record_type, column_handle, file_name, first_ordinal,
         num_records, name=None):
   return gen_user_ops.ceph_writer(cluster_name=cluster_name, user_name=user_name,
                                   pool_name=pool_name, ceph_conf_path=ceph_conf_path, compress=compress,
-                                  record_id=record_id, record_type=record_type, output_dir=output_dir,
+                                  record_id=record_id, record_type=record_type,
                                   column_handle=column_handle, file_name=file_name,
                                   first_ordinal=first_ordinal, num_records=num_records, name=name)
 
