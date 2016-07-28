@@ -98,7 +98,7 @@ class SnapAlignDenseOp : public OpKernel {
       {
         auto start = clock();
         ReadResourceReleaser r(*reads);
-        bool first_is_primary;
+        bool first_is_primary = true; // we only ever generate one result
         cigarString_.clear();
         const char *bases, *qualities;
         std::size_t bases_len, qualities_len;
@@ -106,11 +106,25 @@ class SnapAlignDenseOp : public OpKernel {
         int num_secondary_alignments = 0;
         int num_secondary_results;
         SAMFormat format(options_->useM);
-
+        
         while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
           snap_read_.init(nullptr, 0, bases, qualities, bases_len);
           snap_read_.clip(options_->clipping);
+          if (snap_read_.getDataLength() < options_->minReadLength || snap_read_.countOfNs() > options_->maxDist) {
+            if (!options_->passFilter(&snap_read_, AlignmentResult::NotFound, true, false)) {
+              LOG(INFO) << "FILTERING READ";
+            } else {
+              primaryResult.status = AlignmentResult::NotFound;
+              primaryResult.location = InvalidGenomeLocation;
+              primaryResult.mapq = 0;
+              primaryResult.direction = FORWARD;
+              cigarString_.clear();
+              result_builder_.AppendAlignmentResult(primaryResult, cigarString_, 4, alignment_result_buffer);
+              continue;
+            }
+          }
+
 
           base_aligner_->AlignRead(
             &snap_read_,
@@ -124,6 +138,8 @@ class SnapAlignDenseOp : public OpKernel {
 
           flag_ = 0;
 
+          // we may need to do post process options->passfilter here?
+
           // compute the CIGAR strings and flags
           // input_reads[i] holds the current snap_read
           OP_REQUIRES_OK(ctx, snap_wrapper::computeCigarFlags(
@@ -133,8 +149,7 @@ class SnapAlignDenseOp : public OpKernel {
           /*LOG(INFO) << " result: location " << primaryResult.location <<
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString_ << " mapq: " << primaryResult.mapq;*/
 
-          result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
-
+          result_builder_.AppendAlignmentResult(primaryResult, cigarString_, flag_, alignment_result_buffer);
         }
         //LOG(INFO) << "done aligning";
 

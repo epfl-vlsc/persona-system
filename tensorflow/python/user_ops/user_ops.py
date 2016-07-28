@@ -107,7 +107,7 @@ ops.NoGradient(_sr_str)
 def CephReader(cluster_name, user_name, pool_name, ceph_conf_path, read_size, buffer_handle, queue_key, name=None):
   return gen_user_ops.ceph_reader(cluster_name=cluster_name, user_name=user_name,
                                   pool_name=pool_name, ceph_conf_path=ceph_conf_path, read_size=read_size,
-                                  buffer_handle=buffer_handle, queue_key=queue_key)
+                                  buffer_handle=buffer_handle, queue_key=queue_key, name=name)
 
 _cr_str = "CephReader"
 @ops.RegisterShape(_cr_str)
@@ -120,14 +120,14 @@ def _CephReaderShape(op):
   return [tensor_shape.vector(2), tensor_shape.vector(1)]
 ops.NoGradient(_cr_str)
 
-def CephWriter(cluster_name, user_name, pool_name, ceph_conf_path, 
-        record_id, record_type, column_handle, file_name, first_ordinal, 
+def CephWriter(cluster_name, user_name, pool_name, ceph_conf_path, compress,
+        record_id, record_type, column_handle, file_name, first_ordinal,
         num_records, name=None):
-  return gen_user_ops.ceph_reader(cluster_name=cluster_name, user_name=user_name,
-                                  pool_name=pool_name, ceph_conf_path=ceph_conf_path, 
-                                  record_id=record_id, record_type=record_type, 
-                                  column_handle=column_handle, file_name=file_name, 
-                                  first_ordinal=first_ordinal, num_records=num_records)
+  return gen_user_ops.ceph_writer(cluster_name=cluster_name, user_name=user_name,
+                                  pool_name=pool_name, ceph_conf_path=ceph_conf_path, compress=compress,
+                                  record_id=record_id, record_type=record_type,
+                                  column_handle=column_handle, file_name=file_name,
+                                  first_ordinal=first_ordinal, num_records=num_records, name=name)
 
 _cw_str = "CephWriter"
 @ops.RegisterShape(_cw_str)
@@ -161,6 +161,16 @@ def _BufferSinkShape(op):
   data = op.inputs[0].get_shape()
   _assert_vec(data, 2)
   return []
+
+_dt_string = "DenseTester"
+def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
+  return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records, 
+                                   genome_handle=genome_handle, sam_filename=sam_filename, name=name)
+ops.NoGradient(_dt_string)
+
+@ops.RegisterShape(_dt_string)
+def _DenseTester(op):
+    return [tensor_shape.scalar(), tensor_shape.vector(2)]
 
 _sm_str = "StagedFileMap"
 def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
