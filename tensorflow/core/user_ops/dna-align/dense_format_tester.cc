@@ -138,10 +138,10 @@ namespace tensorflow {
               << " and the dense flag is " << dense_result->flag_ << std::endl;
         }
 
-        if (! dense_cigar.compare(sam_cigar)) {
-          std::cout << "For record " << i << " the SAM cigar is " << sam_cigar 
-              << " and the dense flag is " << dense_cigar << std::endl;
-        }
+//        if (dense_cigar.compare(sam_cigar)) {
+//          std::cout << "For record " << i << " the SAM cigar is " << sam_cigar 
+//              << " and the dense flag is " << dense_cigar << std::endl;
+//        }
 
         curr_record = curr_record + record_size;
       }

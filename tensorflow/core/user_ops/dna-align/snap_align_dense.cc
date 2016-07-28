@@ -107,8 +107,6 @@ class SnapAlignDenseOp : public OpKernel {
         int num_secondary_results;
         SAMFormat format(options_->useM);
         
-        int i = 0;
-
         while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
           snap_read_.init(nullptr, 0, bases, qualities, bases_len);
@@ -122,7 +120,7 @@ class SnapAlignDenseOp : public OpKernel {
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
               cigarString_.clear();
-              result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
+              result_builder_.AppendAlignmentResult(primaryResult, cigarString_, 4, alignment_result_buffer);
               continue;
             }
           }
@@ -151,10 +149,7 @@ class SnapAlignDenseOp : public OpKernel {
           /*LOG(INFO) << " result: location " << primaryResult.location <<
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString_ << " mapq: " << primaryResult.mapq;*/
 
-//          result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
           result_builder_.AppendAlignmentResult(primaryResult, cigarString_, flag_, alignment_result_buffer);
-
-          i++;
         }
         //LOG(INFO) << "done aligning";
 
