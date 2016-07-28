@@ -164,6 +164,7 @@ class SnapAlignDenseOp : public OpKernel {
         //LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
         tracepoint(bioflow, snap_align_kernel, clock() - start);
       }
+      chunk_handles_.clear(); // release all resources
     }
 
   private:
