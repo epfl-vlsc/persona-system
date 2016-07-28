@@ -120,7 +120,7 @@ class SnapAlignDenseOp : public OpKernel {
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
               cigarString_.clear();
-              result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
+              result_builder_.AppendAlignmentResult(primaryResult, cigarString_, 4, alignment_result_buffer);
               continue;
             }
           }
