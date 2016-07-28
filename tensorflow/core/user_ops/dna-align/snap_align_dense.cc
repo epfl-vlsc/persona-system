@@ -113,17 +113,20 @@ class SnapAlignDenseOp : public OpKernel {
 
           snap_read_.init(nullptr, 0, bases, qualities, bases_len);
           snap_read_.clip(options_->clipping);
-          if (!options_->passFilter(&snap_read_, AlignmentResult::NotFound, true, false)) {
-            LOG(INFO) << "FILTERING READ";
-          } else {
-            primaryResult.status = AlignmentResult::NotFound;
-            primaryResult.location = InvalidGenomeLocation;
-            primaryResult.mapq = 0;
-            primaryResult.direction = FORWARD;
-            cigarString_.clear();
-            result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
-            continue;
+          if (snap_read_.getDataLength() < options_->minReadLength || snap_read_.countOfNs() > options_->maxDist) {
+            if (!options_->passFilter(&snap_read_, AlignmentResult::NotFound, true, false)) {
+              LOG(INFO) << "FILTERING READ";
+            } else {
+              primaryResult.status = AlignmentResult::NotFound;
+              primaryResult.location = InvalidGenomeLocation;
+              primaryResult.mapq = 0;
+              primaryResult.direction = FORWARD;
+              cigarString_.clear();
+              result_builder_.AppendAlignmentResult(primaryResult, cigarString_, alignment_result_buffer);
+              continue;
+            }
           }
+
 
           base_aligner_->AlignRead(
             &snap_read_,
