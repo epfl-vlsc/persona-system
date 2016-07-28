@@ -24,8 +24,8 @@ namespace tensorflow {
   .Attr("cluster_name: string")
   .Attr("user_name: string")
   .Attr("pool_name: string")
-  .Attr("compress: bool")
   .Attr("ceph_conf_path: string")
+  .Attr("compress: bool")
   .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
   .Input("column_handle: string")
@@ -66,11 +66,6 @@ file_name: a Tensor() of string for the unique key for this file
       }
       record_suffix_ = "." + s;
       header_.record_type = static_cast<uint8_t>(t);
-
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &s));
-      if (!s.empty()) {
-        record_prefix_ = s;
-      }
 
       // ceph cluster init
       OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_name", &cluster_name));
@@ -131,26 +126,27 @@ file_name: a Tensor() of string for the unique key for this file
       auto column_vec = column_t->vec<string>();
 
       ResourceContainer<Data> *column;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), 
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0),
             column_vec(1), &column));
-    
+
       output_buf_.clear();
       OP_REQUIRES_OK(ctx, WriteHeader(ctx, output_buf_));
       auto s = Status::OK();
       auto data = column->get();
+      string full_path = file_key + record_suffix_;
 
       if (compress_) {
         // compressGZIP already calls buf_.clear()
         s = compressGZIP(data->data(), data->size(), compress_buf_);
         if (s.ok()) {
-          OP_REQUIRES_OK(ctx, appendSegment(&compress_buf_[0], 
+          OP_REQUIRES_OK(ctx, appendSegment(&compress_buf_[0],
                 compress_buf_.size(), output_buf_, true));
-          CephWriteColumn(file_key, &output_buf_[0], output_buf_.size());
+          CephWriteColumn(full_path, &output_buf_[0], output_buf_.size());
         }
       } else {
-        OP_REQUIRES_OK(ctx, appendSegment(data->data(), data->size(), 
+        OP_REQUIRES_OK(ctx, appendSegment(data->data(), data->size(),
               output_buf_, true));
-        CephWriteColumn(file_key, &output_buf_[0], output_buf_.size());
+        CephWriteColumn(full_path, &output_buf_[0], output_buf_.size());
       }
 
       core::ScopedUnref a(column);
@@ -171,7 +167,7 @@ file_name: a Tensor() of string for the unique key for this file
     vector<char> output_buf_; // used to compress into
     format::FileHeader header_;
     bool compress_ = false;
-    string record_suffix_, record_prefix_;
+    string record_suffix_;
 
     Status WriteHeader(OpKernelContext *ctx, vector<char>& buf) {
       const Tensor *tensor;
