@@ -99,14 +99,15 @@ class SnapAlignDenseOp : public OpKernel {
         auto start = clock();
         ReadResourceReleaser r(*reads);
         bool first_is_primary = true; // we only ever generate one result
-        cigarString_.clear();
         const char *bases, *qualities;
         std::size_t bases_len, qualities_len;
         SingleAlignmentResult primaryResult;
         int num_secondary_alignments = 0;
         int num_secondary_results;
         SAMFormat format(options_->useM);
-        
+
+        int i = 1;
+
         while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
           snap_read_.init(nullptr, 0, bases, qualities, bases_len);
@@ -120,7 +121,7 @@ class SnapAlignDenseOp : public OpKernel {
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
               cigarString_.clear();
-              result_builder_.AppendAlignmentResult(primaryResult, cigarString_, 4, alignment_result_buffer);
+              result_builder_.AppendAlignmentResult(primaryResult, "*", 4, alignment_result_buffer);
               continue;
             }
           }
@@ -142,6 +143,7 @@ class SnapAlignDenseOp : public OpKernel {
 
           // compute the CIGAR strings and flags
           // input_reads[i] holds the current snap_read
+          cigarString_.clear();
           OP_REQUIRES_OK(ctx, snap_wrapper::computeCigarFlags(
                 &snap_read_, &primaryResult, 1, first_is_primary, format,
                 options_->useM, lvc_, genome_, cigarString_, flag_));
@@ -150,6 +152,7 @@ class SnapAlignDenseOp : public OpKernel {
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString_ << " mapq: " << primaryResult.mapq;*/
 
           result_builder_.AppendAlignmentResult(primaryResult, cigarString_, flag_, alignment_result_buffer);
+          i++;
         }
         //LOG(INFO) << "done aligning";
 
