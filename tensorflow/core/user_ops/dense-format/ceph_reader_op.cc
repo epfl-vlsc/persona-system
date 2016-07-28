@@ -126,7 +126,7 @@ file_name: a Tensor() of string for the unique key for this file
     string ceph_conf;
     long long read_size;
     librados::Rados cluster;
-    ReferencePool<Buffer> *ref_pool_;
+    ReferencePool<Buffer> *ref_pool_ = nullptr;
     librados::IoCtx io_ctx;
 
     /* Read an object from Ceph asynchronously */

@@ -112,7 +112,7 @@ file_name: a Tensor() of string for the unique key for this file
     }
 
     ~CephWriterOp() {
-      core::ScopedUnref unref_pool(ref_pool_);
+//      core::ScopedUnref unref_pool(ref_pool_);
       io_ctx.close();
       cluster.shutdown();
     }
@@ -161,7 +161,7 @@ file_name: a Tensor() of string for the unique key for this file
     string pool_name;
     string ceph_conf;
     librados::Rados cluster;
-    ReferencePool<Buffer> *ref_pool_;
+//    ReferencePool<Buffer> *ref_pool_;
     librados::IoCtx io_ctx;
     vector<char> compress_buf_; // used to compress into
     vector<char> output_buf_; // used to compress into
