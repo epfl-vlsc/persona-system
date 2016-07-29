@@ -124,24 +124,28 @@ namespace tensorflow {
         std::string dense_cigar(reinterpret_cast<const char*>(curr_record + sizeof(format::AlignmentResult)), var_string_size);
 
         if (sam_genomeLocation != dense_result->location_) {
-          std::cout << "For record " << i << " the SAM location is " << sam_genomeLocation 
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM location is " << sam_genomeLocation 
               << " and the dense location is " << dense_result->location_ << std::endl;
         }
         
         if (sam_mapQ != dense_result->mapq_) {
-          std::cout << "For record " << i << " the SAM mapQ is " << sam_mapQ 
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM mapQ is " << sam_mapQ 
               << " and the dense mapQ is " << dense_result->mapq_ << std::endl;
         }
 
         if (sam_flag != dense_result->flag_) {
-          std::cout << "For record " << i << " the SAM flag is " << sam_flag 
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM flag is " << sam_flag 
               << " and the dense flag is " << dense_result->flag_ << std::endl;
         }
+        
+        // sam_cigar is not null terminated
+        size_t num_char = static_cast<size_t>(strchr(sam_cigar, '\t') - sam_cigar);
+        std::string sam_cigar_end(sam_cigar, num_char);
 
-//        if (dense_cigar.compare(sam_cigar)) {
-//          std::cout << "For record " << i << " the SAM cigar is " << sam_cigar 
-//              << " and the dense flag is " << dense_cigar << std::endl;
-//        }
+        if (dense_cigar.compare(sam_cigar_end)) {
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM cigar is " << sam_cigar_end 
+              << " and the dense cigar is " << dense_cigar << std::endl;
+        }
 
         curr_record = curr_record + record_size;
       }

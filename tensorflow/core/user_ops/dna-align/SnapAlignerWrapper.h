@@ -24,7 +24,24 @@ namespace snap_wrapper {
         int num_secondary_alignments, bool& first_is_primary);
  
     // Uses SNAP code to compute the 'cigar' and 'flags' fields from the SAM format
-    Status computeCigarFlags(
+    bool computeCigarFlags(
+        // inputs
+        Read *read,
+        SingleAlignmentResult* results,
+        int whichResult,
+        bool firstIsPrimary, 
+        GenomeLocation genomeLocation,
+        const SAMFormat &format,
+        bool useM,
+        LandauVishkinWithCigar& lvc, 
+        const Genome* genome,
+        //outputs
+        std::string &cigarString,
+        int &flags,
+        int &addFrontClipping);
+
+    // Computes the CIGAR string and flags and adjusts location according to clipping
+    tensorflow::Status adjustResults(
         // inputs
         Read *read,
         SingleAlignmentResult* results,
@@ -37,6 +54,7 @@ namespace snap_wrapper {
         //outputs
         std::string &cigarString,
         int &flags);
+
 
     // uses slightly modified SNAP code to write results in 
     // `format` format to the provided buffer
