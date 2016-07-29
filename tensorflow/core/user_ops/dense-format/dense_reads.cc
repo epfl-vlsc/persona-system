@@ -1,4 +1,7 @@
 #include "dense_reads.h"
+
+#include <utility>
+
 #include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
@@ -65,6 +68,7 @@ namespace tensorflow {
     other.base_idx_ = nullptr;
     other.qual_idx_ = nullptr;
     other.meta_idx_ = nullptr;
+    return *this;
   }
 
   bool DenseReadResource::reset_iter()
@@ -73,7 +77,9 @@ namespace tensorflow {
     auto idx_offset = num_records_ * sizeof(RecordTable::IndexValue);
     base_data_ = bases_->get()->data() + idx_offset;
     qual_data_ = quals_->get()->data() + idx_offset;
-    meta_data_ = meta_->get()->data() + idx_offset;
+    if (has_metadata()) {
+      meta_data_ = meta_->get()->data() + idx_offset;
+    }
 
     return true;
   }
@@ -148,6 +154,90 @@ namespace tensorflow {
     if (meta_) {
       meta_->release();
     }
+  }
+
+  Status DenseReadResource::split(size_t chunk, vector<unique_ptr<ReadResource>> &split_resources) {
+    split_resources.clear();
+
+    reset_iter(); // who cares doesn't die for now
+
+    // TODO we don't support dealing with meta for now. too difficult for the deadline!
+    decltype(base_data_) base_start = base_data_, qual_start = qual_data_, meta_start = nullptr;
+    
+    decltype(chunk) max_range;
+    for (decltype(num_records_) i = 0; i < num_records_; i += chunk) {
+      //DenseReadSubResource a(*this, i, CHUNK_SIZE, )
+      max_range = i + chunk;
+      if (max_range > num_records_) {
+        // deals with the tail
+        max_range = num_records_;
+      }
+
+      unique_ptr<ReadResource> a(new DenseReadSubResource(*this, i, max_range, base_start, qual_start, meta_start));
+      split_resources.push_back(move(a));
+
+      // actually advance the records
+      for (decltype(i) j = i; j < max_range; ++j) {
+        base_start += base_idx_->relative_index[j];
+        qual_start += qual_idx_->relative_index[j];
+      }
+    }
+    return Status::OK();
+  }
+
+  DenseReadSubResource::DenseReadSubResource(const DenseReadResource &parent_resource,
+                                             size_t index_offset, size_t max_idx,
+                                             const char *base_data_offset, const char *qual_data_offset, const char *meta_data_offset) : start_idx_(index_offset), max_idx_(max_idx), current_idx_(index_offset),
+                                                                                                                                         base_idx_(parent_resource.base_idx_),
+                                                                                                                                         qual_idx_(parent_resource.qual_idx_),
+                                                                                                                                         meta_idx_(parent_resource.meta_idx_),
+                                                                                                                                         base_data_(base_data_offset), base_start_(base_data_offset),
+                                                                                                                                         qual_data_(qual_data_offset), qual_start_(qual_data_offset),
+                                                                                                                                         meta_data_(meta_data_offset), meta_start_(meta_data_offset) {}
+
+  Status DenseReadSubResource::get_next_record(const char **bases, size_t *bases_length,
+                                               const char **qualities, size_t *qualities_length,
+                                               const char **metadata, size_t *metadata_length)
+  {
+    return Unimplemented("DenseReadSubResource doesn't implement get_next_record with metadata");
+  }
+
+  Status DenseReadSubResource::get_next_record(const char **bases, size_t *bases_length,
+                                               const char **qualities, size_t *qualities_length)
+  {
+    if (current_idx_ < max_idx_) {
+      auto base_len = base_idx_->relative_index[current_idx_];
+      *bases_length = base_len;
+      *bases = base_data_;
+      base_data_  += base_len;
+
+      auto qual_len = qual_idx_->relative_index[current_idx_++];
+      *qualities_length = qual_len;
+      *qualities = qual_data_;
+      qual_data_ += qual_len;
+
+      return Status::OK();
+    } else {
+      return ResourceExhausted("dense record container exhausted");
+    }
+  }
+
+  bool DenseReadSubResource::reset_iter() {
+    base_data_ = base_start_;
+    qual_data_ = qual_start_;
+    meta_data_ = meta_start_;
+    current_idx_ = start_idx_;
+    return true;
+  }
+
+  bool DenseReadSubResource::has_qualities()
+  {
+    return qual_start_ != nullptr;
+  }
+
+  bool DenseReadSubResource::has_metadata()
+  {
+    return meta_start_ != nullptr;
   }
 
 } // namespace tensorflow {
