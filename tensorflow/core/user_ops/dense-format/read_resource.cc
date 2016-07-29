@@ -13,6 +13,11 @@ namespace tensorflow {
     return Unimplemented("partial record reading not suppported");
   }
 
+  Status ReadResource::split(size_t chunk, vector<unique_ptr<ReadResource>> &split_resources)
+  {
+    return Unimplemented("resource splitting not supported for this resource");
+  }
+
   bool ReadResource::has_qualities() {
     return false;
   }

@@ -37,6 +37,7 @@ Writes data in column_handle to object file_name in specified Ceph cluster.
 
 column_handle: a handle to the buffer pool
 file_name: a Tensor() of string for the unique key for this file
+compress: whether or not to compress the column
   )doc");
 
   class CephWriterOp : public OpKernel {
@@ -75,44 +76,43 @@ file_name: a Tensor() of string for the unique key for this file
       /* Initialize the cluster handle with the "ceph" cluster name and "client.admin" user */
       ret = cluster.init2(user_name.c_str(), cluster_name.c_str(), 0);
       if (ret < 0) {
-              LOG(INFO) << "Couldn't initialize the cluster handle! error " << ret;
-              exit(EXIT_FAILURE);
+        LOG(INFO) << "Couldn't initialize the cluster handle! error " << ret;
+        exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Created a cluster handle.";
+        LOG(INFO) << "Created a cluster handle.";
       }
 
       /* Read a Ceph configuration file to configure the cluster handle. */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("ceph_conf_path", &ceph_conf));
       ret = cluster.conf_read_file(ceph_conf.c_str());
       if (ret < 0) {
-              LOG(INFO) << "Couldn't read the Ceph configuration file! error " << ret;
-              exit(EXIT_FAILURE);
+        LOG(INFO) << "Couldn't read the Ceph configuration file! error " << ret;
+        exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Read the Ceph configuration file.";
+        LOG(INFO) << "Read the Ceph configuration file.";
       }
 
       /* Connect to the cluster */
       ret = cluster.connect();
       if (ret < 0) {
-              LOG(INFO) << "Couldn't connect to cluster! error " << ret;
-              exit(EXIT_FAILURE);
+        LOG(INFO) << "Couldn't connect to cluster! error " << ret;
+        exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Connected to the cluster.";
+        LOG(INFO) << "Connected to the cluster.";
       }
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
       ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
       if (ret < 0) {
-              LOG(INFO) << "Couldn't set up ioctx! error " << ret;
-              exit(EXIT_FAILURE);
+        LOG(INFO) << "Couldn't set up ioctx! error " << ret;
+        exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Created an ioctx for the pool.";
+        LOG(INFO) << "Created an ioctx for the pool.";
       }
     }
 
     ~CephWriterOp() {
-      core::ScopedUnref unref_pool(ref_pool_);
       io_ctx.close();
       cluster.shutdown();
     }
@@ -136,7 +136,7 @@ file_name: a Tensor() of string for the unique key for this file
       string full_path = file_key + record_suffix_;
 
       if (compress_) {
-        // compressGZIP already calls buf_.clear()
+        // compressGZIP already calls compress_buf_.clear()
         s = compressGZIP(data->data(), data->size(), compress_buf_);
         if (s.ok()) {
           OP_REQUIRES_OK(ctx, appendSegment(&compress_buf_[0],
@@ -161,7 +161,6 @@ file_name: a Tensor() of string for the unique key for this file
     string pool_name;
     string ceph_conf;
     librados::Rados cluster;
-    ReferencePool<Buffer> *ref_pool_;
     librados::IoCtx io_ctx;
     vector<char> compress_buf_; // used to compress into
     vector<char> output_buf_; // used to compress into
