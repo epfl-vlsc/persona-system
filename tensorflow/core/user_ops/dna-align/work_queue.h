@@ -6,7 +6,6 @@
 #include <utility>
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/user_ops/dna-align/bioflow.h"
 
 namespace tensorflow {
 
@@ -115,7 +114,7 @@ template <typename T>
 void WorkQueue<T>::unblock() {
   {
     mutex_lock l(mu_);
-    LOG_INFO << " unblock called!";
+    LOG(INFO) << " unblock called!";
     block_ = false;
   }
 

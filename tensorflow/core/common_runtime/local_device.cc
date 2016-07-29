@@ -35,6 +35,8 @@ Eigen::ThreadPoolDevice* eigen_device = nullptr;
 static bool InitModule(const SessionOptions& options) {
   int32 intra_op_parallelism_threads =
       options.config.intra_op_parallelism_threads();
+  int32 inter_op_parallelism_threads =
+      options.config.inter_op_parallelism_threads();
   if (intra_op_parallelism_threads == 0) {
     intra_op_parallelism_threads = port::NumSchedulableCPUs();
   }
@@ -42,7 +44,8 @@ static bool InitModule(const SessionOptions& options) {
           << intra_op_parallelism_threads;
   eigen_worker_threads.num_threads = intra_op_parallelism_threads;
   eigen_worker_threads.workers = new thread::ThreadPool(
-                                                        options.env, "Eigen", intra_op_parallelism_threads, 0);
+                                                        options.env, "Eigen", intra_op_parallelism_threads, 0, 
+                                                        inter_op_parallelism_threads);
   eigen_thread_pool = new EigenThreadPoolWrapper(eigen_worker_threads.workers);
   eigen_device = new Eigen::ThreadPoolDevice(eigen_thread_pool,
                                              eigen_worker_threads.num_threads);

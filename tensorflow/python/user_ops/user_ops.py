@@ -162,6 +162,17 @@ def _BufferSinkShape(op):
   _assert_vec(data, 2)
   return []
 
+_buf_list_sink_str = "BufferListSink"
+def BufferListSink(data, name=None):
+  return gen_user_ops.buffer_list_sink(data=data, name=name)
+ops.NoGradient(_buf_list_sink_str)
+
+@ops.RegisterShape(_buf_list_sink_str)
+def _BufferListSinkShape(op):
+  data = op.inputs[0].get_shape()
+  _assert_vec(data, 2)
+  return []
+
 _dt_string = "DenseTester"
 def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
   return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records, 
@@ -247,6 +258,19 @@ ops.NoGradient(_sad_string)
 def _SnapAlignDense(op):
     return [tensor_shape.vector(2)]
 
+_sadp_string = "SnapAlignDenseParallel"
+def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, num_threads, is_special=False, name=None):
+
+    return gen_user_ops.snap_align_dense_parallel(genome_handle=genome, options_handle=options,
+            buffer_list_pool=buffer_list_pool, read=read, is_special=is_special, chunk_size=chunk_size, 
+            subchunk_size=subchunk_size, num_threads=num_threads, name=name)
+
+ops.NoGradient(_sadp_string)
+@ops.RegisterShape(_sadp_string)
+def _SnapAlignDenseParallel(op):
+    return [tensor_shape.vector(2)]
+
+
 _drp_str = "DenseReadPool"
 def DenseReadPool(size=0, bound=False, name=None):
     return gen_user_ops.dense_read_pool(size=size, bound=bound, name=name)
@@ -272,6 +296,15 @@ def BufferPool(size, bound=True, name=None):
 ops.NoGradient(_bp_str)
 @ops.RegisterShape(_bp_str)
 def _BufferPoolShape(op):
+    return [tensor_shape.vector(2)]
+
+_blp_str = "BufferListPool"
+def BufferListPool(size, bound=True, name=None):
+    return gen_user_ops.buffer_list_pool(size=size, bound=bound, name=name)
+
+ops.NoGradient(_blp_str)
+@ops.RegisterShape(_blp_str)
+def _BufferListPoolShape(op):
     return [tensor_shape.vector(2)]
 
 _cw_str = "ColumnWriter"

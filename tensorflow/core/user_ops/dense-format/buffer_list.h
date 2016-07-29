@@ -8,7 +8,7 @@
 namespace tensorflow {
     class BufferList {
     public:
-        Buffer& get_at(int index);
+        Buffer* get_at(int index);
         void resize(size_t size);
         std::vector<Buffer>& get();
         void reset();
