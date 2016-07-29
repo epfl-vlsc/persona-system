@@ -31,14 +31,15 @@ class ThreadPool {
   // env->StartThread() is used to create individual threads.
   //
   // REQUIRES: num_threads > 0
-  ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special = 0);
+  ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special = 0,
+      int affinity_start = 0);
 
   // Construct a pool that contains "num_threads" threads with specified "name".
   // env->StartThread() is used to create individual threads.
   //
   // REQUIRES: num_threads > 0
   ThreadPool(Env* env, const ThreadOptions& thread_options, const string& name,
-             int num_threads, int num_threads_special);
+             int num_threads, int num_threads_special = 0, int affinity_start = 0);
 
   // Wait until all scheduled work has finished and then destroy the
   // set of threads.

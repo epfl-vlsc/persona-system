@@ -49,7 +49,7 @@ cc_library(
            exclude = [
                       "sam_writer_async_op.cc", 
                       "snap_read_decode.cc",
-                      "snap_results_decode.cc"
+                      "snap_results_decode.cc",
                       ],
                ),
     copts = tf_copts(),

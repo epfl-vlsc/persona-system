@@ -50,9 +50,10 @@ struct EigenEnvironment {
       port::ScopedFlushDenormal flush;
       f();
     });
-    if (current_cpu_ > port::NumSchedulableCPUs()) {
-      LOG(INFO) << "uh oh, trying to set affinity on core " << 
-        current_cpu_ << ", which is greater than " << port::NumSchedulableCPUs();
+    if (current_cpu_ >= port::NumSchedulableCPUs()) {
+      current_cpu_ = 0;
+      /*LOG(INFO) << "uh oh, trying to set affinity on core " << 
+        current_cpu_ << ", which is greater than " << port::NumSchedulableCPUs();*/
     }
     //LOG(INFO) << "Setting thread affinity to core: " << current_cpu_;
     Status status = t->SetAffinity(current_cpu_);
@@ -110,17 +111,17 @@ struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
   const int num_threads_;
 };
 
-  ThreadPool::ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special)
-    : ThreadPool(env, ThreadOptions(), name, num_threads, num_threads_special) {}
+  ThreadPool::ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special, int affinity_start)
+    : ThreadPool(env, ThreadOptions(), name, num_threads, num_threads_special, affinity_start) {}
 
 ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
-                       const string& name, int num_threads, int num_threads_special) {
+                       const string& name, int num_threads, int num_threads_special, int affinity_start) {
   CHECK_GE(num_threads, 1);
   impl_.reset(
-      new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads, 0));
+      new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads, affinity_start));
   if (num_threads_special > 0) {
     impl_special_.reset(
-      new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special, num_threads));
+      new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special, num_threads + affinity_start));
   } else {
     // TODO may be default behavior of unique_ptr
     impl_special_.reset(nullptr);
