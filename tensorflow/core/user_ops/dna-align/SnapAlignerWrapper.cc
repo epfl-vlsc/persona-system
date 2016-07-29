@@ -99,32 +99,23 @@ namespace snap_wrapper {
     return tensorflow::Status::OK();
   }
 
-  tensorflow::Status computeCigarFlags(
+  bool computeCigarFlags(
     // input
     Read *read,
     SingleAlignmentResult* results,
-    int nResults,
+    int whichResult, // to avoid passing too many parameters
     bool firstIsPrimary,
+    GenomeLocation genomeLocation, // can differ from original location
     const SAMFormat &format,
     bool useM,
     LandauVishkinWithCigar& lvc, 
     const Genome* genome,
 		//output
 		std::string &cigarString,
-    int &flags
+    int &flags,
+		int &addFrontClipping
   ) 
   {  
-    // Adapted from SNAP, but not using the writeRead method, as we need only
-    // the cigar string and the flag, not also writing the output to the buffer
-    if (nResults != 1)
-      return errors::Internal("ComputeCigarFlags received more than one result.");
-    
-    for (int i = 0; i < nResults; i++) {
-      if (results[i].status == NotFound) {
-        results[i].location = InvalidGenomeLocation;
-      }
-    }
-
     cigarString = "*"; // default value
 
     // needed for ComputeCigarString
@@ -136,8 +127,6 @@ namespace snap_wrapper {
     char cigarBufWithClipping[cigarBufWithClippingSize];
 
     int editDistance = -1;
-    int *o_addFrontClipping = new int;
-    *o_addFrontClipping = 0;
 
 		// needed for createSAMLine
     char data[MAX_READ]; 
@@ -164,18 +153,14 @@ namespace snap_wrapper {
     Direction mateDirection = FORWARD;
     GenomeDistance extraBasesClippedBefore;   // Clipping added if we align before the beginning of a chromosome
 
-    for (int whichResult = 0; whichResult < nResults; whichResult++) {
-      bool status;
-      read->setAdditionalFrontClipping(0);
-			
-      AlignmentResult result = results[whichResult].status; 
-      GenomeLocation genomeLocation = results[whichResult].location;
-      Direction direction = results[whichResult].direction;
-      bool secondaryAlignment = (whichResult > 0) || !firstIsPrimary;
+    flags = 0;
 
-      flags = 0;
+    addFrontClipping = 0;
+    AlignmentResult result = results[whichResult].status;
+    Direction direction = results[whichResult].direction;
+    bool secondaryAlignment = (whichResult > 0) || !firstIsPrimary;
 
-      status = format.createSAMLine(
+    if (! format.createSAMLine(
         genome, &lvc,
         // output data
         data, quality, MAX_READ, contigName, contigIndex, flags, positionInContig, 
@@ -185,28 +170,29 @@ namespace snap_wrapper {
         // input data
         qnameLen, read, result, genomeLocation, direction, secondaryAlignment,
         useM, hasMate, firstInPair, alignedAsPair, mate, mateResult, mateLocation, mateDirection,
-        &extraBasesClippedBefore);
+        &extraBasesClippedBefore)) {
+			
+			return false;
+		}
 
-      if (!status) {
-        return tensorflow::errors::Internal("createSAMLine failed!"); // TODO: check if right type of error
-      }
-
-      if (genomeLocation != InvalidGenomeLocation) {
-        // the computeCigarString method which should have been used here is private, but the
-        // computeCigar method which it calls is public, so we'll use that one
-        GenomeDistance extraBasesClippedAfter;
-        int cigarBufUsed;
-        unsigned frontHardClipping = read->getOriginalFrontHardClipping();
-        unsigned backHardClipping = read->getOriginalBackHardClipping();
-        
-        format.computeCigar(
-          COMPACT_CIGAR_STRING, genome, &lvc, cigarBuf, cigarBufSize, clippedData, clippedLength,
-          basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
-          genomeLocation, useM, &editDistance, &cigarBufUsed, o_addFrontClipping);
-          
-
-          // *o_editDistance -> editDistance
-          if (editDistance == -2) {
+    if (genomeLocation != InvalidGenomeLocation) {
+			// the computeCigarString method which should have been used here is private, but the
+			// computeCigar method which it calls is public, so we'll use that one
+			GenomeDistance extraBasesClippedAfter;
+			int cigarBufUsed;
+			unsigned frontHardClipping = read->getOriginalFrontHardClipping();
+			unsigned backHardClipping = read->getOriginalBackHardClipping();
+			
+			format.computeCigar(
+				COMPACT_CIGAR_STRING, genome, &lvc, cigarBuf, cigarBufSize, clippedData, clippedLength,
+				basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
+				genomeLocation, useM, &editDistance, &cigarBufUsed, &addFrontClipping);
+				
+			if (addFrontClipping != 0) {
+				return false;
+			} else {
+        // *o_editDistance -> editDistance
+        if (editDistance == -2) {
           WriteErrorMessage( "WARNING: computeEditDistance returned -2; cigarBuf may be too small\n");
           strcpy(cigarBufWithClipping, "*");
         } else if (editDistance == -1) {
@@ -237,14 +223,79 @@ namespace snap_wrapper {
           snprintf(cigarBufWithClipping, cigarBufWithClippingSize, "%s%s%s%s%s", hardClipBefore, clipBefore, cigarBuf, clipAfter, hardClipAfter);
         }
 
-        // maybe TODO: validate Cigar String - cannot access validateCigarString (private member and only for debugging)
-
         cigarString = cigarBufWithClipping;	
       }
 		}
 
+    return true; 
+  } // computeCigarFlags
+
+	tensorflow::Status adjustResults(
+		// input
+    Read *read,
+    SingleAlignmentResult* results,
+    int nResults,
+    bool firstIsPrimary,
+    const SAMFormat &format,
+    bool useM,
+    LandauVishkinWithCigar& lvc, 
+    const Genome* genome,
+		//output
+		std::string &cigarString,
+    int &flags
+	) {
+    
+    for (int i = 0; i < nResults; i++) {
+      if (results[i].status == NotFound) {
+        results[i].location = InvalidGenomeLocation;
+      }
+    }
+
+    GenomeLocation finalLocations[nResults];
+
+    for (int whichResult = 0; whichResult < nResults; whichResult++) {
+      int addFrontClipping = 0;
+      read->setAdditionalFrontClipping(0);
+      int cumulativeAddFrontClipping = 0;
+      finalLocations[whichResult] = results[whichResult].location;
+
+      unsigned nAdjustments = 0;
+
+      while (!computeCigarFlags(read, results, whichResult, firstIsPrimary, finalLocations[whichResult], format, useM, 
+        lvc, genome, cigarString, flags, addFrontClipping)) {
+				
+				// redo if read modified (e.g. to add soft clipping, or move alignment for a leading I.
+        const Genome::Contig *originalContig = results[whichResult].status == NotFound ? NULL
+          : genome->getContigAtLocation(results[whichResult].location);
+        const Genome::Contig *newContig = results[whichResult].status == NotFound ? NULL
+          : genome->getContigAtLocation(results[whichResult].location + addFrontClipping);
+        if (newContig == NULL || newContig != originalContig || finalLocations[whichResult] + addFrontClipping > 
+          originalContig->beginningLocation + originalContig->length - genome->getChromosomePadding() ||
+          nAdjustments > read->getDataLength()) {
+					
+          // Altering this would push us over a contig boundary, or we're stuck in a loop.  Just give up on the read.
+          results[whichResult].status = NotFound;
+          results[whichResult].location = InvalidGenomeLocation;
+          finalLocations[whichResult] = InvalidGenomeLocation;
+        } else {
+          cumulativeAddFrontClipping += addFrontClipping;
+          if (addFrontClipping > 0) {
+            read->setAdditionalFrontClipping(cumulativeAddFrontClipping);
+          }
+          finalLocations[whichResult] = results[whichResult].location + cumulativeAddFrontClipping;
+        }
+      } // while formatting doesn't work			
+
+      results[whichResult].location = finalLocations[whichResult]; 
+		} // for each result
+
     return tensorflow::Status::OK();
-  }
+	} // adjustResults
+
+
+
+
+	
 
   tensorflow::Status writeRead(const ReaderContext& context, 
       Read *read, SingleAlignmentResult *results, int nResults,
