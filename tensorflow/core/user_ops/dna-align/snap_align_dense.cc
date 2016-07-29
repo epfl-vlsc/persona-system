@@ -106,10 +106,8 @@ class SnapAlignDenseOp : public OpKernel {
         int num_secondary_results;
         SAMFormat format(options_->useM);
 
-        int i = 1;
 
         while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
-
           snap_read_.init(nullptr, 0, bases, qualities, bases_len);
           snap_read_.clip(options_->clipping);
           if (snap_read_.getDataLength() < options_->minReadLength || snap_read_.countOfNs() > options_->maxDist) {
@@ -137,22 +135,22 @@ class SnapAlignDenseOp : public OpKernel {
             nullptr //secondaryResults
           );
 
-          flag_ = 0;
-
           // we may need to do post process options->passfilter here?
 
-          // compute the CIGAR strings and flags
+          // compute the CIGAR strings and flags and adjust location according to clipping
           // input_reads[i] holds the current snap_read
+          flag_ = 0;
           cigarString_.clear();
-          OP_REQUIRES_OK(ctx, snap_wrapper::computeCigarFlags(
+          
+          OP_REQUIRES_OK(ctx, snap_wrapper::adjustResults(
                 &snap_read_, &primaryResult, 1, first_is_primary, format,
                 options_->useM, lvc_, genome_, cigarString_, flag_));
 
           /*LOG(INFO) << " result: location " << primaryResult.location <<
-            " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString_ << " mapq: " << primaryResult.mapq;*/
+            " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " 
+            << cigarString_ << " mapq: " << primaryResult.mapq;*/
 
           result_builder_.AppendAlignmentResult(primaryResult, cigarString_, flag_, alignment_result_buffer);
-          i++;
         }
         //LOG(INFO) << "done aligning";
 
