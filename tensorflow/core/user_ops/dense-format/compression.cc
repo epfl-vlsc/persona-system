@@ -1,6 +1,5 @@
 #include "compression.h"
 #include "tensorflow/core/platform/logging.h"
-#include <zlib.h>
 
 namespace tensorflow {
 
@@ -156,4 +155,72 @@ Status compressGZIP(const char* segment,
   return s;
 }
 
+  // reinitializes the stream
+  Status AppendingGZIPCompressor::init() {
+    // TODO this should all be done in the compressor
+    stream_ = {0};
+    // Not sure if this is necessary
+    stream_.zalloc = Z_NULL;
+    stream_.zfree = Z_NULL;
+    stream_.opaque = Z_NULL;
+    done_ = false;
+    output_.clear();
+    output_.reserve(1);
+
+    int status = deflateInit2(&stream_, Z_DEFAULT_COMPRESSION,
+                              Z_DEFLATED, window_bits | ENABLE_ZLIB_GZIP_COMPRESS,
+                              9, // higher memory, better speed
+                              Z_DEFAULT_STRATEGY);
+    if (status != Z_OK) {
+        return Internal("deflateInit() didn't return Z_OK. Return ", status, " with 2nd param ", Z_DEFAULT_COMPRESSION);
+    }
+  }
+
+  Status AppendingGZIPCompressor::appendGZIP(const char* segment,
+                                             const size_t segment_size) {
+    if (done_) {
+      return Unavailable("appendGZIP is already finished. Must call init()");
+    }
+
+    stream_.next_in = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(segment));
+    stream_.avail_in = segment_size;
+
+    int status;
+    auto init_size = output_.size();
+    output_.resize(output_.capacity());
+
+    stream_.avail_out = output_.size() - init_size;
+    stream_.next_out = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(&output_[init_size]));
+    do {
+      status = deflate(&stream_, Z_NO_FLUSH); // TODO maybe this has to be flushed
+      switch (status) {
+      default:
+        return Internal("deflate(Z_NO_FLUSH) return status ", status);
+        break;
+      case Z_OK:
+        break;
+      }
+    } while (stream_.avail_out == 0);
+
+    return Status::OK();
+  }
+
+  // closes the stream
+  Status AppendingGZIPCompressor::finish() {
+    auto status = deflateEnd(&stream_);
+    if (status != Z_OK) {
+      return Internal("deflateEnd() didn't receive Z_OK. Got: ", status);
+    }
+    return Status::OK();
+  }
+
+  AppendingGZIPCompressor::~AppendingGZIPCompressor()
+  {
+    finish(); // TODO maybe log here?
+  }
+
+  AppendingGZIPCompressor::AppendingGZIPCompressor(vector<char> &output) : output_(output)
+  {
+    
+  }
 } // namespace tensorflow
