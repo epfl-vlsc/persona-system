@@ -154,9 +154,14 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
               // compute the CIGAR strings and flags
               // input_reads[i] holds the current snap_read
-              Status s = snap_wrapper::computeCigarFlags(
+              /*Status s = snap_wrapper::computeCigarFlags(
                     &snap_read, &primaryResult, 1, first_is_primary, format,
-                    options_->useM, lvc, genome_, cigarString, flag);
+                    options_->useM, lvc, genome_, cigarString, flag);*/
+          
+              Status s = snap_wrapper::adjustResults(
+                &snap_read, &primaryResult, 1, first_is_primary, format,
+                options_->useM, lvc, genome_, cigarString, flag);
+
               if (!s.ok())
                 LOG(INFO) << "computeCigarFlags did not return OK!!!";
 
