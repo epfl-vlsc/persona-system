@@ -109,9 +109,6 @@ namespace tensorflow {
       const char *sam_cigar;
 
       const char *curr_record = rec_data + num_records; // skip the indices
-      loc_mismatches = 0;
-      cigar_mismatches = 0;
-
 
       for (int i = 0; i < num_records; i++) {
         if (! reader_->getNextRead(&sam_read_, &sam_alignmentResult, &sam_genomeLocation, 
@@ -127,18 +124,17 @@ namespace tensorflow {
         std::string dense_cigar(reinterpret_cast<const char*>(curr_record + sizeof(format::AlignmentResult)), var_string_size);
 
         if (sam_genomeLocation != dense_result->location_) {
-          std::cout << "For record " << i + 1 << " the SAM location is " << sam_genomeLocation 
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM location is " << sam_genomeLocation 
               << " and the dense location is " << dense_result->location_ << std::endl;
-          loc_mismatches++;
         }
         
         if (sam_mapQ != dense_result->mapq_) {
-          std::cout << "For record " << i + 1 << " the SAM mapQ is " << sam_mapQ 
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM mapQ is " << sam_mapQ 
               << " and the dense mapQ is " << dense_result->mapq_ << std::endl;
         }
 
         if (sam_flag != dense_result->flag_) {
-          std::cout << "For record " << i + 1 << " the SAM flag is " << sam_flag 
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM flag is " << sam_flag 
               << " and the dense flag is " << dense_result->flag_ << std::endl;
         }
         
@@ -147,15 +143,12 @@ namespace tensorflow {
         std::string sam_cigar_end(sam_cigar, num_char);
 
         if (dense_cigar.compare(sam_cigar_end)) {
-          std::cout << "For record " << i + 1 << " the SAM cigar is " << sam_cigar_end 
+          std::cout << "Mismatch: for record " << i + 1 << " the SAM cigar is " << sam_cigar_end 
               << " and the dense cigar is " << dense_cigar << std::endl;
-          cigar_mismatches++;
         }
 
         curr_record = curr_record + record_size;
       }
-
-      std::cout << "Location mismatches: " << loc_mismatches << " and cigar mismatches " << cigar_mismatches << std::endl;
     }
 
   private:     
@@ -164,8 +157,6 @@ namespace tensorflow {
     ReaderContext readerContext_;
     SAMReader *reader_;
     Read sam_read_;
-    _int64 loc_mismatches;
-    _int64 cigar_mismatches;
   };
 
 
