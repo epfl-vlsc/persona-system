@@ -21,7 +21,9 @@ namespace tensorflow {
   }
 
   void BufferList::reset() {
-    buf_list_.clear();
+    for (auto &b : buf_list_) {
+      b.reset();
+    }
   }
 
 } // namespace tensorflow {
