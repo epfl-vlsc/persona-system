@@ -32,8 +32,6 @@ using namespace errors;
 class SnapAlignDenseParallelOp : public OpKernel {
   public:
     explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special",
-              &is_special_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads",
               &num_threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size",
@@ -85,8 +83,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
       TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
       return Status::OK();
     }
-
-    bool IsSpecial() override { return is_special_; }
 
     void Compute(OpKernelContext* ctx) override {
       if (index_resource_ == nullptr) {
@@ -244,8 +240,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
     int chunk_size_;
     vector<unique_ptr<ReadResource>> read_resources_;
 
-    bool is_special_ = false;
-
     WorkQueue<std::tuple<ReadResource*, Buffer*>>* request_queue_;
     WorkQueue<int>* completion_queue_;
     bool run_ = true;
@@ -254,7 +248,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
 
 REGISTER_OP("SnapAlignDenseParallel")
-  .Attr("is_special: bool = false")
   .Attr("num_threads: int = 1")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")

@@ -29,7 +29,6 @@ using namespace errors;
 class SnapAlignDenseOp : public OpKernel {
   public:
     explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", &is_special_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
     }
 
@@ -70,8 +69,6 @@ class SnapAlignDenseOp : public OpKernel {
       TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
       return Status::OK();
     }
-
-    bool IsSpecial() override { return is_special_; }
 
     void Compute(OpKernelContext* ctx) override {
       if (base_aligner_ == nullptr) {
@@ -180,7 +177,6 @@ class SnapAlignDenseOp : public OpKernel {
     AlignmentResultBuilder result_builder_;
     int flag_;
     LandauVishkinWithCigar lvc_;
-    bool is_special_ = true;
 
     vector<Read> input_reads_; // a vector to pass to SNAP
     vector<unique_ptr<ReadResource>> chunk_handles_;
@@ -188,7 +184,6 @@ class SnapAlignDenseOp : public OpKernel {
 
 
 REGISTER_OP("SnapAlignDense")
-  .Attr("is_special: bool = true")
   .Attr("chunk_size: int = 10000")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
