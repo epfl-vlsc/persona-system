@@ -120,6 +120,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
               continue;
 
             result_buf->reset();
+            auto &res_buf = result_buf->get();
 
             while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
@@ -134,7 +135,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
                   primaryResult.location = InvalidGenomeLocation;
                   primaryResult.mapq = 0;
                   primaryResult.direction = FORWARD;
-                  result_builder.AppendAlignmentResult(primaryResult, cigarString, 4, result_buf->get());
+                  result_builder.AppendAlignmentResult(primaryResult, cigarString, 4, res_buf);
                   continue;
                 }
               }
@@ -170,10 +171,10 @@ class SnapAlignDenseParallelOp : public OpKernel {
               /*LOG(INFO) << " result: location " << primaryResult.location <<
                 " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
 
-              result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, result_buf->get());
+              result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
             }
 
-            result_builder.AppendAndFlush(result_buf->get());
+            result_builder.AppendAndFlush(res_buf);
             result_buf->set_ready();
             completion_queue_->push(1);
 
