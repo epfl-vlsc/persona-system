@@ -32,13 +32,13 @@ using namespace errors;
 class SnapAlignDenseParallelOp : public OpKernel {
   public:
     explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special", 
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_special",
               &is_special_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", 
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads",
               &num_threads_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", 
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size",
               &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", 
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size",
               &chunk_size_));
       int capacity = (chunk_size_ / subchunk_size_) + 1;
       request_queue_ = new WorkQueue<std::tuple<ReadResource*, Buffer*>>(capacity);
@@ -108,7 +108,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
           int flag;
           Read snap_read;
           LandauVishkinWithCigar lvc;
-         
+
           Buffer* result_buf;
           ReadResource* reads;
           std::tuple<ReadResource*, Buffer*> batch;
@@ -118,6 +118,8 @@ class SnapAlignDenseParallelOp : public OpKernel {
               result_buf = std::get<1>(batch);
             } else
               continue;
+
+            result_buf->reset();
 
             while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
 
@@ -157,7 +159,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
               /*Status s = snap_wrapper::computeCigarFlags(
                     &snap_read, &primaryResult, 1, first_is_primary, format,
                     options_->useM, lvc, genome_, cigarString, flag);*/
-          
+
               Status s = snap_wrapper::adjustResults(
                 &snap_read, &primaryResult, 1, first_is_primary, format,
                 options_->useM, lvc, genome_, cigarString, flag);
@@ -170,18 +172,19 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
               result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, result_buf->get());
             }
-            
+
             result_builder.AppendAndFlush(result_buf->get());
+            result_buf->set_ready();
             completion_queue_->push(1);
 
           }
-          LOG(INFO) << "base aligner thread ending."; 
+          LOG(INFO) << "base aligner thread ending.";
         };
         auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
         for (int i = 0; i < num_threads_; i++)
           worker_threadpool->Schedule(aligner_func);
       }
-      
+
       //auto begin = std::chrono::high_resolution_clock::now();
 
       ResourceContainer<BufferList> *bufferlist_resource_container;
@@ -190,9 +193,9 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
       ResourceContainer<ReadResource> *reads_container;
       const Tensor *read_input;
-      OP_REQUIRES_OK(ctx, ctx->input("read", &read_input)); 
-      auto data = read_input->vec<string>(); // data(0) = container, data(1) = name 
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container)); 
+      OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
+      auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
       //LOG(INFO) << "aligner doing " << num_actual_reads << " reads";
 
       OP_REQUIRES_OK(ctx, reads_container->get()->split(subchunk_size_, read_resources_));
@@ -218,7 +221,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       }
 
         //auto start = clock();
-        
+
       //LOG(INFO) << "done aligning";
 
 
@@ -233,7 +236,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
     ReferencePool<BufferList> *buflist_pool_ = nullptr;
     GenomeIndexResource* index_resource_ = nullptr;
     AlignerOptionsResource* options_resource_ = nullptr;
-    const Genome *genome_ = nullptr; 
+    const Genome *genome_ = nullptr;
     AlignerOptions* options_;
     int num_threads_;
     int subchunk_size_;
