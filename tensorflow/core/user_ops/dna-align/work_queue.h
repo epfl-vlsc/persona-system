@@ -17,7 +17,7 @@ namespace tensorflow {
 template <typename T>
 class WorkQueue {
   public:
-   
+
     WorkQueue(int capacity);
     ~WorkQueue() {} // if you don't define the destructor, you get
                      // a weird linker error
@@ -68,7 +68,7 @@ void WorkQueue<T>::pop_all(std::vector<T> &items) {
 
     popped = !queue_.empty();
     while (!queue_.empty()) {
-      items.insert(queue_.front());
+      items.push_back(queue_.front());
       queue_.pop();
     }
   }
