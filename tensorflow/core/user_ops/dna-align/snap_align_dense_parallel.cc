@@ -32,12 +32,17 @@ using namespace errors;
   namespace {
     class ReadResourceHolder
     {
+    private:
+      uint64_t id_;
+      ReadResource *parent_resource_;
+      uint16_t count_;
+
     public:
-      ReadResourceHolder(const int id, ReadResource *parent_resource, uint16_t count) :
+      ReadResourceHolder(const decltype(id_) id, ReadResource *parent_resource, uint16_t count) :
         id_(id), parent_resource_(parent_resource), count_(count) {}
 
       inline bool
-      is_id(const int &other_id) {
+      is_id(const decltype(id_) &other_id) {
         return other_id == id_;
       }
 
@@ -47,15 +52,13 @@ using namespace errors;
         if (count_ == 0) {
           LOG(DEBUG) << "decrement_count called with count_ already == 0. This is a bug!\n";
           return true;
-        } else {
-          return --count_ == 0;
-        }
+        } else if (--count_ == 0) {
+          ReadResourceReleaser a(*parent_resource_);
+          return true;
+        } else
+          return false;
       }
 
-    private:
-      const int id_;
-      ReadResource *parent_resource_;
-      uint16_t count_;
     };
   }
 
@@ -69,8 +72,8 @@ class SnapAlignDenseParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size",
               &chunk_size_));
       int capacity = (chunk_size_ / subchunk_size_) + 1;
-      request_queue_ = new WorkQueue<tuple<ReadResource*, Buffer*>>(capacity);
-      completion_queue_ = new WorkQueue<int>(capacity);
+      request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
+      completion_queue_.reset(new WorkQueue<uint64_t>(capacity));
     }
 
     ~SnapAlignDenseParallelOp() override {
@@ -80,8 +83,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
-      delete request_queue_;
-      delete completion_queue_;
     }
 
     Status InitHandles(OpKernelContext* ctx)
@@ -114,9 +115,77 @@ class SnapAlignDenseParallelOp : public OpKernel {
       return Status::OK();
     }
 
+
+  void Compute(OpKernelContext* ctx) override {
+    if (index_resource_ == nullptr) {
+      OP_REQUIRES_OK(ctx, InitHandles(ctx));
+      init_workers(ctx);
+    }
+
+    //auto begin = chrono::high_resolution_clock::now();
+
+    ResourceContainer<BufferList> *bufferlist_resource_container;
+    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
+    auto alignment_result_buffer_list = bufferlist_resource_container->get();
+
+    ResourceContainer<ReadResource> *reads_container;
+    const Tensor *read_input;
+    OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
+    auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
+    OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
+    core::ScopedUnref a(reads_container);
+
+    OP_REQUIRES_OK(ctx, reads_container->get()->split(subchunk_size_, read_resources_));
+    decltype(read_resources_)::size_type num_subchunks = read_resources_.size();
+    alignment_result_buffer_list->resize(num_subchunks);
+
+    for (decltype(num_subchunks) i = 0; i < num_subchunks; ++i) {
+      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_result_buffer_list->get_at(i), id_));
+    }
+    ++id_;
+
+    OP_REQUIRES_OK(ctx, process_completed_chunks());
+
+    // needed because if we just call clear, this will
+    // call delete on all the resources!
+    for (auto &read_rsrc : read_resources_) {
+      read_rsrc.release();
+    }
+    read_resources_.clear();
+  }
+
+private:
+
+  inline Status
+  process_completed_chunks()
+  {
+    auto status = Status::OK();
+
+    completion_queue_->pop_all(completion_process_queue_);
+    bool found;
+    for (auto &id : completion_process_queue_) {
+      found = false;
+      for (decltype(pending_resources_)::size_type i = 0; i < pending_resources_.size(); ++i) {
+        auto &pending_resource = pending_resources_[i];
+        if (pending_resource.is_id(id)) {
+          if (pending_resource.decrement_count()) {
+            pending_resources_.erase(pending_resources_.begin() + i);
+          }
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        status = Internal("Unable to find pending resource with id ", id);
+        break;
+      }
+    }
+
+    return status;
+  }
+
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
-
       LOG(INFO) << "aligner thread spinning up";
       BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
       bool first_is_primary = true; // we only ever generate one result
@@ -134,11 +203,13 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
       Buffer* result_buf;
       ReadResource* reads;
-      tuple<ReadResource*, Buffer*> batch;
+      decltype(id_) id;
+      tuple<ReadResource*, Buffer*, decltype(id_)> batch;
       while (run_) {
         if (request_queue_->pop(batch)) {
           reads = get<0>(batch);
           result_buf = get<1>(batch);
+          id = get<2>(batch);
         } else
           continue;
 
@@ -199,9 +270,9 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
-        completion_queue_->push(1);
-
+        completion_queue_->push(id);
       }
+
       LOG(INFO) << "base aligner thread ending.";
     };
     auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
@@ -209,74 +280,22 @@ class SnapAlignDenseParallelOp : public OpKernel {
       worker_threadpool->Schedule(aligner_func);
   }
 
-  void Compute(OpKernelContext* ctx) override {
-    if (index_resource_ == nullptr) {
-      OP_REQUIRES_OK(ctx, InitHandles(ctx));
-      init_workers(ctx);
-    }
-
-    //auto begin = chrono::high_resolution_clock::now();
-
-    ResourceContainer<BufferList> *bufferlist_resource_container;
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
-    auto alignment_result_buffer_list = bufferlist_resource_container->get();
-
-    ResourceContainer<ReadResource> *reads_container;
-    const Tensor *read_input;
-    OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
-    auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
-    OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
-    //LOG(INFO) << "aligner doing " << num_actual_reads << " reads";
-
-    OP_REQUIRES_OK(ctx, reads_container->get()->split(subchunk_size_, read_resources_));
-    int num_subchunks = read_resources_.size();
-    alignment_result_buffer_list->resize(num_subchunks);
-
-    for (int i = 0; i < num_subchunks; i++) {
-      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_result_buffer_list->get_at(i)));
-    }
-
-    int received = 0;
-    int dummy;
-    while (received < num_subchunks) {
-      completion_queue_->pop(dummy);
-      received++;
-    }
-
-    auto reads = reads_container->get();
-    core::ScopedUnref a(reads_container);
-    ResourceReleaser<ReadResource> b(*reads_container);
-    {
-      ReadResourceReleaser r(*reads);
-    }
-
-    //auto start = clock();
-
-    //LOG(INFO) << "done aligning";
-
-
-    //LOG(INFO) << "done append";
-    //auto end = chrono::high_resolution_clock::now();
-    //LOG(INFO) << "snap align time is: " << ((float)chrono::duration_cast<chrono::nanoseconds>(end-begin).count())/1000000000.0f;
-    //tracepoint(bioflow, snap_align_kernel, clock() - start);
-    read_resources_.clear();
-  }
-
-private:
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   GenomeIndexResource* index_resource_ = nullptr;
   AlignerOptionsResource* options_resource_ = nullptr;
   const Genome *genome_ = nullptr;
-  AlignerOptions* options_;
+  AlignerOptions* options_ = nullptr;
   int num_threads_;
   int subchunk_size_;
   int chunk_size_;
+  volatile bool run_ = true;
+  uint64_t id_ = 0;
+
+  unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
+  unique_ptr<WorkQueue<uint64_t>> completion_queue_;
+
+  vector<uint64_t> completion_process_queue_;
   vector<unique_ptr<ReadResource>> read_resources_;
-
-  WorkQueue<tuple<ReadResource*, Buffer*>>* request_queue_;
-  WorkQueue<int>* completion_queue_;
-  bool run_ = true;
-
   vector<ReadResourceHolder> pending_resources_;
 };
 
