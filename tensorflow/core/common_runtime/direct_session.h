@@ -225,9 +225,6 @@ class DirectSession : public Session {
   // Schedules 'c' for execution on pool.
   void SchedClosure(thread::ThreadPool* pool, std::function<void()> c);
 
-  // Schedules 'c' for execution in the special pool
-  void SchedClosureSpecial(thread::ThreadPool* pool, std::function<void()> c);
-
   mutex executor_lock_;  // protects executors_
   // Holds mappings from signature to the executors that process
   // it. The reason for a level of indirection around mapped_type is
