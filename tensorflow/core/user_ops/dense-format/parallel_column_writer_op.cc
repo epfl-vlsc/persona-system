@@ -6,13 +6,15 @@
 #include <string>
 #include <vector>
 #include "compression.h"
+#include "buffer_list.h"
 #include "format.h"
+#include "util.h"
 
 namespace tensorflow {
   using namespace std;
   using namespace errors;
   namespace {
-    const string op_name("ColumnWriter");
+    const string op_name("ParallelColumnWriter");
   }
 
   REGISTER_OP(op_name.c_str())
@@ -38,9 +40,9 @@ This also assumes that this writer only writes out a single record type.
 Thus we always need 3 of these for the full conversion pipeline
 )doc");
 
-  class ColumnWriterOp : public OpKernel {
+  class ParallelColumnWriterOp : public OpKernel {
   public:
-    ColumnWriterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
+    ParallelColumnWriterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       using namespace format;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
       string s;
@@ -78,12 +80,12 @@ Thus we always need 3 of these for the full conversion pipeline
       auto filepath = path->scalar<string>()();
       auto column_vec = column_t->vec<string>();
 
-      ResourceContainer<Data> *column;
+      ResourceContainer<BufferList> *column;
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
       core::ScopedUnref column_releaser(column);
-      ResourceReleaser<Data> a(*column);
+      ResourceReleaser<BufferList> a(*column);
 
-      auto data = column->get();
+      auto &buffers = column->get()->get();
 
       string full_path(record_prefix_ + filepath + record_suffix_);
 
@@ -94,17 +96,101 @@ Thus we always need 3 of these for the full conversion pipeline
 
       OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out));
 
+      auto num_buffers = buffers.size();
+      uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
+      uint32_t records_per_chunk = num_records / num_buffers;
+      if (num_records % num_buffers != 0) {
+        ++records_per_chunk;
+      }
+
       int fwrite_ret;
       auto s = Status::OK();
-      // TODO in the future, override with a separate op to avoid an if statement
+
+      decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       if (compress_) {
+        buf_.clear(); outbuf_.clear();
+        /*
         // compressGZIP already calls buf_.clear()
         s = compressGZIP(data->data(), data->size(), buf_);
         if (s.ok()) {
           fwrite_ret = fwrite(buf_.data(), buf_.size(), 1, file_out);
         }
+        */
+        for (auto &buffer : buffers) {
+          if (i + recs_per_chunk > num_records) {
+            recs_per_chunk = num_records - i;
+          }
+
+          auto &data_buf = buffer.get();
+          s = appendSegment(&data_buf[0], recs_per_chunk, buf_, true);
+          if (!s.ok())
+            break;
+
+          i += recs_per_chunk;
+        }
+        if (s.ok()) {
+          i = 0; recs_per_chunk = records_per_chunk;
+          size_t expected_size;
+          for (auto &buffer : buffers) {
+            if (i + recs_per_chunk > num_records) {
+              recs_per_chunk = num_records - i;
+            }
+
+            auto &data_buf = buffer.get();
+
+            expected_size = data_buf.size() - recs_per_chunk;
+            s = appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true);
+            if (!s.ok())
+              break;
+            i += recs_per_chunk;
+          }
+
+          if (s.ok()) {
+            s = compressGZIP(&buf_[0], buf_.size(), outbuf_);
+            if (s.ok()) {
+              fwrite_ret = fwrite(&outbuf_[0], outbuf_.size(), 1, file_out);
+              if (fwrite_ret != 1) {
+                s = Internal("fwrite(compressed) return non-1 value of ", fwrite_ret);
+              }
+            }
+          }
+        }
       } else {
-        fwrite_ret = fwrite(data->data(), data->size(), 1, file_out);
+        for (auto &buffer : buffers) {
+          if (i + recs_per_chunk > num_records) {
+            recs_per_chunk = num_records - i;
+          }
+
+          auto &data_buf = buffer.get();
+
+          fwrite_ret = fwrite(&data_buf[0], recs_per_chunk, 1, file_out);
+          if (fwrite_ret != 1) {
+            s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
+            break;
+          }
+
+          i += recs_per_chunk;
+        }
+        if (s.ok()) {
+          i = 0; recs_per_chunk = records_per_chunk;
+          size_t expected_size;
+          for (auto &buffer : buffers) {
+            if (i + recs_per_chunk > num_records) {
+              recs_per_chunk = num_records - i;
+            }
+
+            auto &data_buf = buffer.get();
+
+            expected_size = data_buf.size() - recs_per_chunk;
+            fwrite_ret = fwrite(&data_buf[recs_per_chunk], expected_size, 1, file_out);
+            if (fwrite_ret != 1) {
+              s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", expected_size);
+              break;
+            }
+
+            i += recs_per_chunk;
+          }
+        }
       }
 
       fclose(file_out);
@@ -140,9 +226,9 @@ Thus we always need 3 of these for the full conversion pipeline
 
     bool compress_;
     string record_suffix_, record_prefix_;
-    vector<char> buf_; // used to compress into
+    vector<char> buf_, outbuf_; // used to compress into
     format::FileHeader header_;
   };
 
-  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), ColumnWriterOp);
+  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), ParallelColumnWriterOp);
 } //  namespace tensorflow {

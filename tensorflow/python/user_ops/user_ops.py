@@ -336,6 +336,35 @@ def _ColumnWriterShape(op):
     _assert_scalar(op.inputs[i].get_shape())
   return []
 
+_pcw_str = "ParallelColumnWriter"
+allowed_type_values = set(["base", "qual", "meta", "results"])
+def ParallelColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, output_dir="", name=None):
+    if record_type not in allowed_type_values:
+        raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
+          given=record_type, expected=allowed_type_values))
+    if output_dir != "" and output_dir[-1] != "/":
+      output_dir += "/"
+    return gen_user_ops.parallel_column_writer(
+      column_handle=column_handle,
+      file_path=file_path,
+      record_type=record_type,
+      first_ordinal=first_ordinal,
+      num_records=num_records,
+      compress=compress,
+      record_id=record_id,
+      output_dir=output_dir,
+      name=name
+    )
+
+ops.NoGradient(_pcw_str)
+@ops.RegisterShape(_pcw_str)
+def _ParallelColumnWriterShape(op):
+  column_handle_shape = op.inputs[0].get_shape()
+  _assert_vec(column_handle_shape, 2)
+  for i in range(1,4):
+    _assert_scalar(op.inputs[i].get_shape())
+  return []
+
 _da_str = "DenseAssembler"
 def DenseAssembler(dense_read_pool, base_handle, qual_handle, meta_handle, num_records, name=None):
   return gen_user_ops.dense_assembler(
