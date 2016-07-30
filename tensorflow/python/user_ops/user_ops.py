@@ -175,7 +175,7 @@ def _BufferListSinkShape(op):
 
 _dt_string = "DenseTester"
 def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
-  return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records, 
+  return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records,
                                    genome_handle=genome_handle, sam_filename=sam_filename, name=name)
 ops.NoGradient(_dt_string)
 
@@ -248,10 +248,10 @@ def SnapAlign(genome, options, read, name=None):
 ops.NoGradient("SnapAlign")
 
 _sad_string = "SnapAlignDense"
-def SnapAlignDense(genome, options, buffer_pool, read, is_special=True, name=None):
+def SnapAlignDense(genome, options, buffer_pool, read, name=None):
 
     return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
-            buffer_pool=buffer_pool, read=read, is_special=is_special, name=name)
+            buffer_pool=buffer_pool, read=read, name=name)
 
 ops.NoGradient(_sad_string)
 @ops.RegisterShape(_sad_string)
@@ -259,10 +259,10 @@ def _SnapAlignDense(op):
     return [tensor_shape.vector(2)]
 
 _sadp_string = "SnapAlignDenseParallel"
-def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, num_threads, is_special=False, name=None):
+def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, num_threads, name=None):
 
     return gen_user_ops.snap_align_dense_parallel(genome_handle=genome, options_handle=options,
-            buffer_list_pool=buffer_list_pool, read=read, is_special=is_special, chunk_size=chunk_size, 
+            buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
             subchunk_size=subchunk_size, num_threads=num_threads, name=name)
 
 ops.NoGradient(_sadp_string)
