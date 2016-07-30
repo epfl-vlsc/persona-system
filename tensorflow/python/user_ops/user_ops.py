@@ -26,6 +26,8 @@ from tensorflow.python.framework import ops, tensor_shape
 from tensorflow.python.ops import common_shapes
 from tensorflow.python.ops import io_ops
 
+import os
+
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):
   if shape.ndims != 2:
@@ -175,13 +177,19 @@ def _BufferListSinkShape(op):
 
 _dt_string = "DenseTester"
 def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
+  if not (os.path.exists(sam_filename) and os.path.isfile(sam_file_name)):
+    raise EnvironmentError("DenseTester SAM file '{}' is not valid".format(sam_filename))
   return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records, 
                                    genome_handle=genome_handle, sam_filename=sam_filename, name=name)
 ops.NoGradient(_dt_string)
 
 @ops.RegisterShape(_dt_string)
-def _DenseTester(op):
-    return [tensor_shape.scalar(), tensor_shape.vector(2)]
+def _DenseTesterShape(op):
+  for i in range(2):
+    op_shape = op.inputs[i].get_shape()
+    _assert_vec(op_shape, 2)
+  _assert_scalar(op.inputs[2].get_shape())
+  return []
 
 _sm_str = "StagedFileMap"
 def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
