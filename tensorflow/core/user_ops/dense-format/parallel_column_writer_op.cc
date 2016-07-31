@@ -161,7 +161,7 @@ Thus we always need 3 of these for the full conversion pipeline
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get();
+          auto &data_buf = buffer.get_when_ready();
 
           fwrite_ret = fwrite(&data_buf[0], recs_per_chunk, 1, file_out);
           if (fwrite_ret != 1) {
