@@ -120,6 +120,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
       init_workers(ctx);
     }
+    OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
 
     ResourceContainer<BufferList> *bufferlist_resource_container;
     OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
