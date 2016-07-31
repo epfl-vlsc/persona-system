@@ -30,6 +30,10 @@ namespace tensorflow {
     return false;
   }
 
+  size_t ReadResource::num_records() {
+    return 0;
+  }
+
   void ReadResource::release() {}
 
   ReadResourceReleaser::ReadResourceReleaser(ReadResource &r) : rr_(r) {}

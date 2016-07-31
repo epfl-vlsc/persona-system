@@ -115,6 +115,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
 
   void Compute(OpKernelContext* ctx) override {
+    auto start = clock();
     if (index_resource_ == nullptr) {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
       init_workers(ctx);
@@ -149,6 +150,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       read_rsrc.release();
     }
     read_resources_.clear();
+    tracepoint(bioflow, snap_align_kernel, clock() - start);
   }
 
 private:
@@ -202,6 +204,8 @@ private:
       ReadResource* reads;
       decltype(id_) id;
       tuple<ReadResource*, Buffer*, decltype(id_)> batch;
+      clock_t start;
+      Status status;
       while (run_) {
         if (request_queue_->pop(batch)) {
           reads = get<0>(batch);
@@ -210,10 +214,12 @@ private:
         } else
           continue;
 
+        start = clock();
+
         result_buf->reset();
         auto &res_buf = result_buf->get();
-
-        while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
+        status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+        while (status.ok()) {
 
           cigarString.clear();
           snap_read.init(nullptr, 0, bases, qualities, bases_len);
@@ -263,11 +269,19 @@ private:
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
 
           result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
+          status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+        }
+
+        if (!IsResourceExhausted(status)) {
+          LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError! : " << status << "\n";
+          run_ = false; // not sure what to do here for errors
+          return;
         }
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
         completion_queue_->push(id);
+        tracepoint(bioflow, snap_alignments, clock() - start, reads->num_records());
       }
 
       LOG(INFO) << "base aligner thread ending.";

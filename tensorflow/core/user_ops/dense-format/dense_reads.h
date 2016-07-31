@@ -41,6 +41,8 @@ namespace tensorflow {
 
     void release() override;
 
+    std::size_t num_records() override;
+
     Status split(std::size_t chunk, std::vector<std::unique_ptr<ReadResource>> &split_resources) override;
 
   private:
@@ -76,6 +78,8 @@ namespace tensorflow {
     bool reset_iter() override;
     bool has_qualities() override;
     bool has_metadata() override;
+
+    std::size_t num_records() override;
 
   private:
     const format::RecordTable *base_idx_, *qual_idx_, *meta_idx_;

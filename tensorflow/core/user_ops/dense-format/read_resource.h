@@ -25,6 +25,7 @@ namespace tensorflow {
     virtual bool has_qualities();
     virtual bool has_metadata();
 
+    virtual std::size_t num_records();
 
     // Resets the iterator, and returns `true` only if the iterator was successfully reset
     // Non-reset supporting iterators may return false
