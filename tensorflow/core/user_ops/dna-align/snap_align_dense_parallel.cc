@@ -219,9 +219,9 @@ private:
 
         result_buf->reset();
         auto &res_buf = result_buf->get();
-        status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
-        while (status.ok()) {
-
+        for (status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+             status.ok();
+             status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
           cigarString.clear();
           snap_read.init(nullptr, 0, bases, qualities, bases_len);
           snap_read.clip(options_->clipping);
@@ -270,7 +270,6 @@ private:
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
 
           result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
-          status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
         }
 
         if (!IsResourceExhausted(status)) {
