@@ -30,10 +30,19 @@ namespace tensorflow {
 
   void Buffer::reset() {
     buf_.clear();
+    data_ready_ = false;
   }
 
-  vector<char>& Buffer::get() {
+  void Buffer::set_ready() {
+    data_ready_ = true;
+  }
+
+  decltype(Buffer::buf_)& Buffer::get() {
     return buf_;
   }
 
+  decltype(Buffer::buf_)& Buffer::get_when_ready() {
+    while (!data_ready_) {};
+    return buf_;
+  }
 } // namespace tensorflow {

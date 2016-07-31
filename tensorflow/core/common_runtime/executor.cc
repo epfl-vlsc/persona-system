@@ -185,11 +185,7 @@ struct NodeItem {
   // The kernel for this node.
   OpKernel* kernel = nullptr;
 
-  // TODO(bioflow) TODO(SW)
-  // if we want to pin this item to a specific core / thread, save state in this struct
-
   bool kernel_is_expensive = false;  // True iff kernel->IsExpensive()
-  bool kernel_is_special = false;
   bool kernel_is_async = false;      // True iff kernel->AsAsync() != nullptr
   bool is_merge = false;             // True iff IsMerge(node)
 
@@ -340,7 +336,6 @@ Status ExecutorImpl::Initialize() {
     }
     CHECK(item->kernel);
     item->kernel_is_expensive = item->kernel->IsExpensive();
-    item->kernel_is_special = item->kernel->IsSpecial();
     item->kernel_is_async = (item->kernel->AsAsync() != nullptr);
     item->is_merge = IsMerge(n);
 
@@ -670,7 +665,7 @@ class ExecutorState {
   FunctionCallFrame* call_frame_;
   const ExecutorImpl* impl_;
   CancellationManager* cancellation_manager_;
-  Executor::Args::Runner runner_, runner_special_;
+  Executor::Args::Runner runner_;
 
   // Owned.
 
@@ -821,7 +816,6 @@ ExecutorState::ExecutorState(const Executor::Args& args, ExecutorImpl* impl)
       impl_(impl),
       cancellation_manager_(args.cancellation_manager),
       runner_(args.runner),
-      runner_special_(args.runner_special),
       num_outstanding_ops_(0) {
   // We start the entire execution in iteration 0 of the root frame
   // so let us create the root frame and the state for iteration 0.
@@ -1548,17 +1542,10 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
   if (stats_collector_) {
     scheduled_usec = nodestats::NowInUsec();
   }
-  
   if (inline_ready == nullptr) {
     // Schedule to run all the ready ops in thread pool.
     for (auto& tagged_node : ready) {
-      
-      const NodeItem* nodes = impl_->nodes_;
-      if (nodes[tagged_node.node->id()].kernel_is_special) {
-        //LOG(INFO) << "running special node!";
-        runner_special_(std::bind(&ME::Process, this, tagged_node, scheduled_usec));
-      } else 
-        runner_(std::bind(&ME::Process, this, tagged_node, scheduled_usec));
+      runner_(std::bind(&ME::Process, this, tagged_node, scheduled_usec));
     }
     return;
   }
@@ -1573,40 +1560,21 @@ void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
       if (curr_expensive_node) {
         // Dispatch to another thread since there is plenty of work to
         // do for this thread.
-        if (item.kernel_is_special) {
-          //LOG(INFO) << "running special !";
-          runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
-                                    scheduled_usec));
-        } else {
-          runner_(std::bind(&ME::Process, this, *curr_expensive_node,
-                            scheduled_usec));
-        }
+        runner_(std::bind(&ME::Process, this, *curr_expensive_node,
+                          scheduled_usec));
       }
       curr_expensive_node = &tagged_node;
     }
   }
-
   if (curr_expensive_node) {
-    if (nodes[curr_expensive_node->node->id()].kernel_is_special) {
-      //LOG(INFO) << "running special instead of inlining !";
-      runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
-                                scheduled_usec));
+    if (inline_ready->empty()) {
+      // Tail recursion optimization
+      inline_ready->push_back(*curr_expensive_node);
     } else {
-      if (inline_ready->empty()) {
-        // Tail recursion optimization
-        inline_ready->push_back(*curr_expensive_node);
-      } else {
-        // There are inline nodes to run already. We dispatch this expensive
-        // node to other thread.
-        if (nodes[curr_expensive_node->node->id()].kernel_is_special) {
-          //LOG(INFO) << "running special !";
-          runner_special_(std::bind(&ME::Process, this, *curr_expensive_node,
-                                    scheduled_usec));
-        } else {
-          runner_(std::bind(&ME::Process, this, *curr_expensive_node,
-                            scheduled_usec));
-        }
-      }
+      // There are inline nodes to run already. We dispatch this expensive
+      // node to other thread.
+      runner_(
+          std::bind(&ME::Process, this, *curr_expensive_node, scheduled_usec));
     }
   }
 }

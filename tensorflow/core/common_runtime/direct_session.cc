@@ -72,7 +72,7 @@ thread::ThreadPool* NewThreadPoolFromSessionOptions(
     const SessionOptions& options) {
   const int32 num_threads = NumInterOpThreadsFromSessionOptions(options);
   VLOG(1) << "Direct session inter op parallelism threads: " << num_threads;
-  return new thread::ThreadPool(options.env, "Compute", num_threads, options.config.special_op_threads());
+  return new thread::ThreadPool(options.env, "Compute", num_threads);
 }
 
 thread::ThreadPool* NewThreadPoolFromThreadPoolOptions(
@@ -137,21 +137,6 @@ void DirectSession::SchedClosure(thread::ThreadPool* pool,
   c();
 #else
   pool->Schedule(c);
-#endif  // __ANDROID__
-}
-
-void DirectSession::SchedClosureSpecial(thread::ThreadPool* pool,
-                                        std::function<void()> c) {
-  // TODO(sanjay): Get rid of __ANDROID__ path
-#ifdef __ANDROID__
-  // On Android, there is no implementation of ThreadPool that takes
-  // std::function, only Closure, which we cannot easily convert.
-  //
-  // Instead, we just run the function in-line, which is currently
-  // safe given the reasoning above.
-  c();
-#else
-  pool->ScheduleSpecial(c);
 #endif  // __ANDROID__
 }
 
@@ -333,9 +318,6 @@ Status DirectSession::Run(const RunOptions& run_options,
   args.cancellation_manager = cancellation_manager_;
   args.runner = [this, pool](Executor::Args::Closure c) {
     SchedClosure(pool, c);
-  };
-  args.runner_special = [this, pool](Executor::Args::Closure c) {
-    SchedClosureSpecial(pool, c);
   };
   args.session_state = &session_state_;
   args.tensor_store = &run_state.tensor_store;

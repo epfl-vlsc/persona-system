@@ -111,21 +111,14 @@ struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
   const int num_threads_;
 };
 
-  ThreadPool::ThreadPool(Env* env, const string& name, int num_threads, int num_threads_special, int affinity_start)
-    : ThreadPool(env, ThreadOptions(), name, num_threads, num_threads_special, affinity_start) {}
+  ThreadPool::ThreadPool(Env* env, const string& name, int num_threads, int affinity_start)
+    : ThreadPool(env, ThreadOptions(), name, num_threads, affinity_start) {}
 
 ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
-                       const string& name, int num_threads, int num_threads_special, int affinity_start) {
+                       const string& name, int num_threads, int affinity_start) {
   CHECK_GE(num_threads, 1);
   impl_.reset(
       new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads, affinity_start));
-  if (num_threads_special > 0) {
-    impl_special_.reset(
-      new ThreadPool::Impl(env, thread_options, "tf_special_" + name, num_threads_special, num_threads + affinity_start));
-  } else {
-    // TODO may be default behavior of unique_ptr
-    impl_special_.reset(nullptr);
-  }
 }
 
 ThreadPool::~ThreadPool() {}
@@ -133,13 +126,6 @@ ThreadPool::~ThreadPool() {}
 void ThreadPool::Schedule(std::function<void()> fn) {
   CHECK(fn != nullptr);
   impl_->Schedule(std::move(fn));
-}
-
-void ThreadPool::ScheduleSpecial(std::function<void()> fn) {
-  CHECK(fn != nullptr);
-  CHECK(impl_special_.get() != nullptr);
-  // TODO schedule in the second pool
-  impl_special_->Schedule(std::move(fn));
 }
 
 void ThreadPool::ParallelFor(int64 total, int64 cost_per_unit,

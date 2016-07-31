@@ -26,6 +26,8 @@ from tensorflow.python.framework import ops, tensor_shape
 from tensorflow.python.ops import common_shapes
 from tensorflow.python.ops import io_ops
 
+import os
+
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):
   if shape.ndims != 2:
@@ -175,13 +177,19 @@ def _BufferListSinkShape(op):
 
 _dt_string = "DenseTester"
 def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
-  return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records, 
+  if not (os.path.exists(sam_filename) and os.path.isfile(sam_file_name)):
+    raise EnvironmentError("DenseTester SAM file '{}' is not valid".format(sam_filename))
+  return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records,
                                    genome_handle=genome_handle, sam_filename=sam_filename, name=name)
 ops.NoGradient(_dt_string)
 
 @ops.RegisterShape(_dt_string)
-def _DenseTester(op):
-    return [tensor_shape.scalar(), tensor_shape.vector(2)]
+def _DenseTesterShape(op):
+  for i in range(2):
+    op_shape = op.inputs[i].get_shape()
+    _assert_vec(op_shape, 2)
+  _assert_scalar(op.inputs[2].get_shape())
+  return []
 
 _sm_str = "StagedFileMap"
 def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
@@ -248,10 +256,10 @@ def SnapAlign(genome, options, read, name=None):
 ops.NoGradient("SnapAlign")
 
 _sad_string = "SnapAlignDense"
-def SnapAlignDense(genome, options, buffer_pool, read, is_special=True, name=None):
+def SnapAlignDense(genome, options, buffer_pool, read, name=None):
 
     return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
-            buffer_pool=buffer_pool, read=read, is_special=is_special, name=name)
+            buffer_pool=buffer_pool, read=read, name=name)
 
 ops.NoGradient(_sad_string)
 @ops.RegisterShape(_sad_string)
@@ -259,10 +267,10 @@ def _SnapAlignDense(op):
     return [tensor_shape.vector(2)]
 
 _sadp_string = "SnapAlignDenseParallel"
-def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, num_threads, is_special=False, name=None):
+def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, num_threads, name=None):
 
     return gen_user_ops.snap_align_dense_parallel(genome_handle=genome, options_handle=options,
-            buffer_list_pool=buffer_list_pool, read=read, is_special=is_special, chunk_size=chunk_size, 
+            buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
             subchunk_size=subchunk_size, num_threads=num_threads, name=name)
 
 ops.NoGradient(_sadp_string)
@@ -330,6 +338,35 @@ def ColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id
 ops.NoGradient(_cw_str)
 @ops.RegisterShape(_cw_str)
 def _ColumnWriterShape(op):
+  column_handle_shape = op.inputs[0].get_shape()
+  _assert_vec(column_handle_shape, 2)
+  for i in range(1,4):
+    _assert_scalar(op.inputs[i].get_shape())
+  return []
+
+_pcw_str = "ParallelColumnWriter"
+allowed_type_values = set(["base", "qual", "meta", "results"])
+def ParallelColumnWriter(column_handle, file_path, first_ordinal, num_records, record_id, record_type, compress=False, output_dir="", name=None):
+    if record_type not in allowed_type_values:
+        raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
+          given=record_type, expected=allowed_type_values))
+    if output_dir != "" and output_dir[-1] != "/":
+      output_dir += "/"
+    return gen_user_ops.parallel_column_writer(
+      column_handle=column_handle,
+      file_path=file_path,
+      record_type=record_type,
+      first_ordinal=first_ordinal,
+      num_records=num_records,
+      compress=compress,
+      record_id=record_id,
+      output_dir=output_dir,
+      name=name
+    )
+
+ops.NoGradient(_pcw_str)
+@ops.RegisterShape(_pcw_str)
+def _ParallelColumnWriterShape(op):
   column_handle_shape = op.inputs[0].get_shape()
   _assert_vec(column_handle_shape, 2)
   for i in range(1,4):
