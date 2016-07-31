@@ -92,8 +92,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
       TF_RETURN_IF_ERROR(snap_wrapper::init());
 
-      //LOG(INFO) << "SNAP Kernel creating BaseAligner";
-
       options_ = options_resource_->value();
       genome_ = index_resource_->get_genome();
 
@@ -122,8 +120,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
       init_workers(ctx);
     }
 
-    //auto begin = chrono::high_resolution_clock::now();
-
     ResourceContainer<BufferList> *bufferlist_resource_container;
     OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
     auto alignment_result_buffer_list = bufferlist_resource_container->get();
@@ -134,15 +130,16 @@ class SnapAlignDenseParallelOp : public OpKernel {
     auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
     OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
     core::ScopedUnref a(reads_container);
+    auto reads = reads_container->get();
 
-    OP_REQUIRES_OK(ctx, reads_container->get()->split(subchunk_size_, read_resources_));
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, read_resources_));
     decltype(read_resources_)::size_type num_subchunks = read_resources_.size();
     alignment_result_buffer_list->resize(num_subchunks);
 
     for (decltype(num_subchunks) i = 0; i < num_subchunks; ++i) {
       request_queue_->push(make_tuple(read_resources_[i].get(), alignment_result_buffer_list->get_at(i), id_));
     }
-    ++id_;
+    pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
 
     OP_REQUIRES_OK(ctx, process_completed_chunks());
 
@@ -299,7 +296,6 @@ private:
   vector<ReadResourceHolder> pending_resources_;
 };
 
-
   REGISTER_OP("SnapAlignDenseParallel")
   .Attr("num_threads: int = 1")
   .Attr("chunk_size: int")
@@ -316,7 +312,6 @@ generation of alignment candidates.
 output: a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
-
 
   REGISTER_KERNEL_BUILDER(Name("SnapAlignDenseParallel").Device(DEVICE_CPU), SnapAlignDenseParallelOp);
 
