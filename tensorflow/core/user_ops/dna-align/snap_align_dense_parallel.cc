@@ -86,11 +86,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
         this_thread::sleep_for(chrono::milliseconds(250));
       }
       request_queue_->unblock();
-      size_t requests_in_flight;
-      while ((requests_in_flight = request_queue_->size()) > 0) {
-        LOG(DEBUG) << "DenseAligner("<< this << ") waiting for " << requests_in_flight << " to finish\n";
-        this_thread::sleep_for(chrono::milliseconds(250));
-      }
       completion_queue_->unblock();
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
