@@ -143,7 +143,7 @@ template <typename T>
 void WorkQueue<T>::unblock() {
   {
     mutex_lock l(mu_);
-    LOG(INFO) << " unblock called!";
+    LOG(INFO) << "WorkQueue("<< this << ") unblock called!";
     block_ = false;
   }
 
