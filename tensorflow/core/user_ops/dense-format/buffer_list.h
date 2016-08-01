@@ -13,8 +13,6 @@ namespace tensorflow {
         std::vector<Buffer>& get();
         void reset();
 
-        ~BufferList();
-
     private:
         std::vector<Buffer> buf_list_;
     };

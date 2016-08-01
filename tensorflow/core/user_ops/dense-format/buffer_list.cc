@@ -15,10 +15,6 @@ namespace tensorflow {
     return buf_list_;
   }
 
-  BufferList::~BufferList() {
-    LOG(DEBUG) << "Calling ~BufferList(" << this << ")\n";
-  }
-
   Buffer* BufferList::get_at(int index) {
     if (index >= buf_list_.size()) 
       buf_list_.resize(index+1);

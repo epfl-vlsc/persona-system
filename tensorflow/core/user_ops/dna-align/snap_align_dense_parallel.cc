@@ -2,6 +2,7 @@
 #include <tuple>
 #include <thread>
 #include <chrono>
+#include <atomic>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/resource_mgr.h"
@@ -79,19 +80,27 @@ class SnapAlignDenseParallelOp : public OpKernel {
     }
 
     ~SnapAlignDenseParallelOp() override {
-      run_ = false;
-      size_t requests_in_flight;
-      while ((requests_in_flight = request_queue_->size()) > 0) {
-        LOG(DEBUG) << "DenseAligner("<< this << ") waiting for " << requests_in_flight << " to finish\n";
-        this_thread::sleep_for(chrono::milliseconds(250));
+      auto status = Status::OK();
+      while (pending_resources_.size() > 0 && run_ && status.ok()) { // && run_ because the threads themselves could error, and they set run_ to signal
+        LOG(DEBUG) << "DenseAligner("<< this << ") waiting for requests to finish\n";
+        status = process_completed_chunks();
       }
+      if (!run_) {
+        LOG(ERROR) << "Unable to safely wait in ~SnapAlignDenseParallelOp for all threads. run_ was toggled to false\n";
+      }
+      if (!status.ok()) {
+        LOG(ERROR) << "Bad status received while calling process_completed_chunks in ~SnapAlignDenseParallelOp: " << status << "\n";
+      }
+      run_ = false;
       request_queue_->unblock();
       completion_queue_->unblock();
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
-      while (num_done_ != num_threads_);
-      LOG(DEBUG) << "Dense Align Destructor finished\n";
+      while (num_active_threads_.load() > 0) {
+        this_thread::sleep_for(chrono::milliseconds(10));
+      }
+      LOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
     }
 
     Status InitHandles(OpKernelContext* ctx)
@@ -289,18 +298,19 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
-        if (run_)
+        if (run_) {
           completion_queue_->push(id);
+        }
         tracepoint(bioflow, snap_alignments, clock() - start, reads->num_records());
       }
 
       LOG(INFO) << "base aligner thread ending.";
-      mutex_lock l(done_mu_);
-      num_done_++;
+      num_active_threads_--;
     };
     auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
     for (int i = 0; i < num_threads_; i++)
       worker_threadpool->Schedule(aligner_func);
+    num_active_threads_ = num_threads_;
   }
 
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
@@ -313,8 +323,8 @@ private:
   int chunk_size_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
-  mutex done_mu_;
-  int num_done_ = 0;
+
+  atomic<uint32_t> num_active_threads_;
 
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
   unique_ptr<WorkQueue<uint64_t>> completion_queue_;
