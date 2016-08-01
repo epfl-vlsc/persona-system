@@ -1,5 +1,7 @@
 #include <vector>
 #include <tuple>
+#include <thread>
+#include <chrono>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/resource_mgr.h"
@@ -79,10 +81,16 @@ class SnapAlignDenseParallelOp : public OpKernel {
     ~SnapAlignDenseParallelOp() override {
       run_ = false;
       request_queue_->unblock();
+      size_t requests_in_flight;
+      while ((requests_in_flight = request_queue_->size()) > 0) {
+        LOG(DEBUG) << "DenseAligner("<< this << ") waiting for " << requests_in_flight << " to finish\n";
+        this_thread::sleep_for(chrono::milliseconds(250));
+      }
       completion_queue_->unblock();
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
+      LOG(DEBUG) << "Dense Align Destructor finished\n";
     }
 
     Status InitHandles(OpKernelContext* ctx)
@@ -280,7 +288,8 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
-        completion_queue_->push(id);
+        if (run_)
+          completion_queue_->push(id);
         tracepoint(bioflow, snap_alignments, clock() - start, reads->num_records());
       }
 

@@ -1,5 +1,6 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/platform/logging.h"
 #include "data.h"
 #include <cstdio>
 #include <cstring>
@@ -200,6 +201,10 @@ Thus we always need 3 of these for the full conversion pipeline
       }
 
       OP_REQUIRES_OK(ctx, s); // in case s screws up
+    }
+
+    ~ParallelColumnWriterOp() {
+      LOG(DEBUG) << "parallel column writer " << this << " finishing\n";
     }
 
   private:

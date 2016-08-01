@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <string.h>
 #include "buffer_list.h"
+#include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
 
@@ -12,6 +13,10 @@ namespace tensorflow {
 
   std::vector<Buffer>& BufferList::get() {
     return buf_list_;
+  }
+
+  BufferList::~BufferList() {
+    LOG(DEBUG) << "Calling ~BufferList(" << this << ")\n";
   }
 
   Buffer* BufferList::get_at(int index) {
