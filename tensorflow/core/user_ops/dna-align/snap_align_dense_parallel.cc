@@ -90,6 +90,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
+      while (num_done_ != num_threads_);
       LOG(DEBUG) << "Dense Align Destructor finished\n";
     }
 
@@ -294,6 +295,8 @@ private:
       }
 
       LOG(INFO) << "base aligner thread ending.";
+      mutex_lock l(done_mu_);
+      num_done_++;
     };
     auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
     for (int i = 0; i < num_threads_; i++)
@@ -310,6 +313,8 @@ private:
   int chunk_size_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
+  mutex done_mu_;
+  int num_done_ = 0;
 
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
   unique_ptr<WorkQueue<uint64_t>> completion_queue_;
@@ -317,6 +322,7 @@ private:
   vector<uint64_t> completion_process_queue_;
   vector<unique_ptr<ReadResource>> read_resources_;
   vector<ReadResourceHolder> pending_resources_;
+  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignDenseParallelOp);
 };
 
   REGISTER_OP("SnapAlignDenseParallel")
@@ -328,6 +334,7 @@ private:
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
   .Output("result_buf_handle: string")
+  .SetIsStateful()
   .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
