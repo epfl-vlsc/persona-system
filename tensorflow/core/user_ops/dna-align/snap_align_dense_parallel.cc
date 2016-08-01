@@ -80,6 +80,11 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
     ~SnapAlignDenseParallelOp() override {
       run_ = false;
+      size_t requests_in_flight;
+      while ((requests_in_flight = request_queue_->size()) > 0) {
+        LOG(DEBUG) << "DenseAligner("<< this << ") waiting for " << requests_in_flight << " to finish\n";
+        this_thread::sleep_for(chrono::milliseconds(250));
+      }
       request_queue_->unblock();
       size_t requests_in_flight;
       while ((requests_in_flight = request_queue_->size()) > 0) {
@@ -328,6 +333,7 @@ private:
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
   .Output("result_buf_handle: string")
+  .SetIsStateful()
   .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
