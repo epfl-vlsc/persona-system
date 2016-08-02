@@ -17,7 +17,7 @@ namespace tensorflow {
 template <typename T>
 class WorkQueue {
   public:
-   
+
     WorkQueue(int capacity);
     ~WorkQueue() {} // if you don't define the destructor, you get
                      // a weird linker error
@@ -27,27 +27,56 @@ class WorkQueue {
     bool push(const T& item);
     // return true if success and item is valid, false otherwise
     bool pop(T& item);
+
+    // pops everything in the queue, making size == 0
+    // note that failure may 
+    void pop_all(std::vector<T> &items);
+
     // unblock the queue, notify all threads
     void unblock();
     // set blocking behavior
     void set_block();
 
     bool empty() const;
-    size_t capacity();
+    size_t capacity() const;
     size_t size() const;
 
   private:
     // mutex to protect the queue
     mutable mutex mu_;
     // cond vars for block/wait/notify on queue push/pop
-    std::condition_variable queue_pop_cv_;
-    std::condition_variable queue_push_cv_;
+    mutable std::condition_variable queue_pop_cv_;
+    mutable std::condition_variable queue_push_cv_;
     std::queue<T> queue_;
     size_t capacity_;
     // block on calls to push, pop
     bool block_ = true;
 
-};
+ };
+
+template <typename T>
+void WorkQueue<T>::pop_all(std::vector<T> &items) {
+  bool popped = false;
+  items.clear();
+  {
+    mutex_lock l(mu_);
+    if (queue_.empty() && block_) {
+      queue_pop_cv_.wait(l, [this]() {
+          return !queue_.empty() || !block_;
+        });
+    }
+
+    popped = !queue_.empty();
+    while (!queue_.empty()) {
+      items.push_back(queue_.front());
+      queue_.pop();
+    }
+  }
+
+  if (popped) {
+    queue_push_cv_.notify_all();
+  }
+}
 
 template <typename T>
 bool WorkQueue<T>::pop(T& item) {
@@ -114,7 +143,7 @@ template <typename T>
 void WorkQueue<T>::unblock() {
   {
     mutex_lock l(mu_);
-    LOG(INFO) << " unblock called!";
+    LOG(INFO) << "WorkQueue("<< this << ") unblock called!";
     block_ = false;
   }
 
@@ -142,7 +171,7 @@ template <typename T>
 bool WorkQueue<T>::empty() const { return queue_.empty(); }
 
 template <typename T>
-size_t WorkQueue<T>::capacity() { return capacity_; }
+size_t WorkQueue<T>::capacity() const { return capacity_; }
 
 template <typename T>
 size_t WorkQueue<T>::size() const { return queue_.size(); }

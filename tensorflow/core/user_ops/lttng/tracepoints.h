@@ -72,6 +72,19 @@ TRACEPOINT_EVENT(
                            )
                  )
 
+TRACEPOINT_EVENT(
+                 bioflow,
+                 snap_alignments,
+                 TP_ARGS(
+                         clock_t, alignment_duration,
+                         uint32_t, num_alignments
+                         ),
+                 TP_FIELDS(
+                           ctf_integer(uint32_t, duration, DURATION_CALC(alignment_duration))
+                           ctf_integer(uint32_t, num_alignments, num_alignments)
+                           )
+                 )
+
 #endif
 
 #include <lttng/tracepoint-event.h>

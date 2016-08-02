@@ -104,6 +104,10 @@ Intended to be used for DenseAssembler
   public:
     NoMetaDenseAssemblerOp(OpKernelConstruction *context) : OpKernel(context) {}
 
+    ~NoMetaDenseAssemblerOp() override {
+      LOG(DEBUG) << "NoMetaAssembler("<< this << ") finishing\n";
+    }
+
     void Compute(OpKernelContext* ctx) override {
       if (!drr_pool_) {
         OP_REQUIRES_OK(ctx, InitializePool(ctx));

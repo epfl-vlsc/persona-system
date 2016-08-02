@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <string.h>
 #include "buffer_list.h"
+#include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
 

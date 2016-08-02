@@ -4,6 +4,7 @@
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
+#include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
 
@@ -50,6 +51,10 @@ bundle_name: [{this map op's name}] + upstream_name
   class StagedFileMapOp : public OpKernel {
   public:
     StagedFileMapOp(OpKernelConstruction* context) : OpKernel(context) {}
+
+    ~StagedFileMapOp() override {
+      LOG(DEBUG) << "StagedMMapOp("<< this <<") finishing\n";
+    }
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
@@ -106,6 +111,11 @@ bundle_name: [{this map op's name}] + upstream_name
   class FileMMapOp : public OpKernel {
   public:
     FileMMapOp(OpKernelConstruction* context) : OpKernel(context) {};
+
+    ~FileMMapOp() override
+    {
+      LOG(DEBUG) << "FileMMapOp("<< this <<") finishing\n";
+    }
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;

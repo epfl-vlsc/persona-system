@@ -240,4 +240,12 @@ namespace tensorflow {
     return meta_start_ != nullptr;
   }
 
+  size_t DenseReadResource::num_records() {
+    return num_records_;
+  }
+
+  size_t DenseReadSubResource::num_records() {
+    return max_idx_ - start_idx_;
+  }
+
 } // namespace tensorflow {

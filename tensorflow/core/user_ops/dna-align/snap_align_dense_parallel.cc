@@ -1,5 +1,8 @@
 #include <vector>
 #include <tuple>
+#include <thread>
+#include <chrono>
+#include <atomic>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/resource_mgr.h"
@@ -29,6 +32,39 @@ namespace tensorflow {
 using namespace std;
 using namespace errors;
 
+  namespace {
+    class ReadResourceHolder
+    {
+    private:
+      uint64_t id_;
+      ReadResource *parent_resource_;
+      uint16_t count_;
+
+    public:
+      ReadResourceHolder(const decltype(id_) id, ReadResource *parent_resource, uint16_t count) :
+        id_(id), parent_resource_(parent_resource), count_(count) {}
+
+      inline bool
+      is_id(const decltype(id_) &other_id) {
+        return other_id == id_;
+      }
+
+      inline bool
+      decrement_count() {
+        // complex if statement prevents wraparound, which shouldn't happen
+        if (count_ == 0) {
+          LOG(DEBUG) << "decrement_count called with count_ already == 0. This is a bug!\n";
+          return true;
+        } else if (--count_ == 0) {
+          ReadResourceReleaser a(*parent_resource_);
+          return true;
+        } else
+          return false;
+      }
+
+    };
+  }
+
 class SnapAlignDenseParallelOp : public OpKernel {
   public:
     explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
@@ -39,19 +75,32 @@ class SnapAlignDenseParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size",
               &chunk_size_));
       int capacity = (chunk_size_ / subchunk_size_) + 1;
-      request_queue_ = new WorkQueue<std::tuple<ReadResource*, Buffer*>>(capacity);
-      completion_queue_ = new WorkQueue<int>(capacity);
+      request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
+      completion_queue_.reset(new WorkQueue<uint64_t>(capacity));
     }
 
     ~SnapAlignDenseParallelOp() override {
+      auto status = Status::OK();
+      while (pending_resources_.size() > 0 && run_ && status.ok()) { // && run_ because the threads themselves could error, and they set run_ to signal
+        LOG(DEBUG) << "DenseAligner("<< this << ") waiting for requests to finish\n";
+        status = process_completed_chunks();
+      }
+      if (!run_) {
+        LOG(ERROR) << "Unable to safely wait in ~SnapAlignDenseParallelOp for all threads. run_ was toggled to false\n";
+      }
+      if (!status.ok()) {
+        LOG(ERROR) << "Bad status received while calling process_completed_chunks in ~SnapAlignDenseParallelOp: " << status << "\n";
+      }
       run_ = false;
       request_queue_->unblock();
       completion_queue_->unblock();
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
-      delete request_queue_;
-      delete completion_queue_;
+      while (num_active_threads_.load() > 0) {
+        this_thread::sleep_for(chrono::milliseconds(10));
+      }
+      LOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
     }
 
     Status InitHandles(OpKernelContext* ctx)
@@ -60,8 +109,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &index_resource_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
       TF_RETURN_IF_ERROR(snap_wrapper::init());
-
-      //LOG(INFO) << "SNAP Kernel creating BaseAligner";
 
       options_ = options_resource_->value();
       genome_ = index_resource_->get_genome();
@@ -84,170 +131,211 @@ class SnapAlignDenseParallelOp : public OpKernel {
       return Status::OK();
     }
 
-    void Compute(OpKernelContext* ctx) override {
-      if (index_resource_ == nullptr) {
-        OP_REQUIRES_OK(ctx, InitHandles(ctx));
 
-        auto aligner_func = [this] () {
+  void Compute(OpKernelContext* ctx) override {
+    auto start = clock();
+    if (index_resource_ == nullptr) {
+      OP_REQUIRES_OK(ctx, InitHandles(ctx));
+      init_workers(ctx);
+    }
+    OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
 
-          LOG(INFO) << "aligner thread spinning up";
-          BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
-          bool first_is_primary = true; // we only ever generate one result
-          const char *bases, *qualities;
-          std::size_t bases_len, qualities_len;
-          SingleAlignmentResult primaryResult;
-          int num_secondary_alignments = 0;
-          int num_secondary_results;
-          SAMFormat format(options_->useM);
-          AlignmentResultBuilder result_builder;
-          string cigarString;
-          int flag;
-          Read snap_read;
-          LandauVishkinWithCigar lvc;
+    ResourceContainer<BufferList> *bufferlist_resource_container;
+    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
+    auto alignment_result_buffer_list = bufferlist_resource_container->get();
 
-          Buffer* result_buf;
-          ReadResource* reads;
-          std::tuple<ReadResource*, Buffer*> batch;
-          while (run_) {
-            if (request_queue_->pop(batch)) {
-              reads = std::get<0>(batch);
-              result_buf = std::get<1>(batch);
-            } else
-              continue;
+    ResourceContainer<ReadResource> *reads_container;
+    const Tensor *read_input;
+    OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
+    auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
+    OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
+    core::ScopedUnref a(reads_container);
+    auto reads = reads_container->get();
 
-            result_buf->reset();
-            auto &res_buf = result_buf->get();
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, read_resources_));
+    decltype(read_resources_)::size_type num_subchunks = read_resources_.size();
+    alignment_result_buffer_list->resize(num_subchunks);
 
-            while (reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len).ok()) {
+    for (decltype(num_subchunks) i = 0; i < num_subchunks; ++i) {
+      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_result_buffer_list->get_at(i), id_));
+    }
+    pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
 
-              cigarString.clear();
-              snap_read.init(nullptr, 0, bases, qualities, bases_len);
-              snap_read.clip(options_->clipping);
-              if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
-                if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {
-                  LOG(INFO) << "FILTERING READ";
-                } else {
-                  primaryResult.status = AlignmentResult::NotFound;
-                  primaryResult.location = InvalidGenomeLocation;
-                  primaryResult.mapq = 0;
-                  primaryResult.direction = FORWARD;
-                  result_builder.AppendAlignmentResult(primaryResult, cigarString, 4, res_buf);
-                  continue;
-                }
-              }
+    OP_REQUIRES_OK(ctx, process_completed_chunks());
 
+    // needed because if we just call clear, this will
+    // call delete on all the resources!
+    for (auto &read_rsrc : read_resources_) {
+      read_rsrc.release();
+    }
+    read_resources_.clear();
+    tracepoint(bioflow, snap_align_kernel, clock() - start);
+  }
 
-              base_aligner->AlignRead(
-                &snap_read,
-                &primaryResult,
-                options_->maxSecondaryAlignmentAdditionalEditDistance,
-                num_secondary_alignments * sizeof(SingleAlignmentResult),
-                &num_secondary_results,
-                num_secondary_alignments,
-                nullptr //secondaryResults
-              );
+private:
 
-              flag = 0;
+  inline Status
+  process_completed_chunks()
+  {
+    auto status = Status::OK();
 
-              // we may need to do post process options->passfilter here?
-
-              // compute the CIGAR strings and flags
-              // input_reads[i] holds the current snap_read
-              /*Status s = snap_wrapper::computeCigarFlags(
-                    &snap_read, &primaryResult, 1, first_is_primary, format,
-                    options_->useM, lvc, genome_, cigarString, flag);*/
-
-              Status s = snap_wrapper::adjustResults(
-                &snap_read, &primaryResult, 1, first_is_primary, format,
-                options_->useM, lvc, genome_, cigarString, flag);
-
-              if (!s.ok())
-                LOG(INFO) << "computeCigarFlags did not return OK!!!";
-
-              /*LOG(INFO) << " result: location " << primaryResult.location <<
-                " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
-
-              result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
-            }
-
-            result_builder.AppendAndFlush(res_buf);
-            result_buf->set_ready();
-            completion_queue_->push(1);
-
+    completion_queue_->pop_all(completion_process_queue_);
+    bool found;
+    for (auto &id : completion_process_queue_) {
+      found = false;
+      for (decltype(pending_resources_)::size_type i = 0; i < pending_resources_.size(); ++i) {
+        auto &pending_resource = pending_resources_[i];
+        if (pending_resource.is_id(id)) {
+          if (pending_resource.decrement_count()) {
+            pending_resources_.erase(pending_resources_.begin() + i);
           }
-          LOG(INFO) << "base aligner thread ending.";
-        };
-        auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
-        for (int i = 0; i < num_threads_; i++)
-          worker_threadpool->Schedule(aligner_func);
+          found = true;
+          break;
+        }
       }
-
-      //auto begin = std::chrono::high_resolution_clock::now();
-
-      ResourceContainer<BufferList> *bufferlist_resource_container;
-      OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
-      auto alignment_result_buffer_list = bufferlist_resource_container->get();
-
-      ResourceContainer<ReadResource> *reads_container;
-      const Tensor *read_input;
-      OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
-      auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
-      //LOG(INFO) << "aligner doing " << num_actual_reads << " reads";
-
-      OP_REQUIRES_OK(ctx, reads_container->get()->split(subchunk_size_, read_resources_));
-      int num_subchunks = read_resources_.size();
-      alignment_result_buffer_list->resize(num_subchunks);
-
-      for (int i = 0; i < num_subchunks; i++) {
-        request_queue_->push(std::make_tuple(read_resources_[i].get(), alignment_result_buffer_list->get_at(i)));
+      if (!found) {
+        status = Internal("Unable to find pending resource with id ", id);
+        break;
       }
-
-      int received = 0;
-      int dummy;
-      while (received < num_subchunks) {
-        completion_queue_->pop(dummy);
-        received++;
-      }
-
-      auto reads = reads_container->get();
-      core::ScopedUnref a(reads_container);
-      ResourceReleaser<ReadResource> b(*reads_container);
-      {
-        ReadResourceReleaser r(*reads);
-      }
-
-        //auto start = clock();
-
-      //LOG(INFO) << "done aligning";
-
-
-      //LOG(INFO) << "done append";
-      //auto end = std::chrono::high_resolution_clock::now();
-      //LOG(INFO) << "snap align time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
-      //tracepoint(bioflow, snap_align_kernel, clock() - start);
-      read_resources_.clear();
     }
 
-  private:
-    ReferencePool<BufferList> *buflist_pool_ = nullptr;
-    GenomeIndexResource* index_resource_ = nullptr;
-    AlignerOptionsResource* options_resource_ = nullptr;
-    const Genome *genome_ = nullptr;
-    AlignerOptions* options_;
-    int num_threads_;
-    int subchunk_size_;
-    int chunk_size_;
-    vector<unique_ptr<ReadResource>> read_resources_;
+    return status;
+  }
 
-    WorkQueue<std::tuple<ReadResource*, Buffer*>>* request_queue_;
-    WorkQueue<int>* completion_queue_;
-    bool run_ = true;
+  inline void init_workers(OpKernelContext* ctx) {
+    auto aligner_func = [this] () {
+      LOG(INFO) << "aligner thread spinning up";
+      BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
+      bool first_is_primary = true; // we only ever generate one result
+      const char *bases, *qualities;
+      size_t bases_len, qualities_len;
+      SingleAlignmentResult primaryResult;
+      int num_secondary_alignments = 0;
+      int num_secondary_results;
+      SAMFormat format(options_->useM);
+      AlignmentResultBuilder result_builder;
+      string cigarString;
+      int flag;
+      Read snap_read;
+      LandauVishkinWithCigar lvc;
 
+      Buffer* result_buf;
+      ReadResource* reads;
+      decltype(id_) id;
+      tuple<ReadResource*, Buffer*, decltype(id_)> batch;
+      clock_t start;
+      Status status;
+      while (run_) {
+        if (request_queue_->pop(batch)) {
+          reads = get<0>(batch);
+          result_buf = get<1>(batch);
+          id = get<2>(batch);
+        } else
+          continue;
+
+        start = clock();
+
+        result_buf->reset();
+        auto &res_buf = result_buf->get();
+        for (status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+             status.ok();
+             status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
+          cigarString.clear();
+          snap_read.init(nullptr, 0, bases, qualities, bases_len);
+          snap_read.clip(options_->clipping);
+          if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
+            if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {
+              LOG(INFO) << "FILTERING READ";
+            } else {
+              primaryResult.status = AlignmentResult::NotFound;
+              primaryResult.location = InvalidGenomeLocation;
+              primaryResult.mapq = 0;
+              primaryResult.direction = FORWARD;
+              result_builder.AppendAlignmentResult(primaryResult, cigarString, 4, res_buf);
+              continue;
+            }
+          }
+
+
+          base_aligner->AlignRead(
+                                  &snap_read,
+                                  &primaryResult,
+                                  options_->maxSecondaryAlignmentAdditionalEditDistance,
+                                  num_secondary_alignments * sizeof(SingleAlignmentResult),
+                                  &num_secondary_results,
+                                  num_secondary_alignments,
+                                  nullptr //secondaryResults
+                                  );
+
+          flag = 0;
+
+          // we may need to do post process options->passfilter here?
+
+          // compute the CIGAR strings and flags
+          // input_reads[i] holds the current snap_read
+          /*Status s = snap_wrapper::computeCigarFlags(
+            &snap_read, &primaryResult, 1, first_is_primary, format,
+            options_->useM, lvc, genome_, cigarString, flag);*/
+
+          Status s = snap_wrapper::adjustResults(
+                                                 &snap_read, &primaryResult, 1, first_is_primary, format,
+                                                 options_->useM, lvc, genome_, cigarString, flag);
+
+          if (!s.ok())
+            LOG(INFO) << "computeCigarFlags did not return OK!!!";
+
+          /*LOG(INFO) << " result: location " << primaryResult.location <<
+            " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
+
+          result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
+        }
+
+        if (!IsResourceExhausted(status)) {
+          LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError! : " << status << "\n";
+          run_ = false; // not sure what to do here for errors
+          return;
+        }
+
+        result_builder.AppendAndFlush(res_buf);
+        result_buf->set_ready();
+        if (run_) {
+          completion_queue_->push(id);
+        }
+        tracepoint(bioflow, snap_alignments, clock() - start, reads->num_records());
+      }
+
+      LOG(INFO) << "base aligner thread ending.";
+      num_active_threads_--;
+    };
+    auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
+    for (int i = 0; i < num_threads_; i++)
+      worker_threadpool->Schedule(aligner_func);
+    num_active_threads_ = num_threads_;
+  }
+
+  ReferencePool<BufferList> *buflist_pool_ = nullptr;
+  GenomeIndexResource* index_resource_ = nullptr;
+  AlignerOptionsResource* options_resource_ = nullptr;
+  const Genome *genome_ = nullptr;
+  AlignerOptions* options_ = nullptr;
+  int num_threads_;
+  int subchunk_size_;
+  int chunk_size_;
+  volatile bool run_ = true;
+  uint64_t id_ = 0;
+
+  atomic<uint32_t> num_active_threads_;
+
+  unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
+  unique_ptr<WorkQueue<uint64_t>> completion_queue_;
+
+  vector<uint64_t> completion_process_queue_;
+  vector<unique_ptr<ReadResource>> read_resources_;
+  vector<ReadResourceHolder> pending_resources_;
+  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignDenseParallelOp);
 };
 
-
-REGISTER_OP("SnapAlignDenseParallel")
+  REGISTER_OP("SnapAlignDenseParallel")
   .Attr("num_threads: int = 1")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
@@ -256,6 +344,7 @@ REGISTER_OP("SnapAlignDenseParallel")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
   .Output("result_buf_handle: string")
+  .SetIsStateful()
   .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
@@ -263,7 +352,6 @@ generation of alignment candidates.
 output: a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
-
 
   REGISTER_KERNEL_BUILDER(Name("SnapAlignDenseParallel").Device(DEVICE_CPU), SnapAlignDenseParallelOp);
 
