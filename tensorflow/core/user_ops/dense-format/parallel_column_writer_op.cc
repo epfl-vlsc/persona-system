@@ -122,7 +122,7 @@ Thus we always need 3 of these for the full conversion pipeline
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get_when_ready(); // only need to do this on the first call
+          auto &data_buf = buffer->get_when_ready(); // only need to do this on the first call
           s = appendSegment(&data_buf[0], recs_per_chunk, buf_, true);
           if (!s.ok())
             break;
@@ -137,7 +137,7 @@ Thus we always need 3 of these for the full conversion pipeline
               recs_per_chunk = num_records - i;
             }
 
-            auto &data_buf = buffer.get();
+            auto &data_buf = buffer->get();
 
             expected_size = data_buf.size() - recs_per_chunk;
             s = appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true);
@@ -162,7 +162,7 @@ Thus we always need 3 of these for the full conversion pipeline
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get_when_ready();
+          auto &data_buf = buffer->get_when_ready();
 
           fwrite_ret = fwrite(&data_buf[0], recs_per_chunk, 1, file_out);
           if (fwrite_ret != 1) {
@@ -180,7 +180,7 @@ Thus we always need 3 of these for the full conversion pipeline
               recs_per_chunk = num_records - i;
             }
 
-            auto &data_buf = buffer.get();
+            auto &data_buf = buffer->get();
 
             expected_size = data_buf.size() - recs_per_chunk;
             fwrite_ret = fwrite(&data_buf[recs_per_chunk], expected_size, 1, file_out);
