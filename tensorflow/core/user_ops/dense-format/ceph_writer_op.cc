@@ -5,6 +5,7 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "compression.h"
+#include "buffer_list.h"
 #include "format.h"
 #include "data.h"
 #include "util.h"
@@ -113,21 +114,135 @@ compress: whether or not to compress the column
     }
 
     ~CephWriterOp() {
+      LOG(DEBUG) << "Ceph writer " << this << " finishing\n";
       io_ctx.close();
       cluster.shutdown();
     }
 
     void Compute(OpKernelContext* ctx) override {
+      using namespace errors;
+      const Tensor *path, *column_t;
+      OP_REQUIRES_OK(ctx, ctx->input("file_name", &path));
+      OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
+      auto filepath = path->scalar<string>()();
+      auto column_vec = column_t->vec<string>();
 
-      const Tensor *key_t, *column_t;
+      ResourceContainer<BufferList> *column;
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
+      core::ScopedUnref column_releaser(column);
+      ResourceReleaser<BufferList> a(*column);
+
+      auto &buffers = column->get()->get();
+
+      string full_path(filepath + record_suffix_);
+
+      OP_REQUIRES_OK(ctx, WriteHeader(ctx, output_buf_));
+
+      auto num_buffers = buffers.size();
+      uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
+      uint32_t records_per_chunk = num_records / num_buffers;
+      if (num_records % num_buffers != 0) {
+        ++records_per_chunk;
+      }
+
+      auto s = Status::OK();
+
+      decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
+      if (compress_) {
+        compress_buf_.clear(); output_buf_.clear();
+        /*
+        // compressGZIP already calls buf_.clear()
+        s = compressGZIP(data->data(), data->size(), buf_);
+        if (s.ok()) {
+          fwrite_ret = fwrite(buf_.data(), buf_.size(), 1, file_out);
+        }
+        */
+        for (auto &buffer : buffers) {
+          if (i + recs_per_chunk > num_records) {
+            recs_per_chunk = num_records - i;
+          }
+
+          auto &data_buf = buffer.get_when_ready(); // only need to do this on the first call
+
+          s = appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true);
+          if (!s.ok())
+            break;
+
+          i += recs_per_chunk;
+        }
+        if (s.ok()) {
+          i = 0; recs_per_chunk = records_per_chunk;
+          size_t expected_size;
+          for (auto &buffer : buffers) {
+            if (i + recs_per_chunk > num_records) {
+              recs_per_chunk = num_records - i;
+            }
+
+            auto &data_buf = buffer.get();
+
+            expected_size = data_buf.size() - recs_per_chunk;
+            s = appendSegment(&data_buf[recs_per_chunk], expected_size, compress_buf_, true);
+            if (!s.ok())
+              break;
+            i += recs_per_chunk;
+          }
+
+          if (s.ok()) {
+            s = compressGZIP(&compress_buf_[0], compress_buf_.size(), output_buf_);
+            if (s.ok()) {
+//              fwrite_ret = fwrite(&outbuf_[0], outbuf_.size(), 1, file_out);
+              CephWriteColumn(full_path, &output_buf_[0], output_buf_.size());
+            }
+          }
+        }
+      } else {
+        for (auto &buffer : buffers) {
+          if (i + recs_per_chunk > num_records) {
+            recs_per_chunk = num_records - i;
+          }
+
+          auto &data_buf = buffer.get_when_ready();
+
+//          fwrite_ret = fwrite(&data_buf[0], recs_per_chunk, 1, file_out);
+
+          CephWriteColumn(full_path, &data_buf[0], recs_per_chunk);
+          i += recs_per_chunk;
+        }
+        if (s.ok()) {
+          i = 0; recs_per_chunk = records_per_chunk;
+          size_t expected_size;
+          for (auto &buffer : buffers) {
+            if (i + recs_per_chunk > num_records) {
+              recs_per_chunk = num_records - i;
+            }
+
+            auto &data_buf = buffer.get();
+
+            expected_size = data_buf.size() - recs_per_chunk;
+//            fwrite_ret = fwrite(&data_buf[recs_per_chunk], expected_size, 1, file_out);
+
+            CephWriteColumn(full_path, &data_buf[recs_per_chunk], expected_size);
+            i += recs_per_chunk;
+          }
+        }
+      }
+
+
+      OP_REQUIRES_OK(ctx, s); // in case s screws up
+    }
+
+/*      const Tensor *key_t, *column_t;
       OP_REQUIRES_OK(ctx, ctx->input("file_name", &key_t));
       string file_key = key_t->scalar<string>()();
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
       auto column_vec = column_t->vec<string>();
 
-      ResourceContainer<Data> *column;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0),
-            column_vec(1), &column));
+      ResourceContainer<BufferList> *column;
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
+      core::ScopedUnref column_releaser(column);
+      ResourceReleaser<BufferList> a(*column);
+
+ //     auto &buffers = column->get()->get();
 
       output_buf_.clear();
       OP_REQUIRES_OK(ctx, WriteHeader(ctx, output_buf_));
@@ -153,7 +268,7 @@ compress: whether or not to compress the column
       {
         ResourceReleaser<Data> b(*column); // make sure destructs first
       }
-    }
+    }*/
 
   private:
     string cluster_name;
