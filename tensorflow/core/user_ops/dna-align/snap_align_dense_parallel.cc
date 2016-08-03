@@ -158,8 +158,9 @@ class SnapAlignDenseParallelOp : public OpKernel {
     alignment_result_buffer_list->resize(num_subchunks);
 
     for (decltype(num_subchunks) i = 0; i < num_subchunks; ++i) {
-      alignment_result_buffer_list->get_at(i)->reset();
-      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_result_buffer_list->get_at(i), id_));
+      auto *alignment_buffer = alignment_result_buffer_list->get_at(i);
+      alignment_buffer->reset();
+      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_));
     }
     pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
 
