@@ -43,9 +43,11 @@ static bool InitModule(const SessionOptions& options) {
   VLOG(1) << "Local device intra op parallelism threads: "
           << intra_op_parallelism_threads;
   eigen_worker_threads.num_threads = intra_op_parallelism_threads;
+  int affinity_start = port::NumSchedulableCPUs() - intra_op_parallelism_threads;
+
   eigen_worker_threads.workers = new thread::ThreadPool(
                                                         options.env, "Eigen",
-                                                        intra_op_parallelism_threads, inter_op_parallelism_threads);
+                                                        intra_op_parallelism_threads, affinity_start);
   eigen_thread_pool = new EigenThreadPoolWrapper(eigen_worker_threads.workers);
   eigen_device = new Eigen::ThreadPoolDevice(eigen_thread_pool,
                                              eigen_worker_threads.num_threads);
