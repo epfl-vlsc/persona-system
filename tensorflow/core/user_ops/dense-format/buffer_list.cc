@@ -8,8 +8,13 @@ namespace tensorflow {
   using namespace std;
 
   void BufferList::resize(size_t size) {
-    for (decltype(size) i = buf_list_.size(); i < size; ++i) {
-      buf_list_.push_back(unique_ptr<Buffer>(new Buffer()));
+    if (size > buf_list_.size()) {
+      // Can't do resize here because no default constructor
+      for (decltype(size) i = buf_list_.size(); i < size; ++i) {
+        buf_list_.push_back(unique_ptr<Buffer>(new Buffer()));
+      }
+    } else {
+      buf_list_.resize(size);
     }
   }
 
