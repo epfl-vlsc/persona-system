@@ -303,8 +303,6 @@ compress: whether or not to compress the column
     {
       int ret = 0;
 
-      LOG(INFO) << "Size of write is " << len;
-
       librados::bufferlist write_buf;
       write_buf.push_back(ceph::buffer::create_static(len, buf));
 
@@ -323,7 +321,7 @@ compress: whether or not to compress the column
               LOG(INFO) << "Couldn't write object! error " << ret;
               exit(EXIT_FAILURE);
       }
-      LOG(INFO) << "wrote object asynchronously.";
+      LOG(INFO) << "Wrote object asynchronously. Size of write is " << len;
 
     }
   };
