@@ -75,9 +75,10 @@ class SnapAlignDenseParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size",
               &chunk_size_));
       int capacity = (chunk_size_ / subchunk_size_) + 1;
+      int capacity_completion = 2*(capacity + num_threads_);
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
-      completion_queue_.reset(new WorkQueue<uint64_t>(capacity));
       compute_status_ = Status::OK();
+      completion_queue_.reset(new WorkQueue<uint64_t>(capacity_completion));
     }
 
     ~SnapAlignDenseParallelOp() override {
@@ -164,7 +165,9 @@ class SnapAlignDenseParallelOp : public OpKernel {
     alignment_result_buffer_list->resize(num_subchunks);
 
     for (decltype(num_subchunks) i = 0; i < num_subchunks; ++i) {
-      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_result_buffer_list->get_at(i), id_));
+      auto *alignment_buffer = alignment_result_buffer_list->get_at(i);
+      alignment_buffer->reset();
+      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_));
     }
     pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
 
@@ -242,7 +245,6 @@ private:
 
         start = clock();
 
-        result_buf->reset();
         auto &res_buf = result_buf->get();
         for (status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
              status.ok();
