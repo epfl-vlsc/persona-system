@@ -77,6 +77,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       int capacity = (chunk_size_ / subchunk_size_) + 1;
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
       completion_queue_.reset(new WorkQueue<uint64_t>(capacity));
+      compute_status_ = Status::OK();
     }
 
     ~SnapAlignDenseParallelOp() override {
@@ -138,6 +139,12 @@ class SnapAlignDenseParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
       init_workers(ctx);
     }
+
+    if (!compute_status_.ok()) {
+      ctx->SetStatus(compute_status_);
+      return;
+    }
+    
     OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
 
     ResourceContainer<BufferList> *bufferlist_resource_container;
@@ -204,7 +211,7 @@ private:
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
-      LOG(INFO) << "aligner thread spinning up";
+      //LOG(INFO) << "aligner thread spinning up";
       BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
       bool first_is_primary = true; // we only ever generate one result
       const char *bases, *qualities;
@@ -292,7 +299,7 @@ private:
 
         if (!IsResourceExhausted(status)) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError! : " << status << "\n";
-          run_ = false; // not sure what to do here for errors
+          compute_status_ = status;
           return;
         }
 
@@ -332,6 +339,7 @@ private:
   vector<uint64_t> completion_process_queue_;
   vector<unique_ptr<ReadResource>> read_resources_;
   vector<ReadResourceHolder> pending_resources_;
+  Status compute_status_;
   TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignDenseParallelOp);
 };
 
