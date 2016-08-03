@@ -162,7 +162,7 @@ compress: whether or not to compress the column
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get_when_ready(); // only need to do this on the first call
+          auto &data_buf = buffer->get_when_ready(); // only need to do this on the first call
 
           s = appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true);
           if (!s.ok())
@@ -178,7 +178,7 @@ compress: whether or not to compress the column
               recs_per_chunk = num_records - i;
             }
 
-            auto &data_buf = buffer.get();
+            auto &data_buf = buffer->get();
 
             expected_size = data_buf.size() - recs_per_chunk;
             s = appendSegment(&data_buf[recs_per_chunk], expected_size, compress_buf_, true);
@@ -201,7 +201,7 @@ compress: whether or not to compress the column
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get_when_ready();
+          auto &data_buf = buffer->get_when_ready();
 
 //          fwrite_ret = fwrite(&data_buf[0], recs_per_chunk, 1, file_out);
 
@@ -216,7 +216,7 @@ compress: whether or not to compress the column
               recs_per_chunk = num_records - i;
             }
 
-            auto &data_buf = buffer.get();
+            auto &data_buf = buffer->get();
 
             expected_size = data_buf.size() - recs_per_chunk;
 //            fwrite_ret = fwrite(&data_buf[recs_per_chunk], expected_size, 1, file_out);
