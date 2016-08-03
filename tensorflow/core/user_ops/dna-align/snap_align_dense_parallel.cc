@@ -278,7 +278,7 @@ private:
             options_->useM, lvc, genome_, cigarString, flag);*/
 
           Status s = snap_wrapper::adjustResults(
-                                                 &snap_read, &primaryResult, 1, first_is_primary, format,
+                                                 &snap_read, primaryResult, first_is_primary, format,
                                                  options_->useM, lvc, genome_, cigarString, flag);
 
           if (!s.ok())

@@ -44,8 +44,7 @@ namespace snap_wrapper {
     tensorflow::Status adjustResults(
         // inputs
         Read *read,
-        SingleAlignmentResult* results,
-        int nResults,
+        SingleAlignmentResult& result,
         bool firstIsPrimary, 
         const SAMFormat &format,
         bool useM,

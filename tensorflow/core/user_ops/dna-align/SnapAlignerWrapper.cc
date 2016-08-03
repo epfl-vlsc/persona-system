@@ -233,8 +233,7 @@ namespace snap_wrapper {
 	tensorflow::Status adjustResults(
 		// input
     Read *read,
-    SingleAlignmentResult* results,
-    int nResults,
+    SingleAlignmentResult& result,
     bool firstIsPrimary,
     const SAMFormat &format,
     bool useM,
@@ -245,49 +244,45 @@ namespace snap_wrapper {
     int &flags
 	) {
     
-    for (int i = 0; i < nResults; i++) {
-      if (results[i].status == NotFound) {
-        results[i].location = InvalidGenomeLocation;
-      }
+    if (result.status == NotFound) {
+      result.location = InvalidGenomeLocation;
     }
 
-    GenomeLocation finalLocations[nResults];
+    GenomeLocation finalLocation;
 
-    for (int whichResult = 0; whichResult < nResults; whichResult++) {
-      int addFrontClipping = 0;
-      read->setAdditionalFrontClipping(0);
-      int cumulativeAddFrontClipping = 0;
-      finalLocations[whichResult] = results[whichResult].location;
+    int addFrontClipping = 0;
+    read->setAdditionalFrontClipping(0);
+    int cumulativeAddFrontClipping = 0;
+    finalLocation = result.location;
 
-      unsigned nAdjustments = 0;
+    unsigned nAdjustments = 0;
 
-      while (!computeCigarFlags(read, results, whichResult, firstIsPrimary, finalLocations[whichResult], format, useM, 
-        lvc, genome, cigarString, flags, addFrontClipping)) {
-				
-				// redo if read modified (e.g. to add soft clipping, or move alignment for a leading I.
-        const Genome::Contig *originalContig = results[whichResult].status == NotFound ? NULL
-          : genome->getContigAtLocation(results[whichResult].location);
-        const Genome::Contig *newContig = results[whichResult].status == NotFound ? NULL
-          : genome->getContigAtLocation(results[whichResult].location + addFrontClipping);
-        if (newContig == NULL || newContig != originalContig || finalLocations[whichResult] + addFrontClipping > 
-          originalContig->beginningLocation + originalContig->length - genome->getChromosomePadding() ||
-          nAdjustments > read->getDataLength()) {
-					
-          // Altering this would push us over a contig boundary, or we're stuck in a loop.  Just give up on the read.
-          results[whichResult].status = NotFound;
-          results[whichResult].location = InvalidGenomeLocation;
-          finalLocations[whichResult] = InvalidGenomeLocation;
-        } else {
-          cumulativeAddFrontClipping += addFrontClipping;
-          if (addFrontClipping > 0) {
-            read->setAdditionalFrontClipping(cumulativeAddFrontClipping);
-          }
-          finalLocations[whichResult] = results[whichResult].location + cumulativeAddFrontClipping;
+    while (!computeCigarFlags(read, &result, 0, firstIsPrimary, finalLocation, format, useM, 
+      lvc, genome, cigarString, flags, addFrontClipping)) {
+      
+      // redo if read modified (e.g. to add soft clipping, or move alignment for a leading I.
+      const Genome::Contig *originalContig = result.status == NotFound ? NULL
+        : genome->getContigAtLocation(result.location);
+      const Genome::Contig *newContig = result.status == NotFound ? NULL
+        : genome->getContigAtLocation(result.location + addFrontClipping);
+      if (newContig == NULL || newContig != originalContig || finalLocation + addFrontClipping > 
+        originalContig->beginningLocation + originalContig->length - genome->getChromosomePadding() ||
+        nAdjustments > read->getDataLength()) {
+        
+        // Altering this would push us over a contig boundary, or we're stuck in a loop.  Just give up on the read.
+        result.status = NotFound;
+        result.location = InvalidGenomeLocation;
+        finalLocation = InvalidGenomeLocation;
+      } else {
+        cumulativeAddFrontClipping += addFrontClipping;
+        if (addFrontClipping > 0) {
+          read->setAdditionalFrontClipping(cumulativeAddFrontClipping);
         }
-      } // while formatting doesn't work			
+        finalLocation = result.location + cumulativeAddFrontClipping;
+      }
+    } // while formatting doesn't work			
 
-      results[whichResult].location = finalLocations[whichResult]; 
-		} // for each result
+    result.location = finalLocation; 
 
     return tensorflow::Status::OK();
 	} // adjustResults

@@ -141,7 +141,7 @@ class SnapAlignDenseOp : public OpKernel {
           cigarString_.clear();
           
           OP_REQUIRES_OK(ctx, snap_wrapper::adjustResults(
-                &snap_read_, &primaryResult, 1, first_is_primary, format,
+                &snap_read_, primaryResult, first_is_primary, format,
                 options_->useM, lvc_, genome_, cigarString_, flag_));
 
           /*LOG(INFO) << " result: location " << primaryResult.location <<
