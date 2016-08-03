@@ -35,6 +35,7 @@ namespace tensorflow {
 
   void Buffer::set_ready() {
     data_ready_ = true;
+    ready_cv_.notify_all();
   }
 
   decltype(Buffer::buf_)& Buffer::get() {
@@ -42,7 +43,12 @@ namespace tensorflow {
   }
 
   decltype(Buffer::buf_)& Buffer::get_when_ready() {
-    while (!data_ready_) {};
+    if (!data_ready_) {
+      mutex_lock l(mu_);
+      ready_cv_.wait(l, [this]() {
+          return data_ready_;
+        });
+    }
     return buf_;
   }
 } // namespace tensorflow {

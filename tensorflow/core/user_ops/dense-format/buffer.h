@@ -4,13 +4,17 @@
 #include <vector>
 #include "data.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/platform/mutex.h"
 
 namespace tensorflow {
     class Buffer : public Data {
     private:
       std::vector<char> buf_;
       volatile bool data_ready_;
+      mutable mutex mu_;
+      mutable std::condition_variable ready_cv_;
     public:
+
         Status WriteBuffer(const char* content, std::size_t content_size);
         Status AppendBuffer(const char* content, std::size_t content_size);
         Status AppendBufferDouble(const char* content, std::size_t content_size);
