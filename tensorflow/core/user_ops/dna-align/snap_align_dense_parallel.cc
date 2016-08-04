@@ -307,7 +307,7 @@ private:
               primaryResult.location = InvalidGenomeLocation;
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
-              result_builder.AppendAlignmentResult(primaryResult, cigarString, 4, res_buf);
+              result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
               continue;
             }
           }

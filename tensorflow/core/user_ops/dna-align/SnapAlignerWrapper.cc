@@ -116,8 +116,6 @@ namespace snap_wrapper {
 		int &addFrontClipping
   ) 
   {  
-    cigarString = "*"; // default value
-
     // needed for ComputeCigarString
     const int MAX_READ = MAX_READ_LENGTH;
     const int cigarBufSize = MAX_READ * 2;
@@ -243,7 +241,8 @@ namespace snap_wrapper {
 		std::string &cigarString,
     int &flags
 	) {
-    
+    cigarString = "*"; // default value
+
     if (result.status == NotFound) {
       result.location = InvalidGenomeLocation;
     }
