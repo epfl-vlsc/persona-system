@@ -19,6 +19,7 @@
 #include <rados/buffer.h>
 
 namespace tensorflow {
+  using namespace errors;
   using namespace std;
 
   REGISTER_OP("CephWriter")
@@ -145,56 +146,37 @@ compress: whether or not to compress the column
         ++records_per_chunk;
       }
 
-      auto s = Status::OK();
-
       decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       if (compress_) {
-        compress_buf_.clear(); output_buf_.clear();
-        /*
-        // compressGZIP already calls buf_.clear()
-        s = compressGZIP(data->data(), data->size(), buf_);
-        if (s.ok()) {
-          fwrite_ret = fwrite(buf_.data(), buf_.size(), 1, file_out);
-        }
-        */
+        compress_buf_.clear();
+
         for (auto &buffer : buffers) {
           if (i + recs_per_chunk > num_records) {
             recs_per_chunk = num_records - i;
           }
 
           auto &data_buf = buffer->get_when_ready(); // only need to do this on the first call
-
-          s = appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true);
-          if (!s.ok())
-            break;
-
+          OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true));
           i += recs_per_chunk;
         }
-        if (s.ok()) {
-          i = 0; recs_per_chunk = records_per_chunk;
-          size_t expected_size;
-          for (auto &buffer : buffers) {
-            if (i + recs_per_chunk > num_records) {
-              recs_per_chunk = num_records - i;
-            }
 
-            auto &data_buf = buffer->get();
-
-            expected_size = data_buf.size() - recs_per_chunk;
-            s = appendSegment(&data_buf[recs_per_chunk], expected_size, compress_buf_, true);
-            if (!s.ok())
-              break;
-            i += recs_per_chunk;
+        i = 0; recs_per_chunk = records_per_chunk;
+        size_t expected_size;
+        for (auto &buffer : buffers) {
+          if (i + recs_per_chunk > num_records) {
+            recs_per_chunk = num_records - i;
           }
 
-          if (s.ok()) {
-            s = compressGZIP(&compress_buf_[0], compress_buf_.size(), output_buf_);
-            if (s.ok()) {
-//              fwrite_ret = fwrite(&outbuf_[0], outbuf_.size(), 1, file_out);
-              CephWriteColumn(full_path, &output_buf_[0], output_buf_.size());
-            }
-          }
+          auto &data_buf = buffer->get();
+
+          expected_size = data_buf.size() - recs_per_chunk;
+          OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, compress_buf_, true));
+          i += recs_per_chunk;
         }
+
+        output_buf_.clear();
+        OP_REQUIRES_OK(ctx, compressGZIP(&compress_buf_[0], compress_buf_.size(), output_buf_));
+        OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &output_buf_[0], output_buf_.size()));
       } else {
         for (auto &buffer : buffers) {
           if (i + recs_per_chunk > num_records) {
@@ -203,32 +185,25 @@ compress: whether or not to compress the column
 
           auto &data_buf = buffer->get_when_ready();
 
-//          fwrite_ret = fwrite(&data_buf[0], recs_per_chunk, 1, file_out);
-
-          CephWriteColumn(full_path, &data_buf[0], recs_per_chunk);
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[0], recs_per_chunk));
           i += recs_per_chunk;
         }
-        if (s.ok()) {
-          i = 0; recs_per_chunk = records_per_chunk;
-          size_t expected_size;
-          for (auto &buffer : buffers) {
-            if (i + recs_per_chunk > num_records) {
-              recs_per_chunk = num_records - i;
-            }
 
-            auto &data_buf = buffer->get();
-
-            expected_size = data_buf.size() - recs_per_chunk;
-//            fwrite_ret = fwrite(&data_buf[recs_per_chunk], expected_size, 1, file_out);
-
-            CephWriteColumn(full_path, &data_buf[recs_per_chunk], expected_size);
-            i += recs_per_chunk;
+        i = 0; recs_per_chunk = records_per_chunk;
+        size_t expected_size;
+        for (auto &buffer : buffers) {
+          if (i + recs_per_chunk > num_records) {
+            recs_per_chunk = num_records - i;
           }
+
+          auto &data_buf = buffer->get();
+
+          expected_size = data_buf.size() - recs_per_chunk;
+
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[recs_per_chunk], expected_size));
+          i += recs_per_chunk;
         }
       }
-
-
-      OP_REQUIRES_OK(ctx, s); // in case s screws up
     }
 
 /*      const Tensor *key_t, *column_t;
@@ -299,7 +274,7 @@ compress: whether or not to compress the column
     }
 
     /* Read an object from Ceph asynchronously */
-    void CephWriteColumn(string& file_key, char* buf, size_t len)
+    Status CephWriteColumn(string& file_key, char* buf, size_t len)
     {
       int ret = 0;
 
@@ -310,19 +285,17 @@ compress: whether or not to compress the column
       librados::AioCompletion *write_completion = librados::Rados::aio_create_completion();
       ret = io_ctx.aio_write_full(file_key, write_completion, write_buf);
       if (ret < 0) {
-              LOG(INFO) << "Couldn't start read object! error " << ret;
-              exit(EXIT_FAILURE);
+        return Internal("Couldn't start read object! error: ", ret);
       }
 
       // Wait for the request to complete, and check that it succeeded.
       write_completion->wait_for_complete();
       ret = write_completion->get_return_value();
       if (ret < 0) {
-              LOG(INFO) << "Couldn't write object! error " << ret;
-              exit(EXIT_FAILURE);
+        return Internal("Couldn't write object! error: ", ret);
       }
-      LOG(INFO) << "Wrote object asynchronously. Size of write is " << len;
 
+      return Status::OK();
     }
   };
 
