@@ -3,6 +3,8 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <locale>
+#include <pthread.h>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/resource_mgr.h"
@@ -79,6 +81,19 @@ class SnapAlignDenseParallelOp : public OpKernel {
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
       compute_status_ = Status::OK();
       completion_queue_.reset(new WorkQueue<uint64_t>(capacity_completion));
+      //LOG(INFO) << "my name is " << ctx->def().name();
+      string name = ctx->def().name();
+      LOG(INFO) << name;
+      int len = name.length();
+      LOG(INFO) << len;
+      std::locale loc;
+      if (!isdigit(name[len-1], loc))
+        op_id_ = 0;
+      else
+        op_id_ = (int)(name[len-1]-'0');
+
+      LOG(INFO) << "my id is : " << op_id_;
+
     }
 
     ~SnapAlignDenseParallelOp() override {
@@ -102,6 +117,10 @@ class SnapAlignDenseParallelOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
+      LOG(INFO) << "completion queue push wait: " << completion_queue_->num_push_waits();
+      LOG(INFO) << "completion queue pop wait: " << completion_queue_->num_pop_waits();
+      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
+      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
       LOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
     }
 
@@ -220,6 +239,20 @@ private:
         my_id = thread_id_;
         thread_id_++;
       }
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      if (my_id == 0) {
+        CPU_SET(op_id_, &cpuset);
+        LOG(INFO) << "setting affinity to core: " << op_id_;
+      } else {
+        CPU_SET(op_id_*(num_threads_-1) + my_id + 3, &cpuset);
+        LOG(INFO) << "setting affinity to core: " << op_id_*(num_threads_-1) + my_id + 3;
+      }
+      int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+      if (rc != 0) {
+        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to thread: " << op_id_*num_threads_ + my_id;
+      }
+
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
       BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
@@ -247,7 +280,7 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
-          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.1f)
+          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.2f)
             std::this_thread::yield();
         } else
           continue;
@@ -345,6 +378,7 @@ private:
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
   int thread_id_ = 0;
+  int op_id_;
 
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
   unique_ptr<WorkQueue<uint64_t>> completion_queue_;
