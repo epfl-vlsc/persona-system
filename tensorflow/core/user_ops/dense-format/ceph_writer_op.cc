@@ -206,45 +206,6 @@ compress: whether or not to compress the column
       }
     }
 
-/*      const Tensor *key_t, *column_t;
-      OP_REQUIRES_OK(ctx, ctx->input("file_name", &key_t));
-      string file_key = key_t->scalar<string>()();
-      OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
-      auto column_vec = column_t->vec<string>();
-
-      ResourceContainer<BufferList> *column;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
-      core::ScopedUnref column_releaser(column);
-      ResourceReleaser<BufferList> a(*column);
-
- //     auto &buffers = column->get()->get();
-
-      output_buf_.clear();
-      OP_REQUIRES_OK(ctx, WriteHeader(ctx, output_buf_));
-      auto s = Status::OK();
-      auto data = column->get();
-      string full_path = file_key + record_suffix_;
-
-      if (compress_) {
-        // compressGZIP already calls compress_buf_.clear()
-        s = compressGZIP(data->data(), data->size(), compress_buf_);
-        if (s.ok()) {
-          OP_REQUIRES_OK(ctx, appendSegment(&compress_buf_[0],
-                compress_buf_.size(), output_buf_, true));
-          CephWriteColumn(full_path, &output_buf_[0], output_buf_.size());
-        }
-      } else {
-        OP_REQUIRES_OK(ctx, appendSegment(data->data(), data->size(),
-              output_buf_, true));
-        CephWriteColumn(full_path, &output_buf_[0], output_buf_.size());
-      }
-
-      core::ScopedUnref a(column);
-      {
-        ResourceReleaser<Data> b(*column); // make sure destructs first
-      }
-    }*/
-
   private:
     string cluster_name;
     string user_name;
