@@ -2,7 +2,7 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
-#include "tensorflow/core/user_ops/dense-format/buffer.h"
+#include "tensorflow/core/user_ops/dense-format/buffer_list.h"
 #include "tensorflow/core/user_ops/dense-format/format.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "GenomeIndex.h"
@@ -25,6 +25,8 @@ namespace tensorflow {
   .Input("genome_handle: Ref(string)")
   .Input("dense_records: string")
   .Input("num_records: int32")
+  .Output("dense_records_out: string")
+  .Output("num_records_out: int32")
   .Doc(R"doc(
   Compares the dense format output with the SAM format output
 )doc");
@@ -37,7 +39,6 @@ namespace tensorflow {
       OP_REQUIRES_OK(context, context->GetAttr("sam_filename", &sam_filename_));
     }
 
-
     void Compute(OpKernelContext* ctx) override {
       if (!genome_resource_) {
         OP_REQUIRES_OK(ctx, init(ctx));
@@ -45,19 +46,30 @@ namespace tensorflow {
 
       // Get the dense format results in dense_records
       // rec_data(0) = container, rec_data(1) = name
-      ResourceContainer<Data> *records;
+      ResourceContainer<BufferList> *records;
       const Tensor *rec_input;
       OP_REQUIRES_OK(ctx, ctx->input("dense_records", &rec_input));
       auto rec_input_vec = rec_input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
-      auto rec_data = records->get()->data();
-
+      auto &rec_data_list = records->get()->get();
 
       // Get number of records per chunk
       const Tensor *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto num_records = num_records_t->scalar<int32>()();
 
+      auto status = Status::OK();
+
+      /*
+        TODO(Laura): look at the code for how parallel column writer op compresses into GZIP buffers.
+        You will only need one buffer (because you don't need the 2nd one to hold a compression result)
+
+        basically, do the same sort of assembling that it does (by iterating through each Buffer in the list),
+        but instead of compressing and writing, assign all of the variables as you would below.
+        i.e., the buffer that is assembled through this process should look exactly like the old
+        Data way of doing it (just change `rec_data` for whatever your buffer is called, essentially).
+       */
+#if 0
       // Will be populated in SAMReader::getNextRead
       AlignmentResult sam_alignmentResult;
       GenomeLocation sam_genomeLocation;
@@ -66,13 +78,13 @@ namespace tensorflow {
       unsigned sam_flag;
       const char *sam_cigar;
       size_t num_char, record_size, var_string_size;
+
       auto size_index = reinterpret_cast<const format::RecordTable*>(rec_data);
 
       const char *curr_record = rec_data + num_records; // skip the indices
       const format::AlignmentResult *dense_result;
       bool should_error = false;
 
-      auto status = Status::OK();
       for (decltype(num_records) i = 0; i < num_records; ++i) {
         if (!reader_->getNextRead(&sam_read_, &sam_alignmentResult, &sam_genomeLocation,
                                   &sam_direction, &sam_mapQ, &sam_flag, &sam_cigar)) {
@@ -121,9 +133,16 @@ namespace tensorflow {
 
       if (should_error) {
         status = Internal("Dense record set did not pass verification. Please enable LOG(INFO) for more details");
+      } else {
+        Tensor *dense_out, *records_out;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("dense_records_out", rec_input->shape(), &dense_out));
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", num_records_t->shape(), &records_out));
+        *dense_out = *rec_input;
+        *records_out = *num_records_t;
       }
 
       OP_REQUIRES_OK(ctx, status);
+#endif
     }
 
   private:
@@ -165,6 +184,7 @@ namespace tensorflow {
     ReaderContext readerContext_;
     SAMReader *reader_ = nullptr;
     Read sam_read_;
+    vector <char> buf_;
   };
 
 

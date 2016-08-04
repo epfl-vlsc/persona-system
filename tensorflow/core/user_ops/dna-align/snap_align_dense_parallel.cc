@@ -214,6 +214,13 @@ private:
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
+      int my_id = 0;
+      {
+        mutex_lock l(mu_);
+        my_id = thread_id_;
+        thread_id_++;
+      }
+      int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
       BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
       bool first_is_primary = true; // we only ever generate one result
@@ -240,6 +247,8 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
+          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.1f)
+            std::this_thread::yield();
         } else
           continue;
 
@@ -334,6 +343,8 @@ private:
   uint64_t id_ = 0;
 
   atomic<uint32_t> num_active_threads_;
+  mutex mu_;
+  int thread_id_ = 0;
 
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
   unique_ptr<WorkQueue<uint64_t>> completion_queue_;

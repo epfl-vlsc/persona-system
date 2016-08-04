@@ -56,8 +56,11 @@ struct EigenEnvironment {
         current_cpu_ << ", which is greater than " << port::NumSchedulableCPUs();*/
     }
     //LOG(INFO) << "Setting thread affinity to core: " << current_cpu_;
-    Status status = t->SetAffinity(current_cpu_);
-    current_cpu_++;
+    Status status = Status::OK();
+    if (current_cpu_ != -1) {
+      status = t->SetAffinity(current_cpu_);
+      current_cpu_++;
+    }
     if (!status.ok()) {
       LOG(INFO) << "Set affinity failed in impl create thread";
     }
