@@ -52,6 +52,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->input("dense_records", &rec_input));
       auto rec_input_vec = rec_input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
+      core::ScopedUnref column_releaser(records);
       auto &rec_data_list = records->get()->get();
       auto num_buffers = rec_data_list.size();
 
