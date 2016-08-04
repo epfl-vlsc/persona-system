@@ -187,10 +187,9 @@ ops.NoGradient(_dt_string)
 def _DenseTesterShape(op):
   for i in range(2):
     op_shape = op.inputs[i].get_shape()
-    import ipdb; ipdb.set_trace()
     _assert_vec(op_shape, 2)
   _assert_scalar(op.inputs[2].get_shape())
-  return []
+  return [op.inputs[1].get_shape(), op.inputs[2].get_shape()]
 
 _sm_str = "StagedFileMap"
 def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
