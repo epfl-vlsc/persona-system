@@ -190,7 +190,8 @@ def _DenseTesterShape(op):
     op_shape = op.inputs[i].get_shape()
     _assert_vec(op_shape, 2)
   _assert_scalar(op.inputs[2].get_shape())
-  return [tensor_shape.vector(2), tensor_shape.scalar()]
+#  return [tensor_shape.vector(2), tensor_shape.scalar()]
+  return [op.inputs[1].get_shape(), op.inputs[2].get_shape()]
 
 _sm_str = "StagedFileMap"
 def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
