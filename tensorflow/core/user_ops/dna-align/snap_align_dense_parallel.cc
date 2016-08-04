@@ -70,8 +70,11 @@ using namespace errors;
 class SnapAlignDenseParallelOp : public OpKernel {
   public:
     explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads",
-              &num_threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("threads",
+              &threads_));
+      num_threads_ = threads_.size();
+      OP_REQUIRES(ctx, num_threads_ > 0, errors::InvalidArgument(
+            "Aligner threads list must be > 0"));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size",
               &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size",
@@ -82,7 +85,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       compute_status_ = Status::OK();
       completion_queue_.reset(new WorkQueue<uint64_t>(capacity_completion));
       //LOG(INFO) << "my name is " << ctx->def().name();
-      string name = ctx->def().name();
+      /*string name = ctx->def().name();
       LOG(INFO) << name;
       int len = name.length();
       LOG(INFO) << len;
@@ -92,7 +95,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       else
         op_id_ = (int)(name[len-1]-'0');
 
-      LOG(INFO) << "my id is : " << op_id_;
+      LOG(INFO) << "my id is : " << op_id_;*/
 
     }
 
@@ -241,16 +244,18 @@ private:
       }
       cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
-      if (my_id == 0) {
+      CPU_SET(threads_[my_id], &cpuset);
+      /*if (my_id == 0) {
         CPU_SET(op_id_, &cpuset);
         LOG(INFO) << "setting affinity to core: " << op_id_;
       } else {
         CPU_SET(op_id_*(num_threads_-1) + my_id + 3, &cpuset);
         LOG(INFO) << "setting affinity to core: " << op_id_*(num_threads_-1) + my_id + 3;
-      }
+      }*/
       int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {
-        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to thread: " << op_id_*num_threads_ + my_id;
+        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core: " << threads_[my_id] 
+          << " for thread id: " << my_id;
       }
 
       int capacity = request_queue_->capacity();
@@ -369,7 +374,6 @@ private:
   AlignerOptionsResource* options_resource_ = nullptr;
   const Genome *genome_ = nullptr;
   AlignerOptions* options_ = nullptr;
-  int num_threads_;
   int subchunk_size_;
   int chunk_size_;
   volatile bool run_ = true;
@@ -378,8 +382,9 @@ private:
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
   int thread_id_ = 0;
-  int op_id_;
 
+  std::vector<int> threads_;
+  int num_threads_;
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
   unique_ptr<WorkQueue<uint64_t>> completion_queue_;
 
@@ -391,7 +396,7 @@ private:
 };
 
   REGISTER_OP("SnapAlignDenseParallel")
-  .Attr("num_threads: int = 1")
+  .Attr("threads: list(int)")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Input("genome_handle: Ref(string)")
