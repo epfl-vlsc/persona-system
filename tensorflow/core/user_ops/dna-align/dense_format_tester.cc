@@ -4,6 +4,7 @@
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/user_ops/dense-format/buffer_list.h"
 #include "tensorflow/core/user_ops/dense-format/format.h"
+#include "tensorflow/core/user_ops/dense-format/util.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "GenomeIndex.h"
 #include "genome_index_resource.h"
@@ -52,24 +53,43 @@ namespace tensorflow {
       auto rec_input_vec = rec_input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
       auto &rec_data_list = records->get()->get();
+      auto num_buffers = rec_data_list.size();
 
       // Get number of records per chunk
       const Tensor *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto num_records = num_records_t->scalar<int32>()();
+      uint32_t records_per_chunk = num_records / num_buffers;
+      if (num_records % num_buffers != 0) {
+        ++records_per_chunk;
+      }
 
       auto status = Status::OK();
+      decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
+      buf_.clear();
+      for (auto &buffer : rec_data_list) {
+        // deals with the last chunk, which could have a smaller number of records
+        // depending on the params
+        if (i + recs_per_chunk > num_records) {
+          recs_per_chunk = num_records - i;
+        }
+        auto &data_buf = buffer->get_when_ready(); // only need to do this on the first call
+        OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, buf_, true));
+        i += recs_per_chunk;
+      }
 
-      /*
-        TODO(Laura): look at the code for how parallel column writer op compresses into GZIP buffers.
-        You will only need one buffer (because you don't need the 2nd one to hold a compression result)
+      i = 0; recs_per_chunk = records_per_chunk;
+      size_t expected_size;
+      for (auto &buffer : rec_data_list) {
+        if (i + recs_per_chunk > num_records) {
+          recs_per_chunk = num_records - i;
+        }
+        auto &data_buf = buffer->get();
+        expected_size = data_buf.size() - recs_per_chunk;
+        OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true));
+        i += recs_per_chunk;
+      }
 
-        basically, do the same sort of assembling that it does (by iterating through each Buffer in the list),
-        but instead of compressing and writing, assign all of the variables as you would below.
-        i.e., the buffer that is assembled through this process should look exactly like the old
-        Data way of doing it (just change `rec_data` for whatever your buffer is called, essentially).
-       */
-#if 0
       // Will be populated in SAMReader::getNextRead
       AlignmentResult sam_alignmentResult;
       GenomeLocation sam_genomeLocation;
@@ -79,9 +99,9 @@ namespace tensorflow {
       const char *sam_cigar;
       size_t num_char, record_size, var_string_size;
 
-      auto size_index = reinterpret_cast<const format::RecordTable*>(rec_data);
+      auto size_index = reinterpret_cast<const format::RecordTable*>(&buf_[0]);
 
-      const char *curr_record = rec_data + num_records; // skip the indices
+      const char *curr_record = &buf_[num_records]; // skip the indices
       const format::AlignmentResult *dense_result;
       bool should_error = false;
 
@@ -142,7 +162,6 @@ namespace tensorflow {
       }
 
       OP_REQUIRES_OK(ctx, status);
-#endif
     }
 
   private:
