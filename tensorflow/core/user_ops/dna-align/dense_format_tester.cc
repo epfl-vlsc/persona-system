@@ -157,6 +157,7 @@ namespace tensorflow {
       size_t sam_filesize;
       TF_RETURN_IF_ERROR(getFileSize(sam_filename_, &sam_filesize));
       reader_ = SAMReader::create(DataSupplier::Default, sam_filename_.c_str(), 2, readerContext_, 0, sam_filesize);
+      return Status::OK();
     }
 
     string sam_filename_;
