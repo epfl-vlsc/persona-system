@@ -3,6 +3,8 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <locale>
+#include <pthread.h>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/resource_mgr.h"
@@ -68,8 +70,11 @@ using namespace errors;
 class SnapAlignDenseParallelOp : public OpKernel {
   public:
     explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads",
-              &num_threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("threads",
+              &threads_));
+      num_threads_ = threads_.size();
+      OP_REQUIRES(ctx, num_threads_ > 0, errors::InvalidArgument(
+            "Aligner threads list must be > 0"));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size",
               &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size",
@@ -79,6 +84,19 @@ class SnapAlignDenseParallelOp : public OpKernel {
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
       compute_status_ = Status::OK();
       completion_queue_.reset(new WorkQueue<uint64_t>(capacity_completion));
+      //LOG(INFO) << "my name is " << ctx->def().name();
+      /*string name = ctx->def().name();
+      LOG(INFO) << name;
+      int len = name.length();
+      LOG(INFO) << len;
+      std::locale loc;
+      if (!isdigit(name[len-1], loc))
+        op_id_ = 0;
+      else
+        op_id_ = (int)(name[len-1]-'0');
+
+      LOG(INFO) << "my id is : " << op_id_;*/
+
     }
 
     ~SnapAlignDenseParallelOp() override {
@@ -102,6 +120,10 @@ class SnapAlignDenseParallelOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
+      LOG(INFO) << "completion queue push wait: " << completion_queue_->num_push_waits();
+      LOG(INFO) << "completion queue pop wait: " << completion_queue_->num_pop_waits();
+      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
+      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
       LOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
     }
 
@@ -220,6 +242,22 @@ private:
         my_id = thread_id_;
         thread_id_++;
       }
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(threads_[my_id], &cpuset);
+      /*if (my_id == 0) {
+        CPU_SET(op_id_, &cpuset);
+        LOG(INFO) << "setting affinity to core: " << op_id_;
+      } else {
+        CPU_SET(op_id_*(num_threads_-1) + my_id + 3, &cpuset);
+        LOG(INFO) << "setting affinity to core: " << op_id_*(num_threads_-1) + my_id + 3;
+      }*/
+      int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+      if (rc != 0) {
+        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core: " << threads_[my_id] 
+          << " for thread id: " << my_id;
+      }
+
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
       BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
@@ -247,7 +285,7 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
-          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.1f)
+          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.2f)
             std::this_thread::yield();
         } else
           continue;
@@ -336,7 +374,6 @@ private:
   AlignerOptionsResource* options_resource_ = nullptr;
   const Genome *genome_ = nullptr;
   AlignerOptions* options_ = nullptr;
-  int num_threads_;
   int subchunk_size_;
   int chunk_size_;
   volatile bool run_ = true;
@@ -346,6 +383,8 @@ private:
   mutex mu_;
   int thread_id_ = 0;
 
+  std::vector<int> threads_;
+  int num_threads_;
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
   unique_ptr<WorkQueue<uint64_t>> completion_queue_;
 
@@ -357,7 +396,7 @@ private:
 };
 
   REGISTER_OP("SnapAlignDenseParallel")
-  .Attr("num_threads: int = 1")
+  .Attr("threads: list(int)")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Input("genome_handle: Ref(string)")

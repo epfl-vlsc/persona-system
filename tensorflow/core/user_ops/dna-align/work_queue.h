@@ -41,6 +41,9 @@ class WorkQueue {
     size_t capacity() const;
     size_t size() const;
 
+    int64 num_pop_waits();
+    int64 num_push_waits();
+
   private:
     // mutex to protect the queue
     mutable mutex mu_;
@@ -51,6 +54,8 @@ class WorkQueue {
     size_t capacity_;
     // block on calls to push, pop
     bool block_ = true;
+    int64 num_pop_waits_ = 0;
+    int64 num_push_waits_ = 0;
 
  };
 
@@ -61,6 +66,7 @@ void WorkQueue<T>::pop_all(std::vector<T> &items) {
   {
     mutex_lock l(mu_);
     if (queue_.empty() && block_) {
+      num_pop_waits_++;
       queue_pop_cv_.wait(l, [this]() {
           return !queue_.empty() || !block_;
         });
@@ -87,6 +93,7 @@ bool WorkQueue<T>::pop(T& item) {
     //LOG_INFO << "popping work queue";
     if (queue_.empty() && block_) {
       //LOG_INFO << "pop waiting ...";
+      num_pop_waits_++;
       queue_pop_cv_.wait(l, [this]() {
           return !queue_.empty() || !block_;
           });
@@ -119,6 +126,7 @@ bool WorkQueue<T>::push(const T& item) {
     // unless blocking is set to false
     if (queue_.size() == capacity_ && block_) {
       //LOG_INFO << "work queue is at capacity";
+      num_push_waits_++;
       queue_push_cv_.wait(l, [this]() {
           return (queue_.size() < capacity_) || !block_;
         });
@@ -175,6 +183,12 @@ size_t WorkQueue<T>::capacity() const { return capacity_; }
 
 template <typename T>
 size_t WorkQueue<T>::size() const { return queue_.size(); }
+
+template <typename T>
+int64 WorkQueue<T>::num_pop_waits() { return num_pop_waits_; }
+
+template <typename T>
+int64 WorkQueue<T>::num_push_waits() { return num_push_waits_; }
 
 }  // namespace tensorflow
 
