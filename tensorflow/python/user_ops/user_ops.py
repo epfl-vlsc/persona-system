@@ -177,7 +177,6 @@ def _BufferListSinkShape(op):
 
 _dt_string = "DenseTester"
 def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
-  import ipdb; ipdb.set_trace()
   if not (os.path.exists(sam_filename) and os.path.isfile(sam_filename)):
     raise EnvironmentError("DenseTester SAM file '{}' is not valid".format(sam_filename))
   return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records,
