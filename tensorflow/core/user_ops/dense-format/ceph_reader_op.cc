@@ -129,7 +129,7 @@ file_name: a Tensor() of string for the unique key for this file
     ReferencePool<Buffer> *ref_pool_ = nullptr;
     librados::IoCtx io_ctx;
 
-    /* Read an object from Ceph asynchronously */
+    /* Read an object from Ceph synchronously */
     void CephReadObject(const char* file_key, void *ref_buffer)
     {
       int ret = 0;
@@ -137,7 +137,6 @@ file_name: a Tensor() of string for the unique key for this file
 
       size_t file_size;
       io_ctx.stat(file_key, &file_size, nullptr); // Get file size
-      //LOG(INFO) << "Size of file is " << file_size;
 
       size_t data_read = 0;
       size_t read_len;
@@ -153,7 +152,7 @@ file_name: a Tensor() of string for the unique key for this file
         read_buf.push_back(ceph::buffer::create_static(read_len, &c[data_read]));
 
         // Create I/O Completion.
-        librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
+        /*librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
         ret = io_ctx.aio_read(file_key, read_completion, &read_buf, read_len, data_read);
         if (ret < 0) {
                 LOG(INFO) << "Couldn't start read object! error " << ret;
@@ -167,14 +166,17 @@ file_name: a Tensor() of string for the unique key for this file
         if (ret < 0) {
                 LOG(INFO) << "Couldn't read object! error " << ret;
                 exit(EXIT_FAILURE);
+        }*/
+
+        /* Test synchronous read */
+        ret = io_ctx.read(file_key, read_buf, read_len, data_read);
+        if (ret < 0) {
+                LOG(INFO) << "Couldn't start read object! error " << ret;
+                exit(EXIT_FAILURE);
         }
+        data_read = data_read + read_len;
         read_buf.clear();
       }
-      //LOG(INFO) << "Read object asynchronously.";
-
-      // Test that output actually written
-      //fwrite(buf->data(), 1, 1000, stdout);
-      //LOG(INFO) << buf->size();
     }
   };
 
