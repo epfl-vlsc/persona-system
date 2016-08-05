@@ -121,8 +121,8 @@ namespace snap_wrapper {
     const int cigarBufSize = MAX_READ * 2;
     char cigarBuf[cigarBufSize];
 
-    const int cigarBufWithClippingSize = MAX_READ * 2 + 32;
-    char cigarBufWithClipping[cigarBufWithClippingSize];
+//    const int cigarBufWithClippingSize = MAX_READ * 2 + 32;
+//    char cigarBufWithClipping[cigarBufWithClippingSize];
 
     int editDistance = -1;
 
@@ -214,14 +214,14 @@ namespace snap_wrapper {
             cigarString += hardClipBefore;
           }
           if (basesClippedBefore + extraBasesClippedBefore > 0) {
-            snprintf(clipBefore, sizeof(clipBefore), "%lluS", basesClippedBefore + extraBasesClippedBefore);
+            snprintf(clipBefore, sizeof(clipBefore), "%luS", basesClippedBefore + extraBasesClippedBefore);
             cigarString += clipBefore;
           }
           
           cigarString += cigarBuf;
           
           if (basesClippedAfter + extraBasesClippedAfter > 0) {
-            snprintf(clipAfter, sizeof(clipAfter), "%lluS", basesClippedAfter + extraBasesClippedAfter);
+            snprintf(clipAfter, sizeof(clipAfter), "%luS", basesClippedAfter + extraBasesClippedAfter);
             cigarString += clipAfter;
           }
           if (backHardClipping > 0) {
