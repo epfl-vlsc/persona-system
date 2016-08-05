@@ -234,7 +234,7 @@ compress: whether or not to compress the column
       return Status::OK();
     }
 
-    /* Read an object from Ceph asynchronously */
+    /* Write an object to Ceph synchronously */
     Status CephWriteColumn(string& file_key, char* buf, size_t len)
     {
       int ret = 0;
@@ -243,7 +243,7 @@ compress: whether or not to compress the column
       write_buf.push_back(ceph::buffer::create_static(len, buf));
 
       // Create I/O Completion.
-      librados::AioCompletion *write_completion = librados::Rados::aio_create_completion();
+      /*librados::AioCompletion *write_completion = librados::Rados::aio_create_completion();
       ret = io_ctx.aio_write_full(file_key, write_completion, write_buf);
       if (ret < 0) {
         return Internal("Couldn't start read object! error: ", ret);
@@ -254,8 +254,11 @@ compress: whether or not to compress the column
       ret = write_completion->get_return_value();
       if (ret < 0) {
         return Internal("Couldn't write object! error: ", ret);
+      }*/
+      ret = io_ctx.write_full(file_key, write_buf);
+      if (ret < 0) {
+        return Internal("Couldn't write object! error: ", ret);
       }
-
       return Status::OK();
     }
   };
