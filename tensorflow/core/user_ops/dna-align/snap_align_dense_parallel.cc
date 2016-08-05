@@ -278,8 +278,8 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
-          /*if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.2f)
-            std::this_thread::yield();*/
+          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.1f)
+            std::this_thread::yield();
         } else
           continue;
 
