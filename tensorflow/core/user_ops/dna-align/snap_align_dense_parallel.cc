@@ -242,21 +242,14 @@ private:
         my_id = thread_id_;
         thread_id_++;
       }
-      cpu_set_t cpuset;
+      /*cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
       CPU_SET(threads_[my_id], &cpuset);
-      /*if (my_id == 0) {
-        CPU_SET(op_id_, &cpuset);
-        LOG(INFO) << "setting affinity to core: " << op_id_;
-      } else {
-        CPU_SET(op_id_*(num_threads_-1) + my_id + 3, &cpuset);
-        LOG(INFO) << "setting affinity to core: " << op_id_*(num_threads_-1) + my_id + 3;
-      }*/
       int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {
         LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core: " << threads_[my_id] 
           << " for thread id: " << my_id;
-      }
+      }*/
 
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
@@ -285,8 +278,8 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
-          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.2f)
-            std::this_thread::yield();
+          /*if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.2f)
+            std::this_thread::yield();*/
         } else
           continue;
 
