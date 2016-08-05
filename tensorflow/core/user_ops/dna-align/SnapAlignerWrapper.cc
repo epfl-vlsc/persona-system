@@ -192,36 +192,47 @@ namespace snap_wrapper {
         // *o_editDistance -> editDistance
         if (editDistance == -2) {
           WriteErrorMessage( "WARNING: computeEditDistance returned -2; cigarBuf may be too small\n");
-          strcpy(cigarBufWithClipping, "*");
+          // strcpy(cigarBufWithClipping, "*"); // already set by default
         } else if (editDistance == -1) {
           static bool warningPrinted = false;
           if (!warningPrinted) {
               WriteErrorMessage( "WARNING: computeEditDistance returned -1; this shouldn't happen\n");
               warningPrinted = true;
           }
-          strcpy(cigarBufWithClipping, "*");
+          // strcpy(cigarBufWithClipping, "*"); // already set by default
         } else {
           // Add some CIGAR instructions for soft-clipping if we've ignored some bases in the read.
           char clipBefore[16] = {'\0'};
           char clipAfter[16] = {'\0'};
           char hardClipBefore[16] = {'\0'};
           char hardClipAfter[16] = {'\0'};
+          
+          cigarString = "";
+          
           if (frontHardClipping > 0) {
             snprintf(hardClipBefore, sizeof(hardClipBefore), "%uH", frontHardClipping);
+            cigarString += hardClipBefore;
           }
           if (basesClippedBefore + extraBasesClippedBefore > 0) {
             snprintf(clipBefore, sizeof(clipBefore), "%lluS", basesClippedBefore + extraBasesClippedBefore);
+            cigarString += clipBefore;
           }
+          
+          cigarString += cigarBuf;
+          
           if (basesClippedAfter + extraBasesClippedAfter > 0) {
             snprintf(clipAfter, sizeof(clipAfter), "%lluS", basesClippedAfter + extraBasesClippedAfter);
+            cigarString += clipAfter;
           }
           if (backHardClipping > 0) {
             snprintf(hardClipAfter, sizeof(hardClipAfter), "%uH", backHardClipping);
+            cigarString += hardClipAfter;
           }
-          snprintf(cigarBufWithClipping, cigarBufWithClippingSize, "%s%s%s%s%s", hardClipBefore, clipBefore, cigarBuf, clipAfter, hardClipAfter);
+//          snprintf(cigarBufWithClipping, cigarBufWithClippingSize, "%s%s%s%s%s", hardClipBefore, clipBefore, cigarBuf, clipAfter, hardClipAfter);
+//          cigarString = cigarBufWithClipping;	
+
         }
 
-        cigarString = cigarBufWithClipping;	
       }
 		}
 
