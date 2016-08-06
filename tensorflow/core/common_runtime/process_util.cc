@@ -36,7 +36,7 @@ static thread::ThreadPool* InitComputePool(const SessionOptions& options) {
   }
 
   return new thread::ThreadPool(Env::Default(), "Compute",
-                                inter_op_parallelism_threads);
+                                inter_op_parallelism_threads, false);
 }
 
 }  // namespace

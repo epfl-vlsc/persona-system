@@ -47,7 +47,7 @@ static bool InitModule(const SessionOptions& options) {
 
   eigen_worker_threads.workers = new thread::ThreadPool(
                                                         options.env, "Eigen",
-                                                        intra_op_parallelism_threads, affinity_start);
+                                                        intra_op_parallelism_threads, true, affinity_start);
   eigen_thread_pool = new EigenThreadPoolWrapper(eigen_worker_threads.workers);
   eigen_device = new Eigen::ThreadPoolDevice(eigen_thread_pool,
                                              eigen_worker_threads.num_threads);
