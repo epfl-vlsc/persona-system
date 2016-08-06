@@ -74,6 +74,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_yielding_threads", &num_yielding_threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("low_watermark", &low_watermark_));
 
       num_threads_ = threads_.size();
       OP_REQUIRES(ctx, num_threads_ > 0, errors::InvalidArgument("Aligner threads list must be > 0"));
@@ -84,19 +85,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
       int capacity = (chunk_size_ / subchunk_size_) + 1;
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
       compute_status_ = Status::OK();
-      //LOG(INFO) << "my name is " << ctx->def().name();
-      /*string name = ctx->def().name();
-      LOG(INFO) << name;
-      int len = name.length();
-      LOG(INFO) << len;
-      std::locale loc;
-      if (!isdigit(name[len-1], loc))
-        op_id_ = 0;
-      else
-        op_id_ = (int)(name[len-1]-'0');
-
-      LOG(INFO) << "my id is : " << op_id_;*/
-
     }
 
     ~SnapAlignDenseParallelOp() override {
@@ -237,7 +225,7 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
-          if (should_yield && (float)request_queue_->size() / (float)capacity < 0.1f)
+          if (should_yield && (float)request_queue_->size() / (float)capacity < low_watermark_)
             std::this_thread::yield();
         } else
           continue;
@@ -327,6 +315,7 @@ private:
   int chunk_size_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
+  float low_watermark_;
 
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
@@ -348,6 +337,7 @@ private:
   .Attr("num_yielding_threads: int")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
+  .Attr("low_watermark: float")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
