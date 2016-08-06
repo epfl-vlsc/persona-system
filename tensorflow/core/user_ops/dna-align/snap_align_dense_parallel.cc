@@ -70,15 +70,17 @@ using namespace errors;
 class SnapAlignDenseParallelOp : public OpKernel {
   public:
     explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("threads",
-              &threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("threads", &threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_yielding_threads", &num_yielding_threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
+
       num_threads_ = threads_.size();
-      OP_REQUIRES(ctx, num_threads_ > 0, errors::InvalidArgument(
-            "Aligner threads list must be > 0"));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size",
-              &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size",
-              &chunk_size_));
+      OP_REQUIRES(ctx, num_threads_ > 0, errors::InvalidArgument("Aligner threads list must be > 0"));
+      OP_REQUIRES(ctx, num_yielding_threads_ >= 0 && num_yielding_threads_ <= num_threads_,
+                  errors::InvalidArgument("Aligner needs positive number of yielding threads ", num_yielding_threads_,
+                                          ", but less than total number of threads ", num_threads_));
+
       int capacity = (chunk_size_ / subchunk_size_) + 1;
       int capacity_completion = 2*(capacity + num_threads_);
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
@@ -239,9 +241,9 @@ private:
       int my_id = 0;
       {
         mutex_lock l(mu_);
-        my_id = thread_id_;
-        thread_id_++;
+        my_id = thread_id_++;
       }
+      bool should_yield = my_id < num_yielding_threads_;
       cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
       CPU_SET(threads_[my_id], &cpuset);
@@ -278,7 +280,7 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
-          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.1f)
+          if (should_yield && (float)request_queue_->size() / (float)capacity < 0.1f)
             std::this_thread::yield();
         } else
           continue;
@@ -377,7 +379,7 @@ private:
   int thread_id_ = 0;
 
   std::vector<int> threads_;
-  int num_threads_;
+  int num_threads_, num_yielding_threads_;
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
   unique_ptr<WorkQueue<uint64_t>> completion_queue_;
 
@@ -390,6 +392,7 @@ private:
 
   REGISTER_OP("SnapAlignDenseParallel")
   .Attr("threads: list(int)")
+  .Attr("num_yielding_threads: int")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Input("genome_handle: Ref(string)")

@@ -272,17 +272,22 @@ def _SnapAlignDense(op):
     return [tensor_shape.vector(2)]
 
 _sadp_string = "SnapAlignDenseParallel"
-def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, threads, name=None):
-
-    return gen_user_ops.snap_align_dense_parallel(genome_handle=genome, options_handle=options,
-            buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
-            subchunk_size=subchunk_size, threads=threads, name=name)
+def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, threads, num_yielding_threads, name=None):
+  num_threads = len(threads)
+  if num_threads < 1:
+    raise EnvironmentError("Must pass a non-empty thread list")
+  if num_yielding_threads < 0 or num_yielding_threads > num_threads:
+    raise EnvironmentError("Number of yielding threads ({yielding}) must be positive and less than total threads ({total})".format(
+      yielding=num_yielding_threads, total=num_threads))
+  return gen_user_ops.snap_align_dense_parallel(genome_handle=genome, options_handle=options,
+                                                buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
+                                                subchunk_size=subchunk_size, threads=threads, num_yielding_threads=num_yielding_threads,
+                                                name=name)
 
 ops.NoGradient(_sadp_string)
 @ops.RegisterShape(_sadp_string)
 def _SnapAlignDenseParallel(op):
     return [tensor_shape.vector(2)]
-
 
 _drp_str = "DenseReadPool"
 def DenseReadPool(size=0, bound=False, name=None):
