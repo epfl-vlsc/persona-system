@@ -82,10 +82,8 @@ class SnapAlignDenseParallelOp : public OpKernel {
                                           ", but less than total number of threads ", num_threads_));
 
       int capacity = (chunk_size_ / subchunk_size_) + 1;
-      int capacity_completion = 2*(capacity + num_threads_);
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
       compute_status_ = Status::OK();
-      completion_queue_.reset(new WorkQueue<uint64_t>(capacity_completion));
       //LOG(INFO) << "my name is " << ctx->def().name();
       /*string name = ctx->def().name();
       LOG(INFO) << name;
@@ -102,28 +100,17 @@ class SnapAlignDenseParallelOp : public OpKernel {
     }
 
     ~SnapAlignDenseParallelOp() override {
-      auto status = Status::OK();
-      while (pending_resources_.size() > 0 && run_ && status.ok()) { // && run_ because the threads themselves could error, and they set run_ to signal
-        LOG(DEBUG) << "DenseAligner("<< this << ") waiting for requests to finish\n";
-        status = process_completed_chunks();
-      }
       if (!run_) {
         LOG(ERROR) << "Unable to safely wait in ~SnapAlignDenseParallelOp for all threads. run_ was toggled to false\n";
       }
-      if (!status.ok()) {
-        LOG(ERROR) << "Bad status received while calling process_completed_chunks in ~SnapAlignDenseParallelOp: " << status << "\n";
-      }
       run_ = false;
       request_queue_->unblock();
-      completion_queue_->unblock();
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      LOG(INFO) << "completion queue push wait: " << completion_queue_->num_push_waits();
-      LOG(INFO) << "completion queue pop wait: " << completion_queue_->num_pop_waits();
       LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
       LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
       LOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
@@ -195,8 +182,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
     }
     pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
 
-    OP_REQUIRES_OK(ctx, process_completed_chunks());
-
     // needed because if we just call clear, this will
     // call delete on all the resources!
     for (auto &read_rsrc : read_resources_) {
@@ -207,34 +192,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
   }
 
 private:
-
-  inline Status
-  process_completed_chunks()
-  {
-    auto status = Status::OK();
-
-    completion_queue_->pop_all(completion_process_queue_);
-    bool found;
-    for (auto &id : completion_process_queue_) {
-      found = false;
-      for (decltype(pending_resources_)::size_type i = 0; i < pending_resources_.size(); ++i) {
-        auto &pending_resource = pending_resources_[i];
-        if (pending_resource.is_id(id)) {
-          if (pending_resource.decrement_count()) {
-            pending_resources_.erase(pending_resources_.begin() + i);
-          }
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        status = Internal("Unable to find pending resource with id ", id);
-        break;
-      }
-    }
-
-    return status;
-  }
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
@@ -349,9 +306,6 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
-        if (run_) {
-          completion_queue_->push(id);
-        }
         tracepoint(bioflow, snap_alignments, clock() - start, reads->num_records());
       }
 
@@ -381,7 +335,6 @@ private:
   std::vector<int> threads_;
   int num_threads_, num_yielding_threads_;
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
-  unique_ptr<WorkQueue<uint64_t>> completion_queue_;
 
   vector<uint64_t> completion_process_queue_;
   vector<unique_ptr<ReadResource>> read_resources_;
