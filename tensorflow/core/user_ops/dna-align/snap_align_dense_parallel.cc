@@ -245,13 +245,6 @@ private:
       cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
       CPU_SET(threads_[my_id], &cpuset);
-      /*if (my_id == 0) {
-        CPU_SET(op_id_, &cpuset);
-        LOG(INFO) << "setting affinity to core: " << op_id_;
-      } else {
-        CPU_SET(op_id_*(num_threads_-1) + my_id + 3, &cpuset);
-        LOG(INFO) << "setting affinity to core: " << op_id_*(num_threads_-1) + my_id + 3;
-      }*/
       int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {
         LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core: " << threads_[my_id] 
@@ -285,7 +278,7 @@ private:
           reads = get<0>(batch);
           result_buf = get<1>(batch);
           id = get<2>(batch);
-          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.2f)
+          if (my_id == 0 && (float)request_queue_->size() / (float)capacity < 0.1f)
             std::this_thread::yield();
         } else
           continue;
