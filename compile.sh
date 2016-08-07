@@ -9,6 +9,8 @@ IFS=$'\n\t'
 
 build_type="opt"
 
+DIR=$(dirname $(realpath $0))
+
 process_args() {
 case "$#" in
     0)
@@ -33,5 +35,5 @@ fi
 
 echo "Building configuration $build_type"
 max_build_threads=$(bc <<< "scale=0; ($(nproc) * 0.9) / 1" )
-PYTHON_BIN_PATH=$(which python3) TF_NEED_GCP=0 TF_NEED_CUDA=0 ./configure
+PYTHON_BIN_PATH=$(which python3) TF_NEED_GCP=0 TF_NEED_CUDA=0 $DIR/configure
 eval "bazel build $extra_opts -j $max_build_threads -c $build_type //tensorflow/tools/pip_package:build_pip_package"
