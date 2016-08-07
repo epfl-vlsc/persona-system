@@ -59,7 +59,7 @@ file_name: a Tensor() of string for the unique key for this file
       OP_REQUIRES_OK(ctx, ctx->GetAttr("ceph_conf_path", &ceph_conf));
       ret = cluster.conf_read_file(ceph_conf.c_str());
       if (ret < 0) {
-              LOG(INFO) << "Couldn't read the Ceph configuration file! error " << ret;
+        LOG(INFO) << "Couldn't read the Ceph configuration file ('" << ceph_conf << "')! error " << ret;
               exit(EXIT_FAILURE);
       } else {
               LOG(INFO) << "Read the Ceph configuration file.";
