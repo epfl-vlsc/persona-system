@@ -12,6 +12,7 @@
 #include <cstdint>
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
 namespace tensorflow {
 
@@ -109,6 +110,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
         num_records(i) = num_recs;
         first_ordinals(i) = first_ord;
+        tracepoint(bioflow, start_ordinal, first_ord);
       }
     }
 

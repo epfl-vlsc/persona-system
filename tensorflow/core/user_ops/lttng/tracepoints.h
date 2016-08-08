@@ -85,6 +85,26 @@ TRACEPOINT_EVENT(
                            )
                  )
 
+#define ORDINAL_ARGS TP_ARGS(uint64_t, ordinal)
+TRACEPOINT_EVENT_CLASS(
+                       bioflow,
+                       first_ordinal,
+                       ORDINAL_ARGS,
+                       TP_FIELDS(
+                                 ctf_integer(uint64_t, first_ordinal, ordinal))
+                       )
+
+#define BIOFLOW_FIRST_ORDINAL_INSTANCE(_name_) \
+  TRACEPOINT_EVENT_INSTANCE(                   \
+                            bioflow,           \
+                            first_ordinal,     \
+                            _name_,            \
+                            ORDINAL_ARGS       \
+                             )
+
+BIOFLOW_FIRST_ORDINAL_INSTANCE(start_ordinal)
+BIOFLOW_FIRST_ORDINAL_INSTANCE(stop_ordinal)
+
 #endif
 
 #include <lttng/tracepoint-event.h>

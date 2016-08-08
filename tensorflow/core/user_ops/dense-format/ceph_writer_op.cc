@@ -4,6 +4,7 @@
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include "compression.h"
 #include "buffer_list.h"
 #include "format.h"
@@ -160,6 +161,8 @@ compress: whether or not to compress the column
           i += recs_per_chunk;
         }
 
+        tracepoint(bioflow, stop_ordinal, header_.first_ordinal);
+
         i = 0; recs_per_chunk = records_per_chunk;
         size_t expected_size;
         for (auto &buffer : buffers) {
@@ -188,6 +191,8 @@ compress: whether or not to compress the column
           OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[0], recs_per_chunk));
           i += recs_per_chunk;
         }
+
+        tracepoint(bioflow, stop_ordinal, header_.first_ordinal);
 
         i = 0; recs_per_chunk = records_per_chunk;
         size_t expected_size;
