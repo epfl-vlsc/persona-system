@@ -13,7 +13,7 @@
 
 // All of your tracepoint definitions must go before the endif!
 
-#define DURATION_CALC(_dur) ((_dur * 1000000) / CLOCKS_PER_SEC)
+#define DURATION_CALC(_dur) ((_dur / (float) CLOCKS_PER_SEC) * 1000000.0)
 
 // This event outputs the duration in microseconds
 
@@ -23,7 +23,7 @@ TRACEPOINT_EVENT_CLASS(
                        duration,
                        DURATION_ARGS,
                        TP_FIELDS(
-                                 ctf_integer(uint32_t, duration, DURATION_CALC(event_duration))
+                                 ctf_float(double, duration, DURATION_CALC(event_duration))
                                  )
 )
 
@@ -41,7 +41,7 @@ TRACEPOINT_EVENT_CLASS(
                         dense_read_duration,
                         DENSE_READ_DURATION_ARGS,
                         TP_FIELDS(
-                                  ctf_integer(uint32_t, duration, DURATION_CALC(event_duration))
+                                  ctf_float(double, duration, DURATION_CALC(event_duration))
                                   ctf_integer(uint64_t, first_ordinal, first_ordinal)
                                   ctf_integer(uint32_t, num_records, num_records)
                                   )
@@ -67,7 +67,7 @@ TRACEPOINT_EVENT(
                          const char*, filename
                          ),
                  TP_FIELDS(
-                           ctf_integer(uint32_t, duration, DURATION_CALC(event_duration))
+                           ctf_float(double, duration, DURATION_CALC(event_duration))
                            ctf_string(filename, filename)
                            )
                  )
@@ -80,7 +80,7 @@ TRACEPOINT_EVENT(
                          uint32_t, num_alignments
                          ),
                  TP_FIELDS(
-                           ctf_integer(uint32_t, duration, DURATION_CALC(alignment_duration))
+                           ctf_float(double, duration, DURATION_CALC(alignment_duration))
                            ctf_integer(uint32_t, num_alignments, num_alignments)
                            )
                  )
