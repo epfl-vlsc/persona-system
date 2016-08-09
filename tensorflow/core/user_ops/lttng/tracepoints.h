@@ -17,6 +17,15 @@
 #define DURATION_FIELD(_arg_name) ctf_float(double, duration, DURATION_CALC(_arg_name))
 #define POINTER_FIELD(_field_name, _arg_name) ctf_integer(uintptr_t, _field_name, (uintptr_t) _arg_name)
 
+TRACEPOINT_EVENT(
+                 bioflow,
+                 clocks_per_sec,
+                 TP_ARGS(),
+                 TP_FIELDS(
+                           ctf_integer(uint32_t, clocks_per_sec, CLOCKS_PER_SEC)
+                           )
+                 )
+
 #define POINTER_TIMESTAMP_ARGS TP_ARGS(void*, pointer)
 TRACEPOINT_EVENT_CLASS(
                        bioflow,
