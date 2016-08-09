@@ -107,11 +107,7 @@ file_name: a Tensor() of string for the unique key for this file
       CephReadObject(file_key.c_str(), rec_buffer);
 
       // Output tensors
-      Tensor *output_tensor;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({2}), &output_tensor));
-      auto output_vector = output_tensor->vec<string>();
-      output_vector(0) = rec_buffer->container();
-      output_vector(1) = rec_buffer->name();
+      OP_REQUIRES_OK(ctx, rec_buffer->allocate_output("file_handle", ctx));
 
       Tensor *file_name;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
