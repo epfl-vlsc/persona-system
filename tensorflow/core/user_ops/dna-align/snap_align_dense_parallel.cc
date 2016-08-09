@@ -195,14 +195,14 @@ private:
         my_id = thread_id_++;
       }
       bool should_yield = my_id < num_yielding_threads_;
-      cpu_set_t cpuset;
+      /*cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
       CPU_SET(threads_[my_id], &cpuset);
       int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {
         LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core: " << threads_[my_id] 
           << " for thread id: " << my_id;
-      }
+      }*/
 
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
