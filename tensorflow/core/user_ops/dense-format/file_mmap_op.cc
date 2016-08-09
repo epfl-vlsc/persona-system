@@ -58,6 +58,7 @@ bundle_name: [{this map op's name}] + upstream_name
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
+      start = clock();
       const Tensor *upstream_refs, *upstream_names, *filename_input;
       OP_REQUIRES_OK(ctx, ctx->input("upstream_names", &upstream_names));
       OP_REQUIRES_OK(ctx, ctx->input("upstream_refs", &upstream_refs));
@@ -79,7 +80,6 @@ bundle_name: [{this map op's name}] + upstream_name
       auto start = clock();
       ReadOnlyMemoryRegion *rmr;
       OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-      tracepoint(bioflow, file_mmap, clock() - start, filename.c_str());
       mmf->get()->own(rmr);
 
       Tensor *file_handles, *file_names;
@@ -105,7 +105,11 @@ bundle_name: [{this map op's name}] + upstream_name
       names_vec(max_dim) = filename;
       handles_matrix(max_dim, 0) = mmf->container();
       handles_matrix(max_dim, 1) = mmf->name();
+      tracepoint(bioflow, read_kernel, start, filename.c_str());
+      tracepoint(bioflow, read_ready_queue_start, mmf);
     }
+  private:
+    clock_t start;
   };
 
   class FileMMapOp : public OpKernel {
@@ -120,6 +124,7 @@ bundle_name: [{this map op's name}] + upstream_name
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
 
+      start = clock();
       const Tensor *filename_input;
       OP_REQUIRES_OK(ctx, ctx->input("filename", &filename_input));
       auto filename = filename_input->scalar<string>()();
@@ -134,10 +139,8 @@ bundle_name: [{this map op's name}] + upstream_name
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
-      auto start = clock();
       ReadOnlyMemoryRegion *rmr;
       OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-      tracepoint(bioflow, file_mmap, clock() - start, filename.c_str());
       mmf->get()->own(rmr);
 
       Tensor *output_tensor;
@@ -150,7 +153,11 @@ bundle_name: [{this map op's name}] + upstream_name
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
       auto scalar = file_name->vec<string>();
       scalar(0) = filename;
+      tracepoint(bioflow, read_kernel, start, filename.c_str());
+      tracepoint(bioflow, read_ready_queue_start, mmf);
     }
+  private:
+    clock_t start;
   };
 
   REGISTER_KERNEL_BUILDER(Name("FileMMap").Device(DEVICE_CPU), FileMMapOp);

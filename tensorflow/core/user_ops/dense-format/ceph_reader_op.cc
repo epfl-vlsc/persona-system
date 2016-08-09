@@ -7,6 +7,7 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "data.h"
 #include "tensorflow/core/user_ops/dense-format/buffer.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include <list>
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,6 +96,7 @@ file_name: a Tensor() of string for the unique key for this file
       if (!ref_pool_) {
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_handle", &ref_pool_));
       }
+      start = clock();
 
       const Tensor *key_t;
       OP_REQUIRES_OK(ctx, ctx->input("queue_key", &key_t));
@@ -113,9 +115,12 @@ file_name: a Tensor() of string for the unique key for this file
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
       auto scalar = file_name->vec<string>();
       scalar(0) = file_key;
+      tracepoint(bioflow, read_kernel, start, file_key.c_str());
+      tracepoint(bioflow, read_ready_queue_start, rec_buffer);
     }
 
   private:
+    clock_t start;
     string cluster_name;
     string user_name;
     string pool_name;

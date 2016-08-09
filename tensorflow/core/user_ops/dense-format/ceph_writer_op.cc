@@ -124,6 +124,7 @@ compress: whether or not to compress the column
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
       const Tensor *path, *column_t;
+      start = clock();
       OP_REQUIRES_OK(ctx, ctx->input("file_name", &path));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
       auto filepath = path->scalar<string>()();
@@ -133,6 +134,7 @@ compress: whether or not to compress the column
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
       core::ScopedUnref column_releaser(column);
       ResourceReleaser<BufferList> a(*column);
+      tracepoint(bioflow, result_ready_queue_stop, column);
 
       auto &buffers = column->get()->get();
 
@@ -160,8 +162,7 @@ compress: whether or not to compress the column
           OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true));
           i += recs_per_chunk;
         }
-
-        tracepoint(bioflow, stop_ordinal, header_.first_ordinal);
+        tracepoint(bioflow, total_align_stop, column);
 
         i = 0; recs_per_chunk = records_per_chunk;
         size_t expected_size;
@@ -192,7 +193,7 @@ compress: whether or not to compress the column
           i += recs_per_chunk;
         }
 
-        tracepoint(bioflow, stop_ordinal, header_.first_ordinal);
+        tracepoint(bioflow, total_align_stop, column);
 
         i = 0; recs_per_chunk = records_per_chunk;
         size_t expected_size;
@@ -209,6 +210,7 @@ compress: whether or not to compress the column
           i += recs_per_chunk;
         }
       }
+      tracepoint(bioflow, write_duration, start, full_path.c_str());
     }
 
   private:
@@ -223,6 +225,7 @@ compress: whether or not to compress the column
     format::FileHeader header_;
     bool compress_ = false;
     string record_suffix_;
+    clock_t start;
 
     Status WriteHeader(OpKernelContext *ctx, vector<char>& buf) {
       const Tensor *tensor;

@@ -134,7 +134,6 @@ class SnapAlignDenseParallelOp : public OpKernel {
 
 
   void Compute(OpKernelContext* ctx) override {
-    auto start = clock();
     if (index_resource_ == nullptr) {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
       init_workers(ctx);
@@ -144,12 +143,9 @@ class SnapAlignDenseParallelOp : public OpKernel {
       ctx->SetStatus(compute_status_);
       return;
     }
-    
-    OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
 
-    ResourceContainer<BufferList> *bufferlist_resource_container;
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
-    auto alignment_result_buffer_list = bufferlist_resource_container->get();
+    OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
+    kernel_start = clock();
 
     ResourceContainer<ReadResource> *reads_container;
     const Tensor *read_input;
@@ -158,6 +154,12 @@ class SnapAlignDenseParallelOp : public OpKernel {
     OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
     core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
+    tracepoint(bioflow, assembled_ready_queue_stop, reads_container);
+
+    ResourceContainer<BufferList> *bufferlist_resource_container;
+    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
+    auto alignment_result_buffer_list = bufferlist_resource_container->get();
+
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, read_resources_));
     decltype(read_resources_)::size_type num_subchunks = read_resources_.size();
@@ -166,8 +168,10 @@ class SnapAlignDenseParallelOp : public OpKernel {
     for (decltype(num_subchunks) i = 0; i < num_subchunks; ++i) {
       auto *alignment_buffer = alignment_result_buffer_list->get_at(i);
       alignment_buffer->reset();
+      tracepoint(bioflow, align_ready_queue_start, alignment_buffer);
       request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_));
     }
+    tracepoint(bioflow, total_align_start, bufferlist_resource_container);
     pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
 
     // needed because if we just call clear, this will
@@ -176,10 +180,12 @@ class SnapAlignDenseParallelOp : public OpKernel {
       read_rsrc.release();
     }
     read_resources_.clear();
-    tracepoint(bioflow, snap_align_kernel, clock() - start);
+    tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
+    tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
 
 private:
+  clock_t kernel_start;
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
@@ -224,12 +230,14 @@ private:
         if (request_queue_->pop(batch)) {
           reads = get<0>(batch);
           result_buf = get<1>(batch);
+          tracepoint(bioflow, align_ready_queue_stop, result_buf);
           id = get<2>(batch);
           if (should_yield && (float)request_queue_->size() / (float)capacity < low_watermark_)
             std::this_thread::yield();
         } else
           continue;
 
+        // should this by in the if statement above?
         start = clock();
 
         auto &res_buf = result_buf->get();
@@ -294,7 +302,7 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
-        tracepoint(bioflow, snap_alignments, clock() - start, reads->num_records());
+        tracepoint(bioflow, snap_alignments, start, reads->num_records(), result_buf);
       }
 
       LOG(INFO) << "base aligner thread ending.";

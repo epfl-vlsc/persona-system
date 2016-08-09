@@ -13,35 +13,87 @@
 
 // All of your tracepoint definitions must go before the endif!
 
-#define DURATION_CALC(_dur) ((_dur / (float) CLOCKS_PER_SEC) * 1000000.0)
+#define DURATION_CALC(_start) (((clock() - _start) / (float) CLOCKS_PER_SEC) * 1000000.0)
+#define DURATION_FIELD(_arg_name) ctf_float(double, duration, DURATION_CALC(_arg_name))
+#define POINTER_FIELD(_field_name, _arg_name) ctf_integer(uintptr_t, _field_name, (uintptr_t) _arg_name)
+
+#define POINTER_TIMESTAMP_ARGS TP_ARGS(void*, pointer)
+TRACEPOINT_EVENT_CLASS(
+                       bioflow,
+                       pointer_timestamp,
+                       POINTER_TIMESTAMP_ARGS,
+                       TP_FIELDS(
+                                 POINTER_FIELD(id, pointer)
+                                 ctf_integer(clock_t, timestamp, clock())
+                                 )
+                       )
+
+#define POINTER_TIMESTAMP_EVENT(_name_)               \
+  TRACEPOINT_EVENT_INSTANCE(                          \
+                            bioflow,                  \
+                            pointer_timestamp,        \
+                            _name_,                   \
+                            POINTER_TIMESTAMP_ARGS    \
+                                                    )
+
+#define TIMESTAMP_START_STOP_INSTANCE(_name_)   \
+  POINTER_TIMESTAMP_EVENT(_name_ ## _start)     \
+  POINTER_TIMESTAMP_EVENT(_name_ ## _stop)
+
+// time spent in the read ready queue (after the reads, and before DenseReaderOp)
+TIMESTAMP_START_STOP_INSTANCE(read_ready_queue)
+
+// time spent in the queue of assembled ReadResource instances
+TIMESTAMP_START_STOP_INSTANCE(assembled_ready_queue)
+
+// Time that from when the aligner pushes all the subchunks in the work queue, until all these subchunks' results are ready
+TIMESTAMP_START_STOP_INSTANCE(total_align)
+
+// Time that a read spends in the work queue waiting to be processed by an aligner thread
+TIMESTAMP_START_STOP_INSTANCE(align_ready_queue)
+
+// Time that a BufferList result spends in the queue downstream of the aligner kernel, and upstream of the aligner
+TIMESTAMP_START_STOP_INSTANCE(result_ready_queue)
+
+TRACEPOINT_EVENT(
+                 bioflow,
+                 input_processing,
+                 TP_ARGS(
+                         clock_t, event_start,
+                         const void*, input_ptr,
+                         const void*, output_ptr
+                         ),
+                 TP_FIELDS(
+                           DURATION_FIELD(event_start)
+                           POINTER_FIELD(input_id, input_ptr)
+                           POINTER_FIELD(output_id, output_ptr)
+                           )
+                 )
+
+TRACEPOINT_EVENT(
+                 bioflow,
+                 read_resource_assembly_no_meta,
+                 TP_ARGS(
+                         clock_t, event_start,
+                         const void*, base_ptr,
+                         const void*, qual_ptr
+                         ),
+                 TP_FIELDS(
+                           DURATION_FIELD(event_start)
+                           POINTER_FIELD(base_id, base_ptr)
+                           POINTER_FIELD(qual_id, qual_ptr)
+                           )
+                 )
 
 // This event outputs the duration in microseconds
 
-#define DURATION_ARGS TP_ARGS(clock_t, event_duration)
-TRACEPOINT_EVENT_CLASS(
-                       bioflow,
-                       duration,
-                       DURATION_ARGS,
-                       TP_FIELDS(
-                                 ctf_float(double, duration, DURATION_CALC(event_duration))
-                                 )
-)
-
-#define BIOFLOW_DURATION_INSTANCE(_name_)             \
-  TRACEPOINT_EVENT_INSTANCE(                          \
-                            bioflow,                  \
-                            duration,                 \
-                            _name_,                   \
-                            DURATION_ARGS             \
-                                                    )
-
-#define DENSE_READ_DURATION_ARGS TP_ARGS(clock_t, event_duration, uint64_t, first_ordinal, uint32_t, num_records)
+#define DENSE_READ_DURATION_ARGS TP_ARGS(clock_t, event_start, uint64_t, first_ordinal, uint32_t, num_records)
 TRACEPOINT_EVENT_CLASS(
                         bioflow,
                         dense_read_duration,
                         DENSE_READ_DURATION_ARGS,
                         TP_FIELDS(
-                                  ctf_float(double, duration, DURATION_CALC(event_duration))
+                                  DURATION_FIELD(event_start)
                                   ctf_integer(uint64_t, first_ordinal, first_ordinal)
                                   ctf_integer(uint32_t, num_records, num_records)
                                   )
@@ -57,17 +109,16 @@ TRACEPOINT_EVENT_CLASS(
 
 BIOFLOW_DENSE_READ_DURATION_INSTANCE(decompression)
 BIOFLOW_DENSE_READ_DURATION_INSTANCE(base_conversion)
-BIOFLOW_DURATION_INSTANCE(snap_align_kernel)
 
 TRACEPOINT_EVENT(
                  bioflow,
-                 file_mmap,
+                 read_kernel,
                  TP_ARGS(
-                         clock_t, event_duration,
+                         clock_t, event_start,
                          const char*, filename
                          ),
                  TP_FIELDS(
-                           ctf_float(double, duration, DURATION_CALC(event_duration))
+                           DURATION_FIELD(event_start)
                            ctf_string(filename, filename)
                            )
                  )
@@ -76,34 +127,42 @@ TRACEPOINT_EVENT(
                  bioflow,
                  snap_alignments,
                  TP_ARGS(
-                         clock_t, alignment_duration,
-                         uint32_t, num_alignments
+                         clock_t, alignment_start,
+                         uint32_t, num_alignments,
+                         const void*, result_buf_ptr
                          ),
                  TP_FIELDS(
-                           ctf_float(double, duration, DURATION_CALC(alignment_duration))
+                           DURATION_FIELD(alignment_start)
+                           POINTER_FIELD(result_buf_id, result_buf_ptr)
                            ctf_integer(uint32_t, num_alignments, num_alignments)
                            )
                  )
 
-#define ORDINAL_ARGS TP_ARGS(uint64_t, ordinal)
-TRACEPOINT_EVENT_CLASS(
-                       bioflow,
-                       first_ordinal,
-                       ORDINAL_ARGS,
-                       TP_FIELDS(
-                                 ctf_integer(uint64_t, first_ordinal, ordinal))
-                       )
+TRACEPOINT_EVENT(
+                 bioflow,
+                 snap_align_kernel,
+                 TP_ARGS(
+                         clock_t, kernel_start,
+                         const void*, read_resource_ptr
+                         ),
+                 TP_FIELDS(
+                           DURATION_FIELD(kernel_start)
+                           POINTER_FIELD(read_resource_id, read_resource_ptr)
+                           )
+                 )
 
-#define BIOFLOW_FIRST_ORDINAL_INSTANCE(_name_) \
-  TRACEPOINT_EVENT_INSTANCE(                   \
-                            bioflow,           \
-                            first_ordinal,     \
-                            _name_,            \
-                            ORDINAL_ARGS       \
-                             )
-
-BIOFLOW_FIRST_ORDINAL_INSTANCE(start_ordinal)
-BIOFLOW_FIRST_ORDINAL_INSTANCE(stop_ordinal)
+TRACEPOINT_EVENT(
+                 bioflow,
+                 write_duration,
+                 TP_ARGS(
+                         clock_t, kernel_start,
+                         const char*, filename
+                         ),
+                 TP_FIELDS(
+                           DURATION_FIELD(kernel_start)
+                           ctf_string(filename, filename)
+                           )
+                 )
 
 #endif
 

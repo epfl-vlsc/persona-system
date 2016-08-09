@@ -90,7 +90,9 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
+        start = clock();
         OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &dense_input));
+        tracepoint(bioflow, read_ready_queue_stop, dense_input);
         core::ScopedUnref unref_me(dense_input);
         ResourceReleaser<Data> dense_releaser(*dense_input);
 
@@ -101,7 +103,6 @@ reserve: the number of bytes to call 'reserve' on the vector.
         auto &output_buffer = output_ptr->get();
         output_buffer.reserve(reserve_bytes_);
 
-        // TODO pass something from from output_file, for parser to fill up
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
                                                  verify_, output_buffer, &first_ord, &num_recs));
 
@@ -110,7 +111,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
         num_records(i) = num_recs;
         first_ordinals(i) = first_ord;
-        tracepoint(bioflow, start_ordinal, first_ord);
+        tracepoint(bioflow, input_processing, start, dense_input, output_buffer_rc);
       }
     }
 
@@ -119,6 +120,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
     bool verify_ = false;
     RecordParser rec_parser_;
     size_t reserve_bytes_;
+    clock_t start;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
   };
 

@@ -137,7 +137,7 @@ namespace tensorflow {
       break;
     }
     const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
-    tracepoint(bioflow, decompression, clock() - start, file_header->first_ordinal, index_size);
+    tracepoint(bioflow, decompression, start, file_header->first_ordinal, index_size);
     TF_RETURN_IF_ERROR(status);
 
     if (result.size() < index_size * 2) {
@@ -186,7 +186,7 @@ namespace tensorflow {
       result.reserve(index_scratch_.size() + conversion_scratch_.size());
       TF_RETURN_IF_ERROR(copySegment(&index_scratch_[0], index_scratch_.size(), result));
       TF_RETURN_IF_ERROR(appendSegment(&conversion_scratch_[0], conversion_scratch_.size(), result));
-      tracepoint(bioflow, base_conversion, clock() - start, file_header->first_ordinal, index_size);
+      tracepoint(bioflow, base_conversion, start, file_header->first_ordinal, index_size);
     }
 
     *first_ordinal = file_header->first_ordinal;

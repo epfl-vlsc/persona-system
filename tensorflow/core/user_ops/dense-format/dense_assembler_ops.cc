@@ -6,6 +6,7 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool_op.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include "dense_reads.h"
 
 namespace tensorflow {
@@ -112,6 +113,7 @@ Intended to be used for DenseAssembler
       if (!drr_pool_) {
         OP_REQUIRES_OK(ctx, InitializePool(ctx));
       }
+      start = clock();
 
       const Tensor *base_data_t, *qual_data_t, *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("base_handle", &base_data_t));
@@ -137,8 +139,11 @@ Intended to be used for DenseAssembler
       DenseReadResource a(num_records, base_data, qual_data);
       *dr = move(a);
       OP_REQUIRES_OK(ctx, dense_reads->allocate_output("dense_read_handle", ctx));
+      tracepoint(bioflow, read_resource_assembly_no_meta, start, base_data, qual_data);
+      tracepoint(bioflow, assembled_ready_queue_start, dense_reads);
     }
   private:
+    clock_t start;
 
     inline Status InitializePool(OpKernelContext* ctx) {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "dense_read_pool", &drr_pool_));
