@@ -8,6 +8,7 @@
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/user_ops/dna-align/genome_index_resource.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/mutex.h"
@@ -31,6 +32,7 @@ namespace tensorflow {
             if (!genome_handle_set_) {
                 OP_REQUIRES_OK(ctx, SetGenomeHandle(ctx, genome_location_));
             }
+            tracepoint(bioflow, clocks_per_sec);
             ctx->set_output_ref(0, &mu_, genome_handle_.AccessTensor(ctx));
         }
 
