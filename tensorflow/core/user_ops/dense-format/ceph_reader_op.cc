@@ -18,6 +18,7 @@
 
 namespace tensorflow {
   using namespace std;
+  using namespace errors;
 
   REGISTER_OP("CephReader")
   .Attr("cluster_name: string")
@@ -50,39 +51,39 @@ file_name: a Tensor() of string for the unique key for this file
       /* Initialize the cluster handle with the "ceph" cluster name and "client.admin" user */
       ret = cluster.init2(user_name.c_str(), cluster_name.c_str(), 0);
       if (ret < 0) {
-              LOG(INFO) << "Couldn't initialize the cluster handle! error " << ret;
+              LOG(ERROR) << "Couldn't initialize the cluster handle! error " << ret;
               exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Created a cluster handle.";
+              VLOG(DEBUG) << "Created a cluster handle.";
       }
 
       /* Read a Ceph configuration file to configure the cluster handle. */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("ceph_conf_path", &ceph_conf));
       ret = cluster.conf_read_file(ceph_conf.c_str());
       if (ret < 0) {
-        LOG(INFO) << "Couldn't read the Ceph configuration file ('" << ceph_conf << "')! error " << ret;
+          LOG(ERROR) << "Couldn't read the Ceph configuration file ('" << ceph_conf << "')! error " << ret;
               exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Read the Ceph configuration file.";
+              VLOG(DEBUG) << "Read the Ceph configuration file.";
       }
 
       /* Connect to the cluster */
       ret = cluster.connect();
       if (ret < 0) {
-              LOG(INFO) << "Couldn't connect to cluster! error " << ret;
+              LOG(ERROR) << "Couldn't connect to cluster! error " << ret;
               exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Connected to the cluster.";
+              VLOG(DEBUG) << "Connected to the cluster.";
       }
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
       ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
       if (ret < 0) {
-              LOG(INFO) << "Couldn't set up ioctx! error " << ret;
+              LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
               exit(EXIT_FAILURE);
       } else {
-              LOG(INFO) << "Created an ioctx for the pool.";
+              VLOG(DEBUG) << "Created an ioctx for the pool.";
       }
     }
 
@@ -106,7 +107,7 @@ file_name: a Tensor() of string for the unique key for this file
       OP_REQUIRES_OK(ctx, ref_pool_->GetResource(&rec_buffer));
       rec_buffer->get()->reset();
 
-      CephReadObject(file_key.c_str(), rec_buffer);
+      OP_REQUIRES_OK(ctx, CephReadObject(file_key.c_str(), rec_buffer));
 
       // Output tensors
       OP_REQUIRES_OK(ctx, rec_buffer->allocate_output("file_handle", ctx));
@@ -131,7 +132,7 @@ file_name: a Tensor() of string for the unique key for this file
     librados::IoCtx io_ctx;
 
     /* Read an object from Ceph synchronously */
-    void CephReadObject(const char* file_key, void *ref_buffer)
+    Status CephReadObject(const char* file_key, void *ref_buffer)
     {
       int ret = 0;
       auto buf = ((ResourceContainer<Buffer> *) ref_buffer)->get();
@@ -172,11 +173,12 @@ file_name: a Tensor() of string for the unique key for this file
         /* Test synchronous read */
         ret = io_ctx.read(file_key, read_buf, read_len, data_read);
         if (ret < 0) {
-                LOG(INFO) << "Couldn't start read object! error " << ret;
-                exit(EXIT_FAILURE);
+          return Internal("Couldn't call io_ctx.read. Received ", ret);
         }
         data_read = data_read + read_len;
         read_buf.clear();
+
+        return Status::OK();
       }
     }
   };
