@@ -79,44 +79,44 @@ compress: whether or not to compress the column
       /* Initialize the cluster handle with the "ceph" cluster name and "client.admin" user */
       ret = cluster.init2(user_name.c_str(), cluster_name.c_str(), 0);
       if (ret < 0) {
-        LOG(INFO) << "Couldn't initialize the cluster handle! error " << ret;
+        LOG(ERROR) << "Couldn't initialize the cluster handle! error " << ret;
         exit(EXIT_FAILURE);
       } else {
-        LOG(INFO) << "Created a cluster handle.";
+        VLOG(DEBUG) << "Created a cluster handle.";
       }
 
       /* Read a Ceph configuration file to configure the cluster handle. */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("ceph_conf_path", &ceph_conf));
       ret = cluster.conf_read_file(ceph_conf.c_str());
       if (ret < 0) {
-        LOG(INFO) << "Couldn't read the Ceph configuration file! error " << ret;
+        LOG(ERROR) << "Couldn't read the Ceph configuration file! error " << ret;
         exit(EXIT_FAILURE);
       } else {
-        LOG(INFO) << "Read the Ceph configuration file.";
+        VLOG(DEBUG) << "Read the Ceph configuration file.";
       }
 
       /* Connect to the cluster */
       ret = cluster.connect();
       if (ret < 0) {
-        LOG(INFO) << "Couldn't connect to cluster! error " << ret;
+        LOG(ERROR) << "Couldn't connect to cluster! error " << ret;
         exit(EXIT_FAILURE);
       } else {
-        LOG(INFO) << "Connected to the cluster.";
+        VLOG(DEBUG) << "Connected to the cluster.";
       }
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
       ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
       if (ret < 0) {
-        LOG(INFO) << "Couldn't set up ioctx! error " << ret;
+        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
         exit(EXIT_FAILURE);
       } else {
-        LOG(INFO) << "Created an ioctx for the pool.";
+        VLOG(DEBUG) << "Created an ioctx for the pool.";
       }
     }
 
     ~CephWriterOp() {
-      LOG(DEBUG) << "Ceph writer " << this << " finishing\n";
+      VLOG(DEBUG) << "Ceph writer " << this << " finishing\n";
       io_ctx.close();
       cluster.shutdown();
     }
