@@ -35,6 +35,7 @@ namespace tensorflow {
   .Input("file_name: string")
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
+  .Output("num_records_out: int32")
   .Doc(R"doc(
 Writes data in column_handle to object file_name in specified Ceph cluster.
 
@@ -210,6 +211,9 @@ compress: whether or not to compress the column
           i += recs_per_chunk;
         }
       }
+      Tensor *num_recs;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
+      num_recs->scalar<int32>()() = num_records;
       tracepoint(bioflow, write_duration, start, full_path.c_str());
     }
 
