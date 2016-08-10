@@ -136,10 +136,10 @@ _cw_str = "CephWriter"
 def _CephWriterShape(op):
   handle_shape = op.inputs[0].get_shape()
   _assert_vec(handle_shape, 2)
-
-  key_shape = op.inputs[1].get_shape()
-  _assert_scalar(key_shape)
-  return []
+  for i in range(1,4):
+    scalar_shape = op.inputs[i].get_shape()
+    _assert_scalar(scalar_shape)
+  return [op.inputs[3].get_shape()]
 ops.NoGradient(_cw_str)
 
 _read_sink_str = "ReadSink"
