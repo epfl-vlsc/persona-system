@@ -11,7 +11,8 @@ namespace {
 static const int ENABLE_ZLIB_GZIP = 32;
 static const int ENABLE_ZLIB_GZIP_COMPRESS = 16;
 static const int window_bits = 15;
-static const size_t extend_length = 1024 * 1024 * 2; // 2 Mb
+static const size_t extend_length = 1024 * 1024 * 8; // 2 Mb
+static const size_t reserve_factor = 3;
 
 Status resize_output(z_stream &strm, vector<char> &output, size_t extend_len) {
   auto s = Status::OK();
@@ -41,13 +42,13 @@ Status decompressGZIP(const char* segment,
   // TODO this only supports decompress write, not appending
   // this is an easy change to make, but requires some more "math"
   output.clear(); // just to be sure, in case the caller didn't do it
-  output.reserve(32); // make sure that we don't call with a buffer of 0 bytes and get a Z_STREAM_ERROR
   static const int init_flags = window_bits | ENABLE_ZLIB_GZIP;
   z_stream strm = {0};
   strm.zalloc = Z_NULL;
   strm.zfree = Z_NULL;
   strm.next_in = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(segment));
   strm.avail_in = segment_size;
+  output.reserve(segment_size * reserve_factor);
 
   int status = inflateInit2(&strm, init_flags);
   if (status != Z_OK) {
@@ -67,7 +68,7 @@ Status decompressGZIP(const char* segment,
     if (status == Z_OK || status == Z_BUF_ERROR) {
       // Do normal decompression because we couldn't do it in one shot
       s = resize_output(strm, output, extend_length);
-      while (status != Z_STREAM_END && s.ok()) {
+      while (status != Z_STREAM_END && s.ok() && strm.total_in < segment_size) {
         status = inflate(&strm, Z_NO_FLUSH);
         switch (status) {
         case Z_BUF_ERROR:
