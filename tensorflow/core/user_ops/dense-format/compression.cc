@@ -64,12 +64,13 @@ Status decompressGZIP(const char* segment,
   // TODO do we need to call inflate in while lopp while status == Z_OK (like deflate)?
 
   if (status != Z_STREAM_END) {
-    if (status == Z_OK || status == Z_MEM_ERROR || status == Z_BUF_ERROR) {
+    if (status == Z_OK || status == Z_BUF_ERROR) {
       // Do normal decompression because we couldn't do it in one shot
       s = resize_output(strm, output, extend_length);
       while (status != Z_STREAM_END && s.ok()) {
         status = inflate(&strm, Z_NO_FLUSH);
         switch (status) {
+        case Z_BUF_ERROR:
         case Z_OK:
           s = resize_output(strm, output, extend_length);
         case Z_STREAM_END:
