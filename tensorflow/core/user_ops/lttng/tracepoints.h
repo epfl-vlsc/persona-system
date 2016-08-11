@@ -127,6 +127,7 @@ TRACEPOINT_EVENT(
                          const char*, filename
                          ),
                  TP_FIELDS(
+                           ctf_integer(clock_t, event_start, event_start)
                            DURATION_FIELD(event_start)
                            ctf_string(filename, filename)
                            )
@@ -169,6 +170,7 @@ TRACEPOINT_EVENT(
                          ),
                  TP_FIELDS(
                            DURATION_FIELD(kernel_start)
+                           ctf_integer(clock_t, event_stop, clock())
                            ctf_string(filename, filename)
                            )
                  )
