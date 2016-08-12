@@ -230,6 +230,7 @@ private:
         if (request_queue_->pop(batch)) {
           reads = get<0>(batch);
           result_buf = get<1>(batch);
+          tracepoint(bioflow, subchunk_time_start, result_buf);
           tracepoint(bioflow, align_ready_queue_stop, result_buf);
           id = get<2>(batch);
           if (should_yield && (float)request_queue_->size() / (float)capacity < low_watermark_)
@@ -302,6 +303,7 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
+        tracepoint(bioflow, subchunk_time_stop, result_buf);
         tracepoint(bioflow, snap_alignments, start, reads->num_records(), result_buf);
       }
 

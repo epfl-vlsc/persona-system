@@ -64,6 +64,9 @@ TIMESTAMP_START_STOP_INSTANCE(align_ready_queue)
 // Time that a BufferList result spends in the queue downstream of the aligner kernel, and upstream of the aligner
 TIMESTAMP_START_STOP_INSTANCE(result_ready_queue)
 
+// Time that a BufferList result spends in the queue downstream of the aligner kernel, and upstream of the aligner
+TIMESTAMP_START_STOP_INSTANCE(subchunk_time)
+
 TRACEPOINT_EVENT(
                  bioflow,
                  input_processing,
