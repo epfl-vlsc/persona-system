@@ -169,12 +169,14 @@ TRACEPOINT_EVENT(
                  write_duration,
                  TP_ARGS(
                          clock_t, kernel_start,
-                         const char*, filename
+                         const char*, filename,
+                         uint32_t, num_records
                          ),
                  TP_FIELDS(
                            DURATION_FIELD(kernel_start)
                            ctf_integer(clock_t, event_stop, clock())
                            ctf_string(filename, filename)
+                           ctf_integer(uint32_t, num_records, num_records)
                            )
                  )
 
