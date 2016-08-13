@@ -99,9 +99,9 @@ class SnapAlignDenseParallelOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
-      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
-      LOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
+      VLOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
+      VLOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      VLOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
     }
 
     Status InitHandles(OpKernelContext* ctx)
@@ -287,7 +287,7 @@ private:
                                                  options_->useM, lvc, genome_, cigarString, flag);
 
           if (!s.ok())
-            LOG(INFO) << "computeCigarFlags did not return OK!!!";
+            LOG(ERROR) << "computeCigarFlags did not return OK!!!";
 
           /*LOG(INFO) << " result: location " << primaryResult.location <<
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
@@ -307,7 +307,7 @@ private:
         tracepoint(bioflow, snap_alignments, start, reads->num_records(), result_buf);
       }
 
-      LOG(INFO) << "base aligner thread ending.";
+      VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_--;
     };
     auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
