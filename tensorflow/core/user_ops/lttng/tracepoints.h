@@ -180,6 +180,17 @@ TRACEPOINT_EVENT(
                            )
                  )
 
+TRACEPOINT_EVENT(
+                 bioflow,
+                 process_key,
+                 TP_ARGS(
+                         const char*, filename
+                         ),
+                 TP_FIELDS(
+                           ctf_string(filename, filename)
+                           )
+                 )
+
 #endif
 
 #include <lttng/tracepoint-event.h>

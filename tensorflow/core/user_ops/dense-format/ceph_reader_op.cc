@@ -102,6 +102,7 @@ file_name: a Tensor() of string for the unique key for this file
       const Tensor *key_t;
       OP_REQUIRES_OK(ctx, ctx->input("queue_key", &key_t));
       string file_key = key_t->scalar<string>()();
+      tracepoint(bioflow, process_key, file_key.c_str());
 
       ResourceContainer<Buffer> *rec_buffer;
       OP_REQUIRES_OK(ctx, ref_pool_->GetResource(&rec_buffer));
