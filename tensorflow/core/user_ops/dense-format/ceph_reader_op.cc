@@ -1,7 +1,6 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
@@ -117,7 +116,7 @@ file_name: a Tensor() of string for the unique key for this file
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
       auto scalar = file_name->vec<string>();
       scalar(0) = file_key;
-      tracepoint(bioflow, read_kernel, start, file_key.c_str());
+      tracepoint(bioflow, read_kernel, start, file_key.c_str(), rec_buffer->get()->size());
       tracepoint(bioflow, read_ready_queue_start, rec_buffer);
     }
 

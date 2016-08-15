@@ -75,6 +75,10 @@ class SnapAlignDenseParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_yielding_threads", &num_yielding_threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("low_watermark", &low_watermark_));
+      int i;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("trace_granularity", &i));
+      OP_REQUIRES(ctx, i > 0, errors::InvalidArgument("trace granularity ", i, " must be greater than 0"));
+      trace_granularity_ = i;
 
       num_threads_ = threads_.size();
       OP_REQUIRES(ctx, num_threads_ > 0, errors::InvalidArgument("Aligner threads list must be > 0"));
@@ -226,6 +230,8 @@ private:
       tuple<ReadResource*, Buffer*, decltype(id_)> batch;
       clock_t start;
       Status status;
+      uint32_t num_completed;
+      const uint32_t max_completed = trace_granularity_;
       while (run_) {
         if (request_queue_->pop(batch)) {
           reads = get<0>(batch);
@@ -239,7 +245,7 @@ private:
           continue;
 
         // should this by in the if statement above?
-        start = clock();
+        num_completed = 0;
 
         auto &res_buf = result_buf->get();
         for (status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
@@ -293,6 +299,14 @@ private:
             " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
 
           result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
+          if (++num_completed == max_completed) {
+            tracepoint(bioflow, reads_aligned, num_completed);
+            num_completed = 0;
+          }
+        }
+
+        if (num_completed > 0) {
+          tracepoint(bioflow, reads_aligned, num_completed);
         }
 
         if (!IsResourceExhausted(status)) {
@@ -304,7 +318,6 @@ private:
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
         tracepoint(bioflow, subchunk_time_stop, result_buf);
-        tracepoint(bioflow, snap_alignments, start, reads->num_records(), result_buf);
       }
 
       VLOG(INFO) << "base aligner thread ending.";
@@ -326,6 +339,7 @@ private:
   volatile bool run_ = true;
   uint64_t id_ = 0;
   float low_watermark_;
+  uint32_t trace_granularity_;
 
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
@@ -344,6 +358,7 @@ private:
 
   REGISTER_OP("SnapAlignDenseParallel")
   .Attr("threads: list(int)")
+  .Attr("trace_granularity: int = 500")
   .Attr("num_yielding_threads: int")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")

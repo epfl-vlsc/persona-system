@@ -272,8 +272,10 @@ def _SnapAlignDense(op):
     return [tensor_shape.vector(2)]
 
 _sadp_string = "SnapAlignDenseParallel"
-def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, threads, num_yielding_threads, low_watermark=0.1, name=None):
+def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, threads, num_yielding_threads, low_watermark=0.1, trace_granularity=500, name=None):
   num_threads = len(threads)
+  if trace_granularity < 1:
+    raise EnvironmentError("trace granularity {} must be strictly positive".format(trace_granularity))
   if num_threads < 1:
     raise EnvironmentError("Must pass a non-empty thread list")
   if num_yielding_threads < 0 or num_yielding_threads > num_threads:
@@ -284,7 +286,7 @@ def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, 
   return gen_user_ops.snap_align_dense_parallel(genome_handle=genome, options_handle=options,
                                                 buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
                                                 subchunk_size=subchunk_size, threads=threads, num_yielding_threads=num_yielding_threads,
-                                                low_watermark=low_watermark, name=name)
+                                                low_watermark=low_watermark, trace_granularity=trace_granularity, name=name)
 
 ops.NoGradient(_sadp_string)
 @ops.RegisterShape(_sadp_string)

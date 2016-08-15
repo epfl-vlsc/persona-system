@@ -127,10 +127,12 @@ TRACEPOINT_EVENT(
                  read_kernel,
                  TP_ARGS(
                          clock_t, event_start,
-                         const char*, filename
+                         const char*, filename,
+                         size_t, file_size
                          ),
                  TP_FIELDS(
                            ctf_integer(clock_t, event_start, event_start)
+                           ctf_integer(size_t, size, file_size)
                            DURATION_FIELD(event_start)
                            ctf_string(filename, filename)
                            )
@@ -177,6 +179,17 @@ TRACEPOINT_EVENT(
                            ctf_integer(clock_t, event_stop, clock())
                            ctf_string(filename, filename)
                            ctf_integer(uint32_t, num_records, num_records)
+                           )
+                 )
+
+TRACEPOINT_EVENT(
+                 bioflow,
+                 reads_aligned,
+                 TP_ARGS(
+                         uint32_t, num_reads
+                         ),
+                 TP_FIELDS(
+                           ctf_integer(uint32_t, num_reads, num_reads)
                            )
                  )
 

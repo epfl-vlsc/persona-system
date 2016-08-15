@@ -105,7 +105,7 @@ bundle_name: [{this map op's name}] + upstream_name
       names_vec(max_dim) = filename;
       handles_matrix(max_dim, 0) = mmf->container();
       handles_matrix(max_dim, 1) = mmf->name();
-      tracepoint(bioflow, read_kernel, start, filename.c_str());
+      tracepoint(bioflow, read_kernel, start, filename.c_str(), mmf->get()->size());
       tracepoint(bioflow, read_ready_queue_start, mmf);
     }
   private:
@@ -153,7 +153,7 @@ bundle_name: [{this map op's name}] + upstream_name
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
       auto scalar = file_name->vec<string>();
       scalar(0) = filename;
-      tracepoint(bioflow, read_kernel, start, filename.c_str());
+      tracepoint(bioflow, read_kernel, start, filename.c_str(), mmf->get()->size());
       tracepoint(bioflow, read_ready_queue_start, mmf);
     }
   private:
