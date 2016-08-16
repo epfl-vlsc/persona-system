@@ -28,6 +28,7 @@ namespace tensorflow {
   // TODO these can be collapsed into a vec(3) if that would help performance
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
+  .Output("num_records_out: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Writes out a column (just a character buffer) to the location specified by the input.
@@ -110,13 +111,6 @@ Thus we always need 3 of these for the full conversion pipeline
       decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       if (compress_) {
         buf_.clear(); outbuf_.clear();
-        /*
-        // compressGZIP already calls buf_.clear()
-        s = compressGZIP(data->data(), data->size(), buf_);
-        if (s.ok()) {
-          fwrite_ret = fwrite(buf_.data(), buf_.size(), 1, file_out);
-        }
-        */
         for (auto &buffer : buffers) {
           if (i + recs_per_chunk > num_records) {
             recs_per_chunk = num_records - i;
@@ -200,11 +194,12 @@ Thus we always need 3 of these for the full conversion pipeline
         s = Internal("Received non-1 fwrite return value: ", fwrite_ret);
       }
 
-      OP_REQUIRES_OK(ctx, s); // in case s screws up
-    }
 
-    ~ParallelColumnWriterOp() {
-      LOG(DEBUG) << "parallel column writer " << this << " finishing\n";
+      OP_REQUIRES_OK(ctx, s); // in case s screws up
+
+      Tensor *num_recs;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
+      num_recs->scalar<int32>()() = num_records;
     }
 
   private:
