@@ -78,8 +78,8 @@ def _AGDReaderShape(op):
 
 _fm_str = "FileMMap"
 ops.NoGradient(_fm_str)
-def FileMMap(filename, handle, name=None):
-  return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, name=name)
+def FileMMap(filename, handle, local_prefix="", name=None):
+  return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, local_prefix=local_prefix, name=name)
 
 @ops.RegisterShape(_fm_str)
 def _FileMMapShape(op):
