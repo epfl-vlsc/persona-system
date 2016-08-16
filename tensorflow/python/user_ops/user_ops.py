@@ -215,17 +215,16 @@ def _StagedFileMapShape(op):
 
 _sw_str = "SAMWriter"
 ops.NoGradient("SAMWriter")
-ops.RegisterShape("SAMWriter")(common_shapes.scalar_shape)
 class SAMWriter(io_ops.WriterBase):
     def __init__(self, name=None, out_file=None):
         if out_file is None:
             out_file = name + '_out.txt'
         ww = gen_user_ops.sam_writer(name=name, out_file=out_file)
         super(SAMWriter, self).__init__(ww)
+ops.RegisterShape("SAMWriter")(common_shapes.scalar_shape)
 
 _saw_str = "SAMAsyncWriter"
 ops.NoGradient("SAMAsyncWriter")
-ops.RegisterShape("SAMAsyncWriter")(common_shapes.scalar_shape)
 class SAMAsyncWriter(io_ops.WriterBase):
     def __init__(self, name=None, out_file=None, num_buffers=16, buffer_size=1048576):
         if out_file is None:
@@ -233,6 +232,7 @@ class SAMAsyncWriter(io_ops.WriterBase):
         ww = gen_user_ops.sam_async_writer(name=name, out_file=out_file,
             num_buffers=num_buffers, buffer_size=buffer_size)
         super(SAMAsyncWriter, self).__init__(ww)
+ops.RegisterShape("SAMAsyncWriter")(common_shapes.scalar_shape)
 
 _gi_str = "GenomeIndex"
 ops.NoGradient(_gi_str)
@@ -251,40 +251,6 @@ def AlignerOptions(cmdLine, name=None):
 @ops.RegisterShape(_ao_str)
 def _AlignerOptionsShape(op):
     return [tensor_shape.vector(2)]
-
-'''
-_sa_str = "SnapAlign"
-ops.NoGradient(_sa_str)
-@ops.RegisterShape(_sa_str)
-def SnapAlign(genome, options, read, name=None):
-    return gen_user_ops.snap_align(genome_handle=genome, options_handle=options, read=read, name=name)
-
-def _SnapAlignShape(op):
-    return [tensor_shape.vector(2)]
-
-
-<<<<<<< HEAD
-_sad_string = "SnapAlignDense"
-ops.NoGradient(_sad_string)
-@ops.RegisterShape(_sad_string)
-def SnapAlignDense(genome, options, buffer_pool, read, name=None):
-    return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
-            buffer_pool=buffer_pool, read=read, name=name)
-
-def _SnapAlignDenseShape(op):
-=======
-_sad_string = "SnapAlignAGD"
-def SnapAlignAGD(genome, options, buffer_pool, read, name=None):
-
-    return gen_user_ops.snap_align_agd(genome_handle=genome, options_handle=options,
-            buffer_pool=buffer_pool, read=read, name=name)
-
-ops.NoGradient(_sad_string)
-@ops.RegisterShape(_sad_string)
-def _SnapAlignAGD(op):
->>>>>>> 882ff83ac6a76d45ebc0a3eba579ca28bc52fcab
-    return [tensor_shape.vector(2)]
-'''
 
 _saap_string = "SnapAlignAGDParallel"
 ops.NoGradient(_saap_string)
