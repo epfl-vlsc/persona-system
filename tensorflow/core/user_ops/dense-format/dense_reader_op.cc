@@ -16,7 +16,7 @@
 
 namespace tensorflow {
 
-  REGISTER_OP("DenseReader")
+  REGISTER_OP("AGDReader")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("verify: bool = false")
@@ -28,7 +28,7 @@ namespace tensorflow {
   .Output("first_ordinal: int64")
   .SetIsStateful()
   .Doc(R"doc(
-Read in the dense format from an upstream source (file reader or network reader).
+Read in the agd format from an upstream source (file reader or network reader).
 
 Outputs a handle to the buffer containing the processed data
 
@@ -41,9 +41,9 @@ reserve: the number of bytes to call 'reserve' on the vector.
   using namespace std;
   using namespace errors;
 
-  class DenseReaderOp : public OpKernel {
+  class AGDReaderOp : public OpKernel {
   public:
-    DenseReaderOp(OpKernelConstruction *context) : OpKernel(context) {
+    AGDReaderOp(OpKernelConstruction *context) : OpKernel(context) {
       OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
       if (verify_) {
         LOG(DEBUG) << name() << " enabled verification\n";
@@ -54,7 +54,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
       reserve_bytes_ = static_cast<decltype(reserve_bytes_)>(i);
     }
 
-    ~DenseReaderOp() {
+    ~AGDReaderOp() {
       core::ScopedUnref unref_pool(buffer_pool_);
     }
 
@@ -83,7 +83,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
       // ALl output is set up at this point
 
-      ResourceContainer<Data> *dense_input;
+      ResourceContainer<Data> *agd_input;
       ResourceContainer<Buffer> *output_buffer_rc;
       uint64_t first_ord;
       uint32_t num_recs;
@@ -91,14 +91,14 @@ reserve: the number of bytes to call 'reserve' on the vector.
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
         start = clock();
-        OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &dense_input));
-        tracepoint(bioflow, read_ready_queue_stop, dense_input);
-        core::ScopedUnref unref_me(dense_input);
-        ResourceReleaser<Data> dense_releaser(*dense_input);
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &agd_input));
+        tracepoint(bioflow, read_ready_queue_stop, agd_input);
+        core::ScopedUnref unref_me(agd_input);
+        ResourceReleaser<Data> agd_releaser(*agd_input);
 
         OP_REQUIRES_OK(ctx, buffer_pool_->GetResource(&output_buffer_rc));
 
-        auto input_data = dense_input->get();
+        auto input_data = agd_input->get();
         auto output_ptr = output_buffer_rc->get();
         auto &output_buffer = output_ptr->get();
         output_buffer.reserve(reserve_bytes_);
@@ -111,7 +111,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
         num_records(i) = num_recs;
         first_ordinals(i) = first_ord;
-        tracepoint(bioflow, input_processing, start, dense_input, output_buffer_rc);
+        tracepoint(bioflow, input_processing, start, agd_input, output_buffer_rc);
       }
     }
 
@@ -124,5 +124,5 @@ reserve: the number of bytes to call 'reserve' on the vector.
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
   };
 
-  REGISTER_KERNEL_BUILDER(Name("DenseReader").Device(DEVICE_CPU), DenseReaderOp);
+  REGISTER_KERNEL_BUILDER(Name("AGDReader").Device(DEVICE_CPU), AGDReaderOp);
 } //  namespace tensorflow {

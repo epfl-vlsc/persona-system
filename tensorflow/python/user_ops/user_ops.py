@@ -61,15 +61,15 @@ def FASTQDecoder(value, name=None):
 
 ops.NoGradient("FASTQDecoder")
 
-def DenseReader(file_handle, pool_handle, reserve=8192, name=None, verify=False):
+def AGDReader(file_handle, pool_handle, reserve=8192, name=None, verify=False):
   if reserve < 1:
-    raise Exception ("Dense reader 'reserve' param must be strictly positive. Got {}".format(reserve))
-  return gen_user_ops.dense_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name, reserve=reserve)
+    raise Exception ("AGD reader 'reserve' param must be strictly positive. Got {}".format(reserve))
+  return gen_user_ops.agd_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name, reserve=reserve)
 
-_dread_str = "DenseReader"
+_dread_str = "AGDReader"
 ops.NoGradient(_dread_str)
 @ops.RegisterShape(_dread_str)
-def _DenseReaderShape(op):
+def _AGDReaderShape(op):
   handle_shape = op.inputs[0].get_shape()
   _assert_vec(handle_shape, 2)
   input_shape = op.inputs[1].get_shape()
@@ -175,16 +175,16 @@ def _BufferListSinkShape(op):
   _assert_vec(data, 2)
   return []
 
-_dt_string = "DenseTester"
-def DenseTester(num_records, dense_records, genome_handle, sam_filename, name=None):
+_dt_string = "AGDTester"
+def AGDTester(num_records, agd_records, genome_handle, sam_filename, name=None):
   if not (os.path.exists(sam_filename) and os.path.isfile(sam_filename)):
-    raise EnvironmentError("DenseTester SAM file '{}' is not valid".format(sam_filename))
-  return gen_user_ops.dense_tester(num_records=num_records, dense_records=dense_records,
+    raise EnvironmentError("AGDTester SAM file '{}' is not valid".format(sam_filename))
+  return gen_user_ops.agd_tester(num_records=num_records, agd_records=agd_records,
                                    genome_handle=genome_handle, sam_filename=sam_filename, name=name)
 ops.NoGradient(_dt_string)
 
 @ops.RegisterShape(_dt_string)
-def _DenseTesterShape(op):
+def _AGDTesterShape(op):
   for i in range(2):
     op_shape = op.inputs[i].get_shape()
     _assert_vec(op_shape, 2)
@@ -243,7 +243,7 @@ def GenomeIndex(filePath, name=None):
     return gen_user_ops.genome_index(genome_location=filePath, name=name);
 
 @ops.RegisterShape("GenomeIndex")
-def _SnapAlignDense(op):
+def _SnapAlignAGD(op):
     return [tensor_shape.vector(2)]
 
 ops.NoGradient("GenomeIndex")
@@ -260,19 +260,19 @@ def SnapAlign(genome, options, read, name=None):
 
 ops.NoGradient("SnapAlign")
 
-_sad_string = "SnapAlignDense"
-def SnapAlignDense(genome, options, buffer_pool, read, name=None):
+_sad_string = "SnapAlignAGD"
+def SnapAlignAGD(genome, options, buffer_pool, read, name=None):
 
-    return gen_user_ops.snap_align_dense(genome_handle=genome, options_handle=options,
+    return gen_user_ops.snap_align_agd(genome_handle=genome, options_handle=options,
             buffer_pool=buffer_pool, read=read, name=name)
 
 ops.NoGradient(_sad_string)
 @ops.RegisterShape(_sad_string)
-def _SnapAlignDense(op):
+def _SnapAlignAGD(op):
     return [tensor_shape.vector(2)]
 
-_sadp_string = "SnapAlignDenseParallel"
-def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, threads, num_yielding_threads, low_watermark=0.1, trace_granularity=500, name=None):
+_sadp_string = "SnapAlignAGDParallel"
+def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, chunk_size, subchunk_size, threads, num_yielding_threads, low_watermark=0.1, trace_granularity=500, name=None):
   num_threads = len(threads)
   if trace_granularity < 1:
     raise EnvironmentError("trace granularity {} must be strictly positive".format(trace_granularity))
@@ -282,24 +282,24 @@ def SnapAlignDenseParallel(genome, options, buffer_list_pool, read, chunk_size, 
     raise EnvironmentError("Number of yielding threads ({yielding}) must be positive and less than total threads ({total})".format(
       yielding=num_yielding_threads, total=num_threads))
   if low_watermark < 0.0:
-    raise EnvironmentError("low watermark for SnapAlignDenseParallel must be >0: {}".format(low_watermark))
-  return gen_user_ops.snap_align_dense_parallel(genome_handle=genome, options_handle=options,
+    raise EnvironmentError("low watermark for SnapAlignAGDParallel must be >0: {}".format(low_watermark))
+  return gen_user_ops.snap_align_agd_parallel(genome_handle=genome, options_handle=options,
                                                 buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
                                                 subchunk_size=subchunk_size, threads=threads, num_yielding_threads=num_yielding_threads,
                                                 low_watermark=low_watermark, trace_granularity=trace_granularity, name=name)
 
 ops.NoGradient(_sadp_string)
 @ops.RegisterShape(_sadp_string)
-def _SnapAlignDenseParallel(op):
+def _SnapAlignAGDParallel(op):
     return [tensor_shape.vector(2)]
 
-_drp_str = "DenseReadPool"
-def DenseReadPool(size=0, bound=False, name=None):
-    return gen_user_ops.dense_read_pool(size=size, bound=bound, name=name)
+_drp_str = "AGDReadPool"
+def AGDReadPool(size=0, bound=False, name=None):
+    return gen_user_ops.agd_read_pool(size=size, bound=bound, name=name)
 
 ops.NoGradient(_drp_str)
 @ops.RegisterShape(_drp_str)
-def _DenseReadPoolShape(op):
+def _AGDReadPoolShape(op):
     return [tensor_shape.vector(2)]
 
 _mmp_str = "MMapPool"
@@ -387,10 +387,10 @@ def _ParallelColumnWriterShape(op):
     _assert_scalar(op.inputs[i].get_shape())
   return []
 
-_da_str = "DenseAssembler"
-def DenseAssembler(dense_read_pool, base_handle, qual_handle, meta_handle, num_records, name=None):
-  return gen_user_ops.dense_assembler(
-    dense_read_pool=dense_read_pool,
+_da_str = "AGDAssembler"
+def AGDAssembler(agd_read_pool, base_handle, qual_handle, meta_handle, num_records, name=None):
+  return gen_user_ops.agd_assembler(
+    agd_read_pool=agd_read_pool,
     base_handle=base_handle,
     qual_handle=qual_handle,
     meta_handle=meta_handle,
@@ -400,7 +400,7 @@ def DenseAssembler(dense_read_pool, base_handle, qual_handle, meta_handle, num_r
 
 ops.NoGradient(_da_str)
 @ops.RegisterShape(_da_str)
-def _DenseAssemblerShape(op):
+def _AGDAssemblerShape(op):
   # getting the input op
   _assert_vec(op.inputs[0].get_shape(), 2)
   for i in range(1,4):
@@ -409,10 +409,10 @@ def _DenseAssemblerShape(op):
   _assert_scalar(op.inputs[4].get_shape())
   return [tensor_shape.vector(2)]
 
-_nmda_str = "NoMetaDenseAssembler"
-def NoMetaDenseAssembler(dense_read_pool, base_handle, qual_handle, num_records, name=None):
-  return gen_user_ops.no_meta_dense_assembler(
-    dense_read_pool=dense_read_pool,
+_nmda_str = "NoMetaAGDAssembler"
+def NoMetaAGDAssembler(agd_read_pool, base_handle, qual_handle, num_records, name=None):
+  return gen_user_ops.no_meta_agd_assembler(
+    agd_read_pool=agd_read_pool,
     base_handle=base_handle,
     qual_handle=qual_handle,
     num_records=num_records,
@@ -421,7 +421,7 @@ def NoMetaDenseAssembler(dense_read_pool, base_handle, qual_handle, num_records,
 
 ops.NoGradient(_nmda_str)
 @ops.RegisterShape(_nmda_str)
-def _NoMetaDenseAssemblerShape(op):
+def _NoMetaAGDAssemblerShape(op):
   # getting the input op
   _assert_vec(op.inputs[0].get_shape(), 2)
   for i in range(1,3):
@@ -430,13 +430,13 @@ def _NoMetaDenseAssemblerShape(op):
   _assert_scalar(op.inputs[3].get_shape())
   return [tensor_shape.vector(2)]
 
-_dap_str = "DenseAssemblerPool"
-def DenseAssemblerPool(size=0, bound=False, name=None):
-    return gen_user_ops.dense_assembler_pool(size=size, bound=bound, name=name)
+_dap_str = "AGDAssemblerPool"
+def AGDAssemblerPool(size=0, bound=False, name=None):
+    return gen_user_ops.agd_assembler_pool(size=size, bound=bound, name=name)
 
 ops.NoGradient(_dap_str)
 @ops.RegisterShape(_dap_str)
-def _DenseAssemblerPoolShape(op):
+def _AGDAssemblerPoolShape(op):
     return [tensor_shape.vector(2)]
 
 _fc_str = "FASTQCreator"

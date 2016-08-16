@@ -7,9 +7,9 @@
 
 namespace tensorflow {
 
-  class DenseReadSubResource;
+  class AGDReadSubResource;
 
-  class DenseReadResource : public ReadResource {
+  class AGDReadResource : public ReadResource {
   public:
     typedef ResourceContainer<Data> DataContainer;
 
@@ -17,12 +17,12 @@ namespace tensorflow {
       Note that this iterator assumes that the Data in each of the possible containers has already been verified in a prior step
      */
 
-    explicit DenseReadResource() = default;
+    explicit AGDReadResource() = default;
 
-    explicit DenseReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta);
-    explicit DenseReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals);
+    explicit AGDReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta);
+    explicit AGDReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals);
 
-    DenseReadResource& operator=(DenseReadResource &&other);
+    AGDReadResource& operator=(AGDReadResource &&other);
 
     // WARNING: this method assumes that all fields are populated (qual, base, meta)
     // If this isn't the case but you call this method, segfault / undefinied behavior is likely
@@ -51,19 +51,19 @@ namespace tensorflow {
     const char *base_data_ = nullptr, *qual_data_ = nullptr, *meta_data_ = nullptr;
     std::size_t num_records_ = 0, record_idx_ = 0;
 
-    DenseReadResource(const DenseReadResource &other) = delete;
-    DenseReadResource& operator=(const DenseReadResource &other) = delete;
-    DenseReadResource(DenseReadResource &&other) = delete;
+    AGDReadResource(const AGDReadResource &other) = delete;
+    AGDReadResource& operator=(const AGDReadResource &other) = delete;
+    AGDReadResource(AGDReadResource &&other) = delete;
 
-    friend class DenseReadSubResource;
+    friend class AGDReadSubResource;
   };
 
-  class DenseReadSubResource : public ReadResource {
-    friend class DenseReadResource;
+  class AGDReadSubResource : public ReadResource {
+    friend class AGDReadResource;
 
   private:
 
-    DenseReadSubResource(const DenseReadResource &parent_resource,
+    AGDReadSubResource(const AGDReadResource &parent_resource,
                          std::size_t index_offset, std::size_t max_idx,
                          const char *base_data_offset, const char *qual_data_offset, const char *meta_data_offset);
 

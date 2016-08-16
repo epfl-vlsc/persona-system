@@ -105,7 +105,7 @@ namespace tensorflow {
     reset();
 
     if (length < sizeof(FileHeader)) {
-      return Internal("DenseReader::FillBuffer: needed min length ", sizeof(FileHeader),
+      return Internal("AGDReader::FillBuffer: needed min length ", sizeof(FileHeader),
                       ", but only received ", length);
     }
     auto file_header = reinterpret_cast<const FileHeader*>(data);

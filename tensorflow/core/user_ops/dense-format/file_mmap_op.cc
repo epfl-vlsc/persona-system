@@ -38,7 +38,7 @@ file_name: a Tensor() of string for the unique key for this file
   .Attr("shared_name: string = ''")
   .SetIsStateful()
   .Doc(R"doc(
-Appends a dense reader handle tensor to an input list.
+Appends a agd reader handle tensor to an input list.
 To be used for the staged pipeline
 
 queue_handle: handle to the filename queue

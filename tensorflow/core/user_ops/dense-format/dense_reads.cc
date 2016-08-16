@@ -9,7 +9,7 @@ namespace tensorflow {
   using namespace errors;
   using namespace format;
 
-  DenseReadResource::DenseReadResource(size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta) :
+  AGDReadResource::AGDReadResource(size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta) :
     bases_(bases), quals_(quals), meta_(meta), num_records_(num_records)
   {
     // TODO probably chain this with the other constructor
@@ -27,7 +27,7 @@ namespace tensorflow {
     meta_data_ = m + idx_offset;
   }
 
-  DenseReadResource::DenseReadResource(size_t num_records, DataContainer *bases, DataContainer *quals) : bases_(bases), quals_(quals), num_records_(num_records)
+  AGDReadResource::AGDReadResource(size_t num_records, DataContainer *bases, DataContainer *quals) : bases_(bases), quals_(quals), num_records_(num_records)
   {
     auto idx_offset = num_records * sizeof(RecordTable::IndexValue);
     auto b = bases->get()->data();
@@ -39,8 +39,8 @@ namespace tensorflow {
     qual_data_ = q + idx_offset;
   }
 
-  DenseReadResource&
-  DenseReadResource::operator=(DenseReadResource &&other)
+  AGDReadResource&
+  AGDReadResource::operator=(AGDReadResource &&other)
   {
     bases_ = other.bases_;
     quals_ = other.quals_;
@@ -71,7 +71,7 @@ namespace tensorflow {
     return *this;
   }
 
-  bool DenseReadResource::reset_iter()
+  bool AGDReadResource::reset_iter()
   {
     record_idx_ = 0;
     auto idx_offset = num_records_ * sizeof(RecordTable::IndexValue);
@@ -85,17 +85,17 @@ namespace tensorflow {
   }
 
 
-  bool DenseReadResource::has_qualities()
+  bool AGDReadResource::has_qualities()
   {
     return quals_ != nullptr;
   }
 
-  bool DenseReadResource::has_metadata()
+  bool AGDReadResource::has_metadata()
   {
     return meta_ != nullptr;
   }
 
-  Status DenseReadResource::get_next_record(const char **bases, std::size_t *bases_length,
+  Status AGDReadResource::get_next_record(const char **bases, std::size_t *bases_length,
                                             const char **qualities, std::size_t *qualities_length)
   {
     if (record_idx_ < num_records_) {
@@ -112,12 +112,12 @@ namespace tensorflow {
       record_idx_++;
       return Status::OK();
     } else {
-      return ResourceExhausted("dense record container exhausted");
+      return ResourceExhausted("agd record container exhausted");
     }
 
   }
 
-  Status DenseReadResource::get_next_record(const char **bases, std::size_t *bases_length,
+  Status AGDReadResource::get_next_record(const char **bases, std::size_t *bases_length,
                                             const char **qualities, std::size_t *qualities_length,
                                             const char **metadata, std::size_t *metadata_length)
   {
@@ -140,11 +140,11 @@ namespace tensorflow {
       record_idx_++;
       return Status::OK();
     } else {
-      return ResourceExhausted("dense record container exhausted");
+      return ResourceExhausted("agd record container exhausted");
     }
   }
 
-  void DenseReadResource::release() {
+  void AGDReadResource::release() {
     if (bases_) {
       bases_->release();
     }
@@ -156,7 +156,7 @@ namespace tensorflow {
     }
   }
 
-  Status DenseReadResource::split(size_t chunk, vector<unique_ptr<ReadResource>> &split_resources) {
+  Status AGDReadResource::split(size_t chunk, vector<unique_ptr<ReadResource>> &split_resources) {
     split_resources.clear();
 
     reset_iter(); // who cares doesn't die for now
@@ -166,14 +166,14 @@ namespace tensorflow {
     
     decltype(chunk) max_range;
     for (decltype(num_records_) i = 0; i < num_records_; i += chunk) {
-      //DenseReadSubResource a(*this, i, CHUNK_SIZE, )
+      //AGDReadSubResource a(*this, i, CHUNK_SIZE, )
       max_range = i + chunk;
       if (max_range > num_records_) {
         // deals with the tail
         max_range = num_records_;
       }
 
-      unique_ptr<ReadResource> a(new DenseReadSubResource(*this, i, max_range, base_start, qual_start, meta_start));
+      unique_ptr<ReadResource> a(new AGDReadSubResource(*this, i, max_range, base_start, qual_start, meta_start));
       split_resources.push_back(move(a));
 
       // actually advance the records
@@ -185,7 +185,7 @@ namespace tensorflow {
     return Status::OK();
   }
 
-  DenseReadSubResource::DenseReadSubResource(const DenseReadResource &parent_resource,
+  AGDReadSubResource::AGDReadSubResource(const AGDReadResource &parent_resource,
                                              size_t index_offset, size_t max_idx,
                                              const char *base_data_offset, const char *qual_data_offset, const char *meta_data_offset) : start_idx_(index_offset), max_idx_(max_idx), current_idx_(index_offset),
                                                                                                                                          base_idx_(parent_resource.base_idx_),
@@ -195,14 +195,14 @@ namespace tensorflow {
                                                                                                                                          qual_data_(qual_data_offset), qual_start_(qual_data_offset),
                                                                                                                                          meta_data_(meta_data_offset), meta_start_(meta_data_offset) {}
 
-  Status DenseReadSubResource::get_next_record(const char **bases, size_t *bases_length,
+  Status AGDReadSubResource::get_next_record(const char **bases, size_t *bases_length,
                                                const char **qualities, size_t *qualities_length,
                                                const char **metadata, size_t *metadata_length)
   {
-    return Unimplemented("DenseReadSubResource doesn't implement get_next_record with metadata");
+    return Unimplemented("AGDReadSubResource doesn't implement get_next_record with metadata");
   }
 
-  Status DenseReadSubResource::get_next_record(const char **bases, size_t *bases_length,
+  Status AGDReadSubResource::get_next_record(const char **bases, size_t *bases_length,
                                                const char **qualities, size_t *qualities_length)
   {
     if (current_idx_ < max_idx_) {
@@ -218,11 +218,11 @@ namespace tensorflow {
 
       return Status::OK();
     } else {
-      return ResourceExhausted("dense record container exhausted");
+      return ResourceExhausted("agd record container exhausted");
     }
   }
 
-  bool DenseReadSubResource::reset_iter() {
+  bool AGDReadSubResource::reset_iter() {
     base_data_ = base_start_;
     qual_data_ = qual_start_;
     meta_data_ = meta_start_;
@@ -230,21 +230,21 @@ namespace tensorflow {
     return true;
   }
 
-  bool DenseReadSubResource::has_qualities()
+  bool AGDReadSubResource::has_qualities()
   {
     return qual_start_ != nullptr;
   }
 
-  bool DenseReadSubResource::has_metadata()
+  bool AGDReadSubResource::has_metadata()
   {
     return meta_start_ != nullptr;
   }
 
-  size_t DenseReadResource::num_records() {
+  size_t AGDReadResource::num_records() {
     return num_records_;
   }
 
-  size_t DenseReadSubResource::num_records() {
+  size_t AGDReadSubResource::num_records() {
     return max_idx_ - start_idx_;
   }
 

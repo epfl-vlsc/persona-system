@@ -67,9 +67,9 @@ using namespace errors;
     };
   }
 
-class SnapAlignDenseParallelOp : public OpKernel {
+class SnapAlignAGDParallelOp : public OpKernel {
   public:
-    explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    explicit SnapAlignAGDParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("threads", &threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_yielding_threads", &num_yielding_threads_));
@@ -91,9 +91,9 @@ class SnapAlignDenseParallelOp : public OpKernel {
       compute_status_ = Status::OK();
     }
 
-    ~SnapAlignDenseParallelOp() override {
+    ~SnapAlignAGDParallelOp() override {
       if (!run_) {
-        LOG(ERROR) << "Unable to safely wait in ~SnapAlignDenseParallelOp for all threads. run_ was toggled to false\n";
+        LOG(ERROR) << "Unable to safely wait in ~SnapAlignAGDParallelOp for all threads. run_ was toggled to false\n";
       }
       run_ = false;
       request_queue_->unblock();
@@ -105,7 +105,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       }
       VLOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
       VLOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
-      VLOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
+      VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
     Status InitHandles(OpKernelContext* ctx)
@@ -353,10 +353,10 @@ private:
   vector<unique_ptr<ReadResource>> read_resources_;
   vector<ReadResourceHolder> pending_resources_;
   Status compute_status_;
-  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignDenseParallelOp);
+  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignAGDParallelOp);
 };
 
-  REGISTER_OP("SnapAlignDenseParallel")
+  REGISTER_OP("SnapAlignAGDParallel")
   .Attr("threads: list(int)")
   .Attr("trace_granularity: int = 500")
   .Attr("num_yielding_threads: int")
@@ -377,6 +377,6 @@ output: a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
 
-  REGISTER_KERNEL_BUILDER(Name("SnapAlignDenseParallel").Device(DEVICE_CPU), SnapAlignDenseParallelOp);
+  REGISTER_KERNEL_BUILDER(Name("SnapAlignAGDParallel").Device(DEVICE_CPU), SnapAlignAGDParallelOp);
 
 }  // namespace tensorflow
