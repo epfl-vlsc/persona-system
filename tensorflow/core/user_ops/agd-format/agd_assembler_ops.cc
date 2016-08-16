@@ -7,7 +7,7 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool_op.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
-#include "dense_reads.h"
+#include "agd_reads.h"
 
 namespace tensorflow {
   using namespace std;

@@ -1,5 +1,5 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool_op.h"
-#include "tensorflow/core/user_ops/dense-format/buffer.h"
+#include "tensorflow/core/user_ops/agd-format/buffer.h"
 #include "data.h"
 
 namespace tensorflow {

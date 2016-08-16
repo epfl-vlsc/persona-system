@@ -2,7 +2,7 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
-#include "dense-format/buffer.h"
+#include "agd-format/buffer.h"
 #include "object-pool/resource_container.h"
 #include <cstdint>
 

@@ -1,6 +1,6 @@
 [submodule "tensorflow/user_ops/dna-align/snap"]
 	path = tensorflow/core/user_ops/dna-align/snap
 	url = git@github.com:epfl-bioflow/snap.git
-[submodule "tensorflow/core/user_ops/dense-format/json"]
-	path = tensorflow/core/user_ops/dense-format/json
+[submodule "tensorflow/core/user_ops/agd-format/json"]
+	path = tensorflow/core/user_ops/agd-format/json
 	url = https://github.com/nlohmann/json.git

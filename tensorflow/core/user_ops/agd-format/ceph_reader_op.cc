@@ -5,7 +5,7 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "data.h"
-#include "tensorflow/core/user_ops/dense-format/buffer.h"
+#include "tensorflow/core/user_ops/agd-format/buffer.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include <list>
 #include <stdio.h>
