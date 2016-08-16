@@ -10,7 +10,7 @@
 #include "format.h"
 #include "data.h"
 #include "util.h"
-#include "tensorflow/core/user_ops/dense-format/buffer.h"
+#include "tensorflow/core/user_ops/agd-format/buffer.h"
 #include <list>
 #include <stdio.h>
 #include <stdlib.h>

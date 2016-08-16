@@ -49,7 +49,7 @@ TRACEPOINT_EVENT_CLASS(
   POINTER_TIMESTAMP_EVENT(_name_ ## _start)     \
   POINTER_TIMESTAMP_EVENT(_name_ ## _stop)
 
-// time spent in the read ready queue (after the reads, and before DenseReaderOp)
+// time spent in the read ready queue (after the reads, and before AGDReaderOp)
 TIMESTAMP_START_STOP_INSTANCE(read_ready_queue)
 
 // time spent in the queue of assembled ReadResource instances
@@ -99,11 +99,11 @@ TRACEPOINT_EVENT(
 
 // This event outputs the duration in microseconds
 
-#define DENSE_READ_DURATION_ARGS TP_ARGS(clock_t, event_start, uint64_t, first_ordinal, uint32_t, num_records)
+#define AGD_READ_DURATION_ARGS TP_ARGS(clock_t, event_start, uint64_t, first_ordinal, uint32_t, num_records)
 TRACEPOINT_EVENT_CLASS(
                         bioflow,
-                        dense_read_duration,
-                        DENSE_READ_DURATION_ARGS,
+                        agd_read_duration,
+                        AGD_READ_DURATION_ARGS,
                         TP_FIELDS(
                                   DURATION_FIELD(event_start)
                                   ctf_integer(uint64_t, first_ordinal, first_ordinal)
@@ -111,16 +111,16 @@ TRACEPOINT_EVENT_CLASS(
                                   )
                         )
 
-#define BIOFLOW_DENSE_READ_DURATION_INSTANCE(_name_)      \
+#define BIOFLOW_AGD_READ_DURATION_INSTANCE(_name_)      \
   TRACEPOINT_EVENT_INSTANCE(                              \
                             bioflow,                      \
-                            dense_read_duration,          \
+                            agd_read_duration,          \
                             _name_,                       \
-                            DENSE_READ_DURATION_ARGS      \
+                            AGD_READ_DURATION_ARGS      \
                                                         )
 
-BIOFLOW_DENSE_READ_DURATION_INSTANCE(decompression)
-BIOFLOW_DENSE_READ_DURATION_INSTANCE(base_conversion)
+BIOFLOW_AGD_READ_DURATION_INSTANCE(decompression)
+BIOFLOW_AGD_READ_DURATION_INSTANCE(base_conversion)
 
 TRACEPOINT_EVENT(
                  bioflow,

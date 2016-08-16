@@ -2,9 +2,9 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
-#include "tensorflow/core/user_ops/dense-format/buffer_list.h"
-#include "tensorflow/core/user_ops/dense-format/format.h"
-#include "tensorflow/core/user_ops/dense-format/util.h"
+#include "tensorflow/core/user_ops/agd-format/buffer_list.h"
+#include "tensorflow/core/user_ops/agd-format/format.h"
+#include "tensorflow/core/user_ops/agd-format/util.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "GenomeIndex.h"
 #include "genome_index_resource.h"
@@ -19,23 +19,23 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
 
-  REGISTER_OP("DenseTester")
+  REGISTER_OP("AGDTester")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("sam_filename: string = ''")
   .Input("genome_handle: Ref(string)")
-  .Input("dense_records: string")
+  .Input("agd_records: string")
   .Input("num_records: int32")
-  .Output("dense_records_out: string")
+  .Output("agd_records_out: string")
   .Output("num_records_out: int32")
   .Doc(R"doc(
-  Compares the dense format output with the SAM format output
+  Compares the agd format output with the SAM format output
 )doc");
 
-  class DenseTesterOp : public OpKernel {
+  class AGDTesterOp : public OpKernel {
   public:
 
-    DenseTesterOp(OpKernelConstruction* context) : OpKernel(context)
+    AGDTesterOp(OpKernelConstruction* context) : OpKernel(context)
     {
       OP_REQUIRES_OK(context, context->GetAttr("sam_filename", &sam_filename_));
     }
@@ -45,11 +45,11 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, init(ctx));
       }
 
-      // Get the dense format results in dense_records
+      // Get the agd format results in agd_records
       // rec_data(0) = container, rec_data(1) = name
       ResourceContainer<BufferList> *records;
       const Tensor *rec_input;
-      OP_REQUIRES_OK(ctx, ctx->input("dense_records", &rec_input));
+      OP_REQUIRES_OK(ctx, ctx->input("agd_records", &rec_input));
       auto rec_input_vec = rec_input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
       core::ScopedUnref column_releaser(records);
@@ -103,7 +103,7 @@ namespace tensorflow {
       auto size_index = reinterpret_cast<const format::RecordTable*>(&buf_[0]);
 
       const char *curr_record = &buf_[num_records]; // skip the indices
-      const format::AlignmentResult *dense_result;
+      const format::AlignmentResult *agd_result;
       bool should_error = false;
 
       for (decltype(num_records) i = 0; i < num_records; ++i) {
@@ -117,25 +117,25 @@ namespace tensorflow {
         record_size = size_index->relative_index[i];
         var_string_size = record_size - sizeof(format::AlignmentResult);
 
-        dense_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
+        agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
 
-        string dense_cigar(reinterpret_cast<const char*>(curr_record + sizeof(format::AlignmentResult)), var_string_size);
+        string agd_cigar(reinterpret_cast<const char*>(curr_record + sizeof(format::AlignmentResult)), var_string_size);
 
-        if (sam_genomeLocation != dense_result->location_) {
+        if (sam_genomeLocation != agd_result->location_) {
           LOG(INFO) << "Mismatch: for record " << i + 1 << " the SAM location is " << sam_genomeLocation
-              << " and the dense location is " << dense_result->location_ << "\n";
+              << " and the agd location is " << agd_result->location_ << "\n";
           should_error = true;
         }
 
-        if (sam_mapQ != dense_result->mapq_) {
+        if (sam_mapQ != agd_result->mapq_) {
           LOG(INFO) << "Mismatch: for record " << i + 1 << " the SAM mapQ is " << sam_mapQ
-              << " and the dense mapQ is " << dense_result->mapq_ << "\n";
+              << " and the agd mapQ is " << agd_result->mapq_ << "\n";
           should_error = true;
         }
 
-        if (sam_flag != dense_result->flag_) {
+        if (sam_flag != agd_result->flag_) {
           LOG(INFO) << "Mismatch: for record " << i + 1 << " the SAM flag is " << sam_flag
-              << " and the dense flag is " << dense_result->flag_ << "\n";
+              << " and the agd flag is " << agd_result->flag_ << "\n";
           should_error = true;
         }
 
@@ -143,9 +143,9 @@ namespace tensorflow {
         num_char = static_cast<size_t>(strchr(sam_cigar, '\t') - sam_cigar);
         string sam_cigar_end(sam_cigar, num_char);
 
-        if (dense_cigar.compare(sam_cigar_end)) {
+        if (agd_cigar.compare(sam_cigar_end)) {
           LOG(INFO) << "Mismatch: for record " << i + 1 << " the SAM cigar is " << sam_cigar_end
-              << " and the dense cigar is " << dense_cigar << "\n";
+              << " and the agd cigar is " << agd_cigar << "\n";
           should_error = true;
         }
 
@@ -153,12 +153,12 @@ namespace tensorflow {
       }
 
       if (should_error) {
-        status = Internal("Dense record set did not pass verification. Please enable LOG(INFO) for more details");
+        status = Internal("AGD record set did not pass verification. Please enable LOG(INFO) for more details");
       } else {
-        Tensor *dense_out, *records_out;
-        OP_REQUIRES_OK(ctx, ctx->allocate_output("dense_records_out", rec_input->shape(), &dense_out));
+        Tensor *agd_out, *records_out;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("agd_records_out", rec_input->shape(), &agd_out));
         OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", num_records_t->shape(), &records_out));
-        *dense_out = *rec_input;
+        *agd_out = *rec_input;
         *records_out = *num_records_t;
       }
 
@@ -208,5 +208,5 @@ namespace tensorflow {
   };
 
 
-REGISTER_KERNEL_BUILDER(Name("DenseTester").Device(DEVICE_CPU), DenseTesterOp);
+REGISTER_KERNEL_BUILDER(Name("AGDTester").Device(DEVICE_CPU), AGDTesterOp);
 } // namespace tensorflow

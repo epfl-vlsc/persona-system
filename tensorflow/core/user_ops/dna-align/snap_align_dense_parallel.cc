@@ -17,18 +17,21 @@
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
-#include "tensorflow/core/user_ops/dense-format/buffer_list.h"
-#include "tensorflow/core/user_ops/dense-format/column_builder.h"
+#include "tensorflow/core/user_ops/agd-format/buffer_list.h"
+#include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
-#include "tensorflow/core/user_ops/dense-format/column_builder.h"
+#include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include "GenomeIndex.h"
 #include "work_queue.h"
 #include "Read.h"
 #include "SnapAlignerWrapper.h"
 #include "genome_index_resource.h"
 #include "aligner_options_resource.h"
-#include "tensorflow/core/user_ops/dense-format/read_resource.h"
+#include "tensorflow/core/user_ops/agd-format/read_resource.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
+
+// uncommenting this will define the old behavior. may need to adjust / fix compile bugs
+// #define YIELDING
 
 namespace tensorflow {
 using namespace std;
@@ -67,33 +70,35 @@ using namespace errors;
     };
   }
 
-class SnapAlignDenseParallelOp : public OpKernel {
+class SnapAlignAGDParallelOp : public OpKernel {
   public:
-    explicit SnapAlignDenseParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("threads", &threads_));
+    explicit SnapAlignAGDParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
+#ifdef YIELDING
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("threads", &threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_yielding_threads", &num_yielding_threads_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("low_watermark", &low_watermark_));
+#endif
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       int i;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("trace_granularity", &i));
       OP_REQUIRES(ctx, i > 0, errors::InvalidArgument("trace granularity ", i, " must be greater than 0"));
       trace_granularity_ = i;
 
+#ifdef YIELDING
       num_threads_ = threads_.size();
-      OP_REQUIRES(ctx, num_threads_ > 0, errors::InvalidArgument("Aligner threads list must be > 0"));
-      OP_REQUIRES(ctx, num_yielding_threads_ >= 0 && num_yielding_threads_ <= num_threads_,
-                  errors::InvalidArgument("Aligner needs positive number of yielding threads ", num_yielding_threads_,
-                                          ", but less than total number of threads ", num_threads_));
+#else
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
+#endif
 
       int capacity = (chunk_size_ / subchunk_size_) + 1;
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
       compute_status_ = Status::OK();
     }
 
-    ~SnapAlignDenseParallelOp() override {
+    ~SnapAlignAGDParallelOp() override {
       if (!run_) {
-        LOG(ERROR) << "Unable to safely wait in ~SnapAlignDenseParallelOp for all threads. run_ was toggled to false\n";
+        LOG(ERROR) << "Unable to safely wait in ~SnapAlignAGDParallelOp for all threads. run_ was toggled to false\n";
       }
       run_ = false;
       request_queue_->unblock();
@@ -105,7 +110,7 @@ class SnapAlignDenseParallelOp : public OpKernel {
       }
       VLOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
       VLOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
-      VLOG(DEBUG) << "Dense Align Destructor(" << this << ") finished\n";
+      VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
     Status InitHandles(OpKernelContext* ctx)
@@ -198,15 +203,17 @@ private:
         mutex_lock l(mu_);
         my_id = thread_id_++;
       }
+#ifdef YIELDING
       bool should_yield = my_id < num_yielding_threads_;
-      /*cpu_set_t cpuset;
+      cpu_set_t cpuset;
       CPU_ZERO(&cpuset);
       CPU_SET(threads_[my_id], &cpuset);
       int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {
         LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core: " << threads_[my_id] 
           << " for thread id: " << my_id;
-      }*/
+      }
+#endif
 
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
@@ -239,8 +246,10 @@ private:
           tracepoint(bioflow, subchunk_time_start, result_buf);
           tracepoint(bioflow, align_ready_queue_stop, result_buf);
           id = get<2>(batch);
+#ifdef YIELDING
           if (should_yield && (float)request_queue_->size() / (float)capacity < low_watermark_)
             std::this_thread::yield();
+#endif
         } else
           continue;
 
@@ -338,14 +347,17 @@ private:
   int chunk_size_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
+#ifdef YIELDING
   float low_watermark_;
+  int num_yielding_threads_;
+  std::vector<int> threads_;
+#endif
   uint32_t trace_granularity_;
 
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
   int thread_id_ = 0;
 
-  std::vector<int> threads_;
   int num_threads_, num_yielding_threads_;
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
 
@@ -353,16 +365,20 @@ private:
   vector<unique_ptr<ReadResource>> read_resources_;
   vector<ReadResourceHolder> pending_resources_;
   Status compute_status_;
-  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignDenseParallelOp);
+  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignAGDParallelOp);
 };
 
-  REGISTER_OP("SnapAlignDenseParallel")
+  REGISTER_OP("SnapAlignAGDParallel")
+#ifdef YIELDING
   .Attr("threads: list(int)")
-  .Attr("trace_granularity: int = 500")
   .Attr("num_yielding_threads: int")
+  .Attr("low_watermark: float")
+#else
+  .Attr("num_threads: int")
+#endif
+  .Attr("trace_granularity: int = 500")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
-  .Attr("low_watermark: float")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
@@ -377,6 +393,6 @@ output: a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
 
-  REGISTER_KERNEL_BUILDER(Name("SnapAlignDenseParallel").Device(DEVICE_CPU), SnapAlignDenseParallelOp);
+  REGISTER_KERNEL_BUILDER(Name("SnapAlignAGDParallel").Device(DEVICE_CPU), SnapAlignAGDParallelOp);
 
 }  // namespace tensorflow

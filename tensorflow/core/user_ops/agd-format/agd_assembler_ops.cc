@@ -7,22 +7,22 @@
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool_op.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
-#include "dense_reads.h"
+#include "agd_reads.h"
 
 namespace tensorflow {
   using namespace std;
   using namespace errors;
   namespace {
-    const string op_name("DenseAssembler"), no_meta_op_name("NoMetaDenseAssembler"), dense_read_pool("DenseReadPool");
+    const string op_name("AGDAssembler"), no_meta_op_name("NoMetaAGDAssembler"), agd_read_pool("AGDReadPool");
   }
 
   REGISTER_OP(op_name.c_str())
-  .Input("dense_read_pool: Ref(string)")
+  .Input("agd_read_pool: Ref(string)")
   .Input("base_handle: string")
   .Input("qual_handle: string")
   .Input("meta_handle: string")
   .Input("num_records: int32")
-  .Output("dense_read_handle: string")
+  .Output("agd_read_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
 Assembles all 3 fields (bases, qualities, and metadata) into a generic reader object
@@ -33,11 +33,11 @@ If we need to only process a subset in the future, we must make a separate op.
 )doc");
 
   REGISTER_OP(no_meta_op_name.c_str())
-  .Input("dense_read_pool: Ref(string)")
+  .Input("agd_read_pool: Ref(string)")
   .Input("base_handle: string")
   .Input("qual_handle: string")
   .Input("num_records: int32")
-  .Output("dense_read_handle: string")
+  .Output("agd_read_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
 Assembles all 3 fields (bases, qualities, and metadata) into a generic reader object
@@ -47,16 +47,16 @@ Currently this op requires all 3 fields to be available.
 If we need to only process a subset in the future, we must make a separate op.
 )doc");
 
-  REGISTER_REFERENCE_POOL(dense_read_pool.c_str())
+  REGISTER_REFERENCE_POOL(agd_read_pool.c_str())
   .Doc(R"doc(
-A pool specifically for dense read resources.
+A pool specifically for agd read resources.
 
-Intended to be used for DenseAssembler
+Intended to be used for AGDAssembler
 )doc");
 
-  class DenseAssemblerOp : public OpKernel {
+  class AGDAssemblerOp : public OpKernel {
   public:
-    DenseAssemblerOp(OpKernelConstruction *context) : OpKernel(context) {}
+    AGDAssemblerOp(OpKernelConstruction *context) : OpKernel(context) {}
 
     void Compute(OpKernelContext* ctx) override {
       if (!drr_pool_) {
@@ -82,28 +82,28 @@ Intended to be used for DenseAssembler
 
       core::ScopedUnref b_unref(base_data), q_unref(qual_data), m_unref(meta_data);
 
-      ResourceContainer<DenseReadResource> *dense_reads;
-      OP_REQUIRES_OK(ctx, drr_pool_->GetResource(&dense_reads));
+      ResourceContainer<AGDReadResource> *agd_reads;
+      OP_REQUIRES_OK(ctx, drr_pool_->GetResource(&agd_reads));
 
-      auto dr = dense_reads->get();
+      auto dr = agd_reads->get();
 
-      DenseReadResource a(num_records, base_data, qual_data, meta_data);
+      AGDReadResource a(num_records, base_data, qual_data, meta_data);
       *dr = move(a);
-      OP_REQUIRES_OK(ctx, dense_reads->allocate_output("dense_read_handle", ctx));
+      OP_REQUIRES_OK(ctx, agd_reads->allocate_output("agd_read_handle", ctx));
     }
   private:
 
     inline Status InitializePool(OpKernelContext* ctx) {
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "dense_read_pool", &drr_pool_));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "agd_read_pool", &drr_pool_));
       return Status::OK();
     }
 
-    ReferencePool<DenseReadResource> *drr_pool_ = nullptr;
+    ReferencePool<AGDReadResource> *drr_pool_ = nullptr;
   };
 
-  class NoMetaDenseAssemblerOp : public OpKernel {
+  class NoMetaAGDAssemblerOp : public OpKernel {
   public:
-    NoMetaDenseAssemblerOp(OpKernelConstruction *context) : OpKernel(context) {}
+    NoMetaAGDAssemblerOp(OpKernelConstruction *context) : OpKernel(context) {}
 
     void Compute(OpKernelContext* ctx) override {
       if (!drr_pool_) {
@@ -127,40 +127,40 @@ Intended to be used for DenseAssembler
 
       core::ScopedUnref b_unref(base_data), q_unref(qual_data);
 
-      ResourceContainer<DenseReadResource> *dense_reads;
-      OP_REQUIRES_OK(ctx, drr_pool_->GetResource(&dense_reads));
+      ResourceContainer<AGDReadResource> *agd_reads;
+      OP_REQUIRES_OK(ctx, drr_pool_->GetResource(&agd_reads));
 
-      auto dr = dense_reads->get();
+      auto dr = agd_reads->get();
 
-      DenseReadResource a(num_records, base_data, qual_data);
+      AGDReadResource a(num_records, base_data, qual_data);
       *dr = move(a);
-      OP_REQUIRES_OK(ctx, dense_reads->allocate_output("dense_read_handle", ctx));
+      OP_REQUIRES_OK(ctx, agd_reads->allocate_output("agd_read_handle", ctx));
       tracepoint(bioflow, read_resource_assembly_no_meta, start, base_data, qual_data);
-      tracepoint(bioflow, assembled_ready_queue_start, dense_reads);
+      tracepoint(bioflow, assembled_ready_queue_start, agd_reads);
     }
   private:
     clock_t start;
 
     inline Status InitializePool(OpKernelContext* ctx) {
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "dense_read_pool", &drr_pool_));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "agd_read_pool", &drr_pool_));
       return Status::OK();
     }
 
-    ReferencePool<DenseReadResource> *drr_pool_ = nullptr;
+    ReferencePool<AGDReadResource> *drr_pool_ = nullptr;
   };
 
-  class DenseAssemblerPoolOp : public ReferencePoolOp<DenseReadResource, ReadResource> {
+  class AGDAssemblerPoolOp : public ReferencePoolOp<AGDReadResource, ReadResource> {
   public:
-    DenseAssemblerPoolOp(OpKernelConstruction *ctx) : ReferencePoolOp<DenseReadResource, ReadResource>(ctx) {}
+    AGDAssemblerPoolOp(OpKernelConstruction *ctx) : ReferencePoolOp<AGDReadResource, ReadResource>(ctx) {}
 
   protected:
-    unique_ptr<DenseReadResource> CreateObject() override {
-      return unique_ptr<DenseReadResource>(new DenseReadResource());
+    unique_ptr<AGDReadResource> CreateObject() override {
+      return unique_ptr<AGDReadResource>(new AGDReadResource());
     };
   };
 
 
-  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), DenseAssemblerOp);
-  REGISTER_KERNEL_BUILDER(Name(no_meta_op_name.c_str()).Device(DEVICE_CPU), NoMetaDenseAssemblerOp);
-  REGISTER_KERNEL_BUILDER(Name(dense_read_pool.c_str()).Device(DEVICE_CPU), DenseAssemblerPoolOp);
+  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), AGDAssemblerOp);
+  REGISTER_KERNEL_BUILDER(Name(no_meta_op_name.c_str()).Device(DEVICE_CPU), NoMetaAGDAssemblerOp);
+  REGISTER_KERNEL_BUILDER(Name(agd_read_pool.c_str()).Device(DEVICE_CPU), AGDAssemblerPoolOp);
 } // namespace tensorflow {

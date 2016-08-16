@@ -10,29 +10,29 @@
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
-#include "tensorflow/core/user_ops/dense-format/buffer.h"
-#include "tensorflow/core/user_ops/dense-format/column_builder.h"
+#include "tensorflow/core/user_ops/agd-format/buffer.h"
+#include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
-#include "tensorflow/core/user_ops/dense-format/column_builder.h"
+#include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "SnapAlignerWrapper.h"
 #include "genome_index_resource.h"
 #include "aligner_options_resource.h"
-#include "tensorflow/core/user_ops/dense-format/read_resource.h"
+#include "tensorflow/core/user_ops/agd-format/read_resource.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
 namespace tensorflow {
 using namespace std;
 using namespace errors;
 
-class SnapAlignDenseOp : public OpKernel {
+class SnapAlignAGDOp : public OpKernel {
   public:
-    explicit SnapAlignDenseOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    explicit SnapAlignAGDOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
     }
 
-    ~SnapAlignDenseOp() override {
+    ~SnapAlignAGDOp() override {
       core::ScopedUnref index_unref(index_resource_);
       core::ScopedUnref options_unref(options_resource_);
       core::ScopedUnref buf_pool_unref(buf_pool_);
@@ -182,7 +182,7 @@ class SnapAlignDenseOp : public OpKernel {
 };
 
 
-REGISTER_OP("SnapAlignDense")
+REGISTER_OP("SnapAlignAGD")
   .Attr("chunk_size: int = 10000")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
@@ -196,10 +196,10 @@ generation of alignment candidates.
 output: a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 
-chunk_size is the number of records to chunk incoming dense reads into
+chunk_size is the number of records to chunk incoming agd reads into
 )doc");
 
 
-  REGISTER_KERNEL_BUILDER(Name("SnapAlignDense").Device(DEVICE_CPU), SnapAlignDenseOp);
+  REGISTER_KERNEL_BUILDER(Name("SnapAlignAGD").Device(DEVICE_CPU), SnapAlignAGDOp);
 
 }  // namespace tensorflow

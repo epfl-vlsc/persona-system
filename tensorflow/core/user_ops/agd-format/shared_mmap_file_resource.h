@@ -2,8 +2,8 @@
   An op to read from a queue of filename strings, and enqueue multiple shared resources corresponding to each file.
  */
 
-#ifndef TENSORFLOW_CORE_USEROPS_DENSE_ALIGN_MMAP_H_
-#define TENSORFLOW_CORE_USEROPS_DENSE_ALIGN_MMAP_H_
+#ifndef TENSORFLOW_CORE_USEROPS_AGD_ALIGN_MMAP_H_
+#define TENSORFLOW_CORE_USEROPS_AGD_ALIGN_MMAP_H_
 
 #include <memory>
 #include <cstdint>

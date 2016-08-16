@@ -64,7 +64,7 @@ cc_library(
             ":snap_protos_cc",
             "//tensorflow/core/user_ops/lttng:trace",
             "//tensorflow/core/user_ops/object-pool:object_pool",
-            "//tensorflow/core/user_ops/dense-format:dense_format",
+            "//tensorflow/core/user_ops/agd-format:dense_format",
             ":snap_lib"],
     alwayslink=1,
     linkopts = [
