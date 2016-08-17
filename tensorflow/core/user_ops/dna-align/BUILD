@@ -45,9 +45,9 @@ cc_library(
     name = "snap_align",
     hdrs = ["SnapAlignerWrapper.h", "genome_index_resource.h"],
     includes = ["."],
-    srcs = glob(["*.cc"], 
+    srcs = glob(["*.cc"],
            exclude = [
-                      "sam_writer_async_op.cc", 
+                      "sam_writer_async_op.cc",
                       "snap_read_decode.cc",
                       "snap_results_decode.cc",
                       ],
@@ -64,7 +64,7 @@ cc_library(
             ":snap_protos_cc",
             "//tensorflow/core/user_ops/lttng:trace",
             "//tensorflow/core/user_ops/object-pool:object_pool",
-            "//tensorflow/core/user_ops/agd-format:dense_format",
+            "//tensorflow/core/user_ops/agd-format:agd_format",
             ":snap_lib"],
     alwayslink=1,
     linkopts = [
