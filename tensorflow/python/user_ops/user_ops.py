@@ -54,11 +54,6 @@ class FASTQReader(io_ops.ReaderBase):
         super(FASTQReader, self).__init__(rr)
 ops.RegisterShape(_fq_str)(common_shapes.scalar_shape)
 
-_fd_str = "FASTQDecoder"
-ops.NoGradient(_fd_str)
-def FASTQDecoder(value, name=None):
-    return gen_user_ops.decode_fastq(value, name=name)
-
 _ar_str = "AGDReader"
 ops.NoGradient(_ar_str)
 def AGDReader(file_handle, pool_handle, reserve=8192, name=None, verify=False):
@@ -265,6 +260,14 @@ def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, chunk_size, nu
 
 @ops.RegisterShape(_saap_string)
 def _SnapAlignAGDParallelShape(op):
+    genome_handle = op.inputs[0].get_shape()
+    options_handle = op.inputs[1].get_shape()
+    buffer_list_pool = op.inputs[2].get_shape()
+    read = op.inputs[3].get_shape()
+    _assert_vec(genome_handle, 2)
+    _assert_vec(options_handle, 2)
+    _assert_vec(buffer_list_pool, 2)
+    _assert_vec(read, 2)
     return [tensor_shape.vector(2)]
 
 _arp_str = "AGDReadPool"
