@@ -68,6 +68,11 @@ bundle_name: [{this map op's name}] + upstream_name
                   Internal("Unable to call stat on: ", path_prefix_));
       OP_REQUIRES(ctx, info.st_mode & S_IFDIR != 0,
                   Internal("Local prefix is not a valid directory: ", path_prefix_));
+      auto a = path_prefix_.find_last_of("/");
+      OP_REQUIRES(ctx, a != string::npos, Internal("Invalid local prefix: ", a));
+      if (a < path_prefix_.length()-1) {
+        path_prefix_.append("/");
+      }
     }
 
     void Compute(OpKernelContext* ctx) override {

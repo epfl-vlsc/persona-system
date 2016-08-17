@@ -74,6 +74,8 @@ def _AGDReaderShape(op):
 _fm_str = "FileMMap"
 ops.NoGradient(_fm_str)
 def FileMMap(filename, handle, local_prefix="", name=None):
+  if len(local_prefix) > 0 and not local_prefix.endswith("/"):
+    local_prefix += "/"
   return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, local_prefix=local_prefix, name=name)
 
 @ops.RegisterShape(_fm_str)
@@ -83,6 +85,31 @@ def _FileMMapShape(op):
   _assert_vec(pool_handle, 2)
   _assert_scalar(filename_input)
   return [tensor_shape.matrix(rows=1,cols=2), tensor_shape.vector(1)]
+
+_sm_str = "StagedFileMap"
+ops.NoGradient(_sm_str)
+def StagedFileMap(filename, upstream_files, upstream_names, handle, local_prefix="", name=None):
+  if len(local_prefix) > 0 and not local_prefix.endswith("/"):
+    local_prefix += "/"
+  return gen_user_ops.staged_file_map(filename=filename, pool_handle=handle,
+                                      upstream_refs=upstream_files, local_prefix=local_prefix,
+                                      upstream_names=upstream_names, name=name)
+
+@ops.RegisterShape(_sm_str)
+def _StagedFileMapShape(op):
+  filename = op.inputs[0].get_shape()
+  files = op.inputs[1].get_shape()
+  names = op.inputs[2].get_shape()
+  pool_handle = op.inputs[3].get_shape()
+  _assert_vec(pool_handle, 2)
+  _assert_scalar(filename)
+  num_files = _assert_matrix(files)
+  _assert_vec(names, num_files)
+  files_shape = files.dims
+  names_shape = names.dims
+  files_shape[0] += 1
+  names_shape[0] += 1
+  return [files_shape, names_shape]
 
 _sr_str = "S3Reader"
 ops.NoGradient(_sr_str)
@@ -184,29 +211,6 @@ def _AGDTesterShape(op):
   _assert_scalar(op.inputs[2].get_shape())
 #  return [tensor_shape.vector(2), tensor_shape.scalar()]
   return [op.inputs[1].get_shape(), op.inputs[2].get_shape()]
-
-_sm_str = "StagedFileMap"
-ops.NoGradient(_sm_str)
-def StagedFileMap(filename, upstream_files, upstream_names, handle, name=None):
-  return gen_user_ops.staged_file_map(filename=filename, pool_handle=handle,
-                                      upstream_refs=upstream_files,
-                                      upstream_names=upstream_names, name=name)
-
-@ops.RegisterShape(_sm_str)
-def _StagedFileMapShape(op):
-  filename = op.inputs[0].get_shape()
-  files = op.inputs[1].get_shape()
-  names = op.inputs[2].get_shape()
-  pool_handle = op.inputs[3].get_shape()
-  _assert_vec(pool_handle, 2)
-  _assert_scalar(filename)
-  num_files = _assert_matrix(files)
-  _assert_vec(names, num_files)
-  files_shape = files.dims
-  names_shape = names.dims
-  files_shape[0] += 1
-  names_shape[0] += 1
-  return [files_shape, names_shape]
 
 _sw_str = "SAMWriter"
 ops.NoGradient("SAMWriter")
