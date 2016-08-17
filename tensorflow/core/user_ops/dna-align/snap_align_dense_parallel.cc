@@ -309,13 +309,13 @@ private:
 
           result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
           if (++num_completed == max_completed) {
-            tracepoint(bioflow, reads_aligned, num_completed);
+            tracepoint(bioflow, reads_aligned, num_completed, my_id);
             num_completed = 0;
           }
         }
 
         if (num_completed > 0) {
-          tracepoint(bioflow, reads_aligned, num_completed);
+          tracepoint(bioflow, reads_aligned, num_completed, my_id);
         }
 
         if (!IsResourceExhausted(status)) {

@@ -186,10 +186,12 @@ TRACEPOINT_EVENT(
                  bioflow,
                  reads_aligned,
                  TP_ARGS(
-                         uint32_t, num_reads
+                         uint32_t, num_reads,
+                         int, thread_id
                          ),
                  TP_FIELDS(
                            ctf_integer(uint32_t, num_reads, num_reads)
+                           ctf_integer(int, thread_id, thread_id)
                            )
                  )
 
