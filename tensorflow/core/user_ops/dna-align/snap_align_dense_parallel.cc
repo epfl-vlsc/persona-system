@@ -93,6 +93,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
       int capacity = (chunk_size_ / subchunk_size_) + 1;
       request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
+      done_queue_.reset(new WorkQueue<decltype(id_)>(capacity*10)); // this should never block
       compute_status_ = Status::OK();
     }
 
@@ -189,12 +190,29 @@ class SnapAlignAGDParallelOp : public OpKernel {
       read_rsrc.release();
     }
     read_resources_.clear();
+
+    clear_resources();
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
 
 private:
   clock_t kernel_start;
+
+  inline void clear_resources() {
+    done_queue_->pop_all(completion_process_queue_);
+
+    for (auto &id : completion_process_queue_) {
+      for (size_t i = 0, idx = 0; i < pending_resources_.size(); i++) {
+        auto &rrh = pending_resources_[idx];
+        if (rrh.is_id(id) && rrh.decrement_count()) {
+          pending_resources_.erase(pending_resources_.begin()+idx);
+        } else {
+          idx++;
+        }
+      }
+    }
+  }
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
@@ -326,6 +344,7 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
+        done_queue_->push(id);
         tracepoint(bioflow, subchunk_time_stop, result_buf);
       }
 
@@ -360,10 +379,14 @@ private:
 
   int num_threads_, num_yielding_threads_;
   unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
+  unique_ptr<WorkQueue<decltype(id_)>> done_queue_;
 
-  vector<uint64_t> completion_process_queue_;
+  // used to get things out of the queue quickly
+  vector<decltype(id_)> completion_process_queue_;
+  // TODO make this more efficient with a map from id_->read resource...
   vector<unique_ptr<ReadResource>> read_resources_;
   vector<ReadResourceHolder> pending_resources_;
+
   Status compute_status_;
   TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignAGDParallelOp);
 };
