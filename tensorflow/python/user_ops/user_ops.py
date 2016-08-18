@@ -193,7 +193,7 @@ def BufferListSink(data, name=None):
 def _BufferListSinkShape(op):
   data = op.inputs[0].get_shape()
   _assert_vec(data, 2)
-  return []
+  return [tensor_shape.scalar()]
 
 _at_string = "AGDTester"
 ops.NoGradient(_at_string)
