@@ -366,7 +366,7 @@ def _ParallelColumnWriterShape(op):
   _assert_vec(column_handle_shape, 2)
   for i in range(1,4):
     _assert_scalar(op.inputs[i].get_shape())
-  return []
+  return [op.inputs[3].get_shape()]
 
 _aa_str = "AGDAssembler"
 ops.NoGradient(_aa_str)
