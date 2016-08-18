@@ -14,8 +14,12 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Input("data: string")
+  .Output("id: int32")
   .Doc(R"doc(
 Consumes the buffer input and produces nothing
+
+Note that the output is meaningless. It's only purpose is so that
+we can use it in other pipelines where writers are used
 )doc");
 
   class BufferListSinkOp : public OpKernel {
@@ -31,6 +35,10 @@ Consumes the buffer input and produces nothing
       core::ScopedUnref a(buf);
       {
         ResourceReleaser<BufferList> b(*buf); // make sure destructs first
+
+        Tensor *output;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("id", TensorShape({}), &output));
+        output->scalar<int32>()() = 0;
       }
     }
   };
