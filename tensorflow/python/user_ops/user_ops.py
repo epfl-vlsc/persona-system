@@ -235,8 +235,8 @@ ops.RegisterShape("SAMAsyncWriter")(common_shapes.scalar_shape)
 
 _gi_str = "GenomeIndex"
 ops.NoGradient(_gi_str)
-def GenomeIndex(filePath, name=None):
-    return gen_user_ops.genome_index(genome_location=filePath, name=name);
+def GenomeIndex(index_path, name=None):
+    return gen_user_ops.genome_index(genome_location=index_path, name=name);
 
 @ops.RegisterShape(_gi_str)
 def _GenomeIndexShape(op):
