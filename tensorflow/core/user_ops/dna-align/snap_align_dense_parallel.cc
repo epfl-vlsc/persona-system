@@ -1,3 +1,5 @@
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <vector>
 #include <tuple>
 #include <thread>
@@ -109,8 +111,10 @@ class SnapAlignAGDParallelOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      VLOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
-      VLOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
+      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
+      LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
       VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
@@ -216,6 +220,7 @@ private:
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
+      std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
       int my_id = 0;
       {
         mutex_lock l(mu_);
@@ -348,7 +353,18 @@ private:
         tracepoint(bioflow, subchunk_time_stop, result_buf);
       }
 
+      std::chrono::high_resolution_clock::time_point end_time = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
+      struct rusage usage;
+      int ret = getrusage(RUSAGE_THREAD, &usage);
+
+      LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
+      LOG(INFO) << "system time used: " << usage.ru_stime.tv_sec << "." << usage.ru_stime.tv_usec << endl;
+      LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
+      LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
+      LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
       VLOG(INFO) << "base aligner thread ending.";
+      delete base_aligner;
       num_active_threads_--;
     };
     auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
