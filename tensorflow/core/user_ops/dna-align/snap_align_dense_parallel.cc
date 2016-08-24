@@ -240,7 +240,47 @@ private:
 
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
-      BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
+      auto index = index_resource_->get_index();
+      auto options = options_resource_->value();
+
+      unsigned alignmentResultBufferCount;
+      if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+          alignmentResultBufferCount = 1; // For the primary alignment
+      } else {
+          alignmentResultBufferCount = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine, options->seedCoverage, 
+              MAX_READ_LENGTH, options->maxHits, index->getSeedLength()) + 1; // +1 for the primary alignment
+      }
+      size_t alignmentResultBufferSize = sizeof(SingleAlignmentResult) * (alignmentResultBufferCount + 1); // +1 is for primary result
+   
+      BigAllocator *allocator = new BigAllocator(BaseAligner::getBigAllocatorReservation(index, true, 
+            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig) 
+          + alignmentResultBufferSize);
+    
+      LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true, 
+            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig) 
+          + alignmentResultBufferSize;
+
+      BaseAligner* base_aligner = new (allocator) BaseAligner(
+        index,
+        options->maxHits,
+        options->maxDist,
+        MAX_READ_LENGTH,
+        options->numSeedsFromCommandLine,
+        options->seedCoverage,
+        options->minWeightToCheck,
+        options->extraSearchDepth,
+        false, false, false, // stuff that would decrease performance without impacting quality
+        options->maxSecondaryAlignmentsPerContig,
+        nullptr, nullptr, // Uncached Landau-Vishkin
+        nullptr, // No need for stats
+        allocator 
+        );
+      
+      allocator->checkCanaries();
+
+      base_aligner->setExplorePopularSeeds(options->explorePopularSeeds);
+      base_aligner->setStopOnFirstHit(options->stopOnFirstHit);
+      
       bool first_is_primary = true; // we only ever generate one result
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
@@ -295,8 +335,8 @@ private:
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
               result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
-              continue;
             }
+            continue;
           }
 
 
@@ -304,7 +344,7 @@ private:
                                   &snap_read,
                                   &primaryResult,
                                   options_->maxSecondaryAlignmentAdditionalEditDistance,
-                                  num_secondary_alignments * sizeof(SingleAlignmentResult),
+                                  0, //num_secondary_alignments * sizeof(SingleAlignmentResult),
                                   &num_secondary_results,
                                   num_secondary_alignments,
                                   nullptr //secondaryResults
@@ -363,8 +403,9 @@ private:
       LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
       LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
       LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
+      base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
+      delete allocator;
       VLOG(INFO) << "base aligner thread ending.";
-      delete base_aligner;
       num_active_threads_--;
     };
     auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
