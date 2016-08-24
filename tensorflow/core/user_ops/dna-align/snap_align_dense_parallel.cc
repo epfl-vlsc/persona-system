@@ -147,7 +147,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ReadResource>(reads, resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
 
-    OP_REQUIRES_OK(ctx, bufferlist_resource_container->allocate_output("result_buf_handle", ctx));
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
