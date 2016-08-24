@@ -3,6 +3,7 @@
 #include "tensorflow/core/lib/core/status.h"
 #include <vector>
 #include <memory>
+#include <atomic>
 
 namespace tensorflow {
 
@@ -34,6 +35,9 @@ namespace tensorflow {
     virtual void release();
 
     virtual Status split(std::size_t chunk, std::vector<std::unique_ptr<ReadResource>> &split_resources);
+  protected:
+    std::atomic_size_t num_subchunks{0};
+    friend class SubchunkReleaser;
   };
 
   class ReadResourceReleaser
@@ -44,5 +48,14 @@ namespace tensorflow {
 
   private:
     ReadResource &rr_;
+  };
+
+  class SubchunkReleaser
+  {
+  public:
+    SubchunkReleaser(ReadResource &parent);
+    ~SubchunkReleaser();
+  private:
+    ReadResource &parent_rr_;
   };
 } // namespace tensorflow {

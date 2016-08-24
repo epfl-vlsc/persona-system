@@ -182,6 +182,7 @@ namespace tensorflow {
         qual_start += qual_idx_->relative_index[j];
       }
     }
+    num_subchunks = split_resources.size() - 1; // -1 because we need to decrement .size() times to get to 0
     return Status::OK();
   }
 
