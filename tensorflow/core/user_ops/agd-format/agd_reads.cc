@@ -154,10 +154,23 @@ namespace tensorflow {
     if (meta_) {
       meta_->release();
     }
+    sub_resources_.clear();
+    buffer_list_ = nullptr;
   }
 
-  Status AGDReadResource::split(size_t chunk, vector<unique_ptr<ReadResource>> &split_resources) {
-    split_resources.clear();
+  Status AGDReadResource::get_next_subchunk(ReadResource **rr, Buffer **b) {
+    auto idx = sub_resource_index_.fetch_add(1);
+    if (idx > sub_resources_.size()) {
+      return ResourceExhausted("No more AGD subchunks");
+    } else {
+      *rr = &sub_resources_[idx];
+      *b = buffer_list_->get_at(idx);
+    }
+    return Status::OK();
+  }
+
+  Status AGDReadResource::split(size_t chunk, BufferList *bl) {
+    sub_resources_.clear();
 
     reset_iter(); // who cares doesn't die for now
 
@@ -173,8 +186,7 @@ namespace tensorflow {
         max_range = num_records_;
       }
 
-      unique_ptr<ReadResource> a(new AGDReadSubResource(*this, i, max_range, base_start, qual_start, meta_start));
-      split_resources.push_back(move(a));
+      sub_resources_.push_back(AGDReadSubResource(*this, i, max_range, base_start, qual_start, meta_start));
 
       // actually advance the records
       for (decltype(i) j = i; j < max_range; ++j) {
@@ -182,7 +194,9 @@ namespace tensorflow {
         qual_start += qual_idx_->relative_index[j];
       }
     }
-    num_subchunks = split_resources.size() - 1; // -1 because we need to decrement .size() times to get to 0
+    sub_resource_index_ = 0;
+    buffer_list_ = bl;
+    buffer_list_->resize(sub_resources_.size());
     return Status::OK();
   }
 

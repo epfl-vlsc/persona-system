@@ -1,6 +1,7 @@
 #include <vector>
 #include <tuple>
 #include <thread>
+#include <memory>
 #include <chrono>
 #include <atomic>
 #include <locale>
@@ -38,36 +39,9 @@ using namespace std;
 using namespace errors;
 
   namespace {
-    class ReadResourceHolder
-    {
-    private:
-      uint64_t id_;
-      ReadResource *parent_resource_;
-      uint16_t count_;
-
-    public:
-      ReadResourceHolder(const decltype(id_) id, ReadResource *parent_resource, uint16_t count) :
-        id_(id), parent_resource_(parent_resource), count_(count) {}
-
-      inline bool
-      is_id(const decltype(id_) &other_id) {
-        return other_id == id_;
-      }
-
-      inline bool
-      decrement_count() {
-        // complex if statement prevents wraparound, which shouldn't happen
-        if (count_ == 0) {
-          LOG(DEBUG) << "decrement_count called with count_ already == 0. This is a bug!\n";
-          return true;
-        } else if (--count_ == 0) {
-          ReadResourceReleaser a(*parent_resource_);
-          return true;
-        } else
-          return false;
-      }
-
-    };
+    void resource_releaser(ReadResource *rr) {
+      ReadResourceReleaser r(*rr);
+    }
   }
 
 class SnapAlignAGDParallelOp : public OpKernel {
@@ -91,8 +65,8 @@ class SnapAlignAGDParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
 #endif
 
-      int capacity = (chunk_size_ / subchunk_size_) + 1;
-      request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*>>(capacity));
+      int capacity = (chunk_size_ / subchunk_size_) + 1; // TODO this math should be better
+      request_queue_.reset(new WorkQueue<shared_ptr<ReadResource>>(capacity));
       compute_status_ = Status::OK();
     }
 
@@ -166,29 +140,16 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
     ResourceContainer<BufferList> *bufferlist_resource_container;
     OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
+    core::ScopedUnref bl_unref(bufferlist_resource_container);
     auto alignment_result_buffer_list = bufferlist_resource_container->get();
 
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
+    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ReadResource>(reads, resource_releaser)),
+                Internal("Unable to push item onto work queue. Is it already closed?"));
 
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, read_resources_));
-    decltype(read_resources_)::size_type num_subchunks = read_resources_.size();
-    alignment_result_buffer_list->resize(num_subchunks);
+    // TODO actually push them in to the aligner kernels!
 
-    for (decltype(num_subchunks) i = 0; i < num_subchunks; ++i) {
-      auto *alignment_buffer = alignment_result_buffer_list->get_at(i);
-      alignment_buffer->reset();
-      tracepoint(bioflow, align_ready_queue_start, alignment_buffer);
-      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_, reads));
-    }
-    tracepoint(bioflow, total_align_start, bufferlist_resource_container);
-    pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
-
-    // needed because if we just call clear, this will
-    // call delete on all the resources!
-    for (auto &read_rsrc : read_resources_) {
-      read_rsrc.release();
-    }
-    read_resources_.clear();
-
+    OP_REQUIRES_OK(ctx, bufferlist_resource_container->allocate_output("result_buf_handle", ctx));
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
@@ -232,103 +193,79 @@ private:
       LandauVishkinWithCigar lvc;
 
       Buffer* result_buf;
-      ReadResource* reads, *parent_reads;
-      decltype(id_) id;
-      tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*> batch;
+      ReadResource* subchunk_resource;
       clock_t start;
       Status status;
-      uint32_t num_completed;
       const uint32_t max_completed = trace_granularity_;
       while (run_) {
-        if (request_queue_->pop(batch)) {
-          reads = get<0>(batch);
-          result_buf = get<1>(batch);
-          tracepoint(bioflow, subchunk_time_start, result_buf);
-          tracepoint(bioflow, align_ready_queue_stop, result_buf);
-          id = get<2>(batch);
-          parent_reads = get<3>(batch);
-#ifdef YIELDING
-          if (should_yield && (float)request_queue_->size() / (float)capacity < low_watermark_)
-            std::this_thread::yield();
-#endif
-        } else
+        // reads must be in this scope for the custom releaser to work!
+        shared_ptr<ReadResource> reads;
+        if (!request_queue_->peek(reads)) {
           continue;
+        }
 
-        // should this by in the if statement above?
-        num_completed = 0;
-        SubchunkReleaser a(*parent_reads);
-
-        auto &res_buf = result_buf->get();
-        for (status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
-             status.ok();
-             status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
-          cigarString.clear();
-          snap_read.init(nullptr, 0, bases, qualities, bases_len);
-          snap_read.clip(options_->clipping);
-          if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
-            if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {
-              LOG(INFO) << "FILTERING READ";
-            } else {
-              primaryResult.status = AlignmentResult::NotFound;
-              primaryResult.location = InvalidGenomeLocation;
-              primaryResult.mapq = 0;
-              primaryResult.direction = FORWARD;
-              result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
-              continue;
+        status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+        while (status.ok() || IsResourceExhausted(status)) {
+          auto &res_buf = result_buf->get();
+          for (status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+               status.ok();
+               status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
+            cigarString.clear();
+            snap_read.init(nullptr, 0, bases, qualities, bases_len);
+            snap_read.clip(options_->clipping);
+            if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
+              if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {
+                LOG(INFO) << "FILTERING READ";
+              } else {
+                primaryResult.status = AlignmentResult::NotFound;
+                primaryResult.location = InvalidGenomeLocation;
+                primaryResult.mapq = 0;
+                primaryResult.direction = FORWARD;
+                result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
+                continue;
+              }
             }
-          }
 
 
-          base_aligner->AlignRead(
-                                  &snap_read,
-                                  &primaryResult,
-                                  options_->maxSecondaryAlignmentAdditionalEditDistance,
-                                  num_secondary_alignments * sizeof(SingleAlignmentResult),
-                                  &num_secondary_results,
-                                  num_secondary_alignments,
-                                  nullptr //secondaryResults
-                                  );
+            base_aligner->AlignRead(
+                                    &snap_read,
+                                    &primaryResult,
+                                    options_->maxSecondaryAlignmentAdditionalEditDistance,
+                                    num_secondary_alignments * sizeof(SingleAlignmentResult),
+                                    &num_secondary_results,
+                                    num_secondary_alignments,
+                                    nullptr //secondaryResults
+                                    );
 
-          flag = 0;
+            flag = 0;
 
-          // we may need to do post process options->passfilter here?
-
-          // compute the CIGAR strings and flags
-          // input_reads[i] holds the current snap_read
-          /*Status s = snap_wrapper::computeCigarFlags(
-            &snap_read, &primaryResult, 1, first_is_primary, format,
-            options_->useM, lvc, genome_, cigarString, flag);*/
-
-          Status s = snap_wrapper::adjustResults(
-                                                 &snap_read, primaryResult, first_is_primary, format,
+            status = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
                                                  options_->useM, lvc, genome_, cigarString, flag);
 
-          if (!s.ok())
-            LOG(ERROR) << "computeCigarFlags did not return OK!!!";
+            if (!status.ok())
+              LOG(ERROR) << "computeCigarFlags did not return OK!!!";
 
-          /*LOG(INFO) << " result: location " << primaryResult.location <<
-            " direction: " << primaryResult.direction << " score " << primaryResult.score << " cigar: " << cigarString << " mapq: " << primaryResult.mapq;*/
-
-          result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
-          if (++num_completed == max_completed) {
-            tracepoint(bioflow, reads_aligned, num_completed, my_id, this);
-            num_completed = 0;
+            result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
           }
+
+          if (!IsResourceExhausted(status)) {
+            LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
+            compute_status_ = status;
+            return;
+          }
+
+          result_builder.AppendAndFlush(res_buf);
+          result_buf->set_ready();
+
+          status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         }
 
-        if (num_completed > 0) {
-          tracepoint(bioflow, reads_aligned, num_completed, my_id, this);
-        }
-
+        request_queue_->drop_if_equal(reads);
         if (!IsResourceExhausted(status)) {
-          LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError! : " << status << "\n";
+          LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << status << "\n";
           compute_status_ = status;
           return;
         }
-
-        result_builder.AppendAndFlush(res_buf);
-        result_buf->set_ready();
-        tracepoint(bioflow, subchunk_time_stop, result_buf);
       }
 
       VLOG(INFO) << "base aligner thread ending.";
@@ -361,13 +298,8 @@ private:
   int thread_id_ = 0;
 
   int num_threads_, num_yielding_threads_;
-  unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*>>> request_queue_;
 
-  // used to get things out of the queue quickly
-  vector<decltype(id_)> completion_process_queue_;
-  // TODO make this more efficient with a map from id_->read resource...
-  vector<unique_ptr<ReadResource>> read_resources_;
-  vector<ReadResourceHolder> pending_resources_;
+  unique_ptr<WorkQueue<shared_ptr<ReadResource>>> request_queue_;
 
   Status compute_status_;
   TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignAGDParallelOp);

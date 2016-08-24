@@ -4,6 +4,8 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "data.h"
 #include "format.h"
+#include <vector>
+#include <atomic>
 
 namespace tensorflow {
 
@@ -43,7 +45,8 @@ namespace tensorflow {
 
     std::size_t num_records() override;
 
-    Status split(std::size_t chunk, std::vector<std::unique_ptr<ReadResource>> &split_resources) override;
+    Status split(std::size_t chunk, BufferList *bl) override;
+    Status get_next_subchunk(ReadResource **rr, Buffer **b) override;
 
   private:
     DataContainer *bases_ = nullptr, *quals_ = nullptr, *meta_ = nullptr;
@@ -54,6 +57,9 @@ namespace tensorflow {
     AGDReadResource(const AGDReadResource &other) = delete;
     AGDReadResource& operator=(const AGDReadResource &other) = delete;
     AGDReadResource(AGDReadResource &&other) = delete;
+    std::vector<AGDReadSubResource> sub_resources_;
+    std::atomic_size_t sub_resource_index_;
+    BufferList *buffer_list_ = nullptr;
 
     friend class AGDReadSubResource;
   };
