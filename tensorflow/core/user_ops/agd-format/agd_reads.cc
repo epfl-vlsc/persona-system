@@ -176,7 +176,6 @@ namespace tensorflow {
 
     // TODO we don't support dealing with meta for now. too difficult for the deadline!
     decltype(base_data_) base_start = base_data_, qual_start = qual_data_, meta_start = nullptr;
-    
     decltype(chunk) max_range;
     for (decltype(num_records_) i = 0; i < num_records_; i += chunk) {
       //AGDReadSubResource a(*this, i, CHUNK_SIZE, )

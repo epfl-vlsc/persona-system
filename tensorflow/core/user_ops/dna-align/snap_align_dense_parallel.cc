@@ -147,8 +147,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ReadResource>(reads, resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
 
-    // TODO actually push them in to the aligner kernels!
-
     OP_REQUIRES_OK(ctx, bufferlist_resource_container->allocate_output("result_buf_handle", ctx));
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
@@ -164,17 +162,6 @@ private:
         mutex_lock l(mu_);
         my_id = thread_id_++;
       }
-#ifdef YIELDING
-      bool should_yield = my_id < num_yielding_threads_;
-      cpu_set_t cpuset;
-      CPU_ZERO(&cpuset);
-      CPU_SET(threads_[my_id], &cpuset);
-      int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-      if (rc != 0) {
-        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core: " << threads_[my_id] 
-          << " for thread id: " << my_id;
-      }
-#endif
 
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
