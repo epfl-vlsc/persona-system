@@ -358,7 +358,7 @@ cc_library(
     # TODO  do something about this hacky stuff
     deps = [":framework", "//tensorflow/core/kernels:io",
             "//tensorflow/core/user_ops/dna-align:snap_protos_cc",
-            "//tensorflow/core/user_ops/dna-align:sam_writer_async",
+            #"//tensorflow/core/user_ops/dna-align:sam_writer_async",
             "//tensorflow/core/user_ops/dna-align:snap_align",
             "//tensorflow/core/user_ops/agd-format:agd_format",
             "//tensorflow/core/user_ops/object-pool:object_pool",

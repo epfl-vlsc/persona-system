@@ -1,3 +1,5 @@
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <vector>
 #include <tuple>
 #include <thread>
@@ -31,9 +33,6 @@
 #include "tensorflow/core/user_ops/agd-format/read_resource.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
-// uncommenting this will define the old behavior. may need to adjust / fix compile bugs
-// #define YIELDING
-
 namespace tensorflow {
 using namespace std;
 using namespace errors;
@@ -48,22 +47,13 @@ class SnapAlignAGDParallelOp : public OpKernel {
   public:
     explicit SnapAlignAGDParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
-#ifdef YIELDING
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("threads", &threads_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_yielding_threads", &num_yielding_threads_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("low_watermark", &low_watermark_));
-#endif
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       int i;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("trace_granularity", &i));
       OP_REQUIRES(ctx, i > 0, errors::InvalidArgument("trace granularity ", i, " must be greater than 0"));
       trace_granularity_ = i;
 
-#ifdef YIELDING
-      num_threads_ = threads_.size();
-#else
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
-#endif
 
       int capacity = (chunk_size_ / subchunk_size_) + 1; // TODO this math should be better
       request_queue_.reset(new WorkQueue<shared_ptr<ReadResource>>(capacity));
@@ -82,8 +72,10 @@ class SnapAlignAGDParallelOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      VLOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
-      VLOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
+      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
+      //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
       VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
@@ -155,6 +147,7 @@ private:
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
+      std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
       int my_id = 0;
       {
         mutex_lock l(mu_);
@@ -163,7 +156,47 @@ private:
 
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
-      BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
+      auto index = index_resource_->get_index();
+      auto options = options_resource_->value();
+
+      unsigned alignmentResultBufferCount;
+      if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+          alignmentResultBufferCount = 1; // For the primary alignment
+      } else {
+          alignmentResultBufferCount = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine, options->seedCoverage,
+              MAX_READ_LENGTH, options->maxHits, index->getSeedLength()) + 1; // +1 for the primary alignment
+      }
+      size_t alignmentResultBufferSize = sizeof(SingleAlignmentResult) * (alignmentResultBufferCount + 1); // +1 is for primary result
+
+      BigAllocator *allocator = new BigAllocator(BaseAligner::getBigAllocatorReservation(index, true,
+            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
+          + alignmentResultBufferSize);
+
+      LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true,
+            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
+          + alignmentResultBufferSize;
+
+      BaseAligner* base_aligner = new (allocator) BaseAligner(
+        index,
+        options->maxHits,
+        options->maxDist,
+        MAX_READ_LENGTH,
+        options->numSeedsFromCommandLine,
+        options->seedCoverage,
+        options->minWeightToCheck,
+        options->extraSearchDepth,
+        false, false, false, // stuff that would decrease performance without impacting quality
+        options->maxSecondaryAlignmentsPerContig,
+        nullptr, nullptr, // Uncached Landau-Vishkin
+        nullptr, // No need for stats
+        allocator
+        );
+
+      allocator->checkCanaries();
+
+      base_aligner->setExplorePopularSeeds(options->explorePopularSeeds);
+      base_aligner->setStopOnFirstHit(options->stopOnFirstHit);
+
       bool first_is_primary = true; // we only ever generate one result
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
@@ -179,7 +212,6 @@ private:
 
       Buffer* result_buf = nullptr;
       ReadResource* subchunk_resource = nullptr;
-      clock_t start;
       Status io_chunk_status, subchunk_status;
       const uint32_t max_completed = trace_granularity_;
       while (run_) {
@@ -190,7 +222,7 @@ private:
         }
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
-        while (io_chunk_status.ok() || IsResourceExhausted(io_chunk_status)) {
+        while (io_chunk_status.ok()) {
           auto &res_buf = result_buf->get();
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
@@ -206,16 +238,15 @@ private:
                 primaryResult.mapq = 0;
                 primaryResult.direction = FORWARD;
                 result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
-                continue;
               }
+              continue;
             }
-
 
             base_aligner->AlignRead(
                                     &snap_read,
                                     &primaryResult,
                                     options_->maxSecondaryAlignmentAdditionalEditDistance,
-                                    num_secondary_alignments * sizeof(SingleAlignmentResult),
+                                    0, //num_secondary_alignments * sizeof(SingleAlignmentResult),
                                     &num_secondary_results,
                                     num_secondary_alignments,
                                     nullptr //secondaryResults
@@ -252,6 +283,18 @@ private:
         }
       }
 
+      std::chrono::high_resolution_clock::time_point end_time = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
+      struct rusage usage;
+      int ret = getrusage(RUSAGE_THREAD, &usage);
+
+      LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
+      LOG(INFO) << "system time used: " << usage.ru_stime.tv_sec << "." << usage.ru_stime.tv_usec << endl;
+      LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
+      LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
+      LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
+      base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
+      delete allocator;
       VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_--;
     };
@@ -270,18 +313,13 @@ private:
   int chunk_size_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
-#ifdef YIELDING
-  float low_watermark_;
-  int num_yielding_threads_;
-  std::vector<int> threads_;
-#endif
   uint32_t trace_granularity_;
 
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
   int thread_id_ = 0;
 
-  int num_threads_, num_yielding_threads_;
+  int num_threads_;
 
   unique_ptr<WorkQueue<shared_ptr<ReadResource>>> request_queue_;
 
@@ -290,13 +328,7 @@ private:
 };
 
   REGISTER_OP("SnapAlignAGDParallel")
-#ifdef YIELDING
-  .Attr("threads: list(int)")
-  .Attr("num_yielding_threads: int")
-  .Attr("low_watermark: float")
-#else
   .Attr("num_threads: int")
-#endif
   .Attr("trace_granularity: int = 500")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")

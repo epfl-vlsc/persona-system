@@ -18,14 +18,16 @@ tf_proto_library_cc(
 
 cc_library(
     name = "snap_lib",
+    #srcs = glob(["libsnap.a"]),
     srcs = glob(["snap/SNAPLib/*.cpp"]),
     hdrs = glob(["snap/SNAPLib/*.h"]),
     includes = ["snap/SNAPLib"],
     linkopts = [
         "-lm", "-lrt", "-lz"
     ],
+    linkstatic = 1,
     visibility = ["//visibility:public"],
-    copts = ["-O3", "-pthread", "-MMD", "-msse", "-Wno-format", "-std=c++11"]
+    copts = ["-pthread", "-MMD", "-msse", "-Wno-format", "-std=c++11"]
 )
 
 cc_library(
@@ -48,6 +50,7 @@ cc_library(
     srcs = glob(["*.cc"],
            exclude = [
                       "sam_writer_async_op.cc",
+                      "snap_align.cc",
                       "snap_read_decode.cc",
                       "snap_results_decode.cc",
                       ],
@@ -61,25 +64,26 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
             "//tensorflow/core:framework",
-            ":snap_protos_cc",
+            #":snap_protos_cc",
+            ":snap_lib",
             "//tensorflow/core/user_ops/lttng:trace",
             "//tensorflow/core/user_ops/object-pool:object_pool",
-            "//tensorflow/core/user_ops/agd-format:agd_format",
-            ":snap_lib"],
+            "//tensorflow/core/user_ops/agd-format:agd_format"
+            ],
     alwayslink=1,
     linkopts = [
              "-lboost_system", "-lboost_timer"
     ]
 )
 
-cc_library(
-    name = "sam_writer_async",
-    srcs = ["sam_writer_async_op.cc"],
-    includes = ["."],
-    copts = tf_copts(),
-    linkstatic = 1,
-    visibility = ["//visibility:public"],
-    deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:writer_async_base",
-            ":snap_protos_cc", ":snap_tensor_decoders", ":snap_lib"],
-    alwayslink = 1,
-)
+#cc_library(
+    #name = "sam_writer_async",
+    #srcs = ["sam_writer_async_op.cc"],
+    #includes = ["."],
+    #copts = tf_copts(),
+    #linkstatic = 1,
+    #visibility = ["//visibility:public"],
+    #deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:writer_async_base",
+            #":snap_protos_cc", ":snap_tensor_decoders", ":snap_lib"],
+    #alwayslink = 1,
+#)
