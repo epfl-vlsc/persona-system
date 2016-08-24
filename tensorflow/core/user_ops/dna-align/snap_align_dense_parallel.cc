@@ -92,8 +92,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
 #endif
 
       int capacity = (chunk_size_ / subchunk_size_) + 1;
-      request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
-      done_queue_.reset(new WorkQueue<decltype(id_)>(capacity*10)); // this should never block
+      request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*>>(capacity));
       compute_status_ = Status::OK();
     }
 
@@ -142,7 +141,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
       return Status::OK();
     }
 
-
   void Compute(OpKernelContext* ctx) override {
     if (index_resource_ == nullptr) {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
@@ -179,7 +177,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
       auto *alignment_buffer = alignment_result_buffer_list->get_at(i);
       alignment_buffer->reset();
       tracepoint(bioflow, align_ready_queue_start, alignment_buffer);
-      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_));
+      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_, reads));
     }
     tracepoint(bioflow, total_align_start, bufferlist_resource_container);
     pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
@@ -191,28 +189,12 @@ class SnapAlignAGDParallelOp : public OpKernel {
     }
     read_resources_.clear();
 
-    clear_resources();
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
 
 private:
   clock_t kernel_start;
-
-  inline void clear_resources() {
-    done_queue_->pop_all(completion_process_queue_);
-
-    for (auto &id : completion_process_queue_) {
-      for (size_t i = 0, idx = 0; i < pending_resources_.size(); i++) {
-        auto &rrh = pending_resources_[idx];
-        if (rrh.is_id(id) && rrh.decrement_count()) {
-          pending_resources_.erase(pending_resources_.begin()+idx);
-        } else {
-          idx++;
-        }
-      }
-    }
-  }
 
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
@@ -250,9 +232,9 @@ private:
       LandauVishkinWithCigar lvc;
 
       Buffer* result_buf;
-      ReadResource* reads;
+      ReadResource* reads, *parent_reads;
       decltype(id_) id;
-      tuple<ReadResource*, Buffer*, decltype(id_)> batch;
+      tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*> batch;
       clock_t start;
       Status status;
       uint32_t num_completed;
@@ -264,6 +246,7 @@ private:
           tracepoint(bioflow, subchunk_time_start, result_buf);
           tracepoint(bioflow, align_ready_queue_stop, result_buf);
           id = get<2>(batch);
+          parent_reads = get<3>(batch);
 #ifdef YIELDING
           if (should_yield && (float)request_queue_->size() / (float)capacity < low_watermark_)
             std::this_thread::yield();
@@ -273,6 +256,7 @@ private:
 
         // should this by in the if statement above?
         num_completed = 0;
+        SubchunkReleaser a(*parent_reads);
 
         auto &res_buf = result_buf->get();
         for (status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
@@ -344,7 +328,6 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
-        done_queue_->push(id);
         tracepoint(bioflow, subchunk_time_stop, result_buf);
       }
 
@@ -378,8 +361,7 @@ private:
   int thread_id_ = 0;
 
   int num_threads_, num_yielding_threads_;
-  unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
-  unique_ptr<WorkQueue<decltype(id_)>> done_queue_;
+  unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*>>> request_queue_;
 
   // used to get things out of the queue quickly
   vector<decltype(id_)> completion_process_queue_;
