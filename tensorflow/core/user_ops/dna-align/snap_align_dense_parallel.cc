@@ -177,10 +177,10 @@ private:
       Read snap_read;
       LandauVishkinWithCigar lvc;
 
-      Buffer* result_buf;
-      ReadResource* subchunk_resource;
+      Buffer* result_buf = nullptr;
+      ReadResource* subchunk_resource = nullptr;
       clock_t start;
-      Status status;
+      Status io_chunk_status, subchunk_status;
       const uint32_t max_completed = trace_granularity_;
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
@@ -189,12 +189,11 @@ private:
           continue;
         }
 
-        status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
-        while (status.ok() || IsResourceExhausted(status)) {
+        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+        while (io_chunk_status.ok() || IsResourceExhausted(io_chunk_status)) {
           auto &res_buf = result_buf->get();
-          for (status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
-               status.ok();
-               status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
+          for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
+               subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
             cigarString.clear();
             snap_read.init(nullptr, 0, bases, qualities, bases_len);
             snap_read.clip(options_->clipping);
@@ -224,31 +223,31 @@ private:
 
             flag = 0;
 
-            status = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
+            auto s = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
                                                  options_->useM, lvc, genome_, cigarString, flag);
 
-            if (!status.ok())
+            if (!s.ok())
               LOG(ERROR) << "computeCigarFlags did not return OK!!!";
 
             result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
           }
 
-          if (!IsResourceExhausted(status)) {
+          if (!IsResourceExhausted(subchunk_status)) {
             LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
-            compute_status_ = status;
+            compute_status_ = subchunk_status;
             return;
           }
 
           result_builder.AppendAndFlush(res_buf);
           result_buf->set_ready();
 
-          status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         }
 
         request_queue_->drop_if_equal(reads);
-        if (!IsResourceExhausted(status)) {
-          LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << status << "\n";
-          compute_status_ = status;
+        if (!IsResourceExhausted(io_chunk_status)) {
+          LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status << "\n";
+          compute_status_ = io_chunk_status;
           return;
         }
       }
