@@ -112,8 +112,8 @@ class SnapAlignAGDParallelOp : public OpKernel {
       }
       LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
       LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
-      LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
-      LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
+      //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
+      //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
       VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
