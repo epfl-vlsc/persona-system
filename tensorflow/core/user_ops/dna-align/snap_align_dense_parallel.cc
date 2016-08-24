@@ -140,7 +140,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
     ResourceContainer<BufferList> *bufferlist_resource_container;
     OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
-    core::ScopedUnref bl_unref(bufferlist_resource_container);
     auto alignment_result_buffer_list = bufferlist_resource_container->get();
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
