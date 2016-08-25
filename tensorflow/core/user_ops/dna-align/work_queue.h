@@ -145,7 +145,7 @@ bool WorkQueue<T>::push(const T& item) {
 
   if (pushed) {
     // tell someone blocking on read they can now read from the queue
-    queue_pop_cv_.notify_one();
+    queue_pop_cv_.notify_all();
     return true;
   } else
     return false;
