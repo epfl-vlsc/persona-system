@@ -43,4 +43,13 @@ namespace tensorflow {
     rr_.release();
   }
 
+  SubchunkReleaser::SubchunkReleaser(ReadResource &parent) : parent_rr_(parent) {}
+
+  SubchunkReleaser::~SubchunkReleaser() {
+    auto remaining = parent_rr_.num_subchunks.fetch_sub(1);
+    if (remaining == 0) {
+      parent_rr_.release();
+    }
+  }
+
 } // namespace tensorflow {

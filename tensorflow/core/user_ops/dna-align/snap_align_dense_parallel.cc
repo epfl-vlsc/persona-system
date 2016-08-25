@@ -1,3 +1,5 @@
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <vector>
 #include <tuple>
 #include <thread>
@@ -92,8 +94,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
 #endif
 
       int capacity = (chunk_size_ / subchunk_size_) + 1;
-      request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>(capacity));
-      done_queue_.reset(new WorkQueue<decltype(id_)>(capacity*10)); // this should never block
+      request_queue_.reset(new WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*>>(capacity));
       compute_status_ = Status::OK();
     }
 
@@ -109,8 +110,10 @@ class SnapAlignAGDParallelOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      VLOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
-      VLOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
+      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
+      //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
       VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
@@ -141,7 +144,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
       TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
       return Status::OK();
     }
-
 
   void Compute(OpKernelContext* ctx) override {
     if (index_resource_ == nullptr) {
@@ -179,7 +181,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
       auto *alignment_buffer = alignment_result_buffer_list->get_at(i);
       alignment_buffer->reset();
       tracepoint(bioflow, align_ready_queue_start, alignment_buffer);
-      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_));
+      request_queue_->push(make_tuple(read_resources_[i].get(), alignment_buffer, id_, reads));
     }
     tracepoint(bioflow, total_align_start, bufferlist_resource_container);
     pending_resources_.push_back(ReadResourceHolder(id_++, reads, num_subchunks));
@@ -191,7 +193,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
     }
     read_resources_.clear();
 
-    clear_resources();
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
@@ -199,23 +200,9 @@ class SnapAlignAGDParallelOp : public OpKernel {
 private:
   clock_t kernel_start;
 
-  inline void clear_resources() {
-    done_queue_->pop_all(completion_process_queue_);
-
-    for (auto &id : completion_process_queue_) {
-      for (size_t i = 0, idx = 0; i < pending_resources_.size(); i++) {
-        auto &rrh = pending_resources_[idx];
-        if (rrh.is_id(id) && rrh.decrement_count()) {
-          pending_resources_.erase(pending_resources_.begin()+idx);
-        } else {
-          idx++;
-        }
-      }
-    }
-  }
-
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
+      std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
       int my_id = 0;
       {
         mutex_lock l(mu_);
@@ -235,7 +222,47 @@ private:
 
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
-      BaseAligner* base_aligner = snap_wrapper::createAligner(index_resource_->get_index(), options_resource_->value());
+      auto index = index_resource_->get_index();
+      auto options = options_resource_->value();
+
+      unsigned alignmentResultBufferCount;
+      if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+          alignmentResultBufferCount = 1; // For the primary alignment
+      } else {
+          alignmentResultBufferCount = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine, options->seedCoverage, 
+              MAX_READ_LENGTH, options->maxHits, index->getSeedLength()) + 1; // +1 for the primary alignment
+      }
+      size_t alignmentResultBufferSize = sizeof(SingleAlignmentResult) * (alignmentResultBufferCount + 1); // +1 is for primary result
+   
+      BigAllocator *allocator = new BigAllocator(BaseAligner::getBigAllocatorReservation(index, true, 
+            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig) 
+          + alignmentResultBufferSize);
+    
+      LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true, 
+            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig) 
+          + alignmentResultBufferSize;
+
+      BaseAligner* base_aligner = new (allocator) BaseAligner(
+        index,
+        options->maxHits,
+        options->maxDist,
+        MAX_READ_LENGTH,
+        options->numSeedsFromCommandLine,
+        options->seedCoverage,
+        options->minWeightToCheck,
+        options->extraSearchDepth,
+        false, false, false, // stuff that would decrease performance without impacting quality
+        options->maxSecondaryAlignmentsPerContig,
+        nullptr, nullptr, // Uncached Landau-Vishkin
+        nullptr, // No need for stats
+        allocator 
+        );
+      
+      allocator->checkCanaries();
+
+      base_aligner->setExplorePopularSeeds(options->explorePopularSeeds);
+      base_aligner->setStopOnFirstHit(options->stopOnFirstHit);
+      
       bool first_is_primary = true; // we only ever generate one result
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
@@ -250,9 +277,9 @@ private:
       LandauVishkinWithCigar lvc;
 
       Buffer* result_buf;
-      ReadResource* reads;
+      ReadResource* reads, *parent_reads;
       decltype(id_) id;
-      tuple<ReadResource*, Buffer*, decltype(id_)> batch;
+      tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*> batch;
       clock_t start;
       Status status;
       uint32_t num_completed;
@@ -264,6 +291,7 @@ private:
           tracepoint(bioflow, subchunk_time_start, result_buf);
           tracepoint(bioflow, align_ready_queue_stop, result_buf);
           id = get<2>(batch);
+          parent_reads = get<3>(batch);
 #ifdef YIELDING
           if (should_yield && (float)request_queue_->size() / (float)capacity < low_watermark_)
             std::this_thread::yield();
@@ -273,6 +301,7 @@ private:
 
         // should this by in the if statement above?
         num_completed = 0;
+        SubchunkReleaser a(*parent_reads);
 
         auto &res_buf = result_buf->get();
         for (status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
@@ -290,8 +319,8 @@ private:
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
               result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
-              continue;
             }
+            continue;
           }
 
 
@@ -299,7 +328,7 @@ private:
                                   &snap_read,
                                   &primaryResult,
                                   options_->maxSecondaryAlignmentAdditionalEditDistance,
-                                  num_secondary_alignments * sizeof(SingleAlignmentResult),
+                                  0, //num_secondary_alignments * sizeof(SingleAlignmentResult),
                                   &num_secondary_results,
                                   num_secondary_alignments,
                                   nullptr //secondaryResults
@@ -344,10 +373,21 @@ private:
 
         result_builder.AppendAndFlush(res_buf);
         result_buf->set_ready();
-        done_queue_->push(id);
         tracepoint(bioflow, subchunk_time_stop, result_buf);
       }
 
+      std::chrono::high_resolution_clock::time_point end_time = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
+      struct rusage usage;
+      int ret = getrusage(RUSAGE_THREAD, &usage);
+
+      LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
+      LOG(INFO) << "system time used: " << usage.ru_stime.tv_sec << "." << usage.ru_stime.tv_usec << endl;
+      LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
+      LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
+      LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
+      base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
+      delete allocator;
       VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_--;
     };
@@ -378,8 +418,7 @@ private:
   int thread_id_ = 0;
 
   int num_threads_, num_yielding_threads_;
-  unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_)>>> request_queue_;
-  unique_ptr<WorkQueue<decltype(id_)>> done_queue_;
+  unique_ptr<WorkQueue<tuple<ReadResource*, Buffer*, decltype(id_), ReadResource*>>> request_queue_;
 
   // used to get things out of the queue quickly
   vector<decltype(id_)> completion_process_queue_;
