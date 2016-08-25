@@ -30,25 +30,20 @@ namespace tensorflow {
 
   void Buffer::reset() {
     buf_.clear();
-    data_ready_ = false;
   }
 
   void Buffer::set_ready() {
-    data_ready_ = true;
-    ready_cv_.notify_all();
+    if (parent_) {
+      parent_->decrement_outstanding();
+    }
   }
 
   decltype(Buffer::buf_)& Buffer::get() {
     return buf_;
   }
 
-  decltype(Buffer::buf_)& Buffer::get_when_ready() {
-    if (!data_ready_) {
-      mutex_lock l(mu_);
-      ready_cv_.wait(l, [this]() {
-          return data_ready_;
-        });
-    }
-    return buf_;
+  void Buffer::set_buffer_list_parent(BufferList *bl) {
+    parent_ = bl;
   }
+
 } // namespace tensorflow {

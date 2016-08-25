@@ -137,7 +137,7 @@ compress: whether or not to compress the column
       ResourceReleaser<BufferList> a(*column);
       tracepoint(bioflow, result_ready_queue_stop, column);
 
-      auto &buffers = column->get()->get();
+      auto &buffers = column->get()->get_when_ready();
 
       string full_path(filepath + record_suffix_);
 
@@ -159,7 +159,7 @@ compress: whether or not to compress the column
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer->get_when_ready(); // only need to do this on the first call
+          auto &data_buf = buffer.get(); // only need to do this on the first call
           OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true));
           i += recs_per_chunk;
         }
@@ -172,7 +172,7 @@ compress: whether or not to compress the column
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer->get();
+          auto &data_buf = buffer.get();
 
           expected_size = data_buf.size() - recs_per_chunk;
           OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, compress_buf_, true));
@@ -188,7 +188,7 @@ compress: whether or not to compress the column
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer->get_when_ready();
+          auto &data_buf = buffer.get();
 
           OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[0], recs_per_chunk));
           i += recs_per_chunk;
@@ -203,7 +203,7 @@ compress: whether or not to compress the column
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer->get();
+          auto &data_buf = buffer.get();
 
           expected_size = data_buf.size() - recs_per_chunk;
 

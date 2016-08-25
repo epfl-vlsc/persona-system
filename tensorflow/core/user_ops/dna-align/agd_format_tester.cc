@@ -53,7 +53,7 @@ namespace tensorflow {
       auto rec_input_vec = rec_input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
       core::ScopedUnref column_releaser(records);
-      auto &rec_data_list = records->get()->get();
+      auto &rec_data_list = records->get()->get_when_ready();
       auto num_buffers = rec_data_list.size();
 
       // Get number of records per chunk
@@ -74,7 +74,7 @@ namespace tensorflow {
         if (i + recs_per_chunk > num_records) {
           recs_per_chunk = num_records - i;
         }
-        auto &data_buf = buffer->get_when_ready(); // only need to do this on the first call
+        auto &data_buf = buffer.get(); // only need to do this on the first call
         OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, buf_, true));
         i += recs_per_chunk;
       }
@@ -85,7 +85,7 @@ namespace tensorflow {
         if (i + recs_per_chunk > num_records) {
           recs_per_chunk = num_records - i;
         }
-        auto &data_buf = buffer->get();
+        auto &data_buf = buffer.get();
         expected_size = data_buf.size() - recs_per_chunk;
         OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true));
         i += recs_per_chunk;
