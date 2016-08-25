@@ -78,6 +78,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
       }
       LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
       LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      LOG(INFO) << "request queue peek wait: " << request_queue_->num_peek_waits();
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
       VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
@@ -299,6 +300,8 @@ private:
       LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
       LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
       LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
+      LOG(INFO) << "vol con sw: " << usage.ru_nvcsw << endl;
+      LOG(INFO) << "invol con sw: " << usage.ru_nivcsw << endl;
       base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
       delete allocator;
       VLOG(INFO) << "base aligner thread ending.";

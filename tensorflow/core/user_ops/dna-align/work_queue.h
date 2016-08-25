@@ -42,6 +42,7 @@ class WorkQueue {
 
     int64 num_pop_waits();
     int64 num_push_waits();
+    int64 num_peek_waits();
 
   private:
     // mutex to protect the queue
@@ -55,6 +56,7 @@ class WorkQueue {
     bool block_ = true;
     int64 num_pop_waits_ = 0;
     int64 num_push_waits_ = 0;
+    int64 num_peek_waits_ = 0;
 
  };
 
@@ -65,6 +67,7 @@ bool WorkQueue<T>::peek(T& item) {
     mutex_lock l(mu_);
 
     if (queue_.empty() && block_) {
+      num_peek_waits_++;
       queue_pop_cv_.wait(l, [this]() {
           return !queue_.empty() || !block_;
         });
@@ -188,6 +191,9 @@ int64 WorkQueue<T>::num_pop_waits() { return num_pop_waits_; }
 
 template <typename T>
 int64 WorkQueue<T>::num_push_waits() { return num_push_waits_; }
+
+template <typename T>
+int64 WorkQueue<T>::num_peek_waits() { return num_peek_waits_; }
 
 }  // namespace tensorflow
 
