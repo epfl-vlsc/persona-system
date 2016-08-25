@@ -29,7 +29,7 @@ process_args "$@"
 
 extra_opts=""
 if [ $build_type == "opt" ]; then
-    extra_opts="--copt -O3"
+    extra_opts="--copt -O3 --copt -g"
 fi
 
 
