@@ -75,6 +75,8 @@ bool WorkQueue<T>::peek(T& item) {
       popped = true;
     }
   }
+  if (popped)
+    queue_pop_cv_.notify_one();
   return popped;
 }
 
@@ -139,7 +141,7 @@ bool WorkQueue<T>::push(const T& item) {
 
   if (pushed) {
     // tell someone blocking on read they can now read from the queue
-    queue_pop_cv_.notify_all();
+    queue_pop_cv_.notify_one();
     return true;
   } else
     return false;
