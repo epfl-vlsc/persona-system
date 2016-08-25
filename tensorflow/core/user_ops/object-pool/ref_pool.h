@@ -40,11 +40,11 @@ namespace tensorflow {
     // For getting / releasing resources
     // locks are grabbed here
     Status GetResource(ResourceContainer<T> **rct) {
-      if (unbound_) {
+      //if (unbound_) {
         return GetUnbound(rct);
-      } else {
-        return GetBound(rct);
-      }
+      //} else {
+      //  return GetBound(rct);
+      //}
     }
 
     string DebugString() override {

@@ -9,7 +9,6 @@
 
 namespace tensorflow {
 
-
 // a class wrapping STL queue 
 // thread-safe, limited buffer capacity, blocks on push()
 // to a full queue. 
@@ -28,9 +27,9 @@ class WorkQueue {
     // return true if success and item is valid, false otherwise
     bool pop(T& item);
 
-    // pops everything in the queue, making size == 0
-    // note that failure may 
-    void pop_all(std::vector<T> &items);
+    void drop_if_equal(T& item);
+
+    bool peek(T& item);
 
     // unblock the queue, notify all threads
     void unblock();
@@ -60,28 +59,34 @@ class WorkQueue {
  };
 
 template <typename T>
-void WorkQueue<T>::pop_all(std::vector<T> &items) {
+bool WorkQueue<T>::peek(T& item) {
   bool popped = false;
-  items.clear();
   {
     mutex_lock l(mu_);
+
     if (queue_.empty() && block_) {
-      num_pop_waits_++;
       queue_pop_cv_.wait(l, [this]() {
           return !queue_.empty() || !block_;
         });
     }
 
-    popped = !queue_.empty();
-    while (!queue_.empty()) {
-      items.push_back(queue_.front());
+    if (!queue_.empty()) {
+      item = queue_.front();
+      popped = true;
+    }
+  }
+  return popped;
+}
+
+template <typename T>
+void WorkQueue<T>::drop_if_equal(T& item) {
+  {
+    mutex_lock l(mu_);
+    if (!queue_.empty() && queue_.front() == item) {
       queue_.pop();
     }
   }
-
-  if (popped) {
-    queue_push_cv_.notify_all();
-  }
+  queue_push_cv_.notify_one();
 }
 
 template <typename T>
@@ -90,14 +95,11 @@ bool WorkQueue<T>::pop(T& item) {
   bool popped = false;
   {
     mutex_lock l(mu_);
-    //LOG_INFO << "popping work queue";
     if (queue_.empty() && block_) {
-      //LOG_INFO << "pop waiting ...";
       num_pop_waits_++;
       queue_pop_cv_.wait(l, [this]() {
           return !queue_.empty() || !block_;
           });
-      //LOG_INFO << "pop continuing";
     }
 
     if (!queue_.empty()) {
@@ -105,14 +107,13 @@ bool WorkQueue<T>::pop(T& item) {
       queue_.pop();
       popped = true;
     }
-  } 
+  }
   if (popped) {
     // tell someone blocking on write they can now write to the queue
     queue_push_cv_.notify_one();
     return true;
   } else
     return false;
-
 }
 
 template <typename T>
@@ -121,11 +122,9 @@ bool WorkQueue<T>::push(const T& item) {
   bool pushed = false;
   {
     mutex_lock l(mu_);
-    //LOG_INFO << "pushing work queue";
     // we block until something pops and makes room for us
     // unless blocking is set to false
     if (queue_.size() == capacity_ && block_) {
-      //LOG_INFO << "work queue is at capacity";
       num_push_waits_++;
       queue_push_cv_.wait(l, [this]() {
           return (queue_.size() < capacity_) || !block_;
@@ -140,7 +139,7 @@ bool WorkQueue<T>::push(const T& item) {
 
   if (pushed) {
     // tell someone blocking on read they can now read from the queue
-    queue_pop_cv_.notify_one();
+    queue_pop_cv_.notify_all();
     return true;
   } else
     return false;

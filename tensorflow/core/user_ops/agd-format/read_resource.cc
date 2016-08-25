@@ -13,7 +13,12 @@ namespace tensorflow {
     return Unimplemented("partial record reading not suppported");
   }
 
-  Status ReadResource::split(size_t chunk, vector<unique_ptr<ReadResource>> &split_resources)
+  Status ReadResource::split(size_t chunk, BufferList *bl)
+  {
+    return Unimplemented("resource splitting not supported for this resource");
+  }
+
+  Status ReadResource::get_next_subchunk(ReadResource **rr, Buffer **b)
   {
     return Unimplemented("resource splitting not supported for this resource");
   }
@@ -42,14 +47,4 @@ namespace tensorflow {
   {
     rr_.release();
   }
-
-  SubchunkReleaser::SubchunkReleaser(ReadResource &parent) : parent_rr_(parent) {}
-
-  SubchunkReleaser::~SubchunkReleaser() {
-    auto remaining = parent_rr_.num_subchunks.fetch_sub(1);
-    if (remaining == 0) {
-      parent_rr_.release();
-    }
-  }
-
 } // namespace tensorflow {
