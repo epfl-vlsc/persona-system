@@ -2,7 +2,7 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 
 cc_library(
     name = "object_pool",
-    srcs = glob(["*.cc"]),
+    srcs = glob(["*.cc"] + ["*.h"]),
     hdrs = glob(["*.h"]),
     copts = tf_copts() + ["-fexceptions"],
     nocopts = "-fno-exceptions",

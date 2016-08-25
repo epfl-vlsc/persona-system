@@ -38,8 +38,11 @@ using namespace std;
 using namespace errors;
 
   namespace {
-    void resource_releaser(ReadResource *rr) {
-      ReadResourceReleaser r(*rr);
+    void resource_releaser(ResourceContainer<ReadResource> *rr) {
+      ResourceReleaser<ReadResource> a(*rr);
+      {
+        ReadResourceReleaser r(*rr->get());
+      }
     }
   }
 
@@ -57,7 +60,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
       int capacity;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("work_queue_size", &capacity));
-      request_queue_.reset(new WorkQueue<shared_ptr<ReadResource>>(capacity));
+      request_queue_.reset(new WorkQueue<shared_ptr<ResourceContainer<ReadResource>>>(capacity));
       compute_status_ = Status::OK();
     }
 
@@ -136,7 +139,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
     auto alignment_result_buffer_list = bufferlist_resource_container->get();
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
-    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ReadResource>(reads, resource_releaser)),
+    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
 
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
@@ -217,10 +220,12 @@ private:
       const uint32_t max_completed = trace_granularity_;
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
-        shared_ptr<ReadResource> reads;
-        if (!request_queue_->peek(reads)) {
+        shared_ptr<ResourceContainer<ReadResource>> reads_container;
+        if (!request_queue_->peek(reads_container)) {
           continue;
         }
+
+        auto *reads = reads_container->get();
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
@@ -276,7 +281,7 @@ private:
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         }
 
-        request_queue_->drop_if_equal(reads);
+        request_queue_->drop_if_equal(reads_container);
         if (!IsResourceExhausted(io_chunk_status)) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status << "\n";
           compute_status_ = io_chunk_status;
@@ -322,7 +327,7 @@ private:
 
   int num_threads_;
 
-  unique_ptr<WorkQueue<shared_ptr<ReadResource>>> request_queue_;
+  unique_ptr<WorkQueue<shared_ptr<ResourceContainer<ReadResource>>>> request_queue_;
 
   Status compute_status_;
   TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignAGDParallelOp);
