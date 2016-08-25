@@ -55,7 +55,8 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
 
-      int capacity = (chunk_size_ / subchunk_size_) + 1; // TODO this math should be better
+      int capacity;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("work_queue_size", &capacity));
       request_queue_.reset(new WorkQueue<shared_ptr<ReadResource>>(capacity));
       compute_status_ = Status::OK();
     }
@@ -332,6 +333,7 @@ private:
   .Attr("trace_granularity: int = 500")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
+  .Attr("work_queue_size: int = 10")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")

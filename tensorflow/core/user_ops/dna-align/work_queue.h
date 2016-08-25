@@ -9,7 +9,6 @@
 
 namespace tensorflow {
 
-
 // a class wrapping STL queue 
 // thread-safe, limited buffer capacity, blocks on push()
 // to a full queue. 
@@ -96,14 +95,11 @@ bool WorkQueue<T>::pop(T& item) {
   bool popped = false;
   {
     mutex_lock l(mu_);
-    //LOG_INFO << "popping work queue";
     if (queue_.empty() && block_) {
-      //LOG(DEBUG) << "pop waiting ...";
       num_pop_waits_++;
       queue_pop_cv_.wait(l, [this]() {
           return !queue_.empty() || !block_;
           });
-      //LOG(DEBUG) << "pop continuing";
     }
 
     if (!queue_.empty()) {
@@ -126,11 +122,9 @@ bool WorkQueue<T>::push(const T& item) {
   bool pushed = false;
   {
     mutex_lock l(mu_);
-    //LOG_INFO << "pushing work queue";
     // we block until something pops and makes room for us
     // unless blocking is set to false
     if (queue_.size() == capacity_ && block_) {
-      //LOG_INFO << "work queue is at capacity";
       num_push_waits_++;
       queue_push_cv_.wait(l, [this]() {
           return (queue_.size() < capacity_) || !block_;
