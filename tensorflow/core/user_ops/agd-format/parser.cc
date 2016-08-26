@@ -183,7 +183,7 @@ namespace tensorflow {
 
       // append everything in converted_records to the index
       result.clear();
-      result.reserve(index_scratch_.size() + conversion_scratch_.size());
+      safe_reserve(result, index_scratch_.size() + conversion_scratch_.size());
       TF_RETURN_IF_ERROR(copySegment(&index_scratch_[0], index_scratch_.size(), result));
       TF_RETURN_IF_ERROR(appendSegment(&conversion_scratch_[0], conversion_scratch_.size(), result));
       tracepoint(bioflow, base_conversion, start, file_header->first_ordinal, index_size);

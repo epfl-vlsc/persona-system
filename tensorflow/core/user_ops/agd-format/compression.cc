@@ -1,4 +1,5 @@
 #include "compression.h"
+#include "util.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
@@ -19,7 +20,7 @@ Status resize_output(z_stream &strm, vector<char> &output, size_t extend_len) {
 
   if (strm.avail_out == 0) {
     auto new_cap = output.capacity() + extend_len;
-    output.reserve(new_cap);
+    safe_reserve(output, new_cap);
     output.resize(output.capacity());
     if (output.capacity() < new_cap) {
       s = Internal("Unable to reserve more capacity in a buffer");
@@ -48,7 +49,7 @@ Status decompressGZIP(const char* segment,
   strm.zfree = Z_NULL;
   strm.next_in = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(segment));
   strm.avail_in = segment_size;
-  output.reserve(segment_size * reserve_factor);
+  safe_reserve(output, segment_size * reserve_factor, 16 * 1024 * 1024);
 
   int status = inflateInit2(&strm, init_flags);
   if (status != Z_OK) {
@@ -167,7 +168,7 @@ Status compressGZIP(const char* segment,
     stream_.opaque = Z_NULL;
     done_ = false;
     output_.clear();
-    output_.reserve(1);
+    safe_reserve(output_, 1);
 
     int status = deflateInit2(&stream_, Z_DEFAULT_COMPRESSION,
                               Z_DEFLATED, window_bits | ENABLE_ZLIB_GZIP_COMPRESS,
