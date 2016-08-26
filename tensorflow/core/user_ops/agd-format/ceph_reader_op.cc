@@ -5,6 +5,7 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "data.h"
+#include "util.h"
 #include "tensorflow/core/user_ops/agd-format/buffer.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include <list>
@@ -145,7 +146,7 @@ file_name: a Tensor() of string for the unique key for this file
       size_t size_to_read = (size_t) read_size;
 
       auto& c = buf->get();
-      c.reserve(file_size);
+      safe_reserve(c, file_size);
       c.resize(file_size);
 
       librados::bufferlist read_buf;

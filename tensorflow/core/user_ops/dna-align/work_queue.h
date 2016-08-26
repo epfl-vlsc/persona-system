@@ -78,6 +78,8 @@ bool WorkQueue<T>::peek(T& item) {
       popped = true;
     }
   }
+  if (popped)
+    queue_pop_cv_.notify_one();
   return popped;
 }
 
@@ -142,7 +144,8 @@ bool WorkQueue<T>::push(const T& item) {
 
   if (pushed) {
     // tell someone blocking on read they can now read from the queue
-    queue_pop_cv_.notify_all();
+    // TODO maybe notify_all is better here? If so, good to drop the notify_one in peek
+    queue_pop_cv_.notify_one();
     return true;
   } else
     return false;
