@@ -3,6 +3,7 @@
 
 #include "format.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "buffer.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include <vector>
 #include <array>
@@ -45,7 +46,7 @@ namespace tensorflow {
   public:
     explicit RecordParser();
 
-    Status ParseNew(const char* data, const std::size_t length, const bool verify, std::vector<char> &result_buffer, uint64_t *first_ordinal, uint32_t *num_records);
+    Status ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records);
 
   private:
 

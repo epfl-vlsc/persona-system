@@ -37,6 +37,13 @@ Status resize_output(z_stream &strm, vector<char> &output, size_t extend_len) {
 }
 
 Status decompressGZIP(const char* segment,
+                      const std::size_t segment_size,
+                      Buffer *output)
+{
+  return Unimplemented("implemented gzip decom for Buffer* !!!");
+}
+
+Status decompressGZIP(const char* segment,
                       const size_t segment_size,
                       vector<char> &output)
 {

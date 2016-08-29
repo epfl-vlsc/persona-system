@@ -100,19 +100,16 @@ reserve: the number of bytes to call 'reserve' on the vector.
         OP_REQUIRES_OK(ctx, buffer_pool_->GetResource(&output_buffer_rc));
 
         auto input_data = agd_input->get();
-        auto output_ptr = output_buffer_rc->get();
-        auto &output_buffer = output_ptr->get();
-        safe_reserve(output_buffer, reserve_bytes_);
+        auto* output_ptr = output_buffer_rc->get();
 
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
-                                                 verify_, output_buffer, &first_ord, &num_recs));
+                                                 verify_, output_ptr, &first_ord, &num_recs));
 
         output_matrix(i, 0) = output_buffer_rc->container();
         output_matrix(i, 1) = output_buffer_rc->name();
 
         num_records(i) = num_recs;
         first_ordinals(i) = first_ord;
-        tracepoint(bioflow, input_processing, start, agd_input, output_buffer_rc);
       }
     }
 

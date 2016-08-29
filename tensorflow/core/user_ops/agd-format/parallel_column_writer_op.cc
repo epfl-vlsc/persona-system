@@ -111,6 +111,8 @@ Thus we always need 3 of these for the full conversion pipeline
 
       decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       if (compress_) {
+        OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
+#if 0
         buf_.clear(); outbuf_.clear();
         for (auto &buffer : buffers) {
           if (i + recs_per_chunk > num_records) {
@@ -151,15 +153,16 @@ Thus we always need 3 of these for the full conversion pipeline
             }
           }
         }
+#endif
       } else {
         for (auto &buffer : buffers) {
           if (i + recs_per_chunk > num_records) {
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get();
-
-          fwrite_ret = fwrite(&data_buf[0], recs_per_chunk, 1, file_out);
+          OP_REQUIRES(ctx, buffer.size() > recs_per_chunk,
+                      Internal("Parallel column writer requires at least ", recs_per_chunk, " bytes for writing header, but only have ", buffer.size()));
+          fwrite_ret = fwrite(buffer.data(), recs_per_chunk, 1, file_out);
           if (fwrite_ret != 1) {
             s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
             break;
@@ -175,10 +178,10 @@ Thus we always need 3 of these for the full conversion pipeline
               recs_per_chunk = num_records - i;
             }
 
-            auto &data_buf = buffer.get();
-
-            expected_size = data_buf.size() - recs_per_chunk;
-            fwrite_ret = fwrite(&data_buf[recs_per_chunk], expected_size, 1, file_out);
+            expected_size = buffer.size() - recs_per_chunk;
+            OP_REQUIRES(ctx, expected_size > 0,
+                        Internal("expected a positive payload size for parallel column writer, but got ", expected_size));
+            fwrite_ret = fwrite(&buffer[recs_per_chunk], expected_size, 1, file_out);
             if (fwrite_ret != 1) {
               s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", expected_size);
               break;

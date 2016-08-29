@@ -229,7 +229,6 @@ private:
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
-          auto &res_buf = result_buf->get();
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
             cigarString.clear();
@@ -243,7 +242,7 @@ private:
                 primaryResult.location = InvalidGenomeLocation;
                 primaryResult.mapq = 0;
                 primaryResult.direction = FORWARD;
-                result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
+                result_builder.AppendAlignmentResult(primaryResult, "*", 4);
               }
               continue;
             }
@@ -266,7 +265,7 @@ private:
             if (!s.ok())
               LOG(ERROR) << "computeCigarFlags did not return OK!!!";
 
-            result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
+            result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
           }
 
           if (!IsResourceExhausted(subchunk_status)) {
@@ -275,7 +274,7 @@ private:
             return;
           }
 
-          result_builder.AppendAndFlush(res_buf);
+          result_builder.WriteResult(result_buf);
           result_buf->set_ready();
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);

@@ -152,6 +152,8 @@ compress: whether or not to compress the column
 
       decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       if (compress_) {
+        OP_REQUIRES(ctx, false, Internal("Compression not supported for ceph writers"));
+#if 0
         compress_buf_.clear();
 
         for (auto &buffer : buffers) {
@@ -182,19 +184,19 @@ compress: whether or not to compress the column
         output_buf_.clear();
         OP_REQUIRES_OK(ctx, compressGZIP(&compress_buf_[0], compress_buf_.size(), output_buf_));
         OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &output_buf_[0], output_buf_.size()));
+#endif
       } else {
         for (auto &buffer : buffers) {
           if (i + recs_per_chunk > num_records) {
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get();
+          OP_REQUIRES(ctx, buffer.size() > recs_per_chunk,
+                      Internal("ceph writer: uncompressed header write of inadequate size. Expected at least ", recs_per_chunk, ", but only have ", buffer.size()));
 
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[0], recs_per_chunk));
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &buffer[0], recs_per_chunk));
           i += recs_per_chunk;
         }
-
-        tracepoint(bioflow, total_align_stop, column);
 
         i = 0; recs_per_chunk = records_per_chunk;
         size_t expected_size;
@@ -203,11 +205,11 @@ compress: whether or not to compress the column
             recs_per_chunk = num_records - i;
           }
 
-          auto &data_buf = buffer.get();
+          expected_size = buffer.size() - recs_per_chunk;
+          OP_REQUIRES(ctx, expected_size > 0, Internal(
+                      "ceph writer: expected positive size of payload, but got ", expected_size));
 
-          expected_size = data_buf.size() - recs_per_chunk;
-
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[recs_per_chunk], expected_size));
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &buffer[recs_per_chunk], expected_size));
           i += recs_per_chunk;
         }
       }
