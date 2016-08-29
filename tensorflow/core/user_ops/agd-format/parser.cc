@@ -165,7 +165,7 @@ namespace tensorflow {
     }
 
     if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
-      conversion_scratch_.clear(); index_scratch_.clear();
+      conversion_scratch_.reset(); index_scratch_.reset();
 
       uint8_t current_record_length;
       const char* start_ptr = &(*result_buffer)[index_size];
@@ -176,7 +176,7 @@ namespace tensorflow {
         bases = reinterpret_cast<const BinaryBaseRecord*>(start_ptr);
         start_ptr += current_record_length;
 
-        TF_RETURN_IF_ERROR(bases->appendToVector(current_record_length, conversion_scratch_, index_scratch_));
+        TF_RETURN_IF_ERROR(bases->append(current_record_length, conversion_scratch_, index_scratch_));
       }
 
       // append everything in converted_records to the index
@@ -191,8 +191,8 @@ namespace tensorflow {
   }
 
   void RecordParser::reset() {
-    conversion_scratch_.clear();
-    index_scratch_.clear();
+    conversion_scratch_.reset();
+    index_scratch_.reset();
   }
 
   RecordParser::RecordParser() {

@@ -52,7 +52,7 @@ namespace tensorflow {
 
     void reset();
 
-    std::vector<char> conversion_scratch_, index_scratch_;
+    Buffer conversion_scratch_, index_scratch_;
     const format::RecordTable *records = nullptr;
   };
 
