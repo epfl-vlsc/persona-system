@@ -24,9 +24,9 @@ namespace tensorflow {
   }
 
   Status Buffer::AppendBuffer(const char* content, size_t content_size) {
-    extend_allocation(content_size + extend_extra_);
-    memcpy(&buf_.get()[size_], content, content_size);
+    auto old_size = size_;
     extend_size(content_size);
+    memcpy(&buf_.get()[old_size], content, content_size);
     return Status::OK();
   }
 
