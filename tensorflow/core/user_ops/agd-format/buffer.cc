@@ -26,7 +26,8 @@ namespace tensorflow {
   Status Buffer::AppendBuffer(const char* content, size_t content_size) {
     extend_allocation(content_size + extend_extra_);
     memcpy(&buf_.get()[size_], content, content_size);
-    return extend_size(content_size);
+    extend_size(content_size);
+    return Status::OK();
   }
 
   const char* Buffer::data() const {
@@ -64,20 +65,18 @@ namespace tensorflow {
     }
   }
 
-  Status Buffer::resize(size_t total_size) {
+  void Buffer::resize(size_t total_size) {
     if (total_size > allocation_) {
-      return OutOfRange("Buffer: requested resize to ", total_size, ", but only have allocation of ", allocation_);
-    } else {
-      size_ = total_size;
-      return Status::OK();
+      reserve(total_size);
     }
+    size_ = total_size;
   }
 
   void Buffer::extend_allocation(size_t extend_size) {
     reserve(allocation_ + extend_size);
   }
 
-  Status Buffer::extend_size(size_t extend_size) {
+  void Buffer::extend_size(size_t extend_size) {
     return resize(size_ + extend_size);
   }
 

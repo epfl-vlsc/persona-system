@@ -31,16 +31,16 @@ namespace tensorflow {
         // resizes the actual size to to total_size
         // returns an error if total_size > allocation_
         // should call `reserve` first to be safe
-        inline Status resize(decltype(size_) total_size);
+        void resize(decltype(size_) total_size);
 
         // extends the current allocation by `extend_size`
         // does not affect size_
-        inline void extend_allocation(decltype(size_) extend_size);
+        void extend_allocation(decltype(size_) extend_size);
 
         // extends the current size by extend_size
         // returns an error if size_+extend_size > allocation
         // should call `extend_allocation` first to be safe
-        inline Status extend_size(decltype(size_) extend_size);
+        void extend_size(decltype(size_) extend_size);
 
         char& operator[](size_t idx) const;
 
