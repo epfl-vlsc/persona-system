@@ -161,7 +161,7 @@ Thus we always need 3 of these for the full conversion pipeline
           }
           auto &index = buffer_pair.index();
 
-          OP_REQUIRES(ctx, index.size() != recs_per_chunk,
+          OP_REQUIRES(ctx, index.size() == recs_per_chunk,
                       Internal("Parallel column writer requires at least ", recs_per_chunk, " bytes for writing header, but only have ", index.size()));
           fwrite_ret = fwrite(&index[0], recs_per_chunk, 1, file_out);
           if (fwrite_ret != 1) {

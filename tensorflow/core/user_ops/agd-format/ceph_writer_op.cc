@@ -192,7 +192,7 @@ compress: whether or not to compress the column
           }
           auto &index = buffer_pair.index();
 
-          OP_REQUIRES(ctx, index.size() != recs_per_chunk,
+          OP_REQUIRES(ctx, index.size() == recs_per_chunk,
                       Internal("ceph writer: uncompressed header write of inadequate size. Expected at least ", recs_per_chunk, ", but only have ", index.size()));
 
           OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &index[0], recs_per_chunk));
