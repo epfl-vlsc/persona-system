@@ -149,6 +149,32 @@ class SnapAlignAGDParallelOp : public OpKernel {
 private:
   clock_t kernel_start;
 
+  struct time_log {
+    std::chrono::high_resolution_clock::time_point end_subchunk;
+    std::chrono::high_resolution_clock::time_point start_subchunk;
+    std::chrono::high_resolution_clock::time_point append;
+    std::chrono::high_resolution_clock::time_point ready;
+    std::chrono::high_resolution_clock::time_point getnext;
+    std::chrono::high_resolution_clock::time_point dropifequal;
+    std::chrono::high_resolution_clock::time_point peek;
+
+    void print() {
+
+      auto subchunktime = std::chrono::duration_cast<std::chrono::microseconds>(start_subchunk - end_subchunk);
+      auto appendtime = std::chrono::duration_cast<std::chrono::microseconds>(append - end_subchunk);
+      auto readytime = std::chrono::duration_cast<std::chrono::microseconds>(ready - append);
+      auto getnexttime = std::chrono::duration_cast<std::chrono::microseconds>(getnext - ready);
+      auto dropifequaltime = std::chrono::duration_cast<std::chrono::microseconds>(dropifequal - ready);
+      auto peektime = std::chrono::duration_cast<std::chrono::microseconds>(peek - dropifequal);
+      LOG(INFO) << "subchunk time: " << subchunktime.count() 
+        << " append time: " << appendtime.count()
+        << " ready time: " << readytime.count()
+        << " getnext time: " << getnexttime.count()
+        << " dropifequal time: " << dropifequaltime.count()
+        << " peek time: " << peektime.count();
+    }
+  };
+
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
       std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
@@ -218,17 +244,29 @@ private:
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       const uint32_t max_completed = trace_granularity_;
+      //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
+      //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
+     
+      time_log timeLog;
+
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
         shared_ptr<ResourceContainer<ReadResource>> reads_container;
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
+        timeLog.peek = std::chrono::high_resolution_clock::now();
 
         auto *reads = reads_container->get();
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
+          
+          timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
+          auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
+          if (subchunk_time.count() >= 1000)
+            timeLog.print();
+
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
             cigarString.clear();
@@ -267,6 +305,7 @@ private:
 
             result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
           }
+          timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
 
           if (!IsResourceExhausted(subchunk_status)) {
             LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
@@ -274,13 +313,19 @@ private:
             return;
           }
 
-          result_builder.WriteResult(result_buf);
+          //result_builder.WriteResult(result_buf);
+          timeLog.append = std::chrono::high_resolution_clock::now();
           result_buf->set_ready();
+          timeLog.ready = std::chrono::high_resolution_clock::now();
+          //if (oldcapacity != newcapacity)
+            //LOG(INFO) << "buffer reallocated";
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+          timeLog.getnext = std::chrono::high_resolution_clock::now();
         }
 
         request_queue_->drop_if_equal(reads_container);
+        timeLog.dropifequal = std::chrono::high_resolution_clock::now();
         if (!IsResourceExhausted(io_chunk_status)) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status << "\n";
           compute_status_ = io_chunk_status;

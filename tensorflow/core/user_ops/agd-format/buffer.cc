@@ -3,6 +3,7 @@
 #include <cstddef>
 #include "data.h"
 #include "util.h"
+#include <chrono>
 
 namespace tensorflow {
 
@@ -18,7 +19,11 @@ namespace tensorflow {
       allocation_ = content_size + extend_extra_;
       buf_.reset(new char[allocation_]()); // reset() -> old buf will be deleted
     }
+    //auto t1 = std::chrono::high_resolution_clock::now();
     memcpy(buf_.get(), content, content_size);
+    //auto t2 = std::chrono::high_resolution_clock::now();
+    //auto writememcpytime = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+    //LOG(INFO) << "writebuf memcpy time: " << writememcpytime.count();
     size_ = content_size;
     return Status::OK();
   }
