@@ -160,7 +160,7 @@ namespace tensorflow {
 
   Status AGDReadResource::get_next_subchunk(ReadResource **rr, Buffer **b) {
     //size_t idx = sub_resource_index_;
-    auto a = sub_resource_index_++;
+    auto a = sub_resource_index_.fetch_add(1, memory_order_relaxed);
     if (a >= sub_resources_.size()) {
       return ResourceExhausted("No more AGD subchunks");
     } else {
@@ -200,7 +200,7 @@ namespace tensorflow {
         qual_start += qual_idx_->relative_index[j];
       }
     }
-    sub_resource_index_ = 0;
+    sub_resource_index_.store(0, memory_order_relaxed);
     buffer_list_ = bl;
     buffer_list_->resize(sub_resources_.size());
     return Status::OK();
