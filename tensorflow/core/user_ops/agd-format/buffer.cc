@@ -66,9 +66,7 @@ namespace tensorflow {
   }
 
   void Buffer::resize(size_t total_size) {
-    if (total_size > allocation_) {
-      reserve(total_size);
-    }
+    reserve(total_size);
     size_ = total_size;
   }
 
