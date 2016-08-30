@@ -32,6 +32,7 @@ we can use it in other pipelines where writers are used
       OP_REQUIRES_OK(ctx, ctx->input("data", &input));
       auto data = input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &buf));
+      auto& buflist = buf->get()->get_when_ready();
       core::ScopedUnref a(buf);
       {
         ResourceReleaser<BufferList> b(*buf); // make sure destructs first
