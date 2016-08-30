@@ -18,9 +18,22 @@ namespace tensorflow {
     }
     reset_all();
     outstanding_buffers_.store(size, memory_order_relaxed);
+    size_ = size;
   }
 
-  vector<BufferPair>& BufferList::get_when_ready() {
+  size_t BufferList::size() const {
+    return size_;
+  }
+
+  BufferPair& BufferList::operator[](size_t index) {
+    if (index >= size_) {
+      LOG(ERROR) << "FATAL: get_at requested index " << index << ", with only " << size_ << " elements. Real size: " << buf_list_.size();
+    }
+    // using at instead of operator[] because it will error here
+    return buf_list_.at(index);
+  }
+
+  void BufferList::wait_for_ready() const {
     if (outstanding_buffers_.load(memory_order_relaxed) != 0) {
       mutex_lock l(mu_);
       ready_cv_.wait(l, [this]() {
@@ -28,15 +41,6 @@ namespace tensorflow {
           return a == 0;
         });
     }
-    return buf_list_;
-  }
-
-  BufferPair& BufferList::get_at(size_t index) {
-    if (index >= buf_list_.size()) {
-      LOG(ERROR) << "FATAL: get_at requested index " << index << ", with only " << buf_list_.size() << " elements";
-    }
-    // using at instead of operator[] because it will error here
-    return buf_list_.at(index);
   }
 
   void BufferList::reset_all() {
@@ -48,6 +52,7 @@ namespace tensorflow {
   void BufferList::reset() {
     reset_all();
     outstanding_buffers_.store(0, memory_order_relaxed);
+    size_ = 0;
   }
 
   void BufferList::decrement_outstanding() {

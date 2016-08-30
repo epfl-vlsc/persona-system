@@ -29,18 +29,21 @@ namespace tensorflow {
     class BufferList {
     private:
       std::vector<BufferPair> buf_list_;
-      std::atomic_size_t outstanding_buffers_;
+      mutable std::atomic_size_t outstanding_buffers_;
       mutable mutex mu_;
       mutable std::condition_variable ready_cv_;
 
       void decrement_outstanding();
       void reset_all();
 
+      std::size_t size_ = 0;
+
       friend class BufferPair;
     public:
-        BufferPair& get_at(size_t index);
-        void resize(size_t size);
-        decltype(buf_list_)& get_when_ready();
+      BufferPair& operator[](std::size_t index);
+      std::size_t size() const;
+        void resize(std::size_t size);
+        void wait_for_ready() const;
         void reset();
     };
 } // namespace tensorflow {
