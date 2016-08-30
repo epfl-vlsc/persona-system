@@ -201,8 +201,8 @@ namespace tensorflow {
       }
     }
     sub_resource_index_.store(0, memory_order_relaxed);
+    bl->resize(sub_resources_.size());
     buffer_list_ = bl;
-    buffer_list_->resize(sub_resources_.size());
     return Status::OK();
   }
 

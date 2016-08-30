@@ -34,6 +34,7 @@ namespace tensorflow {
       mutable std::condition_variable ready_cv_;
 
       void decrement_outstanding();
+      void reset_all();
 
       friend class BufferPair;
     public:

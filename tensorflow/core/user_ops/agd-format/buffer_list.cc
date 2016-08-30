@@ -16,6 +16,7 @@ namespace tensorflow {
         buf_list_[old_size].set_parent(this);
       }
     }
+    reset_all();
     outstanding_buffers_.store(size, memory_order_relaxed);
   }
 
@@ -38,10 +39,14 @@ namespace tensorflow {
     return buf_list_.at(index);
   }
 
-  void BufferList::reset() {
+  void BufferList::reset_all() {
     for (auto &b : buf_list_) {
       b.reset();
     }
+  }
+
+  void BufferList::reset() {
+    reset_all();
     outstanding_buffers_.store(0, memory_order_relaxed);
   }
 
