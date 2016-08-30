@@ -16,14 +16,15 @@ namespace tensorflow {
         buf_list_[old_size].set_parent(this);
       }
     }
-    outstanding_buffers_.store(size-1, memory_order_relaxed);
+    outstanding_buffers_.store(size, memory_order_relaxed);
   }
 
   vector<BufferPair>& BufferList::get_when_ready() {
     if (outstanding_buffers_.load(memory_order_relaxed) != 0) {
       mutex_lock l(mu_);
       ready_cv_.wait(l, [this]() {
-          return outstanding_buffers_.load(memory_order_relaxed) == 0;
+          size_t a = outstanding_buffers_.load(memory_order_relaxed);
+          return a == 0;
         });
     }
     return buf_list_;
@@ -46,7 +47,7 @@ namespace tensorflow {
 
   void BufferList::decrement_outstanding() {
     auto previous = outstanding_buffers_.fetch_sub(1, memory_order_relaxed);
-    if (previous == 0) {
+    if (previous == 1) {
       ready_cv_.notify_one();
     }
   }
