@@ -158,7 +158,7 @@ namespace tensorflow {
     buffer_list_ = nullptr;
   }
 
-  Status AGDReadResource::get_next_subchunk(ReadResource **rr, Buffer **b) {
+  Status AGDReadResource::get_next_subchunk(ReadResource **rr, BufferPair **b) {
     //size_t idx = sub_resource_index_;
     auto a = sub_resource_index_.fetch_add(1, memory_order_relaxed);
     if (a >= sub_resources_.size()) {
@@ -171,7 +171,7 @@ namespace tensorflow {
       //  // weak has a few false positives, but is better for loops, according to the spec
       //} while (!sub_resource_index_.compare_exchange_weak(idx, next));
       *rr = &sub_resources_[a];
-      *b = buffer_list_->get_at(a);
+      *b = &buffer_list_->get_at(a);
     }
     return Status::OK();
   }

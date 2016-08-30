@@ -186,31 +186,22 @@ compress: whether or not to compress the column
         OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &output_buf_[0], output_buf_.size()));
 #endif
       } else {
-        for (auto &buffer : buffers) {
+        for (auto &buffer_pair : buffers) {
           if (i + recs_per_chunk > num_records) {
             recs_per_chunk = num_records - i;
           }
+          auto &index = buffer_pair.index();
 
-          OP_REQUIRES(ctx, buffer.size() > recs_per_chunk,
-                      Internal("ceph writer: uncompressed header write of inadequate size. Expected at least ", recs_per_chunk, ", but only have ", buffer.size()));
+          OP_REQUIRES(ctx, index.size() != recs_per_chunk,
+                      Internal("ceph writer: uncompressed header write of inadequate size. Expected at least ", recs_per_chunk, ", but only have ", index.size()));
 
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &buffer[0], recs_per_chunk));
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &index[0], recs_per_chunk));
           i += recs_per_chunk;
         }
 
-        i = 0; recs_per_chunk = records_per_chunk;
-        size_t expected_size;
-        for (auto &buffer : buffers) {
-          if (i + recs_per_chunk > num_records) {
-            recs_per_chunk = num_records - i;
-          }
-
-          expected_size = buffer.size() - recs_per_chunk;
-          OP_REQUIRES(ctx, expected_size > 0, Internal(
-                      "ceph writer: expected positive size of payload, but got ", expected_size));
-
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &buffer[recs_per_chunk], expected_size));
-          i += recs_per_chunk;
+        for (auto &buffer_pair : buffers) {
+          auto &data = buffer_pair.data();
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data[recs_per_chunk], data.size()));
         }
       }
       Tensor *num_recs;

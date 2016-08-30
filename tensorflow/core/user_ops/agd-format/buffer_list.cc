@@ -8,11 +8,18 @@ namespace tensorflow {
   using namespace std;
 
   void BufferList::resize(size_t size) {
-    buf_list_.resize(size);
-    outstanding_buffers_.store(size, memory_order_relaxed);
+    auto old_size = buf_list_.size();
+    if (size > old_size) {
+      buf_list_.resize(size);
+      // for all the extra ones, we need to initialize the parents
+      for (; old_size < size; ++old_size) {
+        buf_list_[old_size].set_parent(this);
+      }
+    }
+    outstanding_buffers_.store(size-1, memory_order_relaxed);
   }
 
-  vector<Buffer>& BufferList::get_when_ready() {
+  vector<BufferPair>& BufferList::get_when_ready() {
     if (outstanding_buffers_.load(memory_order_relaxed) != 0) {
       mutex_lock l(mu_);
       ready_cv_.wait(l, [this]() {
@@ -22,15 +29,12 @@ namespace tensorflow {
     return buf_list_;
   }
 
-  Buffer* BufferList::get_at(size_t index) {
+  BufferPair& BufferList::get_at(size_t index) {
     if (index >= buf_list_.size()) {
-      resize(index+1);
-      outstanding_buffers_.fetch_add(1, memory_order_relaxed);
+      LOG(ERROR) << "FATAL: get_at requested index " << index << ", with only " << buf_list_.size() << " elements";
     }
-    auto &a = buf_list_[index];
-    a.set_buffer_list_parent(this);
-
-    return &a;
+    // using at instead of operator[] because it will error here
+    return buf_list_.at(index);
   }
 
   void BufferList::reset() {
@@ -45,6 +49,27 @@ namespace tensorflow {
     if (previous == 0) {
       ready_cv_.notify_one();
     }
+  }
+
+  Buffer& BufferPair::index() {
+    return index_;
+  }
+
+  Buffer& BufferPair::data() {
+    return data_;
+  }
+
+  void BufferPair::reset() {
+    index_.reset();
+    data_.reset();
+  }
+
+  void BufferPair::set_ready() {
+    parent_->decrement_outstanding(); // This pointer should never be null or unset!
+  }
+
+  void BufferPair::set_parent(BufferList *parent) {
+    parent_ = parent;
   }
 
 } // namespace tensorflow {

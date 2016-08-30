@@ -6,7 +6,7 @@
 #include "format.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
-#include "buffer.h"
+#include "buffer_list.h"
 
 namespace tensorflow {
 
@@ -21,14 +21,13 @@ public:
 
       records_ is used to build up the actual reads, which are appended into the chunk.
     */
+  void set_buffer_pair(BufferPair *data);
+
   void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, const int flag);
 
-  void WriteResult(Buffer *result);
-
   private:
-    Buffer data_;
-    std::vector<uint8_t> index_;
-    format::AlignmentResult builder_result_;
+    Buffer *data_ = nullptr, *index_ = nullptr;
+    format::AlignmentResult converted_result;
   };
 
 } // namespace tensorflow

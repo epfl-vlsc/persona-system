@@ -214,7 +214,7 @@ private:
       Read snap_read;
       LandauVishkinWithCigar lvc;
 
-      Buffer* result_buf = nullptr;
+      BufferPair* result_buf = nullptr;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       const uint32_t max_completed = trace_granularity_;
@@ -229,6 +229,7 @@ private:
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
+          result_builder.set_buffer_pair(result_buf);
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
             cigarString.clear();
@@ -274,7 +275,6 @@ private:
             return;
           }
 
-          result_builder.WriteResult(result_buf);
           result_buf->set_ready();
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);

@@ -46,7 +46,7 @@ namespace tensorflow {
     std::size_t num_records() override;
 
     Status split(std::size_t chunk, BufferList *bl) override;
-    Status get_next_subchunk(ReadResource **rr, Buffer **b) override;
+    Status get_next_subchunk(ReadResource **rr, BufferPair **b) override;
 
   private:
     DataContainer *bases_ = nullptr, *quals_ = nullptr, *meta_ = nullptr;

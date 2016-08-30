@@ -114,7 +114,7 @@ Thus we always need 3 of these for the full conversion pipeline
         OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
 #if 0
         buf_.clear(); outbuf_.clear();
-        for (auto &buffer : buffers) {
+        for (auto &buffer_pair : buffers) {
           if (i + recs_per_chunk > num_records) {
             recs_per_chunk = num_records - i;
           }
@@ -129,7 +129,7 @@ Thus we always need 3 of these for the full conversion pipeline
         if (s.ok()) {
           i = 0; recs_per_chunk = records_per_chunk;
           size_t expected_size;
-          for (auto &buffer : buffers) {
+          for (auto &buffer_pair : buffers) {
             if (i + recs_per_chunk > num_records) {
               recs_per_chunk = num_records - i;
             }
@@ -155,14 +155,15 @@ Thus we always need 3 of these for the full conversion pipeline
         }
 #endif
       } else {
-        for (auto &buffer : buffers) {
+        for (auto &buffer_pair : buffers) {
           if (i + recs_per_chunk > num_records) {
             recs_per_chunk = num_records - i;
           }
+          auto &index = buffer_pair.index();
 
-          OP_REQUIRES(ctx, buffer.size() > recs_per_chunk,
-                      Internal("Parallel column writer requires at least ", recs_per_chunk, " bytes for writing header, but only have ", buffer.size()));
-          fwrite_ret = fwrite(buffer.data(), recs_per_chunk, 1, file_out);
+          OP_REQUIRES(ctx, index.size() != recs_per_chunk,
+                      Internal("Parallel column writer requires at least ", recs_per_chunk, " bytes for writing header, but only have ", index.size()));
+          fwrite_ret = fwrite(&index[0], recs_per_chunk, 1, file_out);
           if (fwrite_ret != 1) {
             s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
             break;
@@ -171,23 +172,14 @@ Thus we always need 3 of these for the full conversion pipeline
           i += recs_per_chunk;
         }
         if (s.ok()) {
-          i = 0; recs_per_chunk = records_per_chunk;
-          size_t expected_size;
-          for (auto &buffer : buffers) {
-            if (i + recs_per_chunk > num_records) {
-              recs_per_chunk = num_records - i;
-            }
+          for (auto &buffer_pair : buffers) {
+            auto &data = buffer_pair.data();
 
-            expected_size = buffer.size() - recs_per_chunk;
-            OP_REQUIRES(ctx, expected_size > 0,
-                        Internal("expected a positive payload size for parallel column writer, but got ", expected_size));
-            fwrite_ret = fwrite(&buffer[recs_per_chunk], expected_size, 1, file_out);
+            fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
             if (fwrite_ret != 1) {
-              s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", expected_size);
+              s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", data.size());
               break;
             }
-
-            i += recs_per_chunk;
           }
         }
       }
