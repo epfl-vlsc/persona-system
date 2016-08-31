@@ -42,7 +42,7 @@ namespace tensorflow {
 
   void BufferList::decrement_outstanding() {
     auto previous = outstanding_buffers_.fetch_sub(1, memory_order_relaxed);
-    if (previous == 0) {
+    if (previous == 1) {
       ready_cv_.notify_one();
     }
   }

@@ -255,17 +255,17 @@ private:
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
-        timeLog.peek = std::chrono::high_resolution_clock::now();
+        //timeLog.peek = std::chrono::high_resolution_clock::now();
 
         auto *reads = reads_container->get();
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
           
-          timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
-          auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
-          if (subchunk_time.count() >= 1000)
-            timeLog.print();
+          //timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
+          //auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
+          //if (subchunk_time.count() >= 500)
+            //timeLog.print();
 
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
@@ -305,7 +305,7 @@ private:
 
             result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
           }
-          timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
+          //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
 
           if (!IsResourceExhausted(subchunk_status)) {
             LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
@@ -314,18 +314,18 @@ private:
           }
 
           //result_builder.WriteResult(result_buf);
-          timeLog.append = std::chrono::high_resolution_clock::now();
+          //timeLog.append = std::chrono::high_resolution_clock::now();
           result_buf->set_ready();
-          timeLog.ready = std::chrono::high_resolution_clock::now();
+          //timeLog.ready = std::chrono::high_resolution_clock::now();
           //if (oldcapacity != newcapacity)
             //LOG(INFO) << "buffer reallocated";
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
-          timeLog.getnext = std::chrono::high_resolution_clock::now();
+          //timeLog.getnext = std::chrono::high_resolution_clock::now();
         }
 
         request_queue_->drop_if_equal(reads_container);
-        timeLog.dropifequal = std::chrono::high_resolution_clock::now();
+        //timeLog.dropifequal = std::chrono::high_resolution_clock::now();
         if (!IsResourceExhausted(io_chunk_status)) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status << "\n";
           compute_status_ = io_chunk_status;
