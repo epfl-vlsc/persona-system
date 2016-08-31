@@ -1,5 +1,7 @@
 #include "util.h"
 #include <cstring>
+#include <cstdint>
+#include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
   using namespace std;
@@ -9,7 +11,7 @@ namespace tensorflow {
                      vector<char> &output)
   {
     output.clear();
-    output.reserve(segment_size);
+    safe_reserve(output, segment_size);
     if (output.capacity() < segment_size) {
       // just use normal insert and not the optimized memcpy
       output.insert(output.end(), segment, segment+segment_size);
@@ -24,15 +26,12 @@ namespace tensorflow {
                        const size_t segment_size,
                        vector<char> &output, bool double_capacity)
   {
-    size_t ideal_length = segment_size + output.size();
-    if (double_capacity) {
-      output.reserve(1); // just to make sure we don't multiply by 0!
-      while (output.capacity() < ideal_length) {
-        output.reserve(output.capacity() * 2);
-      }
-    } else {
-      output.reserve(ideal_length);
-    }
+    auto ideal_length = segment_size + output.size();
+    auto init_capacity = output.capacity();
+
+    safe_reserve(output, ideal_length);
+
+    // double check if new capacity succeeds
     if (output.capacity() < ideal_length) {
       output.insert(output.end(), segment, segment+segment_size);
     } else {

@@ -7,6 +7,7 @@
 #include "format.h"
 #include "compression.h"
 #include "parser.h"
+#include "util.h"
 #include "buffer.h"
 #include <vector>
 #include <cstdint>
@@ -101,7 +102,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
         auto input_data = agd_input->get();
         auto output_ptr = output_buffer_rc->get();
         auto &output_buffer = output_ptr->get();
-        output_buffer.reserve(reserve_bytes_);
+        safe_reserve(output_buffer, reserve_bytes_);
 
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
                                                  verify_, output_buffer, &first_ord, &num_recs));

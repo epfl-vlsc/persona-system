@@ -159,12 +159,19 @@ namespace tensorflow {
   }
 
   Status AGDReadResource::get_next_subchunk(ReadResource **rr, Buffer **b) {
-    auto idx = sub_resource_index_.fetch_add(1);
-    if (idx >= sub_resources_.size()) {
+    //size_t idx = sub_resource_index_;
+    auto a = sub_resource_index_++;
+    if (a >= sub_resources_.size()) {
       return ResourceExhausted("No more AGD subchunks");
     } else {
-      *rr = &sub_resources_[idx];
-      *b = buffer_list_->get_at(idx);
+      //decltype(idx) next;
+      //do {
+      //  idx = sub_resource_index_;
+      //  next = idx+1;
+      //  // weak has a few false positives, but is better for loops, according to the spec
+      //} while (!sub_resource_index_.compare_exchange_weak(idx, next));
+      *rr = &sub_resources_[a];
+      *b = buffer_list_->get_at(a);
     }
     return Status::OK();
   }

@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "compression.h"
 #include "data.h"
+#include "util.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include <string>
@@ -58,7 +59,7 @@ Decompress the entire data buffer that this receives
         auto& buff = decomp_output->get()->get();
         auto data = data_handle->get()->data();
         auto data_size = data_handle->get()->size();
-        buff.reserve(data_size);
+        safe_reserve(buff, data_size);
 
         OP_REQUIRES_OK(ctx, decompressGZIP(data, data_size, buff));
         OP_REQUIRES_OK(ctx, decomp_output->allocate_output("uncomp_handle", ctx));

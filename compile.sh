@@ -29,7 +29,10 @@ process_args "$@"
 
 extra_opts=""
 if [ $build_type == "opt" ]; then
-    extra_opts="--copt -O3 --copt -g"
+    extra_opts="--copt -O3"
+elif [ $build_type == "vtune" ]; then
+    build_type="opt"
+    extra_opts="--copt -g --copt -O3"
 fi
 
 
