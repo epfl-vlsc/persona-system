@@ -2,8 +2,7 @@
   An op to read from a queue of filename strings, and enqueue multiple shared resources corresponding to each file.
  */
 
-#ifndef TENSORFLOW_CORE_USEROPS_AGD_ALIGN_MMAP_H_
-#define TENSORFLOW_CORE_USEROPS_AGD_ALIGN_MMAP_H_
+#pragma once
 
 #include <memory>
 #include <cstdint>
@@ -37,5 +36,3 @@ namespace tensorflow {
   };
 
 } // namespace tensorflow {
-
-#endif
