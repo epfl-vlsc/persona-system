@@ -152,7 +152,6 @@ private:
   struct time_log {
     std::chrono::high_resolution_clock::time_point end_subchunk;
     std::chrono::high_resolution_clock::time_point start_subchunk;
-    std::chrono::high_resolution_clock::time_point append;
     std::chrono::high_resolution_clock::time_point ready;
     std::chrono::high_resolution_clock::time_point getnext;
     std::chrono::high_resolution_clock::time_point dropifequal;
@@ -161,13 +160,11 @@ private:
     void print() {
 
       auto subchunktime = std::chrono::duration_cast<std::chrono::microseconds>(start_subchunk - end_subchunk);
-      auto appendtime = std::chrono::duration_cast<std::chrono::microseconds>(append - end_subchunk);
-      auto readytime = std::chrono::duration_cast<std::chrono::microseconds>(ready - append);
+      auto readytime = std::chrono::duration_cast<std::chrono::microseconds>(ready - end_subchunk);
       auto getnexttime = std::chrono::duration_cast<std::chrono::microseconds>(getnext - ready);
-      auto dropifequaltime = std::chrono::duration_cast<std::chrono::microseconds>(dropifequal - ready);
+      auto dropifequaltime = std::chrono::duration_cast<std::chrono::microseconds>(dropifequal - getnext);
       auto peektime = std::chrono::duration_cast<std::chrono::microseconds>(peek - dropifequal);
       LOG(INFO) << "subchunk time: " << subchunktime.count() 
-        << " append time: " << appendtime.count()
         << " ready time: " << readytime.count()
         << " getnext time: " << getnexttime.count()
         << " dropifequal time: " << dropifequaltime.count()
@@ -240,7 +237,7 @@ private:
       Read snap_read;
       LandauVishkinWithCigar lvc;
 
-      Buffer* result_buf = nullptr;
+      BufferPair* result_buf = nullptr;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       const uint32_t max_completed = trace_granularity_;
@@ -248,6 +245,8 @@ private:
       //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
      
       time_log timeLog;
+      uint64 total = 0;
+      //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
 
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
@@ -266,7 +265,9 @@ private:
           //auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
           //if (subchunk_time.count() >= 500)
             //timeLog.print();
+          //total += subchunk_time.count();
 
+          result_builder.set_buffer_pair(result_buf);
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
             cigarString.clear();
@@ -303,7 +304,11 @@ private:
             if (!s.ok())
               LOG(ERROR) << "computeCigarFlags did not return OK!!!";
 
+            //auto t1 = std::chrono::high_resolution_clock::now();
             result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
+            //auto t2 = std::chrono::high_resolution_clock::now();
+            //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+            //LOG(INFO) << "append time " << time.count();
           }
           //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
 
@@ -314,14 +319,13 @@ private:
           }
 
           //result_builder.WriteResult(result_buf);
-          //timeLog.append = std::chrono::high_resolution_clock::now();
           result_buf->set_ready();
           //timeLog.ready = std::chrono::high_resolution_clock::now();
           //if (oldcapacity != newcapacity)
             //LOG(INFO) << "buffer reallocated";
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
-          //timeLog.getnext = std::chrono::high_resolution_clock::now();
+         // timeLog.getnext = std::chrono::high_resolution_clock::now();
         }
 
         request_queue_->drop_if_equal(reads_container);
@@ -338,7 +342,10 @@ private:
       struct rusage usage;
       int ret = getrusage(RUSAGE_THREAD, &usage);
 
+      double total_s = (double)total / 1000000.0f;
       LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
+      LOG(INFO) << "Total time spent not processing" << total << " us";
+      LOG(INFO) << "Total time spent not processing" << total_s << " seconds";
       LOG(INFO) << "system time used: " << usage.ru_stime.tv_sec << "." << usage.ru_stime.tv_usec << endl;
       LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
       LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;

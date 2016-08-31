@@ -11,6 +11,7 @@ namespace tensorflow {
   using namespace errors;
 
   Buffer::Buffer(size_t initial_size, size_t extend_extra) : extend_extra_(extend_extra), size_(0), allocation_(initial_size) {
+    // FIXME in an ideal world, allocation_ should be checked to be positive
     buf_.reset(new char[allocation_]());
   }
 
@@ -47,16 +48,6 @@ namespace tensorflow {
     size_ = 0;
   }
 
-  void Buffer::set_ready() {
-    if (parent_) {
-      parent_->decrement_outstanding();
-    }
-  }
-
-  void Buffer::set_buffer_list_parent(BufferList *bl) {
-    parent_ = bl;
-  }
-
   char& Buffer::operator[](size_t idx) const {
     return buf_[idx];
   }
@@ -64,6 +55,7 @@ namespace tensorflow {
   void Buffer::reserve(size_t capacity) {
     if (capacity > allocation_) {
       allocation_ = capacity + extend_extra_;
+      LOG(INFO) << "REALLOCATING WTF to " << allocation_ << " bytes";
       decltype(buf_) a(new char[allocation_]());
       memcpy(a.get(), buf_.get(), size_);
       buf_.swap(a);

@@ -3,30 +3,24 @@
 #include <memory>
 #include "data.h"
 #include "tensorflow/core/lib/core/errors.h"
-#include "buffer_list.h"
 
 namespace tensorflow {
-  class BufferList;
 
     class Buffer : public Data {
     private:
       std::unique_ptr<char[]> buf_{nullptr};
       std::size_t size_ = 0, allocation_ = 0, extend_extra_ = 0;
 
-      void set_buffer_list_parent(BufferList *buffer_list);
-      BufferList *parent_ = nullptr;
-
-      friend class BufferList;
     public:
 
-      Buffer(decltype(size_) initial_size = 64 * 1024,
+      Buffer(decltype(size_) initial_size = 2 * 1024 * 1024,
              decltype(size_) extend_extra = 8 * 1024 * 1024);
 
         Status WriteBuffer(const char* content, std::size_t content_size);
         Status AppendBuffer(const char* content, std::size_t content_size);
 
         // ensures that the total capacity is at least `capacity`
-        void reserve(std::size_t capacity);
+        void reserve(decltype(allocation_) capacity);
 
         // resizes the actual size to to total_size
         // returns an error if total_size > allocation_
@@ -42,7 +36,7 @@ namespace tensorflow {
         // should call `extend_allocation` first to be safe
         void extend_size(decltype(size_) extend_size);
 
-        char& operator[](size_t idx) const;
+        char& operator[](std::size_t idx) const;
 
         void set_ready();
         void reset();

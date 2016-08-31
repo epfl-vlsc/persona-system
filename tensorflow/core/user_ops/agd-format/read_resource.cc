@@ -18,7 +18,7 @@ namespace tensorflow {
     return Unimplemented("resource splitting not supported for this resource");
   }
 
-  Status ReadResource::get_next_subchunk(ReadResource **rr, Buffer **b)
+  Status ReadResource::get_next_subchunk(ReadResource **rr, BufferPair **b)
   {
     return Unimplemented("resource splitting not supported for this resource");
   }
