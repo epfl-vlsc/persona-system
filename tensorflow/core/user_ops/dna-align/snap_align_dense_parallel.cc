@@ -181,6 +181,15 @@ private:
         my_id = thread_id_++;
       }
 
+      /*cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(0, &cpuset);
+      int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+      if (rc != 0) {
+        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core:0 " 
+          << " for thread id: " << my_id;
+      } else
+        LOG(INFO) << "set affinity to core 0";*/
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
       auto index = index_resource_->get_index();
@@ -199,9 +208,9 @@ private:
             options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
           + alignmentResultBufferSize);
 
-      LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true,
+      /*LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true,
             options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
-          + alignmentResultBufferSize;
+          + alignmentResultBufferSize;*/
 
       BaseAligner* base_aligner = new (allocator) BaseAligner(
         index,
@@ -246,7 +255,8 @@ private:
      
       time_log timeLog;
       uint64 total = 0;
-      //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
+      timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
+      std::chrono::high_resolution_clock::time_point end_time;
 
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
@@ -254,6 +264,7 @@ private:
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
+        //LOG(INFO) << "starting new chunk";
         //timeLog.peek = std::chrono::high_resolution_clock::now();
 
         auto *reads = reads_container->get();
@@ -264,10 +275,12 @@ private:
           //timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
           //auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
           //if (subchunk_time.count() >= 500)
+            //LOG(INFO) << "subchunk > 500";
             //timeLog.print();
           //total += subchunk_time.count();
 
           result_builder.set_buffer_pair(result_buf);
+          //LOG(INFO) << "starting new subchunk";
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
             cigarString.clear();
@@ -335,9 +348,9 @@ private:
           compute_status_ = io_chunk_status;
           return;
         }
+        end_time = std::chrono::high_resolution_clock::now();
       }
 
-      std::chrono::high_resolution_clock::time_point end_time = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
       struct rusage usage;
       int ret = getrusage(RUSAGE_THREAD, &usage);

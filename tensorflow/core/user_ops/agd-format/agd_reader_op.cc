@@ -101,6 +101,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
         auto input_data = agd_input->get();
         auto* output_ptr = output_buffer_rc->get();
+        output_ptr->reserve(250*1024*1024); // make sure its big enough if its fresh.
 
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
                                                  verify_, output_ptr, &first_ord, &num_recs));

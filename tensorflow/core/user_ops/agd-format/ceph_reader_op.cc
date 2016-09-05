@@ -144,7 +144,7 @@ file_name: a Tensor() of string for the unique key for this file
       size_t data_read = 0;
       size_t read_len;
       size_t size_to_read = (size_t) read_size;
-      buf->reserve(file_size);
+      buf->resize(file_size);
 
       librados::bufferlist read_buf;
       while (data_read < file_size) {
