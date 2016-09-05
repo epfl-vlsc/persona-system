@@ -137,21 +137,19 @@ compress: whether or not to compress the column
       ResourceReleaser<BufferList> a(*column);
       tracepoint(bioflow, result_ready_queue_stop, column);
 
-      auto &buffers = column->get()->get_when_ready();
+      auto *buf_list = column->get();
+      buf_list->wait_for_ready();
 
       string full_path(filepath + record_suffix_);
 
       OP_REQUIRES_OK(ctx, WriteHeader(ctx, output_buf_));
 
-      auto num_buffers = buffers.size();
+      auto num_buffers = buf_list->size();
+      size_t i;
       uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
-      uint32_t records_per_chunk = num_records / num_buffers;
-      if (num_records % num_buffers != 0) {
-        ++records_per_chunk;
-      }
-
-      decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       if (compress_) {
+        OP_REQUIRES(ctx, false, Internal("Compression not supported for ceph writers"));
+#if 0
         compress_buf_.clear();
 
         for (auto &buffer : buffers) {
@@ -182,33 +180,21 @@ compress: whether or not to compress the column
         output_buf_.clear();
         OP_REQUIRES_OK(ctx, compressGZIP(&compress_buf_[0], compress_buf_.size(), output_buf_));
         OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &output_buf_[0], output_buf_.size()));
+#endif
       } else {
-        for (auto &buffer : buffers) {
-          if (i + recs_per_chunk > num_records) {
-            recs_per_chunk = num_records - i;
-          }
+        for (i = 0; i < num_buffers; ++i) {
+          auto &index = (*buf_list)[i].index();
 
-          auto &data_buf = buffer.get();
+          auto s1 = index.size();
+          OP_REQUIRES(ctx, s1 != 0,
+                      Internal("ceph write got empty record!"));
 
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[0], recs_per_chunk));
-          i += recs_per_chunk;
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &index[0], s1));
         }
 
-        tracepoint(bioflow, total_align_stop, column);
-
-        i = 0; recs_per_chunk = records_per_chunk;
-        size_t expected_size;
-        for (auto &buffer : buffers) {
-          if (i + recs_per_chunk > num_records) {
-            recs_per_chunk = num_records - i;
-          }
-
-          auto &data_buf = buffer.get();
-
-          expected_size = data_buf.size() - recs_per_chunk;
-
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data_buf[recs_per_chunk], expected_size));
-          i += recs_per_chunk;
+        for (i = 0; i < num_buffers; ++i) {
+          auto &data = (*buf_list)[i].data();
+          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data[0], data.size()));
         }
       }
       Tensor *num_recs;
@@ -271,6 +257,7 @@ compress: whether or not to compress the column
       if (ret < 0) {
         return Internal("Couldn't write object! error: ", ret);
       }
+      write_buf.clear();
       return Status::OK();
     }
   };

@@ -53,27 +53,22 @@ namespace tensorflow {
       auto rec_input_vec = rec_input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
       core::ScopedUnref column_releaser(records);
-      auto rec_data_list_p = records->get();
-      auto& rec_data_list = *rec_data_list_p;
-      rec_data_list.wait_for_ready();
+      auto &rec_data_list = records->get()->get_when_ready();
       auto num_buffers = rec_data_list.size();
-      LOG(INFO) << "num buffers " << num_buffers;
 
       // Get number of records per chunk
       const Tensor *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto num_records = num_records_t->scalar<int32>()();
-      LOG(INFO) << "num records: " << num_records;
       uint32_t records_per_chunk = num_records / num_buffers;
       if (num_records % num_buffers != 0) {
         ++records_per_chunk;
       }
-      LOG(INFO) << "records per chunk" << records_per_chunk;
 
       auto status = Status::OK();
-      /*decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
+      decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       buf_.clear();
-      for (auto& bufpair : rec_data_list) {
+      for (auto &buffer : rec_data_list) {
         // deals with the last chunk, which could have a smaller number of records
         // depending on the params
         if (i + recs_per_chunk > num_records) {
@@ -94,7 +89,7 @@ namespace tensorflow {
         expected_size = data_buf.size() - recs_per_chunk;
         OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true));
         i += recs_per_chunk;
-      }*/
+      }
 
       // Will be populated in SAMReader::getNextRead
       AlignmentResult sam_alignmentResult;
@@ -105,17 +100,11 @@ namespace tensorflow {
       const char *sam_cigar;
       size_t num_char, record_size, var_string_size;
 
+      auto size_index = reinterpret_cast<const format::RecordTable*>(&buf_[0]);
 
+      const char *curr_record = &buf_[num_records]; // skip the indices
       const format::AlignmentResult *agd_result;
       bool should_error = false;
-
-      int cur_buflist_index = 0;
-      Buffer* index = &rec_data_list[cur_buflist_index].index();
-      auto size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
-      size_t size_index_size = index->size();
-      size_t cur_size_index = 0;
-      Buffer* data = &rec_data_list[cur_buflist_index].data();
-      const char *curr_record = data->data(); // skip the indices
 
       for (decltype(num_records) i = 0; i < num_records; ++i) {
         if (!reader_->getNextRead(&sam_read_, &sam_alignmentResult, &sam_genomeLocation,
@@ -125,7 +114,7 @@ namespace tensorflow {
           break;
         }
 
-        record_size = size_index->relative_index[cur_size_index];
+        record_size = size_index->relative_index[i];
         var_string_size = record_size - sizeof(format::AlignmentResult);
 
         agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
@@ -160,18 +149,7 @@ namespace tensorflow {
           should_error = true;
         }
 
-        if (cur_size_index == size_index_size - 1 && i != num_records - 1) {
-          cur_buflist_index++;
-          index = &rec_data_list[cur_buflist_index].index();
-          size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
-          size_index_size = index->size();
-          cur_size_index = 0;
-          data = &rec_data_list[cur_buflist_index].data();
-          curr_record = data->data(); // skip the indices
-        } else {
-          cur_size_index++;
-          curr_record += record_size;
-        }
+        curr_record += record_size;
       }
 
       if (should_error) {

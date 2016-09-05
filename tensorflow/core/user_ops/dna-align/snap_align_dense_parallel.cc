@@ -78,6 +78,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
       }
       LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
       LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      LOG(INFO) << "request queue peek wait: " << request_queue_->num_peek_waits();
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
       VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
@@ -149,6 +150,29 @@ class SnapAlignAGDParallelOp : public OpKernel {
 private:
   clock_t kernel_start;
 
+  struct time_log {
+    std::chrono::high_resolution_clock::time_point end_subchunk;
+    std::chrono::high_resolution_clock::time_point start_subchunk;
+    std::chrono::high_resolution_clock::time_point ready;
+    std::chrono::high_resolution_clock::time_point getnext;
+    std::chrono::high_resolution_clock::time_point dropifequal;
+    std::chrono::high_resolution_clock::time_point peek;
+
+    void print() {
+
+      auto subchunktime = std::chrono::duration_cast<std::chrono::microseconds>(start_subchunk - end_subchunk);
+      auto readytime = std::chrono::duration_cast<std::chrono::microseconds>(ready - end_subchunk);
+      auto getnexttime = std::chrono::duration_cast<std::chrono::microseconds>(getnext - ready);
+      auto dropifequaltime = std::chrono::duration_cast<std::chrono::microseconds>(dropifequal - getnext);
+      auto peektime = std::chrono::duration_cast<std::chrono::microseconds>(peek - dropifequal);
+      LOG(INFO) << "subchunk time: " << subchunktime.count() 
+        << " ready time: " << readytime.count()
+        << " getnext time: " << getnexttime.count()
+        << " dropifequal time: " << dropifequaltime.count()
+        << " peek time: " << peektime.count();
+    }
+  };
+
   inline void init_workers(OpKernelContext* ctx) {
     auto aligner_func = [this] () {
       std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
@@ -158,6 +182,15 @@ private:
         my_id = thread_id_++;
       }
 
+      /*cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(0, &cpuset);
+      int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+      if (rc != 0) {
+        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core:0 " 
+          << " for thread id: " << my_id;
+      } else
+        LOG(INFO) << "set affinity to core 0";*/
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
       auto index = index_resource_->get_index();
@@ -176,9 +209,9 @@ private:
             options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
           + alignmentResultBufferSize);
 
-      LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true,
+      /*LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true,
             options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
-          + alignmentResultBufferSize;
+          + alignmentResultBufferSize;*/
 
       BaseAligner* base_aligner = new (allocator) BaseAligner(
         index,
@@ -214,22 +247,41 @@ private:
       Read snap_read;
       LandauVishkinWithCigar lvc;
 
-      Buffer* result_buf = nullptr;
+      BufferPair* result_buf = nullptr;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       const uint32_t max_completed = trace_granularity_;
+      //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
+      //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
+     
+      time_log timeLog;
+      uint64 total = 0;
+      timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
+      std::chrono::high_resolution_clock::time_point end_time;
+
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
         shared_ptr<ResourceContainer<ReadResource>> reads_container;
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
+        //LOG(INFO) << "starting new chunk";
+        //timeLog.peek = std::chrono::high_resolution_clock::now();
 
         auto *reads = reads_container->get();
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
-          auto &res_buf = result_buf->get();
+          
+          //timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
+          //auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
+          //if (subchunk_time.count() >= 500)
+            //LOG(INFO) << "subchunk > 500";
+            //timeLog.print();
+          //total += subchunk_time.count();
+
+          result_builder.set_buffer_pair(result_buf);
+          //LOG(INFO) << "starting new subchunk";
           for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
             cigarString.clear();
@@ -243,7 +295,7 @@ private:
                 primaryResult.location = InvalidGenomeLocation;
                 primaryResult.mapq = 0;
                 primaryResult.direction = FORWARD;
-                result_builder.AppendAlignmentResult(primaryResult, "*", 4, res_buf);
+                result_builder.AppendAlignmentResult(primaryResult, "*", 4);
               }
               continue;
             }
@@ -266,8 +318,13 @@ private:
             if (!s.ok())
               LOG(ERROR) << "computeCigarFlags did not return OK!!!";
 
-            result_builder.AppendAlignmentResult(primaryResult, cigarString, flag, res_buf);
+            //auto t1 = std::chrono::high_resolution_clock::now();
+            result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
+            //auto t2 = std::chrono::high_resolution_clock::now();
+            //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+            //LOG(INFO) << "append time " << time.count();
           }
+          //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
 
           if (!IsResourceExhausted(subchunk_status)) {
             LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
@@ -275,30 +332,40 @@ private:
             return;
           }
 
-          result_builder.AppendAndFlush(res_buf);
+          //result_builder.WriteResult(result_buf);
           result_buf->set_ready();
+          //timeLog.ready = std::chrono::high_resolution_clock::now();
+          //if (oldcapacity != newcapacity)
+            //LOG(INFO) << "buffer reallocated";
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+         // timeLog.getnext = std::chrono::high_resolution_clock::now();
         }
 
         request_queue_->drop_if_equal(reads_container);
+        //timeLog.dropifequal = std::chrono::high_resolution_clock::now();
         if (!IsResourceExhausted(io_chunk_status)) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status << "\n";
           compute_status_ = io_chunk_status;
           return;
         }
+        end_time = std::chrono::high_resolution_clock::now();
       }
 
-      std::chrono::high_resolution_clock::time_point end_time = std::chrono::high_resolution_clock::now();
       std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
       struct rusage usage;
       int ret = getrusage(RUSAGE_THREAD, &usage);
 
+      double total_s = (double)total / 1000000.0f;
       LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
+      LOG(INFO) << "Total time spent not processing" << total << " us";
+      LOG(INFO) << "Total time spent not processing" << total_s << " seconds";
       LOG(INFO) << "system time used: " << usage.ru_stime.tv_sec << "." << usage.ru_stime.tv_usec << endl;
       LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
       LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
       LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
+      LOG(INFO) << "vol con sw: " << usage.ru_nvcsw << endl;
+      LOG(INFO) << "invol con sw: " << usage.ru_nivcsw << endl;
       base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
       delete allocator;
       VLOG(INFO) << "base aligner thread ending.";

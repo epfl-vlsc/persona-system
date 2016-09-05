@@ -37,6 +37,74 @@ Status resize_output(z_stream &strm, vector<char> &output, size_t extend_len) {
 }
 
 Status decompressGZIP(const char* segment,
+                      const std::size_t segment_size,
+                      Buffer *output)
+{
+  // TODO this only supports decompress write, not appending
+  // this is an easy change to make, but requires some more "math"
+  output->reset(); // just to be sure, in case the caller didn't do it
+  static const int init_flags = window_bits | ENABLE_ZLIB_GZIP;
+  z_stream strm = {0};
+  strm.zalloc = Z_NULL;
+  strm.zfree = Z_NULL;
+  strm.next_in = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(segment));
+  strm.avail_in = segment_size;
+
+  int status = inflateInit2(&strm, init_flags);
+  if (status != Z_OK) {
+    return Internal("inflateInit2 failed with error: ", status);
+  }
+
+  auto s = Status::OK();
+
+  auto init_size = segment_size * 3;
+  output->resize(init_size);
+  // First, try to decompress as much as possible in a single step
+  strm.avail_out = output->size();
+  strm.next_out = reinterpret_cast<unsigned char*>(&(*output)[0]);
+  status = inflate(&strm, Z_FINISH);
+  // TODO do we need to call inflate in while lopp while status == Z_OK (like deflate)?
+
+  if (status != Z_STREAM_END) {
+    if (status == Z_OK || status == Z_BUF_ERROR) {
+      // Do normal decompression because we couldn't do it in one shot
+      output->extend_size(extend_length);
+      strm.next_out = reinterpret_cast<unsigned char*>(&(*output)[strm.total_out]);
+      strm.avail_out = output->size() - strm.total_out;
+      while (status != Z_STREAM_END && s.ok() && strm.total_in < segment_size) {
+        status = inflate(&strm, Z_NO_FLUSH);
+        switch (status) {
+        case Z_BUF_ERROR:
+        case Z_OK:
+          output->extend_size(extend_length);
+          strm.next_out = reinterpret_cast<unsigned char*>(&(*output)[strm.total_out]);
+          strm.avail_out = output->size() - strm.total_out;
+        case Z_STREAM_END:
+          break;
+        default: // an error
+          s = Internal("inflate(Z_NO_FLUSH) returned code ", status, " with message '", strm.msg == NULL ? "" : strm.msg, "'");
+          break;
+        }
+      }
+    } else {
+      s = Internal("inflate(Z_FINISH) return code ", status, " with message '", strm.msg == NULL ? "" : strm.msg, "'");
+    }
+  }
+
+  auto total_out = strm.total_out;
+
+  status = inflateEnd(&strm);
+  if (status != Z_OK) { // s.ok() status to make sure we don't override non-inflateEnd error
+    if (s.ok()) {
+      s = Internal("inflateEnd() didn't receive Z_OK. Got: ", status);
+    }
+  } else {
+    output->resize(total_out);
+  }
+  return s;
+}
+
+Status decompressGZIP(const char* segment,
                       const size_t segment_size,
                       vector<char> &output)
 {

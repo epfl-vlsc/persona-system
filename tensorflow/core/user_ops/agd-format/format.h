@@ -21,6 +21,7 @@
 #include <array>
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
+#include "buffer.h"
 
 namespace tensorflow {
 namespace format {
@@ -84,7 +85,7 @@ namespace format {
   struct __attribute__((packed)) BinaryBases {
     BinaryBases() : bases(0) {};
 
-    Status appendToVector(std::vector<char> &output, std::size_t *num_bases) const;
+    Status append(Buffer &output, std::size_t *num_bases) const;
 
     Status getBase(const std::size_t position, char* base) const;
 
@@ -105,7 +106,7 @@ namespace format {
 
   struct __attribute__((packed)) BinaryBaseRecord {
 
-    Status appendToVector(const std::size_t record_size_in_bytes, std::vector<char> &output, std::vector<char> &lengths) const;
+    Status append(const std::size_t record_size_in_bytes, Buffer &data, Buffer &lengths) const;
 
     BinaryBases bases[]; // relative length stored in the RecordTable.relative_index
 

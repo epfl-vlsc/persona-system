@@ -197,7 +197,7 @@ def _BufferListSinkShape(op):
 
 _at_string = "AGDTester"
 ops.NoGradient(_at_string)
-def AGDTester(num_records, agd_records, genome_handle, sam_filename, name=None):
+def AGDTester(genome_handle, agd_records, num_records,  sam_filename, name=None):
   if not (os.path.exists(sam_filename) and os.path.isfile(sam_filename)):
     raise EnvironmentError("AGDTester SAM file '{}' is not valid".format(sam_filename))
   return gen_user_ops.agd_tester(num_records=num_records, agd_records=agd_records,
