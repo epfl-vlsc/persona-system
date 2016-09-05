@@ -257,6 +257,7 @@ compress: whether or not to compress the column
       if (ret < 0) {
         return Internal("Couldn't write object! error: ", ret);
       }
+      write_buf.clear();
       return Status::OK();
     }
   };
