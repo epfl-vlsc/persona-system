@@ -27,7 +27,7 @@ namespace {
   }};
 }
 
-Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, vector<char> &output, vector<char> &lengths) const
+Status BinaryBaseRecord::append(const std::size_t record_size_in_bytes, Buffer &data, Buffer &lengths) const
 {
   if (record_size_in_bytes % sizeof(uint64_t) != 0) {
     return InvalidArgument("Size of record ", record_size_in_bytes, " is not a multiple of ", sizeof(uint64_t));
@@ -38,13 +38,14 @@ Status BinaryBaseRecord::appendToVector(const std::size_t record_size_in_bytes, 
   size_t length = 0;
   for (size_t i = 0; i < record_size_in_base_records; ++i) {
     auto const base = &bases[i];
-    TF_RETURN_IF_ERROR(base->appendToVector(output, &length));
+    TF_RETURN_IF_ERROR(base->append(data, &length));
   }
-  lengths.push_back(static_cast<char>(length));
+  char char_len = static_cast<char>(length);
+  lengths.AppendBuffer(&char_len, 1);
   return Status::OK();
 }
 
-Status BinaryBases::appendToVector(vector<char> &output, size_t *num_bases) const
+Status BinaryBases::append(Buffer &data, size_t *num_bases) const
 {
   using namespace errors;
   BaseAlphabet base;
@@ -62,7 +63,7 @@ Status BinaryBases::appendToVector(vector<char> &output, size_t *num_bases) cons
     auto num_chars = res->effective_characters();
     i += val.size();
 
-    appendSegment(val.data(), res->effective_characters(), output, true);
+    data.AppendBuffer(val.data(), num_chars);
     length += num_chars;
     // there must be a terminating character in here
     auto sz = val.size();

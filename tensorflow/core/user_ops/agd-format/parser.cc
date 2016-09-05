@@ -98,7 +98,7 @@ namespace tensorflow {
     return &a;
   }
 
-  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, vector<char> &result, uint64_t *first_ordinal, uint32_t *num_records)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records)
   {
     using namespace errors;
     using namespace format;
@@ -127,24 +127,23 @@ namespace tensorflow {
     auto start = clock();
     switch (compression_type) {
     case CompressionType::GZIP:
-      status = decompressGZIP(payload_start, payload_size, result);
+      status = decompressGZIP(payload_start, payload_size, result_buffer);
       break;
     case CompressionType::UNCOMPRESSED:
-      status = copySegment(payload_start, payload_size, result);
+      status = result_buffer->WriteBuffer(payload_start, payload_size);
       break;
     default:
       status = errors::InvalidArgument("Compressed type '", file_header->compression_type, "' doesn't match to any valid or supported compression enum type");
       break;
     }
     const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
-    tracepoint(bioflow, decompression, start, file_header->first_ordinal, index_size);
     TF_RETURN_IF_ERROR(status);
 
-    if (result.size() < index_size * 2) {
-      return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", result.size());
+    if (result_buffer->size() < index_size * 2) {
+      return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", result_buffer->size());
     }
 
-    records = reinterpret_cast<const RecordTable*>(result.data());
+    records = reinterpret_cast<const RecordTable*>(result_buffer->data());
 
     if (verify) {
       size_t data_size = 0;
@@ -153,7 +152,7 @@ namespace tensorflow {
         data_size += records->relative_index[i];
       }
 
-      const size_t expected_size = result.size() - index_size;
+      const size_t expected_size = result_buffer->size() - index_size;
       if (data_size != expected_size) {
         if (data_size < expected_size) {
           return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
@@ -166,11 +165,10 @@ namespace tensorflow {
     }
 
     if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
-      start = clock();
-      conversion_scratch_.clear(); index_scratch_.clear();
+      conversion_scratch_.reset(); index_scratch_.reset();
 
       uint8_t current_record_length;
-      const char* start_ptr = &result[index_size];
+      const char* start_ptr = &(*result_buffer)[index_size];
       const BinaryBaseRecord *bases;
 
       for (uint64_t i = 0; i < index_size; ++i) {
@@ -178,15 +176,13 @@ namespace tensorflow {
         bases = reinterpret_cast<const BinaryBaseRecord*>(start_ptr);
         start_ptr += current_record_length;
 
-        TF_RETURN_IF_ERROR(bases->appendToVector(current_record_length, conversion_scratch_, index_scratch_));
+        TF_RETURN_IF_ERROR(bases->append(current_record_length, conversion_scratch_, index_scratch_));
       }
 
       // append everything in converted_records to the index
-      result.clear();
-      safe_reserve(result, index_scratch_.size() + conversion_scratch_.size());
-      TF_RETURN_IF_ERROR(copySegment(&index_scratch_[0], index_scratch_.size(), result));
-      TF_RETURN_IF_ERROR(appendSegment(&conversion_scratch_[0], conversion_scratch_.size(), result));
-      tracepoint(bioflow, base_conversion, start, file_header->first_ordinal, index_size);
+      result_buffer->reserve(index_scratch_.size() + conversion_scratch_.size());
+      TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(&index_scratch_[0], index_scratch_.size()));
+      TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
     }
 
     *first_ordinal = file_header->first_ordinal;
@@ -195,8 +191,8 @@ namespace tensorflow {
   }
 
   void RecordParser::reset() {
-    conversion_scratch_.clear();
-    index_scratch_.clear();
+    conversion_scratch_.reset();
+    index_scratch_.reset();
   }
 
   RecordParser::RecordParser() {

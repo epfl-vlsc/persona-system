@@ -144,15 +144,12 @@ file_name: a Tensor() of string for the unique key for this file
       size_t data_read = 0;
       size_t read_len;
       size_t size_to_read = (size_t) read_size;
-
-      auto& c = buf->get();
-      safe_reserve(c, file_size);
-      c.resize(file_size);
+      buf->resize(file_size);
 
       librados::bufferlist read_buf;
       while (data_read < file_size) {
         read_len = min(size_to_read, file_size - data_read);
-        read_buf.push_back(ceph::buffer::create_static(read_len, &c[data_read]));
+        read_buf.push_back(ceph::buffer::create_static(read_len, &(*buf)[data_read]));
 
         // Create I/O Completion.
         /*librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
@@ -176,7 +173,7 @@ file_name: a Tensor() of string for the unique key for this file
         if (ret < 0) {
           return Internal("Couldn't call io_ctx.read. Received ", ret);
         }
-        data_read = data_read + read_len;
+        data_read += read_len;
         read_buf.clear();
 
         return Status::OK();

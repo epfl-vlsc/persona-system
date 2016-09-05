@@ -6,21 +6,11 @@
 #include "format.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
+#include "buffer_list.h"
 
 namespace tensorflow {
 
-class ColumnBuilder {
-public:
-
-  void AppendAndFlush(std::vector<char> &idx_buf);
-
-protected:
-
-  // To be used for subclasses to build up their results
-  std::vector<char> records_;
-};
-
-class AlignmentResultBuilder : public ColumnBuilder {
+class AlignmentResultBuilder {
 public:
     /*
       Append the current alignment result to the internal result buffer
@@ -31,29 +21,13 @@ public:
 
       records_ is used to build up the actual reads, which are appended into the chunk.
     */
-  void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, std::vector<char> &index);
-  void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, 
-                             const int flag, std::vector<char> &index);
+  void set_buffer_pair(BufferPair *data);
+
+  void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, const int flag);
 
   private:
-    format::AlignmentResult builder_result_;
+    Buffer *data_ = nullptr, *index_ = nullptr;
+    format::AlignmentResult converted_result;
   };
 
-  class StringColumnBuilder : public ColumnBuilder {
-  public:
-
-    void AppendString(const char* record, const std::size_t record_size, std::vector<char> &index);
-  };
-
-  class BaseColumnBuilder : public ColumnBuilder {
-  public:
-
-    Status AppendString(const char* bases, const std::size_t base_length, std::vector<char> &index);
-
-  private:
-
-    std::vector<format::BinaryBases> base_scratch_;
-
-  };
-
-  } // namespace tensorflow
+} // namespace tensorflow
