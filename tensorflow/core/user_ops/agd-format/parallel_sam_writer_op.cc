@@ -37,7 +37,7 @@ namespace tensorflow {
   .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}") // TODO: possibly, I don't need them
   .Attr("sam_file_path: string = ''")
-  .Input("column_handle: string")
+  .Input("agd_results: string")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
  // TODO these can be collapsed into a vec(3) if that would help performance
@@ -64,40 +64,42 @@ and is thus passed as an Attr instead of an input (for efficiency);
 			if (!writer_supplier_) {
 				OP_REQUIRES_OK(ctx, init(ctx));
 			}		
+			
+			// Get the agd format results in agd_records
+      ResourceContainer<BufferList> *records;
+      const Tensor *rec_input;
+      OP_REQUIRES_OK(ctx, ctx->input("agd_results", &rec_input));
+      auto rec_input_vec = rec_input->vec<string>();
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(rec_input_vec(0), rec_input_vec(1), &records));
+      core::ScopedUnref column_releaser(records);
+      auto rec_data_list_p = records->get();
+      auto& rec_data_list = *rec_data_list_p;
+      rec_data_list.wait_for_ready();
+      
+			auto num_buffers = rec_data_list.size();
+      LOG(INFO) << "num buffers " << num_buffers;
 
-
-      // Get the results
-      const Tensor *column_t;
-      OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
-      auto column_vec = column_t->vec<string>();
-
-      ResourceContainer<BufferList> *column;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
-      core::ScopedUnref column_releaser(column);
-      ResourceReleaser<BufferList> a(*column);
-
-      auto &buffers = column->get()->get_when_ready();
-
-			// Get reads corresponding to the results
-			ResourceContainer<ReadResource> *reads_container;
-			const Tensor *read_input;
-			OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
-			auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
-			OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
-//			core::ScopedUnref a(reads_container);
-			auto reads = reads_container->get();
-
-      // Get number of records per chunk
+			// Get number of records per chunk
       const Tensor *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto num_records = num_records_t->scalar<int32>()();
-      auto num_buffers = buffers.size();
+      LOG(INFO) << "num records: " << num_records;
       uint32_t records_per_chunk = num_records / num_buffers;
       if (num_records % num_buffers != 0) {
         ++records_per_chunk;
       }
+      LOG(INFO) << "records per chunk" << records_per_chunk;
+
+      // Get the reads corresponding to the results
+			ResourceContainer<ReadResource> *reads_container;
+			const Tensor *read_input;
+			OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
+			auto data_read = read_input->vec<string>(); // data_read(0) = container, data_read(1) = name
+			OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data_read(0), data_read(1), &reads_container));
+			auto reads = reads_container->get();
 
       auto status = Status::OK();
+/*
       decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
       buf_.clear();
       for (auto &buffer : buffers) {
@@ -123,11 +125,18 @@ and is thus passed as an Attr instead of an input (for efficiency);
         OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true));
         i += recs_per_chunk;
       }
+*/
+
+			int cur_buflist_index = 0;
+			Buffer *index = &rec_data_list[cur_buflist_index].index();
+			auto size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
+      size_t size_index_size = index->size();
+      size_t cur_size_index = 0;
+      Buffer* data = &rec_data_list[cur_buflist_index].data();
+      const char *curr_record = data->data(); // skip the indices
 
       size_t record_size;
-      auto size_index = reinterpret_cast<const format::RecordTable*>(&buf_[0]);
 
-      const char *curr_record = &buf_[num_records]; // skip the indices
       const format::AlignmentResult *agd_result;
 
       const char *bases, *qualities;
@@ -155,7 +164,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
           }
         }
 
-				record_size = size_index->relative_index[i];
+				record_size = size_index->relative_index[cur_size_index];
         agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
       
         // convert format::AlignmentResult to SingleAlignmentResult
@@ -168,7 +177,18 @@ and is thus passed as an Attr instead of an input (for efficiency);
         // TODO: is it okay? we only have primary results
         read_writer_->writeReads(reader_context_, &snap_read, &result_for_sam, 1, true);
 
-        curr_record += record_size;
+				if (cur_size_index == size_index_size - 1 && i != num_records - 1) {
+          cur_buflist_index++;
+          index = &rec_data_list[cur_buflist_index].index();
+          size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
+          size_index_size = index->size();
+          cur_size_index = 0;
+          data = &rec_data_list[cur_buflist_index].data();
+          curr_record = data->data(); // skip the indices
+        } else {
+          cur_size_index++;
+          curr_record += record_size;
+        }
       }
       
       Tensor *num_recs;
@@ -182,8 +202,8 @@ and is thus passed as an Attr instead of an input (for efficiency);
         delete read_writer_;
       }
 
-      core::ScopedUnref index_unref(genome_resource_);
-      core::ScopedUnref options_unref(options_resource_);
+      // core::ScopedUnref index_unref(genome_resource_);
+      // core::ScopedUnref options_unref(options_resource_);
     }
 
 		Status init(OpKernelContext *ctx) {
@@ -223,7 +243,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
     AlignerOptionsResource *options_resource_ = nullptr;
   	const Genome *genome_;
     string sam_file_path_;
-    vector <char> buf_;
 		AlignerOptions *options_; // Keep all the options in one place, similar to SNAP
     ReaderContext reader_context_;
     DataWriterSupplier *dataSupplier;
