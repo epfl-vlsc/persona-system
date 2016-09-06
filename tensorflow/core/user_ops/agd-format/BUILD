@@ -4,14 +4,16 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 # copy this
 cc_library(
     name = "agd_format",
-    srcs = glob(["*.cc"]),
+    srcs = glob(["*.cc"],
+      exclude = ["parallel_sam_writer_op.cc"]),
     hdrs = glob(["*.h", "json/src/json.hpp"]),
     copts = tf_copts() + ["-fexceptions"],
     nocopts = "-fno-exceptions",
     linkstatic = 1,
     alwayslink = 1,
     visibility = ["//visibility:public"],
-    deps = ["//tensorflow/core:framework", "//tensorflow/core/kernels:io",
+    deps = ["//tensorflow/core:framework", 
+    "//tensorflow/core/kernels:io",
     "//tensorflow/core/user_ops/dna-align:snap_lib",
     "//tensorflow/core/user_ops/object-pool:object_pool",
     "//tensorflow/core/user_ops/lttng:trace",
@@ -21,3 +23,20 @@ cc_library(
              "-lz", "-ls3", "-lrados"
     ]
 )
+
+cc_library(
+    name = "sam_writer",
+    srcs = ["parallel_sam_writer_op.cc"],
+    #hdrs = ["read_resource.h"],
+    includes=["."],
+    copts = tf_copts() + ["-fexceptions"],
+    nocopts = "-fno-exceptions",
+    linkstatic = 1,
+    alwayslink = 1,
+    visibility = ["//visibility:public"],
+    deps = [
+    "//tensorflow/core/user_ops/agd-format:agd_format",
+    "//tensorflow/core/user_ops/dna-align:snap_align",
+    ],
+    # TODO: this needs to be built better, like this: https://github.com/mzhaom/trunk/blob/master/third_party/boost/BUILD
+    )

@@ -369,6 +369,33 @@ def _ParallelColumnWriterShape(op):
     _assert_scalar(op.inputs[i].get_shape())
   return [op.inputs[3].get_shape()]
 
+_psw_str = "ParallelSamWriter"
+ops.NoGradient(_psw_str)
+def ParallelSamWriter(agd_results, genome_handle, options_handle, read, num_records, record_id, record_type, sam_file_path, name=None):
+    if record_type not in allowed_type_values:
+        raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
+          given=record_type, expected=allowed_type_values))
+    return gen_user_ops.parallel_sam_writer(
+      agd_results = agd_results,
+      genome_handle = genome_handle,
+      options_handle = options_handle,
+      read = read,
+      num_records=num_records,
+      record_id=record_id,
+      record_type=record_type,
+      sam_file_path=sam_file_path,
+      name=name
+    )
+
+@ops.RegisterShape(_psw_str)
+def _ParallelSamWriterShape(op):
+  for i in range(0, 3):
+    vec_shape = op.inputs[i].get_shape()
+    _assert_vec(vec_shape, 2)
+  num_records_shape = op.inputs[4].get_shape()
+  _assert_scalar(num_records_shape)
+  return [op.inputs[4].get_shape()]
+
 _aa_str = "AGDAssembler"
 ops.NoGradient(_aa_str)
 def AGDAssembler(agd_read_pool, base_handle, qual_handle, meta_handle, num_records, name=None):
