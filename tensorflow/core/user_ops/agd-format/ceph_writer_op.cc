@@ -233,11 +233,11 @@ compress: whether or not to compress the column
     }
 
     /* Write an object to Ceph synchronously */
+    librados::bufferlist write_buf;
     Status CephWriteColumn(string& file_key, char* buf, size_t len)
     {
       int ret = 0;
 
-      librados::bufferlist write_buf;
       write_buf.push_back(ceph::buffer::create_static(len, buf));
 
       // Create I/O Completion.

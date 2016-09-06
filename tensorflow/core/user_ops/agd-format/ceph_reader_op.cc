@@ -152,11 +152,11 @@ file_name: a Tensor() of string for the unique key for this file
         read_buf.push_back(ceph::buffer::create_static(read_len, &(*buf)[data_read]));
 
         // Create I/O Completion.
-        /*librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
+        librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
         ret = io_ctx.aio_read(file_key, read_completion, &read_buf, read_len, data_read);
         if (ret < 0) {
-                LOG(INFO) << "Couldn't start read object! error " << ret;
-                exit(EXIT_FAILURE);
+          LOG(INFO) << "Couldn't start read object! error " << ret;
+          exit(EXIT_FAILURE);
         }
         data_read = data_read + read_len;
 
@@ -164,20 +164,21 @@ file_name: a Tensor() of string for the unique key for this file
         read_completion->wait_for_complete();
         ret = read_completion->get_return_value();
         if (ret < 0) {
-                LOG(INFO) << "Couldn't read object! error " << ret;
-                exit(EXIT_FAILURE);
-        }*/
+          LOG(INFO) << "Couldn't read object! error " << ret;
+          exit(EXIT_FAILURE);
+        }
+        read_buf.clear();
 
         /* Test synchronous read */
-        ret = io_ctx.read(file_key, read_buf, read_len, data_read);
+        /*ret = io_ctx.read(file_key, read_buf, read_len, data_read);
         if (ret < 0) {
           return Internal("Couldn't call io_ctx.read. Received ", ret);
         }
         data_read += read_len;
-        read_buf.clear();
+        read_buf.clear();*/
 
-        return Status::OK();
       }
+      return Status::OK();
     }
   };
 
