@@ -371,18 +371,13 @@ def _ParallelColumnWriterShape(op):
 
 _psw_str = "ParallelSamWriter"
 ops.NoGradient(_psw_str)
-def ParallelSamWriter(agd_results, genome_handle, options_handle, read, num_records, record_id, record_type, sam_file_path, name=None):
-    if record_type not in allowed_type_values:
-        raise Exception("record_type ({given}) for ColumnWriter must be one of the following values: {expected}".format(
-          given=record_type, expected=allowed_type_values))
-    return gen_user_ops.parallel_sam_writer(
+def ParallelSamWriter(agd_results, genome_handle, options_handle, read, num_records, sam_file_path, name=None):
+      return gen_user_ops.parallel_sam_writer(
       agd_results = agd_results,
       genome_handle = genome_handle,
       options_handle = options_handle,
       read = read,
       num_records=num_records,
-      record_id=record_id,
-      record_type=record_type,
       sam_file_path=sam_file_path,
       name=name
     )
