@@ -30,6 +30,14 @@ namespace tensorflow {
   using namespace errors;
   namespace {
     const string op_name("ParallelSamWriter");
+    void resource_releaser(ResourceContainer<ReadResource> *read_r, ResourceContainer<BufferList> *result_r) {
+      ResourceReleaser<ReadResource> a(*read_r);
+      ResourceReleaser<BufferList> b(*result_r);
+      LOG(INFO) << "Called resource releaser";
+      {
+        ReadResourceReleaser r(*read_r->get());
+      }
+    }
   }
 
   REGISTER_OP(op_name.c_str())
@@ -156,7 +164,8 @@ and is thus passed as an Attr instead of an input (for efficiency);
           curr_record += record_size;
         }
       }
-      
+     
+      resource_releaser(reads_container, records); 
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
       num_recs->scalar<int32>()() = num_records;
@@ -167,7 +176,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
         read_writer_->close();
         delete read_writer_;
       }
-
+  
       core::ScopedUnref index_unref(genome_resource_);
       core::ScopedUnref options_unref(options_resource_);
     }
