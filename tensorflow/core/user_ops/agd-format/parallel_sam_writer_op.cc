@@ -24,6 +24,7 @@
 
 #define SAM_REVERSE_COMPLEMENT 0x10
 #define NUM_ARGS 5
+#define ID_LEN 40
 
 namespace tensorflow {
   using namespace std;
@@ -33,7 +34,6 @@ namespace tensorflow {
     void resource_releaser(ResourceContainer<ReadResource> *read_r, ResourceContainer<BufferList> *result_r) {
       ResourceReleaser<ReadResource> a(*read_r);
       ResourceReleaser<BufferList> b(*result_r);
-      LOG(INFO) << "Called resource releaser";
       {
         ReadResourceReleaser r(*read_r->get());
       }
@@ -121,19 +121,27 @@ and is thus passed as an Attr instead of an input (for efficiency);
       size_t bases_len, qualities_len;
 
       Read snap_read;
-            
+      char qname_buffer[ID_LEN];  
+
       for (decltype(num_records) i = 0; i < num_records; ++i) {
 
         status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
         if (!status.ok()) {
-         LOG(INFO) << "Failed to get next read";
+         LOG(INFO) << "Failed to get next read!";
          return; 
         }
 
-        snap_read.init(nullptr, 0, bases, qualities, bases_len);
+        // HACK: We're not passing in the metadata, so this is how we are writing the read's ID, assuming the reads are written in order
+        int qname_len = snprintf(qname_buffer, ID_LEN, "ERR174324.%lu", nr_chunk + i + 1); 
+        if (qname_len < 0) {
+          LOG(INFO) << "Failed to write the read's id.";
+        }
+
+        snap_read.init(qname_buffer, qname_len, bases, qualities, bases_len);
         snap_read.clip(options_->clipping);
 
-				if ((snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) && (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false))) {
+				if ((snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) && 
+          (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false))) {
             LOG(INFO) << "FILTERING READ";
             continue;
         }
@@ -164,6 +172,8 @@ and is thus passed as an Attr instead of an input (for efficiency);
           curr_record += record_size;
         }
       }
+      
+      nr_chunk += num_records;
      
       resource_releaser(reads_container, records); 
       Tensor *num_recs;
@@ -223,6 +233,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
     DataWriterSupplier *dataSupplier;
   	ReadWriterSupplier *writer_supplier_ = nullptr;
 		ReadWriter *read_writer_ = nullptr;
+    int nr_chunk = 0;
 
     const int argc_;
     const char *argv_[NUM_ARGS];
