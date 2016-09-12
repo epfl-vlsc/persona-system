@@ -78,18 +78,10 @@ file_name: a Tensor() of string for the unique key for this file
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
-      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
-      if (ret < 0) {
-              LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
-              exit(EXIT_FAILURE);
-      } else {
-              VLOG(DEBUG) << "Created an ioctx for the pool.";
-      }
     }
 
     ~CephReaderOp() {
       core::ScopedUnref unref_pool(ref_pool_);
-      io_ctx.close();
       cluster.shutdown();
     }
 
@@ -130,12 +122,19 @@ file_name: a Tensor() of string for the unique key for this file
     long long read_size;
     librados::Rados cluster;
     ReferencePool<Buffer> *ref_pool_ = nullptr;
-    librados::IoCtx io_ctx;
 
     /* Read an object from Ceph synchronously */
     Status CephReadObject(const char* file_key, void *ref_buffer)
     {
+      librados::IoCtx io_ctx;
       int ret = 0;
+      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
+      if (ret < 0) {
+        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
+        exit(EXIT_FAILURE);
+      } else {
+        VLOG(DEBUG) << "Created an ioctx for the pool.";
+      }
       auto buf = ((ResourceContainer<Buffer> *) ref_buffer)->get();
 
       size_t file_size;
@@ -168,6 +167,7 @@ file_name: a Tensor() of string for the unique key for this file
           exit(EXIT_FAILURE);
         }
         read_buf.clear();
+        read_completion->release();
 
         /* Test synchronous read */
         /*ret = io_ctx.read(file_key, read_buf, read_len, data_read);
@@ -178,6 +178,7 @@ file_name: a Tensor() of string for the unique key for this file
         read_buf.clear();*/
 
       }
+      io_ctx.close();
       return Status::OK();
     }
   };

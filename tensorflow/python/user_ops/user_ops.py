@@ -275,6 +275,20 @@ def _SnapAlignAGDParallelShape(op):
     _assert_vec(read, 2)
     return [tensor_shape.vector(2)]
 
+_na_string = "NullAligner"
+ops.NoGradient(_na_string)
+def NullAligner(buffer_list_pool, read, chunk_size, subchunk_size, name=None):
+  return gen_user_ops.null_aligner(buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
+                                              subchunk_size=subchunk_size, name=name)
+
+@ops.RegisterShape(_na_string)
+def _NullAligner(op):
+    buffer_list_pool = op.inputs[0].get_shape()
+    read = op.inputs[1].get_shape()
+    _assert_vec(buffer_list_pool, 2)
+    _assert_vec(read, 2)
+    return [tensor_shape.vector(2)]
+
 _arp_str = "AGDReadPool"
 ops.NoGradient(_arp_str)
 def AGDReadPool(size=0, bound=False, name=None):
