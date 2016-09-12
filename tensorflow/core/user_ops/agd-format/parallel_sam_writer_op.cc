@@ -41,12 +41,10 @@ namespace tensorflow {
   }
 
   REGISTER_OP(op_name.c_str())
-  // TODO: check to see what attributes I still need
   .Attr("sam_file_path: string = ''")
   .Input("agd_results: string")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
- // TODO these can be collapsed into a vec(3) if that would help performance
 	.Input("read: string")
   .Input("num_records: int32")
   .Output("num_records_out: int32")
@@ -131,7 +129,8 @@ and is thus passed as an Attr instead of an input (for efficiency);
          return; 
         }
 
-        // HACK: We're not passing in the metadata, so this is how we are writing the read's ID, assuming the reads are written in order
+        // HACK: We're not passing in the metadata, so this is how we are writing the read's ID
+        // We are assuming the reads are in the initial order (there needs to be only one reader)
         int qname_len = snprintf(qname_buffer, ID_LEN, "ERR174324.%lu", nr_chunk + i + 1); 
         if (qname_len < 0) {
           LOG(INFO) << "Failed to write the read's id.";
@@ -140,16 +139,21 @@ and is thus passed as an Attr instead of an input (for efficiency);
         snap_read.init(qname_buffer, qname_len, bases, qualities, bases_len);
         snap_read.clip(options_->clipping);
 
+        // The read group was initially blank; passing the same read group as SNAP
+        snap_read.setReadGroup(read_group_);
+
 				if ((snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) && 
           (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false))) {
             LOG(INFO) << "FILTERING READ";
             continue;
         }
 
+        LOG(INFO) << "Writing batch " << nr_chunk / num_records;
+  
 				record_size = size_index->relative_index[cur_size_index];
         agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
       
-        // convert format::AlignmentResult to SingleAlignmentResult
+        // Convert format::AlignmentResult to SingleAlignmentResult
         SingleAlignmentResult result_for_sam;
         result_for_sam.location = agd_result->location_;
         result_for_sam.score = agd_result->score_;
@@ -198,7 +202,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
       options_ = options_resource_->value();
-      
+
       memset(&reader_context_, 0, sizeof(reader_context_));
 			reader_context_.clipping = options_->clipping;
 			reader_context_.defaultReadGroup = options_->defaultReadGroup;
@@ -238,6 +242,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
     const int argc_;
     const char *argv_[NUM_ARGS];
     const char *snap_version_ = "1.0beta.23";
+    const char *read_group_ = "@RG\tID:FASTQ\tPL:Illumina\tPU:pu\tLB:lb\tSM:sm";
   };
 
   REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), ParallelSamWriterOp);
