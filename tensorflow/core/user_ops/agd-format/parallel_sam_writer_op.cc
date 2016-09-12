@@ -45,7 +45,7 @@ namespace tensorflow {
   .Input("agd_results: string")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
-	.Input("read: string")
+  .Input("read: string")
   .Input("num_records: int32")
   .Output("num_records_out: int32")
   .SetIsStateful()
@@ -61,15 +61,16 @@ and is thus passed as an Attr instead of an input (for efficiency);
   class ParallelSamWriterOp : public OpKernel {
   public:
  		ParallelSamWriterOp(OpKernelConstruction *ctx) : OpKernel(ctx), argc_(NUM_ARGS), argv_{"single", "/scratch/stuart/ref_index", "/scratch/genome/one_mil.fastq", "-o", "output.sam"} {
+      LOG(INFO) << "Writing the results in the SAM format...";
       OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_file_path", &sam_file_path_));
     } 
 
-		void Compute(OpKernelContext *ctx) override {
-			if (!writer_supplier_) {
-				OP_REQUIRES_OK(ctx, init(ctx));
-			}		
-			
-			// Get the agd format results in agd_records
+    void Compute(OpKernelContext *ctx) override {
+      if (!writer_supplier_) {
+        OP_REQUIRES_OK(ctx, init(ctx));
+      }		
+
+      // Get the agd format results in agd_records
       ResourceContainer<BufferList> *records;
       const Tensor *rec_input;
       OP_REQUIRES_OK(ctx, ctx->input("agd_results", &rec_input));
@@ -80,33 +81,30 @@ and is thus passed as an Attr instead of an input (for efficiency);
       auto& rec_data_list = *rec_data_list_p;
       rec_data_list.wait_for_ready();
       
-			auto num_buffers = rec_data_list.size();
-      LOG(INFO) << "num buffers " << num_buffers;
+      auto num_buffers = rec_data_list.size();
 
 			// Get number of records per chunk
       const Tensor *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto num_records = num_records_t->scalar<int32>()();
-      LOG(INFO) << "num records: " << num_records;
       uint32_t records_per_chunk = num_records / num_buffers;
       if (num_records % num_buffers != 0) {
         ++records_per_chunk;
       }
-      LOG(INFO) << "records per chunk" << records_per_chunk;
 
       // Get the reads corresponding to the results
-			ResourceContainer<ReadResource> *reads_container;
+      ResourceContainer<ReadResource> *reads_container;
 			const Tensor *read_input;
-			OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
-			auto data_read = read_input->vec<string>(); // data_read(0) = container, data_read(1) = name
-			OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data_read(0), data_read(1), &reads_container));
-			auto reads = reads_container->get();
+      OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
+      auto data_read = read_input->vec<string>(); // data_read(0) = container, data_read(1) = name
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data_read(0), data_read(1), &reads_container));
+      auto reads = reads_container->get();
 
       auto status = Status::OK();
 
-			int cur_buflist_index = 0;
-			Buffer *index = &rec_data_list[cur_buflist_index].index();
-			auto size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
+      int cur_buflist_index = 0;
+      Buffer *index = &rec_data_list[cur_buflist_index].index();
+      auto size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
       size_t size_index_size = index->size();
       size_t cur_size_index = 0;
       Buffer* data = &rec_data_list[cur_buflist_index].data();
@@ -142,15 +140,13 @@ and is thus passed as an Attr instead of an input (for efficiency);
         // The read group was initially blank; passing the same read group as SNAP
         snap_read.setReadGroup(read_group_);
 
-				if ((snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) && 
-          (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false))) {
+        if ((snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) && 
+            (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false))) {
             LOG(INFO) << "FILTERING READ";
             continue;
         }
 
-        LOG(INFO) << "Writing batch " << nr_chunk / num_records;
-  
-				record_size = size_index->relative_index[cur_size_index];
+        record_size = size_index->relative_index[cur_size_index];
         agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
       
         // Convert format::AlignmentResult to SingleAlignmentResult
@@ -195,8 +191,8 @@ and is thus passed as an Attr instead of an input (for efficiency);
       core::ScopedUnref options_unref(options_resource_);
     }
 
-		Status init(OpKernelContext *ctx) {
-			// One-time init
+    Status init(OpKernelContext *ctx) {
+    // One-time init
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &genome_resource_));
       genome_ = genome_resource_->get_genome();
 
@@ -204,18 +200,18 @@ and is thus passed as an Attr instead of an input (for efficiency);
       options_ = options_resource_->value();
 
       memset(&reader_context_, 0, sizeof(reader_context_));
-			reader_context_.clipping = options_->clipping;
-			reader_context_.defaultReadGroup = options_->defaultReadGroup;
-			reader_context_.genome = genome_; 
-			reader_context_.ignoreSecondaryAlignments = options_->ignoreSecondaryAlignments;
-			reader_context_.ignoreSupplementaryAlignments = options_->ignoreSecondaryAlignments;   // Maybe we should split them out
-			DataSupplier::ExpansionFactor = options_->expansionFactor;
+      reader_context_.clipping = options_->clipping;
+      reader_context_.defaultReadGroup = options_->defaultReadGroup;
+      reader_context_.genome = genome_; 
+      reader_context_.ignoreSecondaryAlignments = options_->ignoreSecondaryAlignments;
+      reader_context_.ignoreSupplementaryAlignments = options_->ignoreSecondaryAlignments;   // Maybe we should split them out
+      DataSupplier::ExpansionFactor = options_->expansionFactor;
 
       const FileFormat *format = FileFormat::SAM[options_->useM];
-			
-			format->setupReaderContext(options_, &reader_context_);
 
-			dataSupplier = DataWriterSupplier::create(sam_file_path_.c_str(), options_->writeBufferSize);
+      format->setupReaderContext(options_, &reader_context_);
+
+      dataSupplier = DataWriterSupplier::create(sam_file_path_.c_str(), options_->writeBufferSize);
       writer_supplier_ = ReadWriterSupplier::create(format, dataSupplier, genome_);
       ReadWriter *headerWriter = writer_supplier_->getWriter();
       headerWriter->writeHeader(reader_context_, options_->sortOutput, argc_, argv_, snap_version_, options_->rgLineContents, options_->outputFile.omitSQLines);
@@ -225,18 +221,18 @@ and is thus passed as an Attr instead of an input (for efficiency);
       read_writer_ = writer_supplier_->getWriter();
 
       return Status::OK();
-		}
+    }
   
   private:
     GenomeIndexResource *genome_resource_ = nullptr;
     AlignerOptionsResource *options_resource_ = nullptr;
-  	const Genome *genome_;
+    const Genome *genome_;
     string sam_file_path_;
-		AlignerOptions *options_; // Keep all the options in one place, similar to SNAP
+    AlignerOptions *options_; // Keep all the options in one place, similar to SNAP
     ReaderContext reader_context_;
     DataWriterSupplier *dataSupplier;
-  	ReadWriterSupplier *writer_supplier_ = nullptr;
-		ReadWriter *read_writer_ = nullptr;
+    ReadWriterSupplier *writer_supplier_ = nullptr;
+    ReadWriter *read_writer_ = nullptr;
     int nr_chunk = 0;
 
     const int argc_;
