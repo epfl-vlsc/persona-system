@@ -24,18 +24,24 @@
 
 #define SAM_REVERSE_COMPLEMENT 0x10
 #define NUM_ARGS 5
+#define ID_LEN 40
 
 namespace tensorflow {
   using namespace std;
   using namespace errors;
   namespace {
     const string op_name("ParallelSamWriter");
+    void resource_releaser(ResourceContainer<ReadResource> *read_r, ResourceContainer<BufferList> *result_r) {
+      ResourceReleaser<ReadResource> a(*read_r);
+      ResourceReleaser<BufferList> b(*result_r);
+      {
+        ReadResourceReleaser r(*read_r->get());
+      }
+    }
   }
 
   REGISTER_OP(op_name.c_str())
   // TODO: check to see what attributes I still need
-  .Attr("record_id: string")
-  .Attr("record_type: {'base', 'qual', 'meta', 'results'}") // TODO: possibly, I don't need them
   .Attr("sam_file_path: string = ''")
   .Input("agd_results: string")
   .Input("genome_handle: Ref(string)")
@@ -99,33 +105,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
 			auto reads = reads_container->get();
 
       auto status = Status::OK();
-/*
-      decltype(num_records) i = 0, recs_per_chunk = records_per_chunk;
-      buf_.clear();
-      for (auto &buffer : buffers) {
-        // deals with the last chunk, which could have a smaller number of records
-        // depending on the params
-        if (i + recs_per_chunk > num_records) {
-          recs_per_chunk = num_records - i;
-        }
-        auto &data_buf = buffer.get(); // only need to do this on the first call
-        OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, buf_, true));
-        i += recs_per_chunk;
-      }
-	
-      i = 0; 
-      recs_per_chunk = records_per_chunk;
-      size_t expected_size;
-      for (auto &buffer : buffers) {
-        if (i + recs_per_chunk > num_records) {
-          recs_per_chunk = num_records - i;
-        }
-        auto &data_buf = buffer.get();
-        expected_size = data_buf.size() - recs_per_chunk;
-        OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true));
-        i += recs_per_chunk;
-      }
-*/
 
 			int cur_buflist_index = 0;
 			Buffer *index = &rec_data_list[cur_buflist_index].index();
@@ -134,7 +113,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
       size_t cur_size_index = 0;
       Buffer* data = &rec_data_list[cur_buflist_index].data();
       const char *curr_record = data->data(); // skip the indices
-
       size_t record_size;
 
       const format::AlignmentResult *agd_result;
@@ -143,38 +121,42 @@ and is thus passed as an Attr instead of an input (for efficiency);
       size_t bases_len, qualities_len;
 
       Read snap_read;
+      char qname_buffer[ID_LEN];  
 
       for (decltype(num_records) i = 0; i < num_records; ++i) {
-        SingleAlignmentResult result_for_sam;
 
         status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
         if (!status.ok()) {
-         LOG(INFO) << "Failed to get next read";
+         LOG(INFO) << "Failed to get next read!";
          return; 
         }
 
-        snap_read.init(nullptr, 0, bases, qualities, bases_len);
+        // HACK: We're not passing in the metadata, so this is how we are writing the read's ID, assuming the reads are written in order
+        int qname_len = snprintf(qname_buffer, ID_LEN, "ERR174324.%lu", nr_chunk + i + 1); 
+        if (qname_len < 0) {
+          LOG(INFO) << "Failed to write the read's id.";
+        }
+
+        snap_read.init(qname_buffer, qname_len, bases, qualities, bases_len);
         snap_read.clip(options_->clipping);
 
-				if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
-          if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {
+				if ((snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) && 
+          (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false))) {
             LOG(INFO) << "FILTERING READ";
-          } else {
             continue;
-          }
         }
 
 				record_size = size_index->relative_index[cur_size_index];
         agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
       
         // convert format::AlignmentResult to SingleAlignmentResult
+        SingleAlignmentResult result_for_sam;
         result_for_sam.location = agd_result->location_;
         result_for_sam.score = agd_result->score_;
         result_for_sam.mapq = agd_result->mapq_;
         result_for_sam.direction = (agd_result->flag_ & SAM_REVERSE_COMPLEMENT) ? RC : FORWARD; 
-        result_for_sam.status = (result_for_sam.location == InvalidGenomeLocation) ? static_cast<AlignmentResult>(0) : static_cast<AlignmentResult>(1);
+        result_for_sam.status = (agd_result->location_ == InvalidGenomeLocation) ? static_cast<AlignmentResult>(0) : static_cast<AlignmentResult>(1);
 
-        // TODO: is it okay? we only have primary results
         read_writer_->writeReads(reader_context_, &snap_read, &result_for_sam, 1, true);
 
 				if (cur_size_index == size_index_size - 1 && i != num_records - 1) {
@@ -191,6 +173,9 @@ and is thus passed as an Attr instead of an input (for efficiency);
         }
       }
       
+      nr_chunk += num_records;
+     
+      resource_releaser(reads_container, records); 
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
       num_recs->scalar<int32>()() = num_records;
@@ -201,9 +186,9 @@ and is thus passed as an Attr instead of an input (for efficiency);
         read_writer_->close();
         delete read_writer_;
       }
-
-      // core::ScopedUnref index_unref(genome_resource_);
-      // core::ScopedUnref options_unref(options_resource_);
+  
+      core::ScopedUnref index_unref(genome_resource_);
+      core::ScopedUnref options_unref(options_resource_);
     }
 
 		Status init(OpKernelContext *ctx) {
@@ -233,7 +218,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
       headerWriter->close();
       delete headerWriter;
 
-      read_writer_ = writer_supplier_->getWriter(); // TODO: snap maintains a seperate copy per thread
+      read_writer_ = writer_supplier_->getWriter();
 
       return Status::OK();
 		}
@@ -248,6 +233,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
     DataWriterSupplier *dataSupplier;
   	ReadWriterSupplier *writer_supplier_ = nullptr;
 		ReadWriter *read_writer_ = nullptr;
+    int nr_chunk = 0;
 
     const int argc_;
     const char *argv_[NUM_ARGS];
