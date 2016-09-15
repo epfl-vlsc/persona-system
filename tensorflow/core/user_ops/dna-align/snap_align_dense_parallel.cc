@@ -55,7 +55,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
     explicit SnapAlignAGDParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("release_resources", &release_resources_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       int i;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("trace_granularity", &i));
       OP_REQUIRES(ctx, i > 0, errors::InvalidArgument("trace granularity ", i, " must be greater than 0"));
@@ -146,14 +146,14 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
 
-    if (release_resources_) {
+    if (sam_format_) {
       OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
     } else { 
       OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
     }
-
+        
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
@@ -306,7 +306,11 @@ private:
                 primaryResult.location = InvalidGenomeLocation;
                 primaryResult.mapq = 0;
                 primaryResult.direction = FORWARD;
-                result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                if (sam_format_) {
+                  result_builder.AppendAlignmentResult(primaryResult);
+                } else {
+                  result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                }
               }
               continue;
             }
@@ -323,17 +327,27 @@ private:
 
             flag = 0;
 
-            auto s = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
-                                                 options_->useM, lvc, genome_, cigarString, flag);
+            // TODO: rename it to sam_writer or smth
+            if (sam_format_){
+              result_builder.AppendAlignmentResult(primaryResult); 
+            } else {
+              auto s = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
+                                                   options_->useM, lvc, genome_, cigarString, flag);
 
-            if (!s.ok())
-              LOG(ERROR) << "computeCigarFlags did not return OK!!!";
+              if (!s.ok()) {
+                LOG(ERROR) << "adjustResults did not return OK!!!";
+              }
 
-            //auto t1 = std::chrono::high_resolution_clock::now();
-            result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
-            //auto t2 = std::chrono::high_resolution_clock::now();
-            //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-            //LOG(INFO) << "append time " << time.count();
+              //auto t1 = std::chrono::high_resolution_clock::now();
+ 
+              
+              result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
+
+              //auto t2 = std::chrono::high_resolution_clock::now();
+              //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+              //LOG(INFO) << "append time " << time.count();
+            }
+
           }
           //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
 
@@ -395,7 +409,7 @@ private:
   AlignerOptions* options_ = nullptr;
   int subchunk_size_;
   int chunk_size_;
-  int release_resources_;
+  int sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
   uint32_t trace_granularity_;
@@ -418,7 +432,7 @@ private:
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 10")
-  .Attr("release_resources: int = 0")
+  .Attr("sam_format: int = 0")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")

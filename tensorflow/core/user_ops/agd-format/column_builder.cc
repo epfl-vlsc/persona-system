@@ -16,6 +16,13 @@ namespace tensorflow {
     index_->AppendBuffer(&size, 1);
   }
 
+  void AlignmentResultBuilder::AppendAlignmentResult(const SingleAlignmentResult &result) {
+    data_->AppendBuffer(reinterpret_cast<const char*>(&result), sizeof(result));
+    size_t index_entry = sizeof(result);
+    char size = static_cast<char>(index_entry);
+    index_->AppendBuffer(&size, 1);
+  }
+
   void AlignmentResultBuilder::set_buffer_pair(BufferPair *data) {
     data->reset();
     data_ = &data->data();

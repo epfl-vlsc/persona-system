@@ -81,7 +81,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
       rec_data_list.wait_for_ready();
       
 			auto num_buffers = rec_data_list.size();
-      LOG(INFO) << "num buffers " << num_buffers;
+      LOG(INFO) << "num buffers: " << num_buffers;
 
 			// Get number of records per chunk
       const Tensor *num_records_t;
@@ -92,7 +92,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
       if (num_records % num_buffers != 0) {
         ++records_per_chunk;
       }
-      LOG(INFO) << "records per chunk" << records_per_chunk;
+      LOG(INFO) << "records per chunk: " << records_per_chunk;
 
       // Get the reads corresponding to the results
 			ResourceContainer<ReadResource> *reads_container;
@@ -101,6 +101,9 @@ and is thus passed as an Attr instead of an input (for efficiency);
 			auto data_read = read_input->vec<string>(); // data_read(0) = container, data_read(1) = name
 			OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data_read(0), data_read(1), &reads_container));
 			auto reads = reads_container->get();
+      if (!reads->reset_iter()) {
+        LOG(INFO) << "Failed to reset iterator.";
+      }
 
       auto status = Status::OK();
 
@@ -113,7 +116,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
       const char *curr_record = data->data(); // skip the indices
       size_t record_size;
 
-      const format::AlignmentResult *agd_result;
+      const SingleAlignmentResult *result;
 
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
@@ -148,20 +151,17 @@ and is thus passed as an Attr instead of an input (for efficiency);
             continue;
         }
 
-        LOG(INFO) << "Writing batch " << nr_chunk / num_records;
-  
 				record_size = size_index->relative_index[cur_size_index];
-        agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
-      
-        // Convert format::AlignmentResult to SingleAlignmentResult
-        SingleAlignmentResult result_for_sam;
-        result_for_sam.location = agd_result->location_;
-        result_for_sam.score = agd_result->score_;
-        result_for_sam.mapq = agd_result->mapq_;
-        result_for_sam.direction = (agd_result->flag_ & SAM_REVERSE_COMPLEMENT) ? RC : FORWARD; 
-        result_for_sam.status = (agd_result->location_ == InvalidGenomeLocation) ? static_cast<AlignmentResult>(0) : static_cast<AlignmentResult>(1);
+        result = reinterpret_cast<const SingleAlignmentResult *>(curr_record);
+     
+        SingleAlignmentResult temp_result;
+        temp_result.location = result->location;
+        temp_result.score = result->score;
+        temp_result.mapq = result->mapq;
+        temp_result.direction = result->direction; 
+        temp_result.status = result->status;
 
-        read_writer_->writeReads(reader_context_, &snap_read, &result_for_sam, 1, true);
+        read_writer_->writeReads(reader_context_, &snap_read, &temp_result, 1, true);
 
 				if (cur_size_index == size_index_size - 1 && i != num_records - 1) {
           cur_buflist_index++;
@@ -242,7 +242,8 @@ and is thus passed as an Attr instead of an input (for efficiency);
     const int argc_;
     const char *argv_[NUM_ARGS];
     const char *snap_version_ = "1.0beta.23";
-    const char *read_group_ = "@RG\tID:FASTQ\tPL:Illumina\tPU:pu\tLB:lb\tSM:sm";
+    // TODO: see how this string should be formed
+    const char *read_group_ = "@RG\tID:AGD\tPL:Illumina\tPU:pu\tLB:lb\tSM:sm";
   };
 
   REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), ParallelSamWriterOp);

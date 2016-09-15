@@ -25,6 +25,8 @@ public:
 
   void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, const int flag);
 
+  void AppendAlignmentResult(const SingleAlignmentResult &result);
+
   private:
     Buffer *data_ = nullptr, *index_ = nullptr;
     format::AlignmentResult converted_result;
