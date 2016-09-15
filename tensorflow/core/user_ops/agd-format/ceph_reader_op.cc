@@ -78,18 +78,10 @@ file_name: a Tensor() of string for the unique key for this file
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
-      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
-      if (ret < 0) {
-              LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
-              exit(EXIT_FAILURE);
-      } else {
-              VLOG(DEBUG) << "Created an ioctx for the pool.";
-      }
     }
 
     ~CephReaderOp() {
       core::ScopedUnref unref_pool(ref_pool_);
-      io_ctx.close();
       cluster.shutdown();
     }
 
@@ -130,12 +122,19 @@ file_name: a Tensor() of string for the unique key for this file
     long long read_size;
     librados::Rados cluster;
     ReferencePool<Buffer> *ref_pool_ = nullptr;
-    librados::IoCtx io_ctx;
 
     /* Read an object from Ceph synchronously */
     Status CephReadObject(const char* file_key, void *ref_buffer)
     {
+      librados::IoCtx io_ctx;
       int ret = 0;
+      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
+      if (ret < 0) {
+        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
+        exit(EXIT_FAILURE);
+      } else {
+        VLOG(DEBUG) << "Created an ioctx for the pool.";
+      }
       auto buf = ((ResourceContainer<Buffer> *) ref_buffer)->get();
 
       size_t file_size;
@@ -152,11 +151,11 @@ file_name: a Tensor() of string for the unique key for this file
         read_buf.push_back(ceph::buffer::create_static(read_len, &(*buf)[data_read]));
 
         // Create I/O Completion.
-        /*librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
+        librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
         ret = io_ctx.aio_read(file_key, read_completion, &read_buf, read_len, data_read);
         if (ret < 0) {
-                LOG(INFO) << "Couldn't start read object! error " << ret;
-                exit(EXIT_FAILURE);
+          LOG(INFO) << "Couldn't start read object! error " << ret;
+          exit(EXIT_FAILURE);
         }
         data_read = data_read + read_len;
 
@@ -164,20 +163,23 @@ file_name: a Tensor() of string for the unique key for this file
         read_completion->wait_for_complete();
         ret = read_completion->get_return_value();
         if (ret < 0) {
-                LOG(INFO) << "Couldn't read object! error " << ret;
-                exit(EXIT_FAILURE);
-        }*/
+          LOG(INFO) << "Couldn't read object! error " << ret;
+          exit(EXIT_FAILURE);
+        }
+        read_buf.clear();
+        read_completion->release();
 
         /* Test synchronous read */
-        ret = io_ctx.read(file_key, read_buf, read_len, data_read);
+        /*ret = io_ctx.read(file_key, read_buf, read_len, data_read);
         if (ret < 0) {
           return Internal("Couldn't call io_ctx.read. Received ", ret);
         }
         data_read += read_len;
-        read_buf.clear();
+        read_buf.clear();*/
 
-        return Status::OK();
       }
+      io_ctx.close();
+      return Status::OK();
     }
   };
 

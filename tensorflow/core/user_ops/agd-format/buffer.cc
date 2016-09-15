@@ -55,7 +55,6 @@ namespace tensorflow {
   void Buffer::reserve(size_t capacity) {
     if (capacity > allocation_) {
       allocation_ = capacity + extend_extra_;
-      LOG(INFO) << "REALLOCATING WTF to " << allocation_ << " bytes";
       decltype(buf_) a(new char[allocation_]());
       memcpy(a.get(), buf_.get(), size_);
       buf_.swap(a);

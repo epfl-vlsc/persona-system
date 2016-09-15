@@ -107,18 +107,11 @@ compress: whether or not to compress the column
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
-      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
-      if (ret < 0) {
-        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
-        exit(EXIT_FAILURE);
-      } else {
-        VLOG(DEBUG) << "Created an ioctx for the pool.";
-      }
     }
 
     ~CephWriterOp() {
       VLOG(DEBUG) << "Ceph writer " << this << " finishing\n";
-      io_ctx.close();
+      //io_ctx.watch_flush();
       cluster.shutdown();
     }
 
@@ -209,7 +202,6 @@ compress: whether or not to compress the column
     string pool_name;
     string ceph_conf;
     librados::Rados cluster;
-    librados::IoCtx io_ctx;
     vector<char> compress_buf_; // used to compress into
     vector<char> output_buf_; // used to compress into
     format::FileHeader header_;
@@ -233,15 +225,23 @@ compress: whether or not to compress the column
     }
 
     /* Write an object to Ceph synchronously */
+    librados::bufferlist write_buf;
     Status CephWriteColumn(string& file_key, char* buf, size_t len)
     {
+      librados::IoCtx io_ctx;
       int ret = 0;
+      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
+      if (ret < 0) {
+        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
+        exit(EXIT_FAILURE);
+      } else {
+        VLOG(DEBUG) << "Created an ioctx for the pool.";
+      }
 
-      librados::bufferlist write_buf;
       write_buf.push_back(ceph::buffer::create_static(len, buf));
 
       // Create I/O Completion.
-      /*librados::AioCompletion *write_completion = librados::Rados::aio_create_completion();
+      librados::AioCompletion *write_completion = librados::Rados::aio_create_completion();
       ret = io_ctx.aio_write_full(file_key, write_completion, write_buf);
       if (ret < 0) {
         return Internal("Couldn't start read object! error: ", ret);
@@ -252,12 +252,14 @@ compress: whether or not to compress the column
       ret = write_completion->get_return_value();
       if (ret < 0) {
         return Internal("Couldn't write object! error: ", ret);
-      }*/
-      ret = io_ctx.write_full(file_key, write_buf);
+      }
+      /*ret = io_ctx.write_full(file_key, write_buf);
       if (ret < 0) {
         return Internal("Couldn't write object! error: ", ret);
-      }
+      }*/
       write_buf.clear();
+      write_completion->release();
+      io_ctx.close();
       return Status::OK();
     }
   };
