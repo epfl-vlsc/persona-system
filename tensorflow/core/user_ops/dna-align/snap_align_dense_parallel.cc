@@ -44,6 +44,10 @@ using namespace errors;
         ReadResourceReleaser r(*rr->get());
       }
     }
+
+    void no_resource_releaser(ResourceContainer<ReadResource> *rr) {
+      // nothing to do
+    }
   }
 
 class SnapAlignAGDParallelOp : public OpKernel {
@@ -51,6 +55,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
     explicit SnapAlignAGDParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("release_resources", &release_resources_));
       int i;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("trace_granularity", &i));
       OP_REQUIRES(ctx, i > 0, errors::InvalidArgument("trace granularity ", i, " must be greater than 0"));
@@ -140,8 +145,14 @@ class SnapAlignAGDParallelOp : public OpKernel {
     auto alignment_result_buffer_list = bufferlist_resource_container->get();
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
-    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
+
+    if (release_resources_) {
+      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
+    } else { 
+      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
+                Internal("Unable to push item onto work queue. Is it already closed?"));
+    }
 
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
@@ -384,6 +395,7 @@ private:
   AlignerOptions* options_ = nullptr;
   int subchunk_size_;
   int chunk_size_;
+  int release_resources_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
   uint32_t trace_granularity_;
@@ -406,6 +418,7 @@ private:
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 10")
+  .Attr("release_resources: int = 0")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
