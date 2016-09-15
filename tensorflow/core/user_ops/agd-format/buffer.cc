@@ -12,14 +12,12 @@ namespace tensorflow {
 
   Buffer::Buffer(size_t initial_size, size_t extend_extra) : extend_extra_(extend_extra), size_(0), allocation_(initial_size) {
     // FIXME in an ideal world, allocation_ should be checked to be positive
-    LOG(INFO) << "creating a new buffer!!";
     buf_.reset(new char[allocation_]());
   }
 
   Status Buffer::WriteBuffer(const char* content, size_t content_size) {
     if (allocation_ < content_size) {
       allocation_ = content_size + extend_extra_;
-      LOG(INFO) << "REALLOCATING to WRITE  to " << allocation_ << " bytes";
       buf_.reset(new char[allocation_]()); // reset() -> old buf will be deleted
     }
     //auto t1 = std::chrono::high_resolution_clock::now();
@@ -57,7 +55,6 @@ namespace tensorflow {
   void Buffer::reserve(size_t capacity) {
     if (capacity > allocation_) {
       allocation_ = capacity + extend_extra_;
-      LOG(INFO) << "REALLOCATING WTF to " << allocation_ << " bytes";
       decltype(buf_) a(new char[allocation_]());
       memcpy(a.get(), buf_.get(), size_);
       buf_.swap(a);
