@@ -84,6 +84,7 @@ class NullAlignerOp : public OpKernel {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
     }
 
+    auto start = std::chrono::high_resolution_clock::now();
     ResourceContainer<ReadResource> *reads_container;
     const Tensor *read_input;
     OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
@@ -117,6 +118,11 @@ class NullAlignerOp : public OpKernel {
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
     }
     resource_releaser(reads_container);
+    auto end = std::chrono::high_resolution_clock::now();
+      
+    auto null_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    double duration = null_time.count() / 1000000.0f;
+    LOG(INFO) << "time for null was : " << duration;
 
   }
 
