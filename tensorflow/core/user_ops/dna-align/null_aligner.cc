@@ -5,6 +5,7 @@
 #include <thread>
 #include <memory>
 #include <chrono>
+#include <thread>
 #include <atomic>
 #include <locale>
 #include <pthread.h>
@@ -117,6 +118,7 @@ class NullAlignerOp : public OpKernel {
         result_buf->set_ready();
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
     }
+    std::this_thread::sleep_for(std::chrono::seconds(4));
     resource_releaser(reads_container);
     auto end = std::chrono::high_resolution_clock::now();
       
