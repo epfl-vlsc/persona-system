@@ -149,11 +149,11 @@ class SnapAlignAGDParallelOp : public OpKernel {
     if (sam_format_) {
       OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
-    } else { 
+    } else {
       OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
     }
-        
+
     tracepoint(bioflow, snap_align_kernel, kernel_start, reads_container);
     tracepoint(bioflow, result_ready_queue_start, bufferlist_resource_container);
   }
@@ -176,7 +176,7 @@ private:
       auto getnexttime = std::chrono::duration_cast<std::chrono::microseconds>(getnext - ready);
       auto dropifequaltime = std::chrono::duration_cast<std::chrono::microseconds>(dropifequal - getnext);
       auto peektime = std::chrono::duration_cast<std::chrono::microseconds>(peek - dropifequal);
-      LOG(INFO) << "subchunk time: " << subchunktime.count() 
+      LOG(INFO) << "subchunk time: " << subchunktime.count()
         << " ready time: " << readytime.count()
         << " getnext time: " << getnexttime.count()
         << " dropifequal time: " << dropifequaltime.count()
@@ -198,7 +198,7 @@ private:
       CPU_SET(0, &cpuset);
       int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
       if (rc != 0) {
-        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core:0 " 
+        LOG(INFO) << "Error calling pthread_setaffinity_np: " << rc << ", to core:0 "
           << " for thread id: " << my_id;
       } else
         LOG(INFO) << "set affinity to core 0";*/
@@ -264,7 +264,7 @@ private:
       const uint32_t max_completed = trace_granularity_;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
       //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
-     
+
       time_log timeLog;
       uint64 total = 0;
       timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
@@ -283,7 +283,7 @@ private:
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
-          
+
           //timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
           //auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
           //if (subchunk_time.count() >= 500)
@@ -329,7 +329,7 @@ private:
 
             // TODO: rename it to sam_writer or smth
             if (sam_format_){
-              result_builder.AppendAlignmentResult(primaryResult); 
+              result_builder.AppendAlignmentResult(primaryResult);
             } else {
               auto s = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
                                                    options_->useM, lvc, genome_, cigarString, flag);
@@ -339,8 +339,8 @@ private:
               }
 
               //auto t1 = std::chrono::high_resolution_clock::now();
- 
-              
+
+
               result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
 
               //auto t2 = std::chrono::high_resolution_clock::now();
@@ -409,7 +409,7 @@ private:
   AlignerOptions* options_ = nullptr;
   int subchunk_size_;
   int chunk_size_;
-  int sam_format_;
+  bool sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
   uint32_t trace_granularity_;
@@ -432,7 +432,7 @@ private:
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 10")
-  .Attr("sam_format: int = 0")
+  .Attr("sam_format: bool = false")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")

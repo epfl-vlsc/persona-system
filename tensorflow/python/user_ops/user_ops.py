@@ -253,7 +253,7 @@ def _AlignerOptionsShape(op):
 
 _saap_string = "SnapAlignAGDParallel"
 ops.NoGradient(_saap_string)
-def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, chunk_size, num_threads, subchunk_size, trace_granularity=500, work_queue_size=10, sam_format=0, name=None):
+def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, chunk_size, num_threads, subchunk_size, trace_granularity=500, work_queue_size=10, sam_format=False, name=None):
   if trace_granularity < 1:
     raise EnvironmentError("trace granularity {} must be strictly positive".format(trace_granularity))
   if num_threads < 1:
