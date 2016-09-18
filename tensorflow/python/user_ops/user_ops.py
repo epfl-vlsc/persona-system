@@ -22,8 +22,7 @@ from __future__ import print_function
 from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
-from tensorflow.python.framework import ops, tensor_shape
-from tensorflow.python.ops import common_shapes
+from tensorflow.python.framework import ops, tensor_shape, common_shapes
 from tensorflow.python.ops import io_ops
 
 import os
