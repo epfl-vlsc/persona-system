@@ -29,7 +29,7 @@ with the container and shared name for the file.
 
 local_prefix: a directory on the local machine on which to find the keys
 This is used in the case of a remote reader giving only the filenames to this reader
-queue_handle: a handle to the filename queue
+pool_handle: a handle to the filename queue
 file_handle: a Tensor(2) of strings to access the shared mmaped file resource to downstream nodes
 file_name: a Tensor() of string for the unique key for this file
   )doc");
@@ -51,11 +51,11 @@ To be used for the staged pipeline
 
 local_prefix: a directory on the local machine on which to find the keys
 This is used in the case of a remote reader giving only the filenames to this reader
-queue_handle: handle to the filename queue
-upstream: the handles from previous stages in the pipeline, if any
-upstream_name: the names from the previous stages of the pipeline, if any
-bundle: [{this file map op}] + upstream
-bundle_name: [{this map op's name}] + upstream_name
+pool_handle: handle to the filename queue
+upstream_refs: the handles from previous stages in the pipeline, if any
+upstream_names: the names from the previous stages of the pipeline, if any
+file_handles: [{this file map op}] + upstream
+file_names: [{this map op's name}] + upstream_name
 )doc");
 
   class StagedFileMapOp : public OpKernel {
@@ -94,9 +94,9 @@ bundle_name: [{this map op's name}] + upstream_name
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
-      ReadOnlyMemoryRegion *rmr;
+      unique_ptr<ReadOnlyMemoryRegion> rmr;
       OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-      mmf->get()->own(rmr);
+      mmf->get()->own(move(rmr));
 
       Tensor *file_handles, *file_names;
       TensorShape file_handles_shape(upstream_refs->shape());
@@ -155,9 +155,9 @@ bundle_name: [{this map op's name}] + upstream_name
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
-      ReadOnlyMemoryRegion *rmr;
+      unique_ptr<ReadOnlyMemoryRegion> rmr;
       OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
-      mmf->get()->own(rmr);
+      mmf->get()->own(move(rmr));
 
       Tensor *output_tensor;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));

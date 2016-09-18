@@ -443,7 +443,7 @@ private:
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
 generation of alignment candidates.
-output: a tensor [num_reads] containing serialized reads and results
+outputs a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
 

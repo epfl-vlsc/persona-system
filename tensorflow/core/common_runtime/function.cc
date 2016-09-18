@@ -219,10 +219,34 @@ class PassOn : public OpKernel {
     }
   }
 };
+
 REGISTER_KERNEL_BUILDER(Name("_ListToArray").Device(DEVICE_CPU), PassOn);
-REGISTER_KERNEL_BUILDER(Name("_ListToArray").Device(DEVICE_GPU), PassOn);
 REGISTER_KERNEL_BUILDER(Name("_ArrayToList").Device(DEVICE_CPU), PassOn);
-REGISTER_KERNEL_BUILDER(Name("_ArrayToList").Device(DEVICE_GPU), PassOn);
+
+#define REGISTER_GPU_KERNELS(type)                                       \
+  REGISTER_KERNEL_BUILDER(                                               \
+      Name("_ListToArray").Device(DEVICE_GPU).TypeConstraint<type>("T"), \
+      PassOn);                                                           \
+  REGISTER_KERNEL_BUILDER(                                               \
+      Name("_ArrayToList").Device(DEVICE_GPU).TypeConstraint<type>("T"), \
+      PassOn);
+
+REGISTER_GPU_KERNELS(Eigen::half);
+REGISTER_GPU_KERNELS(float);
+REGISTER_GPU_KERNELS(double);
+
+#undef REGISTER_GPU_KERNELS
+
+REGISTER_KERNEL_BUILDER(Name("_ListToArray")
+                            .Device(DEVICE_GPU)
+                            .HostMemory("output")
+                            .TypeConstraint<int32>("T"),
+                        PassOn);
+REGISTER_KERNEL_BUILDER(Name("_ArrayToList")
+                            .Device(DEVICE_GPU)
+                            .HostMemory("input")
+                            .TypeConstraint<int32>("T"),
+                        PassOn);
 
 static const FunctionLibraryRuntime::Handle kInvalidHandle = -1;
 
@@ -247,6 +271,11 @@ class FunctionLibraryRuntimeImpl : public FunctionLibraryRuntime {
            std::vector<Tensor>* rets, DoneCallback done) override;
 
   bool IsStateful(const string& function) override;
+
+  const FunctionLibraryDefinition* GetFunctionLibraryDefinition()
+      const override {
+    return lib_def_;
+  }
 
   Device* device() override { return device_; }
 
@@ -301,9 +330,7 @@ FunctionLibraryRuntimeImpl::FunctionLibraryRuntimeImpl(
       lib_def_(lib_def),
       optimizer_(optimizer_options) {
   get_func_sig_ = [this](const string& op, const OpDef** sig) {
-    Status s;
-    *sig = lib_def_->LookUp(op, &s);
-    return s;
+    return lib_def_->LookUpOpDef(op, sig);
   };
   create_kernel_ = [this](const NodeDef& ndef, OpKernel** kernel) {
     return CreateKernel(ndef, kernel);
@@ -385,23 +412,22 @@ class SymbolicGradientOp : public AsyncOpKernel {
       args.push_back(ctx->input(i));
     }
     std::vector<Tensor>* rets = new std::vector<Tensor>;
-    lib->Run(opts, handle_, args, rets,
-             [ctx, done, rets](const Status& status) {
-               if (!status.ok()) {
-                 ctx->SetStatus(status);
-               } else if (rets->size() != ctx->num_outputs()) {
-                 ctx->SetStatus(errors::InvalidArgument(
-                     "SymGrad expects to return ", ctx->num_outputs(),
-                     " tensor(s), but get ", rets->size(),
-                     " tensor(s) instead."));
-               } else {
-                 for (size_t i = 0; i < rets->size(); ++i) {
-                   ctx->set_output(i, (*rets)[i]);
-                 }
-               }
-               delete rets;
-               done();
-             });
+    lib->Run(
+        opts, handle_, args, rets, [ctx, done, rets](const Status& status) {
+          if (!status.ok()) {
+            ctx->SetStatus(status);
+          } else if (rets->size() != ctx->num_outputs()) {
+            ctx->SetStatus(errors::InvalidArgument(
+                "SymGrad expects to return ", ctx->num_outputs(),
+                " tensor(s), but get ", rets->size(), " tensor(s) instead."));
+          } else {
+            for (size_t i = 0; i < rets->size(); ++i) {
+              ctx->set_output(i, (*rets)[i]);
+            }
+          }
+          delete rets;
+          done();
+        });
   }
 
  private:
@@ -689,9 +715,9 @@ void FunctionLibraryRuntimeImpl::Run(const Options& opts, Handle handle,
 }
 
 bool FunctionLibraryRuntimeImpl::IsStateful(const string& func) {
-  Status s;
-  auto sig = lib_def_->LookUp(func, &s);
-  return s.ok() && sig->is_stateful();
+  const OpDef* op_def;
+  const Status s = lib_def_->LookUpOpDef(func, &op_def);
+  return s.ok() && op_def->is_stateful();
 }
 
 FunctionLibraryRuntime* NewFunctionLibraryRuntime(

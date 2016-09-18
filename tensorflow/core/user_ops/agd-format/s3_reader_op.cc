@@ -30,7 +30,7 @@ namespace tensorflow {
 Obtains file names from a queue, fetches those files from storage using S3, and writes
 them to a buffer from a pool of buffers.
 
-queue_handle: a handle to the filename queue
+pool_handle: a handle to the filename queue
 pool_handle: a handle to the buffer pool
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
 file_name: a Tensor() of string for the unique key for this file
