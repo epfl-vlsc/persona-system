@@ -81,6 +81,7 @@ class NullAlignerOp : public OpKernel {
     }
 
   void Compute(OpKernelContext* ctx) override {
+    LOG(INFO) << "starting compute!";
     if (buflist_pool_ == nullptr) {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
     }
