@@ -35,8 +35,8 @@ prep_dirs() {
         # assume Ubuntu
         sudo apt-get install python-pip python-dev python-retrying python-ipaddr bc python-virtualenv
     fi
-    [ -e $build_virtualenv_dir ] || mkdir $build_virtualenv_dir
-    [ -e $dev_dir ] || mkdir $dev_dir
+    [ ! -e $build_virtualenv_dir ] || ( rm -rf $build_virtualenv_dir && mkdir $build_virtualenv_dir )
+    [ ! -e $dev_dir ] || ( rm -rf $dev_dir && mkdir $dev_dir)
 }
 
 install_dev_build() {
