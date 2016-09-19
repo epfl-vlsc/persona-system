@@ -21,7 +21,7 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("verify: bool = false")
-  .Attr("reserve: int32 = 8192")
+  .Attr("reserve: int = 8192")
   .Input("buffer_pool: Ref(string)")
   .Input("file_handle: string")
   .Output("processed_buffers: string")

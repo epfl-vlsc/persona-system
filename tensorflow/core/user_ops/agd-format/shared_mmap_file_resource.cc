@@ -17,8 +17,8 @@ namespace tensorflow {
     return file_->length();
   }
 
-  void MemoryMappedFile::own(ReadOnlyMemoryRegion *rmr) {
-    file_.reset(rmr);
+  void MemoryMappedFile::own(ResourceHandle &&rmr) {
+    file_ = move(rmr);
   }
 
   void MemoryMappedFile::release() {

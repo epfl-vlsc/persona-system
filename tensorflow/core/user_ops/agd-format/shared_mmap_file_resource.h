@@ -28,7 +28,7 @@ namespace tensorflow {
     MemoryMappedFile(ResourceHandle &&file);
     MemoryMappedFile& operator=(MemoryMappedFile &&x) = default;
 
-    void own(ReadOnlyMemoryRegion *rmr);
+    void own(ResourceHandle &&rmr);
 
     void release() override;
   private:

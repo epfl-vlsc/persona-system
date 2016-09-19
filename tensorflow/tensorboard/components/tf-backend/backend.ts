@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 module TF.Backend {
-  // TODO(cassandrax): Remove this interface.
   export interface RunEnumeration {
     histograms: string[];
     compressedHistogramTuples: string[];
@@ -25,7 +24,6 @@ module TF.Backend {
     run_metadata: string[];
   }
 
-  // TODO(cassandrax): Remove this interface.
   export interface RunsResponse { [runName: string]: RunEnumeration; }
 
   export type RunToTag = {[run: string]: string[]};
@@ -99,8 +97,6 @@ module TF.Backend {
 
     /**
      * Returns a listing of all the available data in the TensorBoard backend.
-     * Will be deprecated in the future, in favor of
-     * per-data-type methods.
      */
     public runs(): Promise<RunsResponse> {
       return this.requestManager.request(this.router.runs());
@@ -108,8 +104,6 @@ module TF.Backend {
 
     /**
      * Return a promise showing the Run-to-Tag mapping for scalar data.
-     * TODO(cassandrax): Replace this with the direct route, when
-     * available.
      */
     public scalarRuns(): Promise<RunToTag> {
       return this.runs().then((x) => _.mapValues(x, 'scalars'));
@@ -117,8 +111,6 @@ module TF.Backend {
 
     /**
      * Return a promise showing the Run-to-Tag mapping for histogram data.
-     * TODO(cassandrax): Replace this with the direct route, when
-     * available.
      */
     public histogramRuns(): Promise<RunToTag> {
       return this.runs().then((x) => _.mapValues(x, 'histograms'));
@@ -126,8 +118,6 @@ module TF.Backend {
 
     /**
      * Return a promise showing the Run-to-Tag mapping for image data.
-     * TODO(cassandrax): Replace this with the direct route, when
-     * available.
      */
     public imageRuns(): Promise<RunToTag> {
       return this.runs().then((x) => _.mapValues(x, 'images'));
@@ -135,8 +125,6 @@ module TF.Backend {
 
     /**
      * Return a promise showing the Run-to-Tag mapping for audio data.
-     * TODO(cassandrax): Replace this with the direct route, when
-     * available.
      */
     public audioRuns(): Promise<RunToTag> {
       return this.runs().then((x) => _.mapValues(x, 'audio'));
@@ -145,8 +133,6 @@ module TF.Backend {
     /**
      * Return a promise showing the Run-to-Tag mapping for compressedHistogram
      * data.
-     * TODO(cassandrax): Replace this with the direct route, when
-     * available.
      */
     public compressedHistogramRuns(): Promise<RunToTag> {
       return this.runs().then((x) => _.mapValues(x, 'compressedHistograms'));
@@ -154,8 +140,6 @@ module TF.Backend {
 
     /**
      * Return a promise showing list of runs that contain graphs.
-     * TODO(cassandrax): Replace this with the direct route, when
-     * available.
      */
     public graphRuns(): Promise<string[]> {
       return this.runs().then(
@@ -164,8 +148,6 @@ module TF.Backend {
 
     /**
      * Return a promise showing the Run-to-Tag mapping for run_metadata objects.
-     * TODO(cassandrax): Replace this with the direct route, when
-     * available.
      */
     public runMetadataRuns(): Promise<RunToTag> {
       return this.runs().then((x) => _.mapValues(x, 'run_metadata'));
@@ -200,11 +182,16 @@ module TF.Backend {
       let url = this.router.histograms(tag, run);
       p = this.requestManager.request(url);
       return p.then(map(detupler(createHistogram))).then(function(histos) {
+        // Get the minimum and maximum values across all histograms so that the
+        // visualization is aligned for all timesteps.
+        let min = d3.min(histos, d => d.min);
+        let max = d3.max(histos, d => d.max);
+
         return histos.map(function(histo, i) {
           return {
             wall_time: histo.wall_time,
             step: histo.step,
-            bins: convertBins(histo)
+            bins: convertBins(histo, min, max)
           };
         });
       });
@@ -272,11 +259,13 @@ module TF.Backend {
   }
 
   /** Given a RunToTag, return sorted array of all runs */
-  export function getRuns(r: RunToTag): string[] { return _.keys(r).sort(); }
+  export function getRuns(r: RunToTag): string[] {
+    return _.keys(r).sort(VZ.Sorting.compareTagNames);
+  }
 
   /** Given a RunToTag, return array of all tags (sorted + dedup'd) */
   export function getTags(r: RunToTag): string[] {
-    return _.union.apply(null, _.values(r)).sort();
+    return _.union.apply(null, _.values(r)).sort(VZ.Sorting.compareTagNames);
   }
 
   /**
@@ -287,7 +276,7 @@ module TF.Backend {
   export function filterTags(r: RunToTag, runs: string[]): string[] {
     var result = [];
     runs.forEach((x) => result = result.concat(r[x]));
-    return _.uniq(result).sort();
+    return _.uniq(result).sort(VZ.Sorting.compareTagNames);
   }
 
   function timeToDate(x: number): Date { return new Date(x * 1000); };
@@ -331,34 +320,59 @@ module TF.Backend {
    * Takes histogram data as stored by tensorboard backend and converts it to
    * the standard d3 histogram data format to make it more compatible and easier
    * to visualize. When visualizing histograms, having the left edge and width
-   * makes things quite a bit easier.
+   * makes things quite a bit easier. The bins are also converted to have an
+   * uniform width, what makes the visualization easier to understand.
    *
    * @param histogram A histogram from tensorboard backend.
+   * @param min The leftmost edge. The binning will start on it.
+   * @param max The rightmost edge. The binning will end on it.
+   * @param numBins The number of bins of the converted data. The default of 30
+   * is a sensible default, using more starts to get artifacts because the event
+   * data is stored in buckets, and you start being able to see the aliased
+   * borders between each bucket.
    * @return A histogram bin. Each bin has an x (left edge), a dx (width),
    *     and a y (count).
    *
    * If given rightedges are inclusive, then these left edges (x) are exclusive.
    */
-  export function convertBins(histogram: Histogram) {
+  export function convertBins(
+      histogram: Histogram, min: number, max: number, numBins = 30) {
     if (histogram.bucketRightEdges.length !== histogram.bucketCounts.length) {
       throw(new Error('Edges and counts are of different lengths.'));
     }
 
-    var previousRightEdge = histogram.min;
-    return histogram.bucketRightEdges.map(function(
-        rightEdge: number, i: number) {
+    let binWidth = (max - min) / numBins;
+    let bucketLeft = min;  // Use the min as the starting point for the bins.
+    let bucketPos = 0;
+    return d3.range(min, max, binWidth).map(function(binLeft) {
+      let binRight = binLeft + binWidth;
 
-      // Use the previous bin's rightEdge as the new leftEdge
-      var left = previousRightEdge;
+      // Take the count of each existing bucket, multiply it by the proportion
+      // of overlap with the new bin, then sum and store as the count for the
+      // new bin. If no overlap, will add to zero, if 100% overlap, will include
+      // the full count into new bin.
+      let binY = 0;
+      while (bucketPos < histogram.bucketRightEdges.length) {
+        // Clip the right edge because right-most edge can be infinite-sized.
+        let bucketRight = Math.min(max, histogram.bucketRightEdges[bucketPos]);
 
-      // We need to clip the rightEdge because right-most edge can be
-      // infinite-sized
-      var right = Math.min(histogram.max, rightEdge);
+        let intersect =
+            Math.min(bucketRight, binRight) - Math.max(bucketLeft, binLeft);
+        let count = (intersect / (bucketRight - bucketLeft)) *
+            histogram.bucketCounts[bucketPos];
 
-      // Store rightEdgeValue for next iteration
-      previousRightEdge = rightEdge;
+        binY += intersect > 0 ? count : 0;
 
-      return {x: left, dx: right - left, y: histogram.bucketCounts[i]};
+        // If bucketRight is bigger than binRight, than this bin is finished and
+        // there is data for the next bin, so don't increment bucketPos.
+        if (bucketRight > binRight) {
+          break;
+        }
+        bucketLeft = Math.max(min, bucketRight);
+        bucketPos++;
+      };
+
+      return {x: binLeft, dx: binWidth, y: binY};
     });
   }
 

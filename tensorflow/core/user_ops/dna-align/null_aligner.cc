@@ -52,6 +52,9 @@ class NullAlignerOp : public OpKernel {
     explicit NullAlignerOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
+      float wt;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("wait_time_secs", &wt));
+      wait_time_ = wt * 1000000; // to put into microseconds
     }
 
     ~NullAlignerOp() override {
@@ -86,7 +89,7 @@ class NullAlignerOp : public OpKernel {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
     }
 
-    auto start = std::chrono::high_resolution_clock::now();
+    auto start = chrono::high_resolution_clock::now();
     ResourceContainer<ReadResource> *reads_container;
     const Tensor *read_input;
     OP_REQUIRES_OK(ctx, ctx->input("read", &read_input));
@@ -121,12 +124,13 @@ class NullAlignerOp : public OpKernel {
     }
     std::this_thread::sleep_for(std::chrono::seconds(4));
     resource_releaser(reads_container);
-    auto end = std::chrono::high_resolution_clock::now();
-      
-    auto null_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    double duration = null_time.count() / 1000000.0f;
-    LOG(INFO) << "time for null was : " << duration;
+    auto end = chrono::high_resolution_clock::now();
 
+    auto null_time = chrono::duration_cast<chrono::microseconds>(end - start);
+    decltype(wait_time_) extra_wait = wait_time_ - null_time.count();
+    if (extra_wait > 0) {
+      this_thread::sleep_for(chrono::microseconds(extra_wait));
+    }
   }
 
 private:
@@ -135,6 +139,7 @@ private:
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   int subchunk_size_;
   int chunk_size_;
+  int64_t wait_time_;
 
 
   Status compute_status_;
@@ -144,15 +149,17 @@ private:
   REGISTER_OP("NullAligner")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
+  .Attr("wait_time_secs: float = 0.0")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
   .Output("result_buf_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
+wait_time specifies the minimum time that the alignment should take
 Loads the SNAP-based hash table into memory on construction to perform
 generation of alignment candidates.
-output: a tensor [num_reads] containing serialized reads and results
+outputs a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
 

@@ -128,9 +128,11 @@ class ReaderBase : public ReaderInterface {
   TensorShape GetRequiredShape() override { return GetUserRequiredShape(); }
   DataType GetRequiredType() override  { return GetUserRequiredType(); }
 
+  // Produces up to num_records.
+  // In this implementation all the records come from the same work unit.
   int64 ReadUpTo(const int64 num_records, QueueInterface* queue,
                  std::vector<string>* keys, std::vector<string>* value,
-                 OpKernelContext* context);
+                 OpKernelContext* context) override;
 
   Status Reset() override;
   int64 NumRecordsProduced() override;

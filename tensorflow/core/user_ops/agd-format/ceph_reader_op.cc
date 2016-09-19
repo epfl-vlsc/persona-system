@@ -25,7 +25,7 @@ namespace tensorflow {
   .Attr("user_name: string")
   .Attr("pool_name: string")
   .Attr("ceph_conf_path: string")
-  .Attr("read_size: int64")
+  .Attr("read_size: int")
   .Input("buffer_handle: Ref(string)")
   .Input("queue_key: string")
   .Output("file_handle: string")

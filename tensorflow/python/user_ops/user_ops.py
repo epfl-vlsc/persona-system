@@ -22,8 +22,7 @@ from __future__ import print_function
 from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
-from tensorflow.python.framework import ops, tensor_shape
-from tensorflow.python.ops import common_shapes
+from tensorflow.python.framework import ops, tensor_shape, common_shapes
 from tensorflow.python.ops import io_ops
 
 import os
@@ -277,9 +276,9 @@ def _SnapAlignAGDParallelShape(op):
 
 _na_string = "NullAligner"
 ops.NoGradient(_na_string)
-def NullAligner(buffer_list_pool, read, chunk_size, subchunk_size, name=None):
+def NullAligner(buffer_list_pool, read, chunk_size, subchunk_size, extra_wait=0.0, name=None):
   return gen_user_ops.null_aligner(buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
-                                              subchunk_size=subchunk_size, name=name)
+                                              subchunk_size=subchunk_size, wait_time_secs=extra_wait, name=name)
 
 @ops.RegisterShape(_na_string)
 def _NullAligner(op):
