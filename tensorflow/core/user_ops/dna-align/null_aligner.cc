@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <vector>
@@ -122,14 +123,15 @@ class NullAlignerOp : public OpKernel {
         result_buf->set_ready();
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
     }
-    std::this_thread::sleep_for(std::chrono::seconds(4));
     resource_releaser(reads_container);
     auto end = chrono::high_resolution_clock::now();
 
     auto null_time = chrono::duration_cast<chrono::microseconds>(end - start);
     decltype(wait_time_) extra_wait = wait_time_ - null_time.count();
     if (extra_wait > 0) {
-      this_thread::sleep_for(chrono::microseconds(extra_wait));
+      //LOG(INFO) << "sleeping for " << extra_wait << " microseconds";
+      usleep(extra_wait);
+      //this_thread::sleep_for(chrono::microseconds(extra_wait));
     }
   }
 
