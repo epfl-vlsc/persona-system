@@ -163,16 +163,17 @@ namespace tensorflow {
     auto a = sub_resource_index_.fetch_add(1, memory_order_relaxed);
     if (a >= sub_resources_.size()) {
       return ResourceExhausted("No more AGD subchunks");
-    } else {
+    } else if (a == 0) {
+      buffer_list_->set_start_time();
+    }
       //decltype(idx) next;
       //do {
       //  idx = sub_resource_index_;
       //  next = idx+1;
       //  // weak has a few false positives, but is better for loops, according to the spec
       //} while (!sub_resource_index_.compare_exchange_weak(idx, next));
-      *rr = &sub_resources_[a];
-      *b = &(*buffer_list_)[a];
-    }
+    *rr = &sub_resources_[a];
+    *b = &(*buffer_list_)[a];
     return Status::OK();
   }
 

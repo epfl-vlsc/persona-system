@@ -68,6 +68,13 @@ TRACEPOINT_EVENT(
                            )
                  )
 
+TRACEPOINT_EVENT(
+                 bioflow,
+                 chunk_aligned,
+                 TP_ARGS(std::chrono::high_resolution_clock::time_point, start),
+                 TP_FIELDS(DURATION_FIELD(start))
+                 )
+
 // Used to check when the first key starts (to get accurate start info, to subtract from Tensorflow startup stuff)
 TRACEPOINT_EVENT(
                  bioflow,
