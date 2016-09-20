@@ -2,6 +2,7 @@
 #include <string.h>
 #include "buffer_list.h"
 #include "tensorflow/core/platform/logging.h"
+#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
 namespace tensorflow {
 
@@ -43,6 +44,10 @@ namespace tensorflow {
     }
   }
 
+  void BufferList::set_start_time() {
+    process_start_ = chrono::high_resolution_clock::now();
+  }
+
   void BufferList::reset_all() {
     for (auto &b : buf_list_) {
       b.reset();
@@ -58,6 +63,7 @@ namespace tensorflow {
   void BufferList::decrement_outstanding() {
     auto previous = outstanding_buffers_.fetch_sub(1, memory_order_relaxed);
     if (previous == 1) {
+      tracepoint(bioflow, chunk_aligned, process_start_);
       ready_cv_.notify_one();
     }
   }

@@ -2,13 +2,16 @@
 // Stuart Byma
 // Op providing SNAP genome index and genome
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/user_ops/dna-align/genome_index_resource.h"
-#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/mutex.h"
@@ -16,15 +19,21 @@
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
+  using namespace std;
+  using namespace errors;
 
     class GenomeIndexOp : public OpKernel {
     public:
         GenomeIndexOp(OpKernelConstruction* context)
             : OpKernel(context), genome_handle_set_(false) {
-            OP_REQUIRES_OK(context, context->GetAttr("genome_location", &genome_location_));
-            OP_REQUIRES_OK(context,
-                context->allocate_persistent(DT_STRING, TensorShape({ 2 }),
-                    &genome_handle_, nullptr));
+          OP_REQUIRES_OK(context, context->GetAttr("genome_location", &genome_location_));
+          struct stat buf;
+          auto ret = stat(genome_location_.c_str(), &buf);
+          OP_REQUIRES(context, ret == 0 && buf.st_mode & S_IFDIR != 0,
+                      Internal("Genome location '", genome_location_, "' is not a valid directory"));
+          OP_REQUIRES_OK(context,
+                         context->allocate_persistent(DT_STRING, TensorShape({ 2 }),
+                                                      &genome_handle_, nullptr));
         }
 
         void Compute(OpKernelContext* ctx) override {
@@ -32,7 +41,6 @@ namespace tensorflow {
             if (!genome_handle_set_) {
                 OP_REQUIRES_OK(ctx, SetGenomeHandle(ctx, genome_location_));
             }
-            tracepoint(bioflow, clocks_per_sec);
             ctx->set_output_ref(0, &mu_, genome_handle_.AccessTensor(ctx));
         }
 

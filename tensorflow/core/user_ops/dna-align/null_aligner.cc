@@ -33,7 +33,6 @@
 #include "genome_index_resource.h"
 #include "aligner_options_resource.h"
 #include "tensorflow/core/user_ops/agd-format/read_resource.h"
-#include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
 namespace tensorflow {
 using namespace std;
@@ -98,7 +97,6 @@ class NullAlignerOp : public OpKernel {
     OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &reads_container));
     core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
-    tracepoint(bioflow, assembled_ready_queue_stop, reads_container);
 
     ResourceContainer<BufferList> *bufferlist_resource_container;
     OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));

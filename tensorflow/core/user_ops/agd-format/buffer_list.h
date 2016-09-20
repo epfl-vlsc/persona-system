@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <atomic>
+#include <chrono>
 #include "buffer.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/mutex.h"
@@ -37,13 +38,16 @@ namespace tensorflow {
       void reset_all();
 
       std::size_t size_ = 0;
+      std::chrono::high_resolution_clock::time_point process_start_;
 
       friend class BufferPair;
     public:
       BufferPair& operator[](std::size_t index);
       std::size_t size() const;
-        void resize(std::size_t size);
-        void wait_for_ready() const;
-        void reset();
+      void resize(std::size_t size);
+      void wait_for_ready() const;
+      void reset();
+
+      void set_start_time();
     };
 } // namespace tensorflow {

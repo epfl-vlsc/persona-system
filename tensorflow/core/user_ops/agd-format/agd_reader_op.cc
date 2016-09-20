@@ -93,7 +93,6 @@ reserve: the number of bytes to call 'reserve' on the vector.
       {
         start = clock();
         OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &agd_input));
-        tracepoint(bioflow, read_ready_queue_stop, agd_input);
         core::ScopedUnref unref_me(agd_input);
         ResourceReleaser<Data> agd_releaser(*agd_input);
 

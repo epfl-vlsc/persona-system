@@ -135,8 +135,6 @@ Intended to be used for AGDAssembler
       AGDReadResource a(num_records, base_data, qual_data);
       *dr = move(a);
       OP_REQUIRES_OK(ctx, agd_reads->allocate_output("agd_read_handle", ctx));
-      tracepoint(bioflow, read_resource_assembly_no_meta, start, base_data, qual_data);
-      tracepoint(bioflow, assembled_ready_queue_start, agd_reads);
     }
   private:
     clock_t start;
