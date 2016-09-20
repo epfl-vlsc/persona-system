@@ -91,6 +91,9 @@ Thus we always need 3 of these for the full conversion pipeline
       auto *buf_list = column->get();
       buf_list->wait_for_ready();
 
+      // do this after the wait, so we are only timing the write, and NOT part of the alignment
+      start = chrono::high_resolution_clock::now();
+
       string full_path(record_prefix_ + filepath + record_suffix_);
 
       FILE *file_out = fopen(full_path.c_str(), "w+");
@@ -191,6 +194,8 @@ Thus we always need 3 of these for the full conversion pipeline
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
       num_recs->scalar<int32>()() = num_records;
+
+      tracepoint(bioflow, chunk_write, filepath.c_str(), start);
     }
 
   private:
@@ -215,6 +220,7 @@ Thus we always need 3 of these for the full conversion pipeline
       return Status::OK();
     }
 
+    chrono::high_resolution_clock::time_point start;
     bool compress_;
     string record_suffix_, record_prefix_;
     vector<char> buf_, outbuf_; // used to compress into
