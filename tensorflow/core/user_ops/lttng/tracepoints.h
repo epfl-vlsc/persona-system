@@ -13,7 +13,7 @@
 
 // All of your tracepoint definitions must go before the endif!
 
-#define DURATION_CALC(_start) (std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - _start).count())
+#define DURATION_CALC(_start) (std::chrono::duration_cast<std::chrono::duration<uint64_t, std::micro>>(std::chrono::high_resolution_clock::now() - _start).count())
 #define DURATION_FIELD(_arg_name) ctf_integer(uint64_t, duration, DURATION_CALC(_arg_name))
 #define POINTER_FIELD(_field_name, _arg_name) ctf_integer(uintptr_t, _field_name, (uintptr_t) _arg_name)
 
