@@ -118,7 +118,6 @@ compress: whether or not to compress the column
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
       const Tensor *path, *column_t;
-      start = clock();
       OP_REQUIRES_OK(ctx, ctx->input("file_name", &path));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
       auto filepath = path->scalar<string>()();
@@ -128,7 +127,6 @@ compress: whether or not to compress the column
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
       core::ScopedUnref column_releaser(column);
       ResourceReleaser<BufferList> a(*column);
-      tracepoint(bioflow, result_ready_queue_stop, column);
 
       auto *buf_list = column->get();
       buf_list->wait_for_ready();
@@ -140,6 +138,9 @@ compress: whether or not to compress the column
       auto num_buffers = buf_list->size();
       size_t i;
       uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
+
+      start = chrono::high_resolution_clock::now();
+
       if (compress_) {
         OP_REQUIRES(ctx, false, Internal("Compression not supported for ceph writers"));
 #if 0
@@ -154,7 +155,6 @@ compress: whether or not to compress the column
           OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true));
           i += recs_per_chunk;
         }
-        tracepoint(bioflow, total_align_stop, column);
 
         i = 0; recs_per_chunk = records_per_chunk;
         size_t expected_size;
@@ -190,13 +190,16 @@ compress: whether or not to compress the column
           OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data[0], data.size()));
         }
       }
+
+      tracepoint(bioflow, chunk_write, filepath.c_str(), start);
+
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
       num_recs->scalar<int32>()() = num_records;
-      tracepoint(bioflow, write_duration, full_path.c_str(), num_records);
     }
 
   private:
+    chrono::high_resolution_clock::time_point start;
     string cluster_name;
     string user_name;
     string pool_name;
@@ -207,7 +210,6 @@ compress: whether or not to compress the column
     format::FileHeader header_;
     bool compress_ = false;
     string record_suffix_;
-    clock_t start;
 
     Status WriteHeader(OpKernelContext *ctx, vector<char>& buf) {
       const Tensor *tensor;

@@ -89,7 +89,12 @@ file_names: [{this map op's name}] + upstream_name
 
       OP_REQUIRES_OK(ctx, ctx->input("filename", &filename_input));
 
-      auto filename = path_prefix_ + filename_input->scalar<string>()();
+      auto file_key = filename_input->scalar<string>()();
+      tracepoint(bioflow, process_key, file_key.c_str());
+
+      auto filename = path_prefix_ + file_key;
+
+      start = chrono::high_resolution_clock::now();
 
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
@@ -121,8 +126,11 @@ file_names: [{this map op's name}] + upstream_name
       names_vec(max_dim) = filename;
       handles_matrix(max_dim, 0) = mmf->container();
       handles_matrix(max_dim, 1) = mmf->name();
+
+      tracepoint(bioflow, chunk_read, file_key.c_str(), start);
     }
   private:
+    chrono::high_resolution_clock::time_point start;
     ReferencePool<MemoryMappedFile> *ref_pool = nullptr;
     string path_prefix_;
   };
@@ -149,8 +157,12 @@ file_names: [{this map op's name}] + upstream_name
       }
       const Tensor *filename_input;
       OP_REQUIRES_OK(ctx, ctx->input("filename", &filename_input));
-      auto filename = path_prefix_ + filename_input->scalar<string>()();
 
+      auto file_key = filename_input->scalar<string>()();
+      tracepoint(bioflow, process_key, file_key.c_str());
+      auto filename = path_prefix_ + file_key;
+
+      start = chrono::high_resolution_clock::now();
 
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
@@ -169,8 +181,11 @@ file_names: [{this map op's name}] + upstream_name
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
       auto scalar = file_name->vec<string>();
       scalar(0) = filename;
+
+      tracepoint(bioflow, chunk_read, file_key.c_str(), start);
     }
   private:
+    chrono::high_resolution_clock::time_point start;
     ReferencePool<MemoryMappedFile> *ref_pool = nullptr;
     string path_prefix_;
   };

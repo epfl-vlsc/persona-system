@@ -89,12 +89,13 @@ file_name: a Tensor() of string for the unique key for this file
       if (!ref_pool_) {
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_handle", &ref_pool_));
       }
-      start = clock();
 
       const Tensor *key_t;
       OP_REQUIRES_OK(ctx, ctx->input("queue_key", &key_t));
       string file_key = key_t->scalar<string>()();
       tracepoint(bioflow, process_key, file_key.c_str());
+
+      start = chrono::high_resolution_clock::now();
 
       ResourceContainer<Buffer> *rec_buffer;
       OP_REQUIRES_OK(ctx, ref_pool_->GetResource(&rec_buffer));
@@ -109,12 +110,12 @@ file_name: a Tensor() of string for the unique key for this file
       OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
       auto scalar = file_name->vec<string>();
       scalar(0) = file_key;
-      tracepoint(bioflow, read_kernel, start, file_key.c_str(), rec_buffer->get()->size());
-      tracepoint(bioflow, read_ready_queue_start, rec_buffer);
+
+      tracepoint(bioflow, chunk_read, file_key.c_str(), start);
     }
 
   private:
-    clock_t start;
+    chrono::high_resolution_clock::time_point start;
     string cluster_name;
     string user_name;
     string pool_name;

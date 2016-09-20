@@ -191,7 +191,6 @@ Thus we always need 3 of these for the full conversion pipeline
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
       num_recs->scalar<int32>()() = num_records;
-      tracepoint(bioflow, write_duration, full_path.c_str(), num_records);
     }
 
   private:
