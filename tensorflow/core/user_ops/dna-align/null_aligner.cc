@@ -115,7 +115,7 @@ class NullAlignerOp : public OpKernel {
               subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
           char size = static_cast<char>(bases_len);
           result_buf->index().AppendBuffer(&size, 1);
-          result_buf->data().AppendBuffer(bases, bases_len);
+          result_buf->data().AppendBuffer(bases, 60);
         }
 
         result_buf->set_ready();
