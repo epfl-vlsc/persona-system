@@ -104,6 +104,15 @@ compress: whether or not to compress the column
       } else {
         VLOG(DEBUG) << "Connected to the cluster.";
       }
+      
+      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
+      if (ret < 0) {
+        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
+        exit(EXIT_FAILURE);
+      } else {
+        VLOG(DEBUG) << "Created an ioctx for the pool.";
+      }
+
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
@@ -112,6 +121,7 @@ compress: whether or not to compress the column
     ~CephWriterOp() {
       VLOG(DEBUG) << "Ceph writer " << this << " finishing\n";
       //io_ctx.watch_flush();
+      io_ctx.close();
       cluster.shutdown();
     }
 
@@ -205,6 +215,7 @@ compress: whether or not to compress the column
     string pool_name;
     string ceph_conf;
     librados::Rados cluster;
+    librados::IoCtx io_ctx;
     vector<char> compress_buf_; // used to compress into
     vector<char> output_buf_; // used to compress into
     format::FileHeader header_;
@@ -230,16 +241,8 @@ compress: whether or not to compress the column
     librados::bufferlist write_buf;
     Status CephWriteColumn(string& file_key, char* buf, size_t len)
     {
-      librados::IoCtx io_ctx;
+      auto t1 = chrono::high_resolution_clock::now();
       int ret = 0;
-      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
-      if (ret < 0) {
-        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
-        exit(EXIT_FAILURE);
-      } else {
-        VLOG(DEBUG) << "Created an ioctx for the pool.";
-      }
-
       write_buf.push_back(ceph::buffer::create_static(len, buf));
 
       // Create I/O Completion.
@@ -261,7 +264,9 @@ compress: whether or not to compress the column
       }*/
       write_buf.clear();
       write_completion->release();
-      io_ctx.close();
+      auto t2 = chrono::high_resolution_clock::now();
+      auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+      LOG(INFO) << "the write took: " << time.count() << "microseconds";
       return Status::OK();
     }
   };
