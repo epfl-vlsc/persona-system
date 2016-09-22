@@ -156,6 +156,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
 private:
   clock_t kernel_start;
+  int num_chunks = 0;
 
   struct time_log {
     std::chrono::high_resolution_clock::time_point end_subchunk;
@@ -370,15 +371,16 @@ private:
           compute_status_ = io_chunk_status;
           return;
         }
+        num_chunks++;
         end_time = std::chrono::high_resolution_clock::now();
       }
 
       std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
-      struct rusage usage;
-      int ret = getrusage(RUSAGE_THREAD, &usage);
+      /*struct rusage usage;
+      int ret = getrusage(RUSAGE_THREAD, &usage);*/
 
       double total_s = (double)total / 1000000.0f;
-      LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
+      /*LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
       LOG(INFO) << "Total time spent not processing" << total << " us";
       LOG(INFO) << "Total time spent not processing" << total_s << " seconds";
       LOG(INFO) << "system time used: " << usage.ru_stime.tv_sec << "." << usage.ru_stime.tv_usec << endl;
@@ -386,7 +388,8 @@ private:
       LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
       LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
       LOG(INFO) << "vol con sw: " << usage.ru_nvcsw << endl;
-      LOG(INFO) << "invol con sw: " << usage.ru_nivcsw << endl;
+      LOG(INFO) << "invol con sw: " << usage.ru_nivcsw << endl;*/
+      LOG(INFO) << "number chunks processed: " << num_chunks;
       base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
       delete allocator;
       VLOG(INFO) << "base aligner thread ending.";
