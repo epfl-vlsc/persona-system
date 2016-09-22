@@ -32,18 +32,6 @@ Opens a pipe at `path`, and emits newline-delimited strings (one line at a time)
     PipeSourceOp(OpKernelConstruction *ctx) : OpKernel(ctx), buf_sz_(line_buf_size), line_buf_(new char[line_buf_size]) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("path", &path_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("create", &create_));
-
-      int status;
-      if (create_) {
-        status = mkfifo(path_.c_str(), S_IRUSR | S_IWUSR);
-        OP_REQUIRES(ctx, status == 0, Internal("mkfifo() on path '", path_, "' returns error ", status));
-      }
-
-      fifo_fd_ = open(path_.c_str(), O_RDONLY | O_NONBLOCK); // nonblock and rdonly -> return immediately instead of waiting for a writer
-      OP_REQUIRES(ctx, fifo_fd_ != -1, Internal("open on fifo at path '", path_, "' failed"));
-
-      fifo_fp_ = fdopen(fifo_fd_, "r");
-      OP_REQUIRES(ctx, fifo_fp_ != nullptr, Internal("fdopen for fifo at path '", path_, "' failed"));
     }
 
     ~PipeSourceOp() override {
@@ -55,15 +43,6 @@ Opens a pipe at `path`, and emits newline-delimited strings (one line at a time)
         }
       }
 
-      // TODO not sure whether I have to close both in every case
-      if (fifo_fd_ != -1) {
-        LOG(WARNING) << "~PipeSource has null file pointer, but initialized file fd";
-        ret = close(fifo_fd_);
-        if (ret != 0) {
-          LOG(ERROR) << "Calling close() on path " << path_ << " return value " << ret;
-        }
-      }
-
       if (create_) {
         // TODO delete the fifo
       }
@@ -72,6 +51,9 @@ Opens a pipe at `path`, and emits newline-delimited strings (one line at a time)
     }
 
     void Compute(OpKernelContext* ctx) override {
+      if (!fifo_fp_) {
+        OP_REQUIRES_OK(ctx, init());
+      }
       auto ret = getline(&line_buf_, &buf_sz_, fifo_fp_);
       if (ret < 0) {
         Status s;
@@ -83,6 +65,7 @@ Opens a pipe at `path`, and emits newline-delimited strings (one line at a time)
         ctx->SetStatus(s);
         return;
       }
+
       OP_REQUIRES(ctx, ret != -1, Internal("getline() on named pipe '", path_, "' returned ", ret));
       // TODO check errno to shut down correctly
       string s(line_buf_, ret-1); // -1 to not include the delim character
@@ -93,8 +76,26 @@ Opens a pipe at `path`, and emits newline-delimited strings (one line at a time)
     }
 
   private:
+
+    Status init() {
+      int status;
+
+      if (create_) {
+        status = mkfifo(path_.c_str(), S_IRUSR | S_IWUSR);
+        if (status != 0) {
+          return Internal("mkfifo() on path '", path_, "' returns error ", status);
+        }
+      }
+
+      fifo_fp_ = fopen(path_.c_str(), "r");
+      if (!fifo_fp_) {
+        return Internal("fdopen for fifo at path '", path_, "' failed");
+      }
+
+      return Status::OK();
+    }
+
     string path_;
-    int fifo_fd_ = -1;
     char *line_buf_;
     size_t buf_sz_;
     FILE *fifo_fp_ = nullptr;
