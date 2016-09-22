@@ -105,6 +105,8 @@ compress: whether or not to compress the column
         VLOG(DEBUG) << "Connected to the cluster.";
       }
       
+      /* Set up IO context */
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
       ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
       if (ret < 0) {
         LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
@@ -112,10 +114,6 @@ compress: whether or not to compress the column
       } else {
         VLOG(DEBUG) << "Created an ioctx for the pool.";
       }
-
-
-      /* Set up IO context */
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
     }
 
     ~CephWriterOp() {
@@ -266,7 +264,6 @@ compress: whether or not to compress the column
       write_completion->release();
       auto t2 = chrono::high_resolution_clock::now();
       auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-      LOG(INFO) << "the write took: " << time.count() << "microseconds";
       return Status::OK();
     }
   };
