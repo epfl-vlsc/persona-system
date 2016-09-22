@@ -125,6 +125,7 @@ compress: whether or not to compress the column
 
     void Compute(OpKernelContext* ctx) override {
       using namespace errors;
+      start = chrono::high_resolution_clock::now();
       const Tensor *path, *column_t;
       OP_REQUIRES_OK(ctx, ctx->input("file_name", &path));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
@@ -138,6 +139,9 @@ compress: whether or not to compress the column
 
       auto *buf_list = column->get();
       buf_list->wait_for_ready();
+      auto t2 = chrono::high_resolution_clock::now();
+      auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - start);
+      LOG(INFO) << "ceph wait time was: " << time.count() << " microsecond";
 
       string full_path(filepath + record_suffix_);
 
@@ -147,7 +151,6 @@ compress: whether or not to compress the column
       size_t i;
       uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
 
-      start = chrono::high_resolution_clock::now();
 
       if (compress_) {
         OP_REQUIRES(ctx, false, Internal("Compression not supported for ceph writers"));
@@ -262,9 +265,6 @@ compress: whether or not to compress the column
       }*/
       write_buf.clear();
       write_completion->release();
-      auto t2 = chrono::high_resolution_clock::now();
-      auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-      LOG(INFO) << "ceph write time was: " << time.count() << " microsecond";
       return Status::OK();
     }
   };
