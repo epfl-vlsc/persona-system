@@ -151,7 +151,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
 private:
   clock_t kernel_start;
-  int num_chunks = 0;
 
   struct time_log {
     std::chrono::high_resolution_clock::time_point end_subchunk;
@@ -365,7 +364,6 @@ private:
           compute_status_ = io_chunk_status;
           return;
         }
-        num_chunks++;
         end_time = std::chrono::high_resolution_clock::now();
       }
 
@@ -383,7 +381,6 @@ private:
       LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
       LOG(INFO) << "vol con sw: " << usage.ru_nvcsw << endl;
       LOG(INFO) << "invol con sw: " << usage.ru_nivcsw << endl;*/
-      LOG(INFO) << "number chunks processed: " << num_chunks;
       base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
       delete allocator;
       VLOG(INFO) << "base aligner thread ending.";

@@ -18,7 +18,7 @@ class WorkQueue {
   public:
 
     WorkQueue(int capacity);
-    ~WorkQueue() {} // if you don't define the destructor, you get
+    ~WorkQueue() { LOG(INFO) << "num pushed: " << num_push_; } // if you don't define the destructor, you get
                      // a weird linker error
 
     // return true if pushed, false otherwise
@@ -57,6 +57,7 @@ class WorkQueue {
     int64 num_pop_waits_ = 0;
     int64 num_push_waits_ = 0;
     int64 num_peek_waits_ = 0;
+    int64 num_push_ = 0;
 
  };
 
@@ -147,6 +148,7 @@ bool WorkQueue<T>::push(const T& item) {
     // tell someone blocking on read they can now read from the queue
     // TODO maybe notify_all is better here? If so, good to drop the notify_one in peek
     queue_pop_cv_.notify_one();
+    num_push_++;
     return true;
   } else
     return false;
