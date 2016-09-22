@@ -68,7 +68,6 @@ bool WorkQueue<T>::peek(T& item) {
     mutex_lock l(mu_);
 
     if (queue_.empty() && block_) {
-      LOG(INFO) << "waiting on peek!";
       num_peek_waits_++;
       queue_pop_cv_.wait(l, [this]() {
           return !queue_.empty() || !block_;
