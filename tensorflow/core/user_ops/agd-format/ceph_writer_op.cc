@@ -264,6 +264,7 @@ compress: whether or not to compress the column
       write_completion->release();
       auto t2 = chrono::high_resolution_clock::now();
       auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+      LOG(INFO) << "ceph write time was: " << time.count() << " microsecond";
       return Status::OK();
     }
   };
