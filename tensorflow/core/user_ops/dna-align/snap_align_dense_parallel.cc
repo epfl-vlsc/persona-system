@@ -79,6 +79,8 @@ class SnapAlignAGDParallelOp : public OpKernel {
       LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
       LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
       LOG(INFO) << "request queue peek wait: " << request_queue_->num_peek_waits();
+      auto avg_inter_time = total_usec / total_invoke_intervals;
+      LOG(INFO) << "average inter kernel time: " << avg_inter_time;
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
       VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
@@ -113,6 +115,16 @@ class SnapAlignAGDParallelOp : public OpKernel {
     }
 
   void Compute(OpKernelContext* ctx) override {
+    if (first) {
+      first = false;
+    } else {
+      t_now = std::chrono::high_resolution_clock::now();
+      auto interval_time = std::chrono::duration_cast<std::chrono::microseconds>(t_now - t_last);
+      total_usec += interval_time.count();
+      total_invoke_intervals++;
+    }
+      
+
     if (index_resource_ == nullptr) {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
       init_workers(ctx);
@@ -147,10 +159,16 @@ class SnapAlignAGDParallelOp : public OpKernel {
       OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
                 Internal("Unable to push item onto work queue. Is it already closed?"));
     }
+    t_last = std::chrono::high_resolution_clock::now();
   }
 
 private:
   clock_t kernel_start;
+  uint64 total_usec = 0;
+  uint64 total_invoke_intervals = 0;
+  bool first = true;
+  std::chrono::high_resolution_clock::time_point t_now;
+  std::chrono::high_resolution_clock::time_point t_last;
 
   struct time_log {
     std::chrono::high_resolution_clock::time_point end_subchunk;
