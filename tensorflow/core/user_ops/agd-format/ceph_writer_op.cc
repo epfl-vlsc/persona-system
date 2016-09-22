@@ -139,9 +139,6 @@ compress: whether or not to compress the column
 
       auto *buf_list = column->get();
       buf_list->wait_for_ready();
-      auto t2 = chrono::high_resolution_clock::now();
-      auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - start);
-      LOG(INFO) << "ceph wait time was: " << time.count() << " microsecond";
 
       string full_path(filepath + record_suffix_);
 
@@ -242,7 +239,6 @@ compress: whether or not to compress the column
     librados::bufferlist write_buf;
     Status CephWriteColumn(string& file_key, char* buf, size_t len)
     {
-      auto t1 = chrono::high_resolution_clock::now();
       int ret = 0;
       write_buf.push_back(ceph::buffer::create_static(len, buf));
 
