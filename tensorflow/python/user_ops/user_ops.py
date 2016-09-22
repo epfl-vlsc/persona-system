@@ -490,3 +490,12 @@ def _GZIPDecompShape(op):
   _assert_vec(pool_shape, 2)
   _assert_vec(data_shape, 2)
   return [data_shape]
+
+_ps_str = "PipeSource"
+ops.NoGradient(_ps_str)
+def PipeSource(path, create=False, name=None):
+  return gen_user_ops.pipe_source(path=path, create=create)
+
+@ops.RegisterShape(_ps_str)
+def _PipeSourceShape(op):
+  return [tensor_shape.scalar()]
