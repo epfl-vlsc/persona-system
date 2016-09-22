@@ -56,11 +56,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
-      int i;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("trace_granularity", &i));
-      OP_REQUIRES(ctx, i > 0, errors::InvalidArgument("trace granularity ", i, " must be greater than 0"));
-      trace_granularity_ = i;
-
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
 
       int capacity;
@@ -258,7 +253,6 @@ private:
       BufferPair* result_buf = nullptr;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
-      const uint32_t max_completed = trace_granularity_;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
       //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
 
@@ -411,7 +405,6 @@ private:
   bool sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
-  uint32_t trace_granularity_;
 
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
@@ -427,7 +420,6 @@ private:
 
   REGISTER_OP("SnapAlignAGDParallel")
   .Attr("num_threads: int")
-  .Attr("trace_granularity: int = 500")
   .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 10")

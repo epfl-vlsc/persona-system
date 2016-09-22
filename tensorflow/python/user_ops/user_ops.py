@@ -252,15 +252,12 @@ def _AlignerOptionsShape(op):
 
 _saap_string = "SnapAlignAGDParallel"
 ops.NoGradient(_saap_string)
-def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, chunk_size, num_threads, subchunk_size, trace_granularity=500, work_queue_size=10, sam_format=False, name=None):
-  if trace_granularity < 1:
-    raise EnvironmentError("trace granularity {} must be strictly positive".format(trace_granularity))
+def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, chunk_size, num_threads, subchunk_size, work_queue_size=10, sam_format=False, name=None):
   if num_threads < 1:
     raise EnvironmentError("number of threads must be greater than 0. Got {}".format(num_threads))
   return gen_user_ops.snap_align_agd_parallel(genome_handle=genome, options_handle=options, num_threads=num_threads,
                                               buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
-                                              subchunk_size=subchunk_size, trace_granularity=trace_granularity,
-                                              work_queue_size=work_queue_size, sam_format=sam_format, name=name)
+                                              subchunk_size=subchunk_size, work_queue_size=work_queue_size, sam_format=sam_format, name=name)
 
 @ops.RegisterShape(_saap_string)
 def _SnapAlignAGDParallelShape(op):
@@ -493,3 +490,12 @@ def _GZIPDecompShape(op):
   _assert_vec(pool_shape, 2)
   _assert_vec(data_shape, 2)
   return [data_shape]
+
+_ps_str = "PipeSource"
+ops.NoGradient(_ps_str)
+def PipeSource(path, create=False, name=None):
+  return gen_user_ops.pipe_source(path=path, create=create)
+
+@ops.RegisterShape(_ps_str)
+def _PipeSourceShape(op):
+  return [tensor_shape.scalar()]
