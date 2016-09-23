@@ -27,16 +27,10 @@ namespace tensorflow {
       init();
     }
 
-    ~ZeroMqSourceOp() override {
-      socket_.reset(nullptr);
-      delete context_;
-    }
-
     void Compute(OpKernelContext* ctx) override {
-
       zmq::message_t msg;
       socket_->recv(&msg);
-      OP_REQUIRES(ctx, msg.size() > 0, Internal("ZeroMqSourceOp received message of size 0!")); 
+      OP_REQUIRES(ctx, msg.size() > 0, Internal("ZeroMqSourceOp received message of size 0!"));
       LOG(INFO) << "zmq source received input: " << (char *)msg.data();
       string input((char *)msg.data());
 
@@ -49,14 +43,15 @@ namespace tensorflow {
 
     Status init() {
 
-      context_ = new zmq::context_t(1);
-      socket_.reset(new zmq::socket_t(*context_, ZMQ_REP));
+      // no default constructor
+      context_.reset(new zmq::context_t(1));
+      socket_.reset(new zmq::socket_t(*context_, ZMQ_PULL));
       socket_->bind(url_.c_str());
 
       return Status::OK();
     }
 
-    zmq::context_t* context_;
+    unique_ptr<zmq::context_t> context_;
     unique_ptr<zmq::socket_t> socket_;
     string url_;
   };
