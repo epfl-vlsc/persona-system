@@ -508,3 +508,13 @@ def ZeroMqSource(server_address, server_port, name=None):
 @ops.RegisterShape(_zmq_str)
 def _ZeroMqPipeSourceShape(op):
   return [tensor_shape.scalar()]
+
+_zmq_sink_str = "ZeroMqSink"
+ops.NoGradient(_zmq_sink_str)
+def ZeroMqSink(server_address, server_port, name=None):
+  return gen_user_ops.zero_mq_sink(url="tcp://{addr}:{port}".format(addr=server_address, port=server_port), name=name)
+
+@ops.RegisterShape(_zmq_sink_str)
+def _ZeroMqPipeSinkShape(op):
+  _assert_scalar(op.inputs[0].get_shape())
+  return []
