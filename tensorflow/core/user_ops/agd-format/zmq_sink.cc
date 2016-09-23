@@ -44,7 +44,7 @@ Creates a zmq writer that sends it's input to the specified URL
 
       context_.reset(new zmq::context_t(1));
       socket_.reset(new zmq::socket_t(*context_, ZMQ_PUSH));
-      socket_->bind(url_.c_str());
+      socket_->connect(url_.c_str());
 
       return Status::OK();
     }
