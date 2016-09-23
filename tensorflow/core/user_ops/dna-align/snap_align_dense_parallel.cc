@@ -54,7 +54,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
   public:
     explicit SnapAlignAGDParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
 
@@ -416,7 +415,6 @@ private:
   const Genome *genome_ = nullptr;
   AlignerOptions* options_ = nullptr;
   int subchunk_size_;
-  int chunk_size_;
   bool sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
@@ -435,7 +433,6 @@ private:
 
   REGISTER_OP("SnapAlignAGDParallel")
   .Attr("num_threads: int")
-  .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 10")
   .Attr("sam_format: bool = false")

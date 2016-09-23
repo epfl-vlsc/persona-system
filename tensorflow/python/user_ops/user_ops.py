@@ -252,11 +252,11 @@ def _AlignerOptionsShape(op):
 
 _saap_string = "SnapAlignAGDParallel"
 ops.NoGradient(_saap_string)
-def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, chunk_size, num_threads, subchunk_size, work_queue_size=10, sam_format=False, name=None):
+def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, num_threads, subchunk_size, work_queue_size=10, sam_format=False, name=None):
   if num_threads < 1:
     raise EnvironmentError("number of threads must be greater than 0. Got {}".format(num_threads))
   return gen_user_ops.snap_align_agd_parallel(genome_handle=genome, options_handle=options, num_threads=num_threads,
-                                              buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
+                                              buffer_list_pool=buffer_list_pool, read=read,
                                               subchunk_size=subchunk_size, work_queue_size=work_queue_size, sam_format=sam_format, name=name)
 
 @ops.RegisterShape(_saap_string)
