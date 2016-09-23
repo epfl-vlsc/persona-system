@@ -203,7 +203,7 @@ compress: whether or not to compress the column
 
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &num_recs));
-      num_recs->scalar<string>()() = file_path;
+      num_recs->scalar<string>()() = filepath;
     }
 
   private:
