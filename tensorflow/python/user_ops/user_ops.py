@@ -159,7 +159,7 @@ def _CephWriterShape(op):
   for i in range(1,4):
     scalar_shape = op.inputs[i].get_shape()
     _assert_scalar(scalar_shape)
-  return [op.inputs[3].get_shape()]
+  return [tensor_shape.scalar()]
 
 _read_sink_str = "ReadSink"
 ops.NoGradient(_read_sink_str)
