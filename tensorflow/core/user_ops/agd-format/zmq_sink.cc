@@ -15,7 +15,7 @@ namespace tensorflow {
 
   REGISTER_OP(op_name.c_str())
   .Attr("url: string")
-  .Output("input: string")
+  .Input("input: string")
   .Doc(R"doc(
 Creates a zmq writer that sends it's input to the specified URL
 )doc");
