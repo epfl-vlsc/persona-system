@@ -499,3 +499,12 @@ def PipeSource(path, create=False, name=None):
 @ops.RegisterShape(_ps_str)
 def _PipeSourceShape(op):
   return [tensor_shape.scalar()]
+
+_zmq_str = "ZeroMqSource"
+ops.NoGradient(_zmq_str)
+def ZeroMqSource(url, name=None):
+  return gen_user_ops.zero_mq_source(url=url)
+
+@ops.RegisterShape(_zmq_str)
+def _ZeroMqPipeSourceShape(op):
+  return [tensor_shape.scalar()]

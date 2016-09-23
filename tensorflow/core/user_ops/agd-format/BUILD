@@ -5,7 +5,7 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 cc_library(
     name = "agd_format",
     srcs = glob(["*.cc"],
-      exclude = ["parallel_sam_writer_op.cc"]),
+      exclude = ["parallel_sam_writer_op.cc", "zmq_source.cc"]),
     hdrs = glob(["*.h", "json/src/json.hpp"]),
     copts = tf_copts() + ["-fexceptions"],
     nocopts = "-fno-exceptions",
@@ -21,6 +21,21 @@ cc_library(
     # TODO: this needs to be built better, like this: https://github.com/mzhaom/trunk/blob/master/third_party/boost/BUILD
     linkopts = [
            "-lz", "-ls3", "-lrados"
+    ]
+)
+
+cc_library(
+    name = "zmq_source",
+    srcs = ["zmq_source.cc"],
+    copts = tf_copts() + ["-fexceptions"],
+    linkstatic = 1,
+    alwayslink = 1,
+    visibility = ["//visibility:public"],
+    deps = ["//tensorflow/core:framework", 
+    "//tensorflow/core/user_ops/lttng:trace",
+    ],
+    linkopts = [
+           "-lzmq"
     ]
 )
 
