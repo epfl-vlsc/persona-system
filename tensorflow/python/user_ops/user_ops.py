@@ -511,8 +511,8 @@ def _ZeroMqPipeSourceShape(op):
 
 _zmq_sink_str = "ZeroMqSink"
 ops.NoGradient(_zmq_sink_str)
-def ZeroMqSink(server_address, server_port, name=None):
-  return gen_user_ops.zero_mq_sink(url="tcp://{addr}:{port}".format(addr=server_address, port=server_port), name=name)
+def ZeroMqSink(tensor_input, server_address, server_port, name=None):
+  return gen_user_ops.zero_mq_sink(input=tensor_input, url="tcp://{addr}:{port}".format(addr=server_address, port=server_port), name=name)
 
 @ops.RegisterShape(_zmq_sink_str)
 def _ZeroMqPipeSinkShape(op):
