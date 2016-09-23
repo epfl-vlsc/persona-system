@@ -502,8 +502,8 @@ def _PipeSourceShape(op):
 
 _zmq_str = "ZeroMqSource"
 ops.NoGradient(_zmq_str)
-def ZeroMqSource(url, name=None):
-  return gen_user_ops.zero_mq_source(url=url)
+def ZeroMqSource(server_address, server_port, name=None):
+  return gen_user_ops.zero_mq_source(url="tcp://{addr}:{port}".format(addr=server_address, port=server_port), name=name)
 
 @ops.RegisterShape(_zmq_str)
 def _ZeroMqPipeSourceShape(op):

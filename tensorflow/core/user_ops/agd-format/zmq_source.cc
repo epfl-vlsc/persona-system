@@ -28,7 +28,6 @@ namespace tensorflow {
     }
 
     ~ZeroMqSourceOp() override {
-      socket_.reset(nullptr);
       delete context_;
     }
 
