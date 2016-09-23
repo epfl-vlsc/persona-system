@@ -33,7 +33,6 @@ namespace tensorflow {
       socket_->recv(&msg);
       OP_REQUIRES(ctx, msg.size() > 0, Internal("ZeroMqSourceOp received message of size 0!"));
       string input((char *)msg.data(), msg.size());
-      LOG(INFO) << "zmq read: " << input;
 
       Tensor *output;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("output", TensorShape({}), &output));

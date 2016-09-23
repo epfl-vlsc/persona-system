@@ -32,8 +32,6 @@ Creates a zmq writer that sends it's input to the specified URL
       OP_REQUIRES_OK(ctx, ctx->input("input", &input));
       auto msg_str = input->scalar<string>()();
 
-      LOG(INFO) << "Sending string: " << msg_str;
-
       auto msg_sz = msg_str.size();
       zmq::message_t msg(msg_sz);
       memcpy(msg.data(), msg_str.c_str(), msg_sz);
