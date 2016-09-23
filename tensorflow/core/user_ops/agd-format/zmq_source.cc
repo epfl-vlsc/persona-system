@@ -16,6 +16,7 @@ namespace tensorflow {
   REGISTER_OP(op_name.c_str())
   .Attr("url: string")
   .Output("output: string")
+  .SetIsStateful()
   .Doc(R"doc(
   Creates a ZMQ reader that reads one line at a time from a ZMQ url of form tcp://blah:1234
 )doc");

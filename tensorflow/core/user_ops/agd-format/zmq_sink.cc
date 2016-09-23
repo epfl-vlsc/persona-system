@@ -32,7 +32,11 @@ Creates a zmq writer that sends it's input to the specified URL
       OP_REQUIRES_OK(ctx, ctx->input("input", &input));
       auto msg_str = input->scalar<string>()();
 
-      zmq::message_t msg(const_cast<void*>(reinterpret_cast<const void*>(msg_str.c_str())), msg_str.size(), nullptr);
+      LOG(INFO) << "Sending string: " << msg_str;
+
+      auto msg_sz = msg_str.size();
+      zmq::message_t msg(msg_sz);
+      memcpy(msg.data(), msg_str.c_str(), msg_sz);
 
       // TODO in the future, we should be smart and retry connecting
       OP_REQUIRES(ctx, socket_->send(msg), Internal("sending message to '", url_, "' failed"));
