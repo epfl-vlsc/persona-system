@@ -124,7 +124,6 @@ compress: whether or not to compress the column
     }
 
     void Compute(OpKernelContext* ctx) override {
-      using namespace errors;
       start = chrono::high_resolution_clock::now();
       const Tensor *path, *column_t;
       OP_REQUIRES_OK(ctx, ctx->input("file_name", &path));
@@ -147,7 +146,8 @@ compress: whether or not to compress the column
       auto num_buffers = buf_list->size();
       size_t i;
       uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
-
+      index_.reset();
+      payload_.reset();
 
       if (compress_) {
         OP_REQUIRES(ctx, false, Internal("Compression not supported for ceph writers"));
@@ -185,19 +185,22 @@ compress: whether or not to compress the column
       } else {
         for (i = 0; i < num_buffers; ++i) {
           auto &index = (*buf_list)[i].index();
-
-          auto s1 = index.size();
-          OP_REQUIRES(ctx, s1 != 0,
-                      Internal("ceph write got empty record!"));
-
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &index[0], s1));
+          //OP_REQUIRES(ctx, s1 != 0, Internal("ceph write got empty record!"));
+          OP_REQUIRES_OK(ctx, index_.AppendBuffer(&index[0], index.size()));
         }
 
         for (i = 0; i < num_buffers; ++i) {
           auto &data = (*buf_list)[i].data();
-          OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &data[0], data.size()));
+          OP_REQUIRES_OK(ctx, payload_.AppendBuffer(&data[0], data.size()));
         }
       }
+
+      write_buf.clear();
+      write_buf.push_back(ceph::buffer::create_static(index_.size(), const_cast<char*>(index_.data())));
+      write_buf.push_back(ceph::buffer::create_static(payload_.size(), const_cast<char*>(payload_.data())));
+
+      auto ret = io_ctx.write_full(full_path, write_buf);
+      OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
 
       tracepoint(bioflow, chunk_write, filepath.c_str(), start);
 
@@ -212,6 +215,7 @@ compress: whether or not to compress the column
     string user_name;
     string pool_name;
     string ceph_conf;
+    Buffer index_, payload_;
     librados::Rados cluster;
     librados::IoCtx io_ctx;
     vector<char> compress_buf_; // used to compress into
