@@ -14,7 +14,7 @@ namespace tensorflow {
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Input("data: string")
-  .Output("id: int32")
+  .Output("id: string")
   .Doc(R"doc(
 Consumes the buffer input and produces nothing
 
@@ -39,7 +39,7 @@ we can use it in other pipelines where writers are used
 
         Tensor *output;
         OP_REQUIRES_OK(ctx, ctx->allocate_output("id", TensorShape({}), &output));
-        output->scalar<int32>()() = 0;
+        output->scalar<string>()() = "i whoop yo head boy";
       }
     }
   };

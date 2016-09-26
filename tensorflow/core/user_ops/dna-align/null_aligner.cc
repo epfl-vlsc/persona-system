@@ -51,7 +51,6 @@ class NullAlignerOp : public OpKernel {
   public:
     explicit NullAlignerOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
       float wt;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("wait_time_secs", &wt));
       wait_time_ = wt * 1000000; // to put into microseconds
@@ -111,12 +110,12 @@ class NullAlignerOp : public OpKernel {
     io_chunk_status = Status::OK();
     io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
     while (io_chunk_status.ok()) {
-        for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
+        /*for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
               subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
           char size = static_cast<char>(bases_len);
           result_buf->index().AppendBuffer(&size, 1);
           result_buf->data().AppendBuffer(bases, 60);
-        }
+        }*/
 
         result_buf->set_ready();
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
@@ -138,7 +137,6 @@ private:
 
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   int subchunk_size_;
-  int chunk_size_;
   int64_t wait_time_;
 
 
@@ -147,7 +145,6 @@ private:
 };
 
   REGISTER_OP("NullAligner")
-  .Attr("chunk_size: int")
   .Attr("subchunk_size: int")
   .Attr("wait_time_secs: float = 0.0")
   .Input("buffer_list_pool: Ref(string)")

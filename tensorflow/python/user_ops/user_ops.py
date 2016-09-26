@@ -273,9 +273,9 @@ def _SnapAlignAGDParallelShape(op):
 
 _na_string = "NullAligner"
 ops.NoGradient(_na_string)
-def NullAligner(buffer_list_pool, read, chunk_size, subchunk_size, extra_wait=0.0, name=None):
-  return gen_user_ops.null_aligner(buffer_list_pool=buffer_list_pool, read=read, chunk_size=chunk_size,
-                                              subchunk_size=subchunk_size, wait_time_secs=extra_wait, name=name)
+def NullAligner(buffer_list_pool, read, subchunk_size, extra_wait=0.0, name=None):
+  return gen_user_ops.null_aligner(buffer_list_pool=buffer_list_pool, read=read, subchunk_size=subchunk_size, 
+          wait_time_secs=extra_wait, name=name)
 
 @ops.RegisterShape(_na_string)
 def _NullAligner(op):
