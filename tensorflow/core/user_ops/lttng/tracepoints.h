@@ -57,14 +57,25 @@ TRACEPOINT_EVENT(
                            )
                  )
 
-TRACEPOINT_EVENT(
+#define PLAIN_DURATION_ARGS TP_ARGS(std::chrono::microseconds, duration)
+TRACEPOINT_EVENT_CLASS(
                  bioflow,
-                 chunk_aligned,
-                 TP_ARGS(std::chrono::microseconds, duration),
+                 plain_duration, //chunk_aligned,
+                 PLAIN_DURATION_ARGS,
                  TP_FIELDS(
                            DURATION_FIELD(duration)
                            )
                  )
+
+#define PLAIN_DURATION_INSTANCE(_name)            \
+  TRACEPOINT_EVENT_INSTANCE(                      \
+                            bioflow,              \
+                            plain_duration,       \
+                            _name,                \
+                            PLAIN_DURATION_ARGS )
+
+PLAIN_DURATION_INSTANCE(chunk_aligned)
+PLAIN_DURATION_INSTANCE(ceph_read)
 
 // Used to check when the first key starts (to get accurate start info, to subtract from Tensorflow startup stuff)
 TRACEPOINT_EVENT(

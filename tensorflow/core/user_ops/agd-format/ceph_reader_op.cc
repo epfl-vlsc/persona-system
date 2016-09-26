@@ -101,7 +101,10 @@ file_name: a Tensor() of string for the unique key for this file
       OP_REQUIRES_OK(ctx, ref_pool_->GetResource(&rec_buffer));
       rec_buffer->get()->reset();
 
+      read_only_start_ = chrono::high_resolution_clock::now();
       OP_REQUIRES_OK(ctx, CephReadObject(file_key.c_str(), rec_buffer));
+      auto duration = TRACEPOINT_DURATION_CALC(read_only_start_);
+      tracepoint(bioflow, ceph_read, duration);
 
       // Output tensors
       OP_REQUIRES_OK(ctx, rec_buffer->allocate_output("file_handle", ctx));
@@ -111,12 +114,12 @@ file_name: a Tensor() of string for the unique key for this file
       auto scalar = file_name->vec<string>();
       scalar(0) = file_key;
 
-      auto duration = TRACEPOINT_DURATION_CALC(start);
+      duration = TRACEPOINT_DURATION_CALC(start);
       tracepoint(bioflow, chunk_read, file_key.c_str(), duration);
     }
 
   private:
-    chrono::high_resolution_clock::time_point start;
+    chrono::high_resolution_clock::time_point start, read_only_start_;
     string cluster_name;
     string user_name;
     string pool_name;
