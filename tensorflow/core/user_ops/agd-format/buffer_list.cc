@@ -63,8 +63,8 @@ namespace tensorflow {
   void BufferList::decrement_outstanding() {
     auto previous = outstanding_buffers_.fetch_sub(1, memory_order_relaxed);
     if (previous == 1) {
-      tracepoint(bioflow, chunk_aligned,
-                 chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - process_start_));
+      auto duration = TRACEPOINT_DURATION_CALC(process_start_);
+      tracepoint(bioflow, chunk_aligned, duration);
       ready_cv_.notify_one();
     }
   }

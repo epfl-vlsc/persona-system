@@ -202,8 +202,8 @@ compress: whether or not to compress the column
       auto ret = io_ctx.write_full(full_path, write_buf);
       OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
 
-      tracepoint(bioflow, chunk_read, filepath.c_str(),
-                 chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start));
+      auto duration = TRACEPOINT_DURATION_CALC(start);
+      tracepoint(bioflow, chunk_read, filepath.c_str(), duration);
 
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &num_recs));

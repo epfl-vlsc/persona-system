@@ -195,8 +195,8 @@ Thus we always need 3 of these for the full conversion pipeline
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &key_out));
       key_out->scalar<string>()() = filepath;
 
-      tracepoint(bioflow, chunk_read, filepath.c_str(),
-                 chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start));
+      auto duration = TRACEPOINT_DURATION_CALC(start);
+      tracepoint(bioflow, chunk_read, filepath.c_str(), duration);
     }
 
   private:

@@ -127,8 +127,8 @@ file_names: [{this map op's name}] + upstream_name
       handles_matrix(max_dim, 0) = mmf->container();
       handles_matrix(max_dim, 1) = mmf->name();
 
-      tracepoint(bioflow, chunk_read, file_key.c_str(),
-                 chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start));
+      auto duration = TRACEPOINT_DURATION_CALC(start);
+      tracepoint(bioflow, chunk_read, file_key.c_str(), duration);
     }
   private:
     chrono::high_resolution_clock::time_point start;
@@ -183,8 +183,8 @@ file_names: [{this map op's name}] + upstream_name
       auto scalar = file_name->vec<string>();
       scalar(0) = filename;
 
-      tracepoint(bioflow, chunk_read, filename.c_str(),
-                 chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start));
+      auto duration = TRACEPOINT_DURATION_CALC(start);
+      tracepoint(bioflow, chunk_read, filename.c_str(), duration);
     }
   private:
     chrono::high_resolution_clock::time_point start;

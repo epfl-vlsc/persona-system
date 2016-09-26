@@ -111,8 +111,8 @@ file_name: a Tensor() of string for the unique key for this file
       auto scalar = file_name->vec<string>();
       scalar(0) = file_key;
 
-      tracepoint(bioflow, chunk_read, file_key.c_str(),
-                 chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start));
+      auto duration = TRACEPOINT_DURATION_CALC(start);
+      tracepoint(bioflow, chunk_read, file_key.c_str(), duration);
     }
 
   private:
