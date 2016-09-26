@@ -29,7 +29,7 @@ namespace tensorflow {
   // TODO these can be collapsed into a vec(3) if that would help performance
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
-  .Output("num_records_out: int32")
+  .Output("key_out: string")
   .SetIsStateful()
   .Doc(R"doc(
 Writes out a column (just a character buffer) to the location specified by the input.
@@ -191,11 +191,12 @@ Thus we always need 3 of these for the full conversion pipeline
 
       OP_REQUIRES_OK(ctx, s); // in case s screws up
 
-      Tensor *num_recs;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records_out", TensorShape({}), &num_recs));
-      num_recs->scalar<int32>()() = num_records;
+      Tensor *key_out;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &key_out));
+      key_out->scalar<string>()() = filepath;
 
-      tracepoint(bioflow, chunk_write, filepath.c_str(), start);
+      tracepoint(bioflow, chunk_read, filepath.c_str(),
+                 chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start));
     }
 
   private:

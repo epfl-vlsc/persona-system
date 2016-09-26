@@ -13,23 +13,11 @@
 
 // All of your tracepoint definitions must go before the endif!
 
-#define DURATION_CALC(_start) (std::chrono::duration_cast<std::chrono::duration<uint64_t, std::micro>>(std::chrono::high_resolution_clock::now() - _start).count())
-#define DURATION_FIELD(_arg_name) ctf_integer(uint64_t, duration, DURATION_CALC(_arg_name))
+#define DURATION_FIELD(_arg_name) ctf_integer(uint64_t, duration, _arg_name.count())
 #define POINTER_FIELD(_field_name, _arg_name) ctf_integer(uintptr_t, _field_name, (uintptr_t) _arg_name)
 
-#define POINTER_TIMESTAMP_ARGS TP_ARGS(void*, pointer)
-TRACEPOINT_EVENT_CLASS(
-                       bioflow,
-                       pointer_timestamp,
-                       POINTER_TIMESTAMP_ARGS,
-                       TP_FIELDS(
-                                 POINTER_FIELD(id, pointer)
-                                 ctf_integer(clock_t, timestamp, clock())
-                                 )
-                       )
-
 #define STRING_DURATION_ARGS TP_ARGS(const char*, s, \
-                                     std::chrono::high_resolution_clock::time_point, start)
+                                     std::chrono::microseconds, duration)
 
 TRACEPOINT_EVENT_CLASS(
                        bioflow,
@@ -37,7 +25,7 @@ TRACEPOINT_EVENT_CLASS(
                        STRING_DURATION_ARGS,
                        TP_FIELDS(
                                  ctf_string(string_val, s)
-                                 DURATION_FIELD(start)
+                                 DURATION_FIELD(duration)
                                  )
                        )
 
@@ -71,8 +59,10 @@ TRACEPOINT_EVENT(
 TRACEPOINT_EVENT(
                  bioflow,
                  chunk_aligned,
-                 TP_ARGS(std::chrono::high_resolution_clock::time_point, start),
-                 TP_FIELDS(DURATION_FIELD(start))
+                 TP_ARGS(std::chrono::microseconds, duration),
+                 TP_FIELDS(
+                           DURATION_FIELD(duration)
+                           )
                  )
 
 // Used to check when the first key starts (to get accurate start info, to subtract from Tensorflow startup stuff)
