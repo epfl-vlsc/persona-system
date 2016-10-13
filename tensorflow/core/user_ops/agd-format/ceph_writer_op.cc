@@ -79,41 +79,21 @@ compress: whether or not to compress the column
       int ret = 0;
       /* Initialize the cluster handle with the "ceph" cluster name and "client.admin" user */
       ret = cluster.init2(user_name.c_str(), cluster_name.c_str(), 0);
-      if (ret < 0) {
-        LOG(ERROR) << "Couldn't initialize the cluster handle! error " << ret;
-        exit(EXIT_FAILURE);
-      } else {
-        VLOG(DEBUG) << "Created a cluster handle.";
-      }
+      OP_REQUIRES(ctx, ret == 0, Internal("Ceph cluster init2\nUsername: ", user_name, "\nCluster Name: ", cluster_name, "\nReturn code: ", ret));
 
       /* Read a Ceph configuration file to configure the cluster handle. */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("ceph_conf_path", &ceph_conf));
       ret = cluster.conf_read_file(ceph_conf.c_str());
-      if (ret < 0) {
-        LOG(ERROR) << "Couldn't read the Ceph configuration file! error " << ret;
-        exit(EXIT_FAILURE);
-      } else {
-        VLOG(DEBUG) << "Read the Ceph configuration file.";
-      }
+      OP_REQUIRES(ctx, ret == 0, Internal("Ceph conf file at '", ceph_conf, "' returned ", ret, " when attempting to open"));
 
       /* Connect to the cluster */
       ret = cluster.connect();
-      if (ret < 0) {
-        LOG(ERROR) << "Couldn't connect to cluster! error " << ret;
-        exit(EXIT_FAILURE);
-      } else {
-        VLOG(DEBUG) << "Connected to the cluster.";
-      }
-      
+      OP_REQUIRES(ctx, ret == 0, Internal("Cluster connect returned: ", ret));
+
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
       ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
-      if (ret < 0) {
-        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
-        exit(EXIT_FAILURE);
-      } else {
-        VLOG(DEBUG) << "Created an ioctx for the pool.";
-      }
+      OP_REQUIRES(ctx, ret == 0, Internal("ceph writer couldn't set up ioctx! error code: ", ret));
     }
 
     ~CephWriterOp() {
