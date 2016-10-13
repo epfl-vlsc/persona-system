@@ -203,7 +203,7 @@ compress: whether or not to compress the column
       OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
 
       auto duration = TRACEPOINT_DURATION_CALC(start);
-      tracepoint(bioflow, chunk_read, filepath.c_str(), duration);
+      tracepoint(bioflow, chunk_write, filepath.c_str(), duration);
 
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &num_recs));
