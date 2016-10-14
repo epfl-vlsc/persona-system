@@ -76,6 +76,7 @@ TRACEPOINT_EVENT_CLASS(
 
 PLAIN_DURATION_INSTANCE(chunk_aligned)
 PLAIN_DURATION_INSTANCE(ceph_read)
+PLAIN_DURATION_INSTANCE(ceph_write)
 
 // Used to check when the first key starts (to get accurate start info, to subtract from Tensorflow startup stuff)
 TRACEPOINT_EVENT(

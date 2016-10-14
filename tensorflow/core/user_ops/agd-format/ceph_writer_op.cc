@@ -104,7 +104,7 @@ compress: whether or not to compress the column
     }
 
     void Compute(OpKernelContext* ctx) override {
-      start = chrono::high_resolution_clock::now();
+      auto start = chrono::high_resolution_clock::now();
       const Tensor *path, *column_t;
       OP_REQUIRES_OK(ctx, ctx->input("file_name", &path));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
@@ -175,14 +175,18 @@ compress: whether or not to compress the column
         }
       }
 
+      auto write_only_start = chrono::high_resolution_clock::now();
       write_buf.clear();
       write_buf.push_back(ceph::buffer::create_static(index_.size(), const_cast<char*>(index_.data())));
       write_buf.push_back(ceph::buffer::create_static(payload_.size(), const_cast<char*>(payload_.data())));
 
       auto ret = io_ctx.write_full(full_path, write_buf);
       OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
+      auto duration = TRACEPOINT_DURATION_CALC(write_only_start);
+      LOG(DEBUG) << "Write duration: " << duration.count();
+      tracepoint(bioflow, ceph_write, duration);
 
-      auto duration = TRACEPOINT_DURATION_CALC(start);
+      duration = TRACEPOINT_DURATION_CALC(start);
       tracepoint(bioflow, chunk_write, filepath.c_str(), duration);
 
       Tensor *num_recs;
@@ -191,7 +195,6 @@ compress: whether or not to compress the column
     }
 
   private:
-    chrono::high_resolution_clock::time_point start;
     string cluster_name;
     string user_name;
     string pool_name;
