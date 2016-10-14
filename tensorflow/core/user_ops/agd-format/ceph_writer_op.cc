@@ -183,7 +183,6 @@ compress: whether or not to compress the column
       auto ret = io_ctx.write_full(full_path, write_buf);
       OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
       auto duration = TRACEPOINT_DURATION_CALC(write_only_start);
-      LOG(DEBUG) << "Write duration: " << duration.count();
       tracepoint(bioflow, ceph_write, duration);
 
       duration = TRACEPOINT_DURATION_CALC(start);
