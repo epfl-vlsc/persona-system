@@ -252,9 +252,13 @@ def _AlignerOptionsShape(op):
 
 _saap_string = "SnapAlignAGDParallel"
 ops.NoGradient(_saap_string)
-def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, num_threads, subchunk_size, work_queue_size=10, sam_format=False, name=None):
+def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, num_threads, subchunk_size, work_queue_size=3, sam_format=False, name=None):
   if num_threads < 1:
     raise EnvironmentError("number of threads must be greater than 0. Got {}".format(num_threads))
+  if work_queue_size < 1:
+    raise EnvironmentError("work queue size must be strictly positive. Got {}".format(work_queue_size))
+  if subchunk_size < 1:
+    raise EnvironmentError("must have a positive size for subchunks. Got {}".format(subchunk_size))
   return gen_user_ops.snap_align_agd_parallel(genome_handle=genome, options_handle=options, num_threads=num_threads,
                                               buffer_list_pool=buffer_list_pool, read=read,
                                               subchunk_size=subchunk_size, work_queue_size=work_queue_size, sam_format=sam_format, name=name)
@@ -274,7 +278,7 @@ def _SnapAlignAGDParallelShape(op):
 _na_string = "NullAligner"
 ops.NoGradient(_na_string)
 def NullAligner(buffer_list_pool, read, subchunk_size, extra_wait=0.0, name=None):
-  return gen_user_ops.null_aligner(buffer_list_pool=buffer_list_pool, read=read, subchunk_size=subchunk_size, 
+  return gen_user_ops.null_aligner(buffer_list_pool=buffer_list_pool, read=read, subchunk_size=subchunk_size,
           wait_time_secs=extra_wait, name=name)
 
 @ops.RegisterShape(_na_string)

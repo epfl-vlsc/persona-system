@@ -434,7 +434,7 @@ private:
   REGISTER_OP("SnapAlignAGDParallel")
   .Attr("num_threads: int")
   .Attr("subchunk_size: int")
-  .Attr("work_queue_size: int = 10")
+  .Attr("work_queue_size: int = 3")
   .Attr("sam_format: bool = false")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
