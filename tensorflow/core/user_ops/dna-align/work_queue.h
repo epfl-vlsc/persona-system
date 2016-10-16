@@ -1,6 +1,4 @@
-
-#ifndef TENSORFLOW_USER_OPS_WORK_QUEUE_H_
-#define TENSORFLOW_USER_OPS_WORK_QUEUE_H_
+#pragma once
 
 #include <queue>
 #include <utility>
@@ -201,6 +199,4 @@ template <typename T>
 int64 WorkQueue<T>::num_peek_waits() { return num_peek_waits_; }
 
 }  // namespace tensorflow
-
-#endif
 
