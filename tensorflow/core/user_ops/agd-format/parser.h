@@ -53,7 +53,7 @@ namespace tensorflow {
     void reset();
 
     Buffer conversion_scratch_, index_scratch_;
-    const format::RecordTable *records = nullptr;
+    const format::RelativeIndex *records = nullptr;
   };
 
 }  //  namespace tensorflow {

@@ -13,8 +13,7 @@
    limitations under the License.
    ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_USER_OPS_FORMAT_H_
-#define TENSORFLOW_CORE_USER_OPS_FORMAT_H_
+#pragma once
 
 #include <cstdint>
 #include <vector>
@@ -25,10 +24,7 @@
 
 namespace tensorflow {
 namespace format {
-  struct __attribute__((packed)) RecordTable {
-    typedef uint8_t IndexValue;
-    IndexValue relative_index[];
-  };
+  typedef uint8_t RelativeIndex;
 
   const uint8_t current_major = 0;
   const uint8_t current_minor = 1;
@@ -116,5 +112,3 @@ namespace format {
 
 } // namespace format
 } // namespace tensorflow
-
-#endif // TENSORFLOW_CORE_USER_OPS_FORMAT_H_

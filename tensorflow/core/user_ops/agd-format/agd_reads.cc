@@ -13,29 +13,29 @@ namespace tensorflow {
     bases_(bases), quals_(quals), meta_(meta), num_records_(num_records)
   {
     // TODO probably chain this with the other constructor
-    auto idx_offset = num_records * sizeof(RecordTable::IndexValue);
+    auto idx_offset = num_records * sizeof(RelativeIndex);
     auto b = bases->get()->data();
-    base_idx_ = reinterpret_cast<const RecordTable*>(b);
+    base_idx_ = reinterpret_cast<const RelativeIndex*>(b);
     base_data_ = b + idx_offset;
 
     auto q = quals->get()->data();
-    qual_idx_ = reinterpret_cast<const RecordTable*>(q);
+    qual_idx_ = reinterpret_cast<const RelativeIndex*>(q);
     qual_data_ = q + idx_offset;
 
     auto m = meta->get()->data();
-    meta_idx_ = reinterpret_cast<const RecordTable*>(m);
+    meta_idx_ = reinterpret_cast<const RelativeIndex*>(m);
     meta_data_ = m + idx_offset;
   }
 
   AGDReadResource::AGDReadResource(size_t num_records, DataContainer *bases, DataContainer *quals) : bases_(bases), quals_(quals), num_records_(num_records)
   {
-    auto idx_offset = num_records * sizeof(RecordTable::IndexValue);
+    auto idx_offset = num_records * sizeof(RelativeIndex);
     auto b = bases->get()->data();
-    base_idx_ = reinterpret_cast<const RecordTable*>(b);
+    base_idx_ = reinterpret_cast<const RelativeIndex*>(b);
     base_data_ = b + idx_offset;
 
     auto q = quals->get()->data();
-    qual_idx_ = reinterpret_cast<const RecordTable*>(q);
+    qual_idx_ = reinterpret_cast<const RelativeIndex*>(q);
     qual_data_ = q + idx_offset;
   }
 
@@ -74,7 +74,7 @@ namespace tensorflow {
   bool AGDReadResource::reset_iter()
   {
     record_idx_ = 0;
-    auto idx_offset = num_records_ * sizeof(RecordTable::IndexValue);
+    auto idx_offset = num_records_ * sizeof(RelativeIndex);
     base_data_ = bases_->get()->data() + idx_offset;
     qual_data_ = quals_->get()->data() + idx_offset;
     if (has_metadata()) {
@@ -99,12 +99,12 @@ namespace tensorflow {
                                             const char **qualities, std::size_t *qualities_length)
   {
     if (record_idx_ < num_records_) {
-      auto base_len = base_idx_->relative_index[record_idx_];
+      auto base_len = base_idx_[record_idx_];
       *bases_length = base_len;
       *bases = base_data_;
       base_data_  += base_len;
 
-      auto qual_len = qual_idx_->relative_index[record_idx_];
+      auto qual_len = qual_idx_[record_idx_];
       *qualities_length = qual_len;
       *qualities = qual_data_;
       qual_data_ += qual_len;
@@ -122,17 +122,17 @@ namespace tensorflow {
                                             const char **metadata, std::size_t *metadata_length)
   {
     if (record_idx_ < num_records_) {
-      auto base_len = base_idx_->relative_index[record_idx_];
+      auto base_len = base_idx_[record_idx_];
       *bases_length = base_len;
       *bases = base_data_;
       base_data_  += base_len;
 
-      auto qual_len = qual_idx_->relative_index[record_idx_];
+      auto qual_len = qual_idx_[record_idx_];
       *qualities_length = qual_len;
       *qualities = qual_data_;
       qual_data_ += qual_len;
 
-      auto meta_len = meta_idx_->relative_index[record_idx_];
+      auto meta_len = meta_idx_[record_idx_];
       *metadata_length = meta_len;
       *metadata = meta_data_;
       meta_data_ += meta_len;
@@ -197,8 +197,8 @@ namespace tensorflow {
 
       // actually advance the records
       for (decltype(i) j = i; j < max_range; ++j) {
-        base_start += base_idx_->relative_index[j];
-        qual_start += qual_idx_->relative_index[j];
+        base_start += base_idx_[j];
+        qual_start += qual_idx_[j];
       }
     }
     sub_resource_index_.store(0, memory_order_relaxed);
@@ -228,12 +228,12 @@ namespace tensorflow {
                                                const char **qualities, size_t *qualities_length)
   {
     if (current_idx_ < max_idx_) {
-      auto base_len = base_idx_->relative_index[current_idx_];
+      auto base_len = base_idx_[current_idx_];
       *bases_length = base_len;
       *bases = base_data_;
       base_data_  += base_len;
 
-      auto qual_len = qual_idx_->relative_index[current_idx_++];
+      auto qual_len = qual_idx_[current_idx_++];
       *qualities_length = qual_len;
       *qualities = qual_data_;
       qual_data_ += qual_len;
