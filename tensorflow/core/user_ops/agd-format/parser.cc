@@ -169,14 +169,14 @@ namespace tensorflow {
 
       uint8_t current_record_length;
       const char* start_ptr = &(*result_buffer)[index_size];
-      const BinaryBaseRecord *bases;
+      const BinaryBases *bases;
 
       for (uint64_t i = 0; i < index_size; ++i) {
         current_record_length = records[i];
-        bases = reinterpret_cast<const BinaryBaseRecord*>(start_ptr);
+        bases = reinterpret_cast<const BinaryBases*>(start_ptr);
         start_ptr += current_record_length;
 
-        TF_RETURN_IF_ERROR(bases->append(current_record_length, conversion_scratch_, index_scratch_));
+        TF_RETURN_IF_ERROR(append(bases, current_record_length, conversion_scratch_, index_scratch_));
       }
 
       // append everything in converted_records to the index

@@ -27,7 +27,7 @@ namespace {
   }};
 }
 
-Status BinaryBaseRecord::append(const std::size_t record_size_in_bytes, Buffer &data, Buffer &lengths) const
+Status append(const BinaryBases* bases, const std::size_t record_size_in_bytes, Buffer &data, Buffer &lengths)
 {
   if (record_size_in_bytes % sizeof(uint64_t) != 0) {
     return InvalidArgument("Size of record ", record_size_in_bytes, " is not a multiple of ", sizeof(uint64_t));
@@ -110,7 +110,7 @@ BinaryBases::getBase(const size_t position, char* base) const
 }
 
 Status
-BinaryBaseRecord::IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases)
+IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases)
 {
   size_t base_idx = 0;
   BinaryBases bb;

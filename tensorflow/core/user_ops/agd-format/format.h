@@ -100,15 +100,9 @@ namespace format {
     Status setBaseAtPosition(const BaseAlphabet base, const std::size_t position);
   };
 
-  struct __attribute__((packed)) BinaryBaseRecord {
+  Status append(const BinaryBases *bases, const std::size_t record_size_in_bytes, Buffer &data, Buffer &lengths);
 
-    Status append(const std::size_t record_size_in_bytes, Buffer &data, Buffer &lengths) const;
-
-    BinaryBases bases[]; // relative length stored in the RecordTable.relative_index
-
-    static Status
-    IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases);
-  };
+  Status IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases);
 
 } // namespace format
 } // namespace tensorflow
