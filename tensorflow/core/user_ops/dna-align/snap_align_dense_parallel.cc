@@ -135,7 +135,6 @@ class SnapAlignAGDParallelOp : public OpKernel {
     }
 
     OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
-    kernel_start = clock();
 
     ResourceContainer<ReadResource> *reads_container;
     const Tensor *read_input;
@@ -161,8 +160,8 @@ class SnapAlignAGDParallelOp : public OpKernel {
     t_last = std::chrono::high_resolution_clock::now();
   }
 
+
 private:
-  clock_t kernel_start;
   uint64 total_usec = 0;
   uint64 total_invoke_intervals = 0;
   bool first = true;
