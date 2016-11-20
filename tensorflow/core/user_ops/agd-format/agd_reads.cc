@@ -56,6 +56,8 @@ namespace tensorflow {
 
     num_records_ = other.num_records_;
     record_idx_ = other.record_idx_;
+    sub_resources_ = move(other.sub_resources_);
+    sub_resource_index_ = other.sub_resource_index_.exchange(0, memory_order_relaxed);
 
     other.bases_ = nullptr;
     other.quals_ = nullptr;

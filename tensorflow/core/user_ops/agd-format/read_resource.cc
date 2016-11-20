@@ -41,10 +41,26 @@ namespace tensorflow {
 
   void ReadResource::release() {}
 
-  ReadResourceReleaser::ReadResourceReleaser(ReadResource &r) : rr_(r) {}
+  ReadResourceReleaser::ReadResourceReleaser(ReleasableRead &r) : rr_(r) {}
 
   ReadResourceReleaser::~ReadResourceReleaser()
   {
     rr_.release();
+  }
+
+  size_t PairedReadResource::num_records() { return 0; }
+
+  bool PairedReadResource::reset_iter() { return false; }
+
+  void PairedReadResource::release() {}
+
+  Status PairedReadResource::split(size_t chunk, BufferList *bl)
+  {
+    return Unimplemented("resource splitting not supported for this resource");
+  }
+
+  Status PairedReadResource::get_next_subchunk(PairedReadResource **rr, BufferPair **b)
+  {
+    return Unimplemented("resource splitting not supported for this resource");
   }
 } // namespace tensorflow {

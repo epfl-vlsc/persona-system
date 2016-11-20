@@ -2,13 +2,19 @@
 
 #include "tensorflow/core/lib/core/status.h"
 #include "buffer_list.h"
-#include <vector>
+#include <array>
+#include <utility>
 #include <memory>
 #include <atomic>
 
 namespace tensorflow {
 
-  class ReadResource {
+  class ReleasableRead {
+  public:
+    virtual void release() = 0;
+  };
+
+  class ReadResource : public ReleasableRead {
   public:
     // TODO how to declare properly?
     virtual ~ReadResource();
@@ -33,7 +39,7 @@ namespace tensorflow {
     // Non-reset supporting iterators may return false
     virtual bool reset_iter();
 
-    virtual void release();
+    virtual void release() override;
 
     // Only valid if the subclass implements subchunks
     virtual Status split(std::size_t chunk, BufferList *bl);
@@ -44,11 +50,29 @@ namespace tensorflow {
   class ReadResourceReleaser
   {
   public:
-    ReadResourceReleaser(ReadResource &r);
+    ReadResourceReleaser(ReleasableRead &r);
     ~ReadResourceReleaser();
 
   private:
-    ReadResource &rr_;
+    ReleasableRead &rr_;
+  };
+
+  class PairedReadResource : public ReleasableRead {
+  public:
+    virtual Status get_next_record(std::array<std::pair<const char*, std::size_t>, 2> &bases, std::array<std::pair<const char*, std::size_t>, 2> &qualities) = 0;
+
+    virtual std::size_t num_records();
+
+    // Resets the iterator, and returns `true` only if the iterator was successfully reset
+    // Non-reset supporting iterators may return false
+    virtual bool reset_iter();
+
+    virtual void release() override;
+
+    // Only valid if the subclass implements subchunks
+    virtual Status split(std::size_t chunk, BufferList *bl);
+
+    virtual Status get_next_subchunk(PairedReadResource **rr, BufferPair **b);
   };
 
 } // namespace tensorflow {
