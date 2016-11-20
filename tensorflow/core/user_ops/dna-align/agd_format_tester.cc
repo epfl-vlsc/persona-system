@@ -111,7 +111,7 @@ namespace tensorflow {
 
       int cur_buflist_index = 0;
       Buffer* index = &rec_data_list[cur_buflist_index].index();
-      auto size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
+      auto size_index = reinterpret_cast<const format::RelativeIndex*>(&(*index)[0]);
       size_t size_index_size = index->size();
       size_t cur_size_index = 0;
       Buffer* data = &rec_data_list[cur_buflist_index].data();
@@ -125,7 +125,7 @@ namespace tensorflow {
           break;
         }
 
-        record_size = size_index->relative_index[cur_size_index];
+        record_size = size_index[cur_size_index];
         var_string_size = record_size - sizeof(format::AlignmentResult);
 
         agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
@@ -163,7 +163,7 @@ namespace tensorflow {
         if (cur_size_index == size_index_size - 1 && i != num_records - 1) {
           cur_buflist_index++;
           index = &rec_data_list[cur_buflist_index].index();
-          size_index = reinterpret_cast<const format::RecordTable*>(&(*index)[0]);
+          size_index = reinterpret_cast<const format::RelativeIndex*>(&(*index)[0]);
           size_index_size = index->size();
           cur_size_index = 0;
           data = &rec_data_list[cur_buflist_index].data();

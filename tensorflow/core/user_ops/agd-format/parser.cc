@@ -143,13 +143,13 @@ namespace tensorflow {
       return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", result_buffer->size());
     }
 
-    records = reinterpret_cast<const RecordTable*>(result_buffer->data());
+    records = reinterpret_cast<const RelativeIndex*>(result_buffer->data());
 
     if (verify) {
       size_t data_size = 0;
       // This iteration is expensive, which is why this is optional. Run with perf to get an idea
       for (uint64_t i = 0; i < index_size; ++i) {
-        data_size += records->relative_index[i];
+        data_size += records[i];
       }
 
       const size_t expected_size = result_buffer->size() - index_size;
@@ -169,14 +169,14 @@ namespace tensorflow {
 
       uint8_t current_record_length;
       const char* start_ptr = &(*result_buffer)[index_size];
-      const BinaryBaseRecord *bases;
+      const BinaryBases *bases;
 
       for (uint64_t i = 0; i < index_size; ++i) {
-        current_record_length = records->relative_index[i];
-        bases = reinterpret_cast<const BinaryBaseRecord*>(start_ptr);
+        current_record_length = records[i];
+        bases = reinterpret_cast<const BinaryBases*>(start_ptr);
         start_ptr += current_record_length;
 
-        TF_RETURN_IF_ERROR(bases->append(current_record_length, conversion_scratch_, index_scratch_));
+        TF_RETURN_IF_ERROR(append(bases, current_record_length, conversion_scratch_, index_scratch_));
       }
 
       // append everything in converted_records to the index

@@ -50,7 +50,7 @@ namespace tensorflow {
 
   private:
     DataContainer *bases_ = nullptr, *quals_ = nullptr, *meta_ = nullptr;
-    const format::RecordTable *base_idx_ = nullptr, *qual_idx_ = nullptr, *meta_idx_ = nullptr;
+    const format::RelativeIndex *base_idx_ = nullptr, *qual_idx_ = nullptr, *meta_idx_ = nullptr;
     const char *base_data_ = nullptr, *qual_data_ = nullptr, *meta_data_ = nullptr;
     std::size_t num_records_ = 0, record_idx_ = 0;
 
@@ -88,7 +88,7 @@ namespace tensorflow {
     std::size_t num_records() override;
 
   private:
-    const format::RecordTable *base_idx_, *qual_idx_, *meta_idx_;
+    const format::RelativeIndex *base_idx_, *qual_idx_, *meta_idx_;
     const char *base_data_, *base_start_, *qual_data_, *qual_start_, *meta_data_, *meta_start_;
     const std::size_t start_idx_, max_idx_;
     std::size_t current_idx_;
