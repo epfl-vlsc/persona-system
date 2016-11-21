@@ -24,8 +24,6 @@ namespace tensorflow {
     explicit AGDReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta);
     explicit AGDReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals);
 
-    // Be aware: don't use operator= in the prescence of data sharing
-    // this doesn't handle that correctly at all!
     AGDReadResource& operator=(AGDReadResource &&other);
 
     // WARNING: this method assumes that all fields are populated (qual, base, meta)
@@ -59,7 +57,6 @@ namespace tensorflow {
     AGDReadResource(const AGDReadResource &other) = delete;
     AGDReadResource& operator=(const AGDReadResource &other) = delete;
     AGDReadResource(AGDReadResource &&other) = delete;
-
     std::vector<AGDReadSubResource> sub_resources_;
     std::atomic_size_t sub_resource_index_;
     BufferList *buffer_list_ = nullptr;
