@@ -250,6 +250,15 @@ def AlignerOptions(cmdLine, name=None):
 def _AlignerOptionsShape(op):
     return [tensor_shape.vector(2)]
 
+_pao_str = "PairedAlignerOptions"
+ops.NoGradient(_pao_str)
+def PairedAlignerOptions(cmdLine, name=None):
+    return gen_user_ops.paired_aligner_options(cmd_line=cmdLine, name=name);
+
+@ops.RegisterShape(_pao_str)
+def _PairedAlignerOptionsShape(op):
+    return [tensor_shape.vector(2)]
+
 _saap_string = "SnapAlignAGDParallel"
 ops.NoGradient(_saap_string)
 def SnapAlignAGDParallel(genome, options, buffer_list_pool, read, num_threads, subchunk_size, work_queue_size=3, sam_format=False, name=None):

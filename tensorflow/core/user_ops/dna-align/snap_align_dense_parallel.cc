@@ -19,6 +19,7 @@
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
+#include "tensorflow/core/user_ops/object-pool/basic_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/agd-format/buffer_list.h"
 #include "tensorflow/core/user_ops/agd-format/column_builder.h"
@@ -92,7 +93,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
       TF_RETURN_IF_ERROR(snap_wrapper::init());
 
-      options_ = options_resource_->value();
+      options_ = options_resource_->get();
       genome_ = index_resource_->get_genome();
 
       /*if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
@@ -212,7 +213,7 @@ private:
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
       auto index = index_resource_->get_index();
-      auto options = options_resource_->value();
+      auto options = options_resource_->get();
 
       unsigned alignmentResultBufferCount;
       if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
@@ -410,7 +411,7 @@ private:
 
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   GenomeIndexResource* index_resource_ = nullptr;
-  AlignerOptionsResource* options_resource_ = nullptr;
+  BasicContainer<AlignerOptions>* options_resource_ = nullptr;
   const Genome *genome_ = nullptr;
   AlignerOptions* options_ = nullptr;
   int subchunk_size_;
