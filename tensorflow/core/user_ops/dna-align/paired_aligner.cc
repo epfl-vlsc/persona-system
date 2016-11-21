@@ -23,13 +23,15 @@
 #include "tensorflow/core/user_ops/agd-format/buffer_list.h"
 #include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
+#include "tensorflow/core/user_ops/object-pool/basic_container.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/ChimericPairedEndAligner.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/IntersectingPairedEndAligner.h"
 #include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include "GenomeIndex.h"
 #include "work_queue.h"
 #include "Read.h"
 #include "SnapAlignerWrapper.h"
 #include "genome_index_resource.h"
-#include "aligner_options_resource.h"
 #include "tensorflow/core/user_ops/agd-format/read_resource.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
@@ -56,10 +58,11 @@ class AGDPairedAlignerOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
+      subchunk_size_ *= 2;
 
       int capacity;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("work_queue_size", &capacity));
-      request_queue_.reset(new WorkQueue<shared_ptr<ResourceContainer<ReadResource>>>(capacity * 2));
+      request_queue_.reset(new WorkQueue<shared_ptr<ResourceContainer<ReadResource>>>(capacity));
       compute_status_ = Status::OK();
     }
 
@@ -107,28 +110,23 @@ class AGDPairedAlignerOp : public OpKernel {
 
     OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
 
-    ResourceContainer<ReadResource> *reads_container_0, *reads_container_1;
-    OP_REQUIRES_OK(ctx, GetInput(ctx, "read_0", &reads_container_0));
-    OP_REQUIRES_OK(ctx, GetInput(ctx, "read_1", &reads_container_1));
+    ResourceContainer<ReadResource> *reads_container;
+    OP_REQUIRES_OK(ctx, GetInput(ctx, "read", &reads_container));
 
-    core::ScopedUnref a0(reads_container_0), a1(reads_container_1);
-    auto reads_0 = reads_container_0->get(), reads_1 = reads_container_1->get();
+    core::ScopedUnref a(reads_container);
+    auto reads = reads_container->get();
 
-    ResourceContainer<BufferList> *bufferlist_resource_container_0, *bufferlist_resource_container_1;
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container_0));
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container_1));
+    ResourceContainer<BufferList> *bufferlist_resource_container;
+    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
 
-    auto alignment_result_buffer_list_0 = bufferlist_resource_container_0->get(), alignment_result_buffer_list_1 = bufferlist_resource_container_1->get();
+    auto alignment_result_buffer_list = bufferlist_resource_container->get();
 
-    OP_REQUIRES_OK(ctx, reads_0->split(subchunk_size_, alignment_result_buffer_list_0));
-    OP_REQUIRES_OK(ctx, reads_1->split(subchunk_size_, alignment_result_buffer_list_1));
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
 
     if (sam_format_) {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container_0, no_resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container_1, no_resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
+      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
     } else {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container_0, resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container_1, resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
+      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
     }
     t_last = std::chrono::high_resolution_clock::now();
   }
@@ -170,7 +168,7 @@ private:
     TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
     TF_RETURN_IF_ERROR(snap_wrapper::init());
 
-    options_ = options_resource_->value();
+    options_ = options_resource_->get();
     genome_ = index_resource_->get_genome();
 
     /*if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
@@ -221,57 +219,77 @@ private:
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
       auto index = index_resource_->get_index();
-      auto options = options_resource_->value();
 
-      unsigned alignmentResultBufferCount;
-      if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
-          alignmentResultBufferCount = 1; // For the primary alignment
+      int maxReadSize = MAX_READ_LENGTH;
+      size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(index, options_->intersectingAlignerMaxHits, options_->maxReadSize, index->getSeedLength(), 
+                                                                                       options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxDist, options_->extraSearchDepth, options_->maxCandidatePoolSize,
+                                                                                       options_->maxSecondaryAlignmentsPerContig);
+
+      memoryPoolSize += ChimericPairedEndAligner::getBigAllocatorReservation(index, options_->maxReadSize, options_->maxHits, index->getSeedLength(), options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxDist,
+                                                                             options_->extraSearchDepth, options_->maxCandidatePoolSize, options_->maxSecondaryAlignmentsPerContig);
+
+      unsigned maxPairedSecondaryHits, maxSingleSecondaryHits;
+
+      if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+        maxPairedSecondaryHits = 0;
+        maxSingleSecondaryHits = 0;
       } else {
-          alignmentResultBufferCount = BaseAligner::getMaxSecondaryResults(options->numSeedsFromCommandLine, options->seedCoverage,
-              MAX_READ_LENGTH, options->maxHits, index->getSeedLength()) + 1; // +1 for the primary alignment
+        maxPairedSecondaryHits = IntersectingPairedEndAligner::getMaxSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxReadSize, options_->maxHits, index->getSeedLength(), options_->minSpacing, options_->maxSpacing);
+        maxSingleSecondaryHits = ChimericPairedEndAligner::getMaxSingleEndSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxReadSize, options_->maxHits, index->getSeedLength());
       }
-      size_t alignmentResultBufferSize = sizeof(SingleAlignmentResult) * (alignmentResultBufferCount + 1); // +1 is for primary result
 
-      BigAllocator *allocator = new BigAllocator(BaseAligner::getBigAllocatorReservation(index, true,
-            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
-          + alignmentResultBufferSize);
+      memoryPoolSize += (1 + maxPairedSecondaryHits) * sizeof(PairedAlignmentResult) + maxSingleSecondaryHits * sizeof(SingleAlignmentResult);
 
-      /*LOG(INFO) << "reservation: " << BaseAligner::getBigAllocatorReservation(index, true,
-            options->maxHits, MAX_READ_LENGTH, index->getSeedLength(), options->numSeedsFromCommandLine, options->seedCoverage, options->maxSecondaryAlignmentsPerContig)
-          + alignmentResultBufferSize;*/
+      BigAllocator *allocator = new BigAllocator(memoryPoolSize);
 
-      BaseAligner* base_aligner = new (allocator) BaseAligner(
-        index,
-        options->maxHits,
-        options->maxDist,
-        MAX_READ_LENGTH,
-        options->numSeedsFromCommandLine,
-        options->seedCoverage,
-        options->minWeightToCheck,
-        options->extraSearchDepth,
-        false, false, false, // stuff that would decrease performance without impacting quality
-        options->maxSecondaryAlignmentsPerContig,
-        nullptr, nullptr, // Uncached Landau-Vishkin
-        nullptr, // No need for stats
-        allocator
-        );
-
+      IntersectingPairedEndAligner *intersectingAligner = new (allocator) IntersectingPairedEndAligner(index,
+                                                                                                       options_->maxReadSize,
+                                                                                                       options_->maxHits,
+                                                                                                       options_->maxDist,
+                                                                                                       options_->numSeedsFromCommandLine,
+                                                                                                       options_->seedCoverage,
+                                                                                                       options_->minSpacing,
+                                                                                                       options_->maxSpacing,
+                                                                                                       options_->intersectingAlignerMaxHits,
+                                                                                                       options_->extraSearchDepth,
+                                                                                                       options_->maxCandidatePoolSize,
+                                                                                                       options_->maxSecondaryAlignmentsPerContig,
+                                                                                                       allocator,
+                                                                                                       options_->noUkkonen,
+                                                                                                       options_->noOrderedEvaluation,
+                                                                                                       options_->noTruncation);
+      ChimericPairedEndAligner *aligner = new (allocator) ChimericPairedEndAligner(index,
+                                                                                   options_->maxReadSize,
+                                                                                   options_->maxHits,
+                                                                                   options_->maxDist,
+                                                                                   options_->numSeedsFromCommandLine,
+                                                                                   options_->seedCoverage,
+                                                                                   options_->minWeightToCheck,
+                                                                                   options_->forceSpacing,
+                                                                                   options_->extraSearchDepth,
+                                                                                   options_->noUkkonen,
+                                                                                   options_->noOrderedEvaluation,
+                                                                                   options_->noTruncation,
+                                                                                   intersectingAligner,
+                                                                                   options_->minReadLength,
+                                                                                   options_->maxSecondaryAlignmentsPerContig,
+                                                                                   allocator);
       allocator->checkCanaries();
 
-      base_aligner->setExplorePopularSeeds(options->explorePopularSeeds);
-      base_aligner->setStopOnFirstHit(options->stopOnFirstHit);
+      aligner->setExplorePopularSeeds(options_->explorePopularSeeds);
+      aligner->setStopOnFirstHit(options_->stopOnFirstHit);
 
       bool first_is_primary = true; // we only ever generate one result
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
-      SingleAlignmentResult primaryResult;
+      PairedAlignentResult primaryResult;
       int num_secondary_alignments = 0;
       int num_secondary_results;
       SAMFormat format(options_->useM);
       AlignmentResultBuilder result_builder;
       string cigarString;
       int flag;
-      Read snap_read;
+      Read snap_read[2];
       LandauVishkinWithCigar lvc;
 
       BufferPair* result_buf = nullptr;
@@ -279,6 +297,7 @@ private:
       Status io_chunk_status, subchunk_status;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
       //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
+      bool useless[2], pass[2], pass_all;
 
       time_log timeLog;
       uint64 total = 0;
@@ -291,7 +310,6 @@ private:
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
-        //LOG(INFO) << "starting new chunk";
         //timeLog.peek = std::chrono::high_resolution_clock::now();
 
         auto *reads = reads_container->get();
@@ -299,72 +317,51 @@ private:
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
         while (io_chunk_status.ok()) {
 
-          //timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
-          //auto subchunk_time = std::chrono::duration_cast<std::chrono::microseconds>(timeLog.start_subchunk - timeLog.end_subchunk);
-          //if (subchunk_time.count() >= 500)
-            //LOG(INFO) << "subchunk > 500";
-            //timeLog.print();
-          //total += subchunk_time.count();
-
           result_builder.set_buffer_pair(result_buf);
-          //LOG(INFO) << "starting new subchunk";
-          for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
-               subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
-            cigarString.clear();
-            snap_read.init(nullptr, 0, bases, qualities, bases_len);
-            snap_read.clip(options_->clipping);
-            if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
-              if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {
-                LOG(INFO) << "FILTERING READ";
+          while (subchunk_status.ok()) {
+            for (size_t i = 0, subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+                 i < 2 && subchunk_status.ok();
+                 ++i, subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
+              auto &sread = snap_read[i];
+              sread.init(nullptr, 0, bases, qualities, bases_len);
+              sread.clip(options_->clipping);
+              useless[i] = sread.getDataLength() < options->minReadLength && sread.countOfNs() > options->maxDist;
+            }
+            if (!subchunk_status.ok()) {
+              break;
+            }
+            if (useless[0] || useless[1]) {
+              pass[0] = options_->passFilter(snap_read[0], AlignmentResult::NotFound, true, false);
+              pass[1] = options_->passFilter(snap_read[1], AlignmentResult::NotFound, true, false);
+              pass_all = (options->filterFlags & AlignerOptions::FilterBothMatesMatch) ? (pass[0] && pass[1]) : (pass[1] || pass[1]);
+              if (pass_all) {
+                VLOG(INFO) << "FILTERING READ";
               } else {
+                // TODO we don't have a primary result anymore!
                 primaryResult.status = AlignmentResult::NotFound;
                 primaryResult.location = InvalidGenomeLocation;
                 primaryResult.mapq = 0;
                 primaryResult.direction = FORWARD;
-                if (sam_format_) {
-                  result_builder.AppendAlignmentResult(primaryResult);
-                } else {
-                  result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                for (size_t i = 0; i < 2; ++i) {
+                  if (sam_format_) {
+                    result_builder.AppendAlignmentResult(primaryResult);
+                  } else {
+                    result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                  }
                 }
               }
-              continue;
             }
 
-            base_aligner->AlignRead(
-                                    &snap_read,
-                                    &primaryResult,
-                                    options_->maxSecondaryAlignmentAdditionalEditDistance,
-                                    0, //num_secondary_alignments * sizeof(SingleAlignmentResult),
-                                    &num_secondary_results,
-                                    num_secondary_alignments,
-                                    nullptr //secondaryResults
-                                    );
-
-            flag = 0;
-
-            // TODO: rename it to sam_writer or smth
-            if (sam_format_){
-              result_builder.AppendAlignmentResult(primaryResult);
-            } else {
-              auto s = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
-                                                   options_->useM, lvc, genome_, cigarString, flag);
-
-              if (!s.ok()) {
-                LOG(ERROR) << "adjustResults did not return OK!!!";
-              }
-
-              //auto t1 = std::chrono::high_resolution_clock::now();
-
-
-              result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
-
-              //auto t2 = std::chrono::high_resolution_clock::now();
-              //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-              //LOG(INFO) << "append time " << time.count();
-            }
-
+            // TODO I'm not sure how much of the secondary alignments we can just ignore
+            aligner->align(&snap_read[0], &snap_read[1], options_->maxSecondaryAlignmentAdditionalEditDistance,
+                           0, // secondary results buffer size
+                           &num_secondary_results,
+                           nullptr, // secondary results buffer
+                           0, // single secondary buffer size
+                           0, // maxSecondaryAlignmentsToReturn
+                           nullptr, nullptr, nullptr); // more stuff related to secondary results
+                                                            flag = 0;
           }
-          //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
 
           if (!IsResourceExhausted(subchunk_status)) {
             LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
@@ -372,18 +369,13 @@ private:
             return;
           }
 
-          //result_builder.WriteResult(result_buf);
           result_buf->set_ready();
-          //timeLog.ready = std::chrono::high_resolution_clock::now();
-          //if (oldcapacity != newcapacity)
-            //LOG(INFO) << "buffer reallocated";
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
-         // timeLog.getnext = std::chrono::high_resolution_clock::now();
         }
 
         request_queue_->drop_if_equal(reads_container);
-        //timeLog.dropifequal = std::chrono::high_resolution_clock::now();
+
         if (!IsResourceExhausted(io_chunk_status)) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status << "\n";
           compute_status_ = io_chunk_status;
@@ -406,11 +398,16 @@ private:
       LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
       LOG(INFO) << "vol con sw: " << usage.ru_nvcsw << endl;
       LOG(INFO) << "invol con sw: " << usage.ru_nivcsw << endl;*/
-      base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
+
+      // This calls the destructor without calling operator delete, allocator owns the memory.
+      aligner->~ChimericPairedEndAligner();
+      intersectingAligner->~IntersectingPairedEndAligner();
       delete allocator;
+
       VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_--;
     };
+
     auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
     for (int i = 0; i < num_threads_; i++)
       worker_threadpool->Schedule(aligner_func);
@@ -419,9 +416,9 @@ private:
 
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   GenomeIndexResource* index_resource_ = nullptr;
-  AlignerOptionsResource* options_resource_ = nullptr;
+  BasicContainer<PairedAlignerOptions>* options_resource_ = nullptr;
   const Genome *genome_ = nullptr;
-  AlignerOptions* options_ = nullptr;
+  PairedAlignerOptions *options_ = nullptr;
   int subchunk_size_;
   bool sam_format_;
   volatile bool run_ = true;
@@ -447,10 +444,8 @@ private:
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
-  .Input("read_0: string")
-  .Input("read_1: string")
-  .Output("result_buf_handle_0: string")
-  .Output("result_buf_handle_1: string")
+  .Input("read: string")
+  .Output("result_buf_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
@@ -458,6 +453,8 @@ Loads the SNAP-based hash table into memory on construction to perform
 generation of alignment candidates.
 outputs a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
+
+Subchunk Size is the size in paired records. The actual chunk size will be 2x because of the pairing.
 )doc");
 
   REGISTER_KERNEL_BUILDER(Name("AGDPairedAligner").Device(DEVICE_CPU), AGDPairedAlignerOp);
