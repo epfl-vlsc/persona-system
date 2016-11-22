@@ -10,7 +10,6 @@
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
-#include "tensorflow/core/user_ops/dna-align/aligner_options_resource.h"
 #include "tensorflow/core/user_ops/object-pool/basic_container.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/PairedAligner.h" // for paired aligner options
 #include "tensorflow/core/lib/core/errors.h"

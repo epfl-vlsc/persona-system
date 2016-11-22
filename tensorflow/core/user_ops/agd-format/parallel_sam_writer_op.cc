@@ -1,4 +1,5 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
+#include "tensorflow/core/user_ops/object-pool/basic_container.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/logging.h"
@@ -20,7 +21,6 @@
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Read.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/DataWriter.h"
 #include "tensorflow/core/user_ops/dna-align/genome_index_resource.h"
-#include "tensorflow/core/user_ops/dna-align/aligner_options_resource.h"
 
 #define SAM_REVERSE_COMPLEMENT 0x10
 #define NUM_ARGS 5
@@ -201,7 +201,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
       genome_ = genome_resource_->get_genome();
 
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
-      options_ = options_resource_->value();
+      options_ = options_resource_->get();
 
       memset(&reader_context_, 0, sizeof(reader_context_));
 			reader_context_.clipping = options_->clipping;
@@ -229,7 +229,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
   
   private:
     GenomeIndexResource *genome_resource_ = nullptr;
-    AlignerOptionsResource *options_resource_ = nullptr;
+    BasicContainer<AlignerOptions>* options_resource_ = nullptr;
   	const Genome *genome_;
     string sam_file_path_;
 		AlignerOptions *options_; // Keep all the options in one place, similar to SNAP

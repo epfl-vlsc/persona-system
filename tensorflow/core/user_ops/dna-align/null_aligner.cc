@@ -31,7 +31,6 @@
 #include "Read.h"
 #include "SnapAlignerWrapper.h"
 #include "genome_index_resource.h"
-#include "aligner_options_resource.h"
 #include "tensorflow/core/user_ops/agd-format/read_resource.h"
 
 namespace tensorflow {

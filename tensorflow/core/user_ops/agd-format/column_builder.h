@@ -27,6 +27,11 @@ public:
 
   void AppendAlignmentResult(const SingleAlignmentResult &result);
 
+  // Methods for adding paired alignment results
+  void AppendAlignmentResult(const PairedAlignmentResult &result, const std::size_t result_idx, const std::string &var_string, const int flag);
+
+  void AppendAlignmentResult(const PairedAlignmentResult &result, const std::size_t result_idx);
+
   private:
     Buffer *data_ = nullptr, *index_ = nullptr;
     format::AlignmentResult converted_result;

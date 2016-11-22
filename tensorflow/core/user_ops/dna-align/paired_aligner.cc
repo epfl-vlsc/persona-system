@@ -26,6 +26,8 @@
 #include "tensorflow/core/user_ops/object-pool/basic_container.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/ChimericPairedEndAligner.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/IntersectingPairedEndAligner.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/PairedAligner.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
 #include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include "GenomeIndex.h"
 #include "work_queue.h"
@@ -221,11 +223,11 @@ private:
       auto index = index_resource_->get_index();
 
       int maxReadSize = MAX_READ_LENGTH;
-      size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(index, options_->intersectingAlignerMaxHits, options_->maxReadSize, index->getSeedLength(), 
+      size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(index, options_->intersectingAlignerMaxHits, maxReadSize, index->getSeedLength(), 
                                                                                        options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxDist, options_->extraSearchDepth, options_->maxCandidatePoolSize,
                                                                                        options_->maxSecondaryAlignmentsPerContig);
 
-      memoryPoolSize += ChimericPairedEndAligner::getBigAllocatorReservation(index, options_->maxReadSize, options_->maxHits, index->getSeedLength(), options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxDist,
+      memoryPoolSize += ChimericPairedEndAligner::getBigAllocatorReservation(index, maxReadSize, options_->maxHits, index->getSeedLength(), options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxDist,
                                                                              options_->extraSearchDepth, options_->maxCandidatePoolSize, options_->maxSecondaryAlignmentsPerContig);
 
       unsigned maxPairedSecondaryHits, maxSingleSecondaryHits;
@@ -234,8 +236,8 @@ private:
         maxPairedSecondaryHits = 0;
         maxSingleSecondaryHits = 0;
       } else {
-        maxPairedSecondaryHits = IntersectingPairedEndAligner::getMaxSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxReadSize, options_->maxHits, index->getSeedLength(), options_->minSpacing, options_->maxSpacing);
-        maxSingleSecondaryHits = ChimericPairedEndAligner::getMaxSingleEndSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxReadSize, options_->maxHits, index->getSeedLength());
+        maxPairedSecondaryHits = IntersectingPairedEndAligner::getMaxSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, maxReadSize, options_->maxHits, index->getSeedLength(), options_->minSpacing, options_->maxSpacing);
+        maxSingleSecondaryHits = ChimericPairedEndAligner::getMaxSingleEndSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, maxReadSize, options_->maxHits, index->getSeedLength());
       }
 
       memoryPoolSize += (1 + maxPairedSecondaryHits) * sizeof(PairedAlignmentResult) + maxSingleSecondaryHits * sizeof(SingleAlignmentResult);
@@ -243,7 +245,7 @@ private:
       BigAllocator *allocator = new BigAllocator(memoryPoolSize);
 
       IntersectingPairedEndAligner *intersectingAligner = new (allocator) IntersectingPairedEndAligner(index,
-                                                                                                       options_->maxReadSize,
+                                                                                                       maxReadSize,
                                                                                                        options_->maxHits,
                                                                                                        options_->maxDist,
                                                                                                        options_->numSeedsFromCommandLine,
@@ -259,7 +261,7 @@ private:
                                                                                                        options_->noOrderedEvaluation,
                                                                                                        options_->noTruncation);
       ChimericPairedEndAligner *aligner = new (allocator) ChimericPairedEndAligner(index,
-                                                                                   options_->maxReadSize,
+                                                                                   maxReadSize,
                                                                                    options_->maxHits,
                                                                                    options_->maxDist,
                                                                                    options_->numSeedsFromCommandLine,
@@ -276,13 +278,10 @@ private:
                                                                                    allocator);
       allocator->checkCanaries();
 
-      aligner->setExplorePopularSeeds(options_->explorePopularSeeds);
-      aligner->setStopOnFirstHit(options_->stopOnFirstHit);
-
       bool first_is_primary = true; // we only ever generate one result
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
-      PairedAlignentResult primaryResult;
+      PairedAlignmentResult primaryResult;
       int num_secondary_alignments = 0;
       int num_secondary_results;
       SAMFormat format(options_->useM);
@@ -299,11 +298,6 @@ private:
       //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
       bool useless[2], pass[2], pass_all;
 
-      time_log timeLog;
-      uint64 total = 0;
-      timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
-      std::chrono::high_resolution_clock::time_point end_time;
-
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
         shared_ptr<ResourceContainer<ReadResource>> reads_container;
@@ -319,48 +313,52 @@ private:
 
           result_builder.set_buffer_pair(result_buf);
           while (subchunk_status.ok()) {
-            for (size_t i = 0, subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
-                 i < 2 && subchunk_status.ok();
+            subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+            for (size_t i = 0; i < 2 && subchunk_status.ok();
                  ++i, subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
               auto &sread = snap_read[i];
               sread.init(nullptr, 0, bases, qualities, bases_len);
               sread.clip(options_->clipping);
-              useless[i] = sread.getDataLength() < options->minReadLength && sread.countOfNs() > options->maxDist;
+              useless[i] = sread.getDataLength() < options_->minReadLength && sread.countOfNs() > options_->maxDist;
             }
             if (!subchunk_status.ok()) {
               break;
             }
             if (useless[0] || useless[1]) {
-              pass[0] = options_->passFilter(snap_read[0], AlignmentResult::NotFound, true, false);
-              pass[1] = options_->passFilter(snap_read[1], AlignmentResult::NotFound, true, false);
-              pass_all = (options->filterFlags & AlignerOptions::FilterBothMatesMatch) ? (pass[0] && pass[1]) : (pass[1] || pass[1]);
+              pass[0] = options_->passFilter(&snap_read[0], AlignmentResult::NotFound, true, false);
+              pass[1] = options_->passFilter(&snap_read[1], AlignmentResult::NotFound, true, false);
+              pass_all = (options_->filterFlags & AlignerOptions::FilterBothMatesMatch) ? (pass[0] && pass[1]) : (pass[1] || pass[1]);
               if (pass_all) {
                 VLOG(INFO) << "FILTERING READ";
               } else {
-                // TODO we don't have a primary result anymore!
-                primaryResult.status = AlignmentResult::NotFound;
-                primaryResult.location = InvalidGenomeLocation;
-                primaryResult.mapq = 0;
-                primaryResult.direction = FORWARD;
+                // TODO change to the writePairs code for the new readWriter
                 for (size_t i = 0; i < 2; ++i) {
+                  primaryResult.status[i] = AlignmentResult::NotFound;
+                  primaryResult.location[i] = InvalidGenomeLocation;
+                  primaryResult.mapq[i] = 0;
+                  primaryResult.direction[i] = i; // TODO this is a hack! second direction = reverse. see directions.h in SNAP
                   if (sam_format_) {
-                    result_builder.AppendAlignmentResult(primaryResult);
+                    result_builder.AppendAlignmentResult(primaryResult, i);
                   } else {
-                    result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                    result_builder.AppendAlignmentResult(primaryResult, i, "*", 4);
                   }
                 }
               }
             }
 
             // TODO I'm not sure how much of the secondary alignments we can just ignore
-            aligner->align(&snap_read[0], &snap_read[1], options_->maxSecondaryAlignmentAdditionalEditDistance,
+            aligner->align(&snap_read[0], &snap_read[1],
+                           &primaryResult,
+                           options_->maxSecondaryAlignmentAdditionalEditDistance,
                            0, // secondary results buffer size
                            &num_secondary_results,
                            nullptr, // secondary results buffer
                            0, // single secondary buffer size
                            0, // maxSecondaryAlignmentsToReturn
                            nullptr, nullptr, nullptr); // more stuff related to secondary results
-                                                            flag = 0;
+            flag = 0;
+
+            // TODO need to write out the result!
           }
 
           if (!IsResourceExhausted(subchunk_status)) {
@@ -381,23 +379,7 @@ private:
           compute_status_ = io_chunk_status;
           return;
         }
-        end_time = std::chrono::high_resolution_clock::now();
       }
-
-      std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
-      /*struct rusage usage;
-      int ret = getrusage(RUSAGE_THREAD, &usage);*/
-
-      double total_s = (double)total / 1000000.0f;
-      /*LOG(INFO) << "Aligner thread total time is: " << thread_time.count() << " seconds";
-      LOG(INFO) << "Total time spent not processing" << total << " us";
-      LOG(INFO) << "Total time spent not processing" << total_s << " seconds";
-      LOG(INFO) << "system time used: " << usage.ru_stime.tv_sec << "." << usage.ru_stime.tv_usec << endl;
-      LOG(INFO) << "user time used: " << usage.ru_utime.tv_sec << "." << usage.ru_utime.tv_usec << endl;
-      LOG(INFO) << "maj page faults: " << usage.ru_minflt << endl;
-      LOG(INFO) << "min page faults: " << usage.ru_majflt << endl;
-      LOG(INFO) << "vol con sw: " << usage.ru_nvcsw << endl;
-      LOG(INFO) << "invol con sw: " << usage.ru_nivcsw << endl;*/
 
       // This calls the destructor without calling operator delete, allocator owns the memory.
       aligner->~ChimericPairedEndAligner();

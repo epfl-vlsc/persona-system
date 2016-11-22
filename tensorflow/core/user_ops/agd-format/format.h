@@ -75,6 +75,7 @@ namespace format {
     int mapq_ = 0;
     int64_t location_ = 0; // POS field in SAM format
 
+    void convertFromSNAP(const PairedAlignmentResult &result, const std::size_t result_idx, const int flag);
     void convertFromSNAP(const SingleAlignmentResult &result, const int flag);
    };
 

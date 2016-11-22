@@ -181,7 +181,16 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
     flag_ = flag;
     score_ = result.score;
     mapq_ = result.mapq;
-    location_ = result.location; 
+    location_ = result.location;
+  }
+
+  // FIXME this could fail silently if result_idx > 1!
+  void AlignmentResult::convertFromSNAP(const PairedAlignmentResult &result, const size_t result_idx, const int flag)
+  {
+    flag_ = flag;
+    score_ = result.score[result_idx];
+    mapq_ = result.mapq[result_idx];
+    location_ = result.location[result_idx];
   }
 
 } // namespace format
