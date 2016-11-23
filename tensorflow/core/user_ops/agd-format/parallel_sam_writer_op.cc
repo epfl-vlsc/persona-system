@@ -20,7 +20,6 @@
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/SAM.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Read.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/DataWriter.h"
-#include "tensorflow/core/user_ops/dna-align/genome_index_resource.h"
 
 #define SAM_REVERSE_COMPLEMENT 0x10
 #define NUM_ARGS 5
@@ -198,7 +197,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 		Status init(OpKernelContext *ctx) {
 			// One-time init
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &genome_resource_));
-      genome_ = genome_resource_->get_genome();
+      genome_ = genome_resource_->get()->getGenome();
 
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
       options_ = options_resource_->get();
@@ -228,7 +227,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 		}
   
   private:
-    GenomeIndexResource *genome_resource_ = nullptr;
+    BasicContainer<GenomeIndex> *genome_resource_ = nullptr;
     BasicContainer<AlignerOptions>* options_resource_ = nullptr;
   	const Genome *genome_;
     string sam_file_path_;

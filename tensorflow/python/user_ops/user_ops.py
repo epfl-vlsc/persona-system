@@ -503,21 +503,6 @@ def FASTQCreatorPool(size=0, bound=False, name=None):
 def _FASTQCreatorPoolOpShape(op):
     return [tensor_shape.vector(2)]
 
-_gz_str = "GZIPDecomp"
-ops.NoGradient(_gz_str)
-def GZIPDecompressor(buffer_pool, data_handle, name=None):
-  return gen_user_ops.gzip_decomp(buffer_pool=buffer_pool,
-                                  data_handle=data_handle,
-                                  name=name)
-
-@ops.RegisterShape(_gz_str)
-def _GZIPDecompShape(op):
-  pool_shape = op.inputs[0].get_shape()
-  data_shape = op.inputs[1].get_shape()
-  _assert_vec(pool_shape, 2)
-  _assert_vec(data_shape, 2)
-  return [data_shape]
-
 _zmq_str = "ZeroMqSource"
 ops.NoGradient(_zmq_str)
 def ZeroMqSource(server_address, server_port, name=None):

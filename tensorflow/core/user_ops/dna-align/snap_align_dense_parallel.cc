@@ -29,7 +29,6 @@
 #include "work_queue.h"
 #include "Read.h"
 #include "SnapAlignerWrapper.h"
-#include "genome_index_resource.h"
 #include "tensorflow/core/user_ops/agd-format/read_resource.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
@@ -93,7 +92,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
       TF_RETURN_IF_ERROR(snap_wrapper::init());
 
       options_ = options_resource_->get();
-      genome_ = index_resource_->get_genome();
+      genome_ = index_resource_->get()->getGenome();
 
       /*if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
         num_secondary_alignments_ = 0;
@@ -211,7 +210,7 @@ private:
         LOG(INFO) << "set affinity to core 0";*/
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
-      auto index = index_resource_->get_index();
+      auto index = index_resource_->get();
       auto options = options_resource_->get();
 
       unsigned alignmentResultBufferCount;
@@ -409,7 +408,7 @@ private:
   }
 
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
-  GenomeIndexResource* index_resource_ = nullptr;
+  BasicContainer<GenomeIndex> *index_resource_ = nullptr;
   BasicContainer<AlignerOptions>* options_resource_ = nullptr;
   const Genome *genome_ = nullptr;
   AlignerOptions* options_ = nullptr;

@@ -6,8 +6,8 @@
 #include "tensorflow/core/user_ops/agd-format/format.h"
 #include "tensorflow/core/user_ops/agd-format/util.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
+#include "tensorflow/core/user_ops/object-pool/basic_container.h"
 #include "GenomeIndex.h"
-#include "genome_index_resource.h"
 #include "Read.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/SAM.h"
 #include <cstdint>
@@ -203,7 +203,7 @@ namespace tensorflow {
     {
       // One-time init
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &genome_resource_));
-      auto const *genome = genome_resource_->get_genome();
+      auto const *genome = genome_resource_->get()->getGenome();
 
       // Populate a context necessary for reading the SAM file
       readerContext_.genome = genome;
@@ -222,7 +222,7 @@ namespace tensorflow {
     }
 
     string sam_filename_;
-    GenomeIndexResource* genome_resource_ = nullptr;
+    BasicContainer<GenomeIndex> *genome_resource_ = nullptr;
     ReaderContext readerContext_;
     SAMReader *reader_ = nullptr;
     Read sam_read_;

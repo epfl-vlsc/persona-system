@@ -5,18 +5,21 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <memory>
+#include <utility>
 
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
-#include "tensorflow/core/user_ops/dna-align/genome_index_resource.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/thread_annotations.h"
 #include "tensorflow/core/platform/types.h"
+#include "tensorflow/core/user_ops/object-pool/basic_container.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/GenomeIndex.h"
 
 namespace tensorflow {
   using namespace std;
@@ -24,6 +27,8 @@ namespace tensorflow {
 
     class GenomeIndexOp : public OpKernel {
     public:
+      typedef BasicContainer<GenomeIndex> GenomeContainer;
+
         GenomeIndexOp(OpKernelConstruction* context)
             : OpKernel(context), genome_handle_set_(false) {
           OP_REQUIRES_OK(context, context->GetAttr("genome_location", &genome_location_));
@@ -48,7 +53,7 @@ namespace tensorflow {
         ~GenomeIndexOp() override {
             // If the genome object was not shared, delete it.
             if (genome_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
-                TF_CHECK_OK(cinfo_.resource_manager()->Delete<GenomeIndexResource>(
+                TF_CHECK_OK(cinfo_.resource_manager()->Delete<GenomeContainer>(
                     cinfo_.container(), cinfo_.name()));
             }
         }
@@ -60,16 +65,20 @@ namespace tensorflow {
     private:
         Status SetGenomeHandle(OpKernelContext* ctx, string genome_location) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
             TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
-            GenomeIndexResource* genome_index;
+            GenomeContainer* genome_index;
 
-            auto creator = [this, genome_location](GenomeIndexResource** genome) {
-                *genome = new GenomeIndexResource();
-                (*genome)->init(genome_location);
+            auto creator = [this, genome_location](GenomeContainer** genome) {
+                LOG(INFO) << "loading genome index";
+                auto begin = std::chrono::high_resolution_clock::now();
+                unique_ptr<GenomeIndex> value(GenomeIndex::loadFromDirectory(const_cast<char*>(genome_location.c_str()), true, true));
+                auto end = std::chrono::high_resolution_clock::now();
+                LOG(INFO) << "genome load time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
+                *genome = new GenomeContainer(move(value));
                 return Status::OK();
             };
 
             TF_RETURN_IF_ERROR(
-                cinfo_.resource_manager()->LookupOrCreate<GenomeIndexResource>(
+                cinfo_.resource_manager()->LookupOrCreate<GenomeContainer>(
                     cinfo_.container(), cinfo_.name(), &genome_index, creator));
 
             auto h = genome_handle_.AccessTensor(ctx)->flat<string>();

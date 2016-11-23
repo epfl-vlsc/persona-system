@@ -45,7 +45,7 @@ cc_library(
 
 cc_library(
     name = "snap_align",
-    hdrs = ["SnapAlignerWrapper.h", "genome_index_resource.h"],
+    hdrs = ["SnapAlignerWrapper.h"],
     includes = ["."],
     srcs = glob(["*.cc"] + ["work_queue.h"],
            exclude = [
