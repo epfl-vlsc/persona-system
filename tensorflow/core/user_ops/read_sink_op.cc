@@ -35,12 +35,9 @@ Consumes the input read Resource and produces nothing
       { // Need this scope to make sure ReadResourceReleaser fires before `b` (the other scoped releaser)
         ReadResourceReleaser r(*rs);
         auto s = Status::OK();
-        const char *base, *qual, *meta;
-        size_t base_len, qual_len, meta_len;
+        Read snap_read;
         do {
-          s = rs->get_next_record(&base, &base_len,
-                                  &qual, &qual_len,
-                                  &meta, &meta_len);
+          s = rs->get_next_record(snap_read);
         } while (s.ok());
 
         if (!IsResourceExhausted(s)) {

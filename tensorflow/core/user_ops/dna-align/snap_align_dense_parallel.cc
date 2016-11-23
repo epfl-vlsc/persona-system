@@ -298,10 +298,9 @@ private:
 
           result_builder.set_buffer_pair(result_buf);
           //LOG(INFO) << "starting new subchunk";
-          for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
-               subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
+          for (subchunk_status = subchunk_resource->get_next_record(snap_read); subchunk_status.ok();
+               subchunk_status = subchunk_resource->get_next_record(snap_read)) {
             cigarString.clear();
-            snap_read.init(nullptr, 0, bases, qualities, bases_len);
             snap_read.clip(options_->clipping);
             if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
               if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {

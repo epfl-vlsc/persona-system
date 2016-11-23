@@ -29,17 +29,10 @@ namespace tensorflow {
     // WARNING: this method assumes that all fields are populated (qual, base, meta)
     // If this isn't the case but you call this method, segfault / undefinied behavior is likely
     // this avoids unnecessary conditionals
-    Status get_next_record(const char **bases, std::size_t *bases_length,
-                           const char **qualities, std::size_t *qualities_length,
-                           const char **metadata, std::size_t *metadata_length) override;
 
-    Status get_next_record(const char **bases, std::size_t *bases_length,
-                           const char **qualities, std::size_t *qualities_length) override;
+    Status get_next_record(Read &snap_read) override;
 
     bool reset_iter() override;
-
-    bool has_qualities() override;
-    bool has_metadata() override;
 
     void release() override;
 
@@ -53,6 +46,8 @@ namespace tensorflow {
     const format::RelativeIndex *base_idx_ = nullptr, *qual_idx_ = nullptr, *meta_idx_ = nullptr;
     const char *base_data_ = nullptr, *qual_data_ = nullptr, *meta_data_ = nullptr;
     std::size_t num_records_ = 0, record_idx_ = 0;
+
+    bool has_metadata();
 
     AGDReadResource(const AGDReadResource &other) = delete;
     AGDReadResource& operator=(const AGDReadResource &other) = delete;
@@ -74,16 +69,9 @@ namespace tensorflow {
                          const char *base_data_offset, const char *qual_data_offset, const char *meta_data_offset);
 
   public:
-    Status get_next_record(const char **bases, std::size_t *bases_length,
-                           const char **qualities, std::size_t *qualities_length,
-                           const char **metadata, std::size_t *metadata_length) override;
-
-    Status get_next_record(const char **bases, std::size_t *bases_length,
-                           const char **qualities, std::size_t *qualities_length) override;
+    Status get_next_record(Read &snap_read) override;
 
     bool reset_iter() override;
-    bool has_qualities() override;
-    bool has_metadata() override;
 
     std::size_t num_records() override;
 

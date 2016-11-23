@@ -102,14 +102,15 @@ class NullAlignerOp : public OpKernel {
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
     BufferPair* result_buf = nullptr;
     ReadResource* subchunk_resource = nullptr;
+    Read snap_read;
     const char *bases, *qualities;
     size_t bases_len, qualities_len;
     Status io_chunk_status, subchunk_status;
     io_chunk_status = Status::OK();
     io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
     while (io_chunk_status.ok()) {
-        for (subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len); subchunk_status.ok();
-              subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
+        for (subchunk_status = subchunk_resource->get_next_record(snap_read); subchunk_status.ok();
+              subchunk_status = subchunk_resource->get_next_record(snap_read)) {
           char size = static_cast<char>(bases_len);
           result_buf->index().AppendBuffer(&size, 1);
           result_buf->data().AppendBuffer(bases, 28);

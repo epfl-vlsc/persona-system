@@ -282,7 +282,7 @@ private:
       size_t bases_len, qualities_len;
       PairedAlignmentResult primaryResult;
       int num_secondary_alignments = 0;
-      int num_secondary_results;
+      int num_secondary_results, single_end_2ndary_results_for_first_read, single_end_2ndary_results_for_second_read;
       SAMFormat format(options_->useM);
       AlignmentResultBuilder result_builder;
       string cigarString;
@@ -312,17 +312,21 @@ private:
 
           result_builder.set_buffer_pair(result_buf);
           while (subchunk_status.ok()) {
-            subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
-            for (size_t i = 0; i < 2 && subchunk_status.ok();
-                 ++i, subchunk_status = subchunk_resource->get_next_record(&bases, &bases_len, &qualities, &qualities_len)) {
+            for (size_t i = 0; i < 2; ++i) {
               auto &sread = snap_read[i];
-              sread.init(nullptr, 0, bases, qualities, bases_len);
-              sread.clip(options_->clipping);
-              useless[i] = sread.getDataLength() < options_->minReadLength && sread.countOfNs() > options_->maxDist;
+              subchunk_status = subchunk_resource->get_next_record(sread);
+              if (subchunk_status.ok()) {
+                sread.clip(options_->clipping);
+                useless[i] = sread.getDataLength() < options_->minReadLength && sread.countOfNs() > options_->maxDist;
+              } else {
+                break;
+              }
             }
+
             if (!subchunk_status.ok()) {
               break;
             }
+
             if (useless[0] || useless[1]) {
               pass[0] = options_->passFilter(&snap_read[0], AlignmentResult::NotFound, true, false);
               pass[1] = options_->passFilter(&snap_read[1], AlignmentResult::NotFound, true, false);
@@ -345,7 +349,7 @@ private:
               }
             }
 
-            // TODO I'm not sure how much of the secondary alignments we can just ignore
+            // TODO(sw): this is verified to run ok by changing the equivalent command in SNAP
             aligner->align(&snap_read[0], &snap_read[1],
                            &primaryResult,
                            options_->maxSecondaryAlignmentAdditionalEditDistance,
@@ -354,10 +358,15 @@ private:
                            nullptr, // secondary results buffer
                            0, // single secondary buffer size
                            0, // maxSecondaryAlignmentsToReturn
-                           nullptr, nullptr, nullptr); // more stuff related to secondary results
+                           // We don't use either of these, but we can't pass in nullptr
+                           &single_end_2ndary_results_for_first_read,
+                           &single_end_2ndary_results_for_second_read,
+                           nullptr); // more stuff related to secondary results
             flag = 0;
-
             // TODO need to write out the result!
+            for (size_t i = 0; i < 2; ++i) {
+              //result_builder.AppendAlignmentResult(result, i, ???);
+            }
           }
 
           if (!IsResourceExhausted(subchunk_status)) {
@@ -381,6 +390,7 @@ private:
       }
 
       // This calls the destructor without calling operator delete, allocator owns the memory.
+      allocator->checkCanaries();
       aligner->~ChimericPairedEndAligner();
       intersectingAligner->~IntersectingPairedEndAligner();
       delete allocator;

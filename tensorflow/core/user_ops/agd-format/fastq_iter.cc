@@ -20,24 +20,26 @@ namespace tensorflow {
 
   FASTQIterator::FASTQIterator(ResourceContainer<Data> *fastq_file) : fastq_file_(fastq_file), data_size_(fastq_file->get()->size()), data_(fastq_file->get()) {}
 
-  Status FASTQIterator::get_next_record(const char **bases, size_t *bases_length,
-                                        const char **qualities, size_t *qualities_length,
-                                        const char **metadata, size_t *metadata_length)
+  Status FASTQIterator::get_next_record(Read &snap_read)
   {
     if (!fastq_file_) {
       return Internal("get_next_record called with null data!");
     }
+    const char *meta, *base, *qual;
+    size_t meta_len, base_len;
 
-    TF_RETURN_IF_ERROR(read_line(metadata, metadata_length, 1)); // +1 to skip '@'
-    TF_RETURN_IF_ERROR(read_line(bases, bases_length));
+    TF_RETURN_IF_ERROR(read_line(&meta, &meta_len, 1)); // +1 to skip '@'
+    TF_RETURN_IF_ERROR(read_line(&base, &base_len));
     TF_RETURN_IF_ERROR(skip_line());
-    TF_RETURN_IF_ERROR(read_line(qualities, qualities_length));
+    TF_RETURN_IF_ERROR(read_line(&qual, &base_len));
+    snap_read.init(meta, meta_len, base, qual, base_len);
 
     return Status::OK();
   }
 
   Status FASTQIterator::read_line(const char **line_start, size_t *line_length, size_t skip_length)
   {
+    // TODO efficiently check that the data_ has not been released
     if (index_ >= data_size_) {
       return ResourceExhausted("no more records in this file");
     }
@@ -68,16 +70,6 @@ namespace tensorflow {
   bool FASTQIterator::reset_iter()
   {
     index_ = 0;
-    return true;
-  }
-
-  bool FASTQIterator::has_qualities()
-  {
-    return true;
-  }
-
-  bool FASTQIterator::has_metadata()
-  {
     return true;
   }
 

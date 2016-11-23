@@ -7,12 +7,6 @@ namespace tensorflow {
 
   ReadResource::~ReadResource() {}
 
-  Status ReadResource::get_next_record(const char **bases, std::size_t *bases_length,
-                                const char **qualities, std::size_t *qualities_length)
-  {
-    return Unimplemented("partial record reading not suppported");
-  }
-
   Status ReadResource::split(size_t chunk, BufferList *bl)
   {
     return Unimplemented("resource splitting not supported for this resource");
@@ -21,14 +15,6 @@ namespace tensorflow {
   Status ReadResource::get_next_subchunk(ReadResource **rr, BufferPair **b)
   {
     return Unimplemented("resource splitting not supported for this resource");
-  }
-
-  bool ReadResource::has_qualities() {
-    return false;
-  }
-
-  bool ReadResource::has_metadata() {
-    return false;
   }
 
   bool ReadResource::reset_iter() {

@@ -15,14 +15,9 @@ namespace tensorflow {
     FASTQIterator() = default;
     FASTQIterator& operator=(FASTQIterator &&other);
 
-    Status get_next_record(const char **bases, std::size_t *bases_length,
-                           const char **qualities, std::size_t *qualities_length,
-                           const char **metadata, std::size_t *metadata_length) override;
+    Status get_next_record(Read &snap_read) override;
 
     bool reset_iter() override;
-
-    bool has_qualities() override;
-    bool has_metadata() override;
 
     void release() override;
 

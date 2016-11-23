@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tensorflow/core/lib/core/status.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Read.h"
 #include "buffer_list.h"
 #include <vector>
 #include <memory>
@@ -17,15 +18,8 @@ namespace tensorflow {
 
       It is the subclassing class's responsibility to set unavailable fields to 0 / null respectively
      */
-    virtual Status get_next_record(const char **bases, std::size_t *bases_length,
-                                   const char **qualities, std::size_t *qualities_length,
-                                   const char **metadata, std::size_t *metadata_length) = 0;
 
-    virtual Status get_next_record(const char **bases, std::size_t *bases_length,
-                                   const char **qualities, std::size_t *qualities_length);
-
-    virtual bool has_qualities();
-    virtual bool has_metadata();
+    virtual Status get_next_record(Read &snap_read) = 0;
 
     virtual std::size_t num_records();
 

@@ -125,7 +125,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
       for (decltype(num_records) i = 0; i < num_records; ++i) {
 
-        status = reads->get_next_record(&bases, &bases_len, &qualities, &qualities_len);
+        status = reads->get_next_record(snap_read);
         if (!status.ok()) {
          LOG(INFO) << "Failed to get next read!";
          return; 
@@ -138,7 +138,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
           LOG(INFO) << "Failed to write the read's id.";
         }
 
-        snap_read.init(qname_buffer, qname_len, bases, qualities, bases_len);
         snap_read.clip(options_->clipping);
 
         // The read group was initially blank; passing the same read group as SNAP

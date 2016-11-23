@@ -84,60 +84,24 @@ namespace tensorflow {
     return true;
   }
 
-
-  bool AGDReadResource::has_qualities()
-  {
-    return quals_ != nullptr;
-  }
-
   bool AGDReadResource::has_metadata()
   {
     return meta_ != nullptr;
   }
 
-  Status AGDReadResource::get_next_record(const char **bases, std::size_t *bases_length,
-                                            const char **qualities, std::size_t *qualities_length)
+  Status AGDReadResource::get_next_record(Read &snap_read)
   {
     if (record_idx_ < num_records_) {
       auto base_len = base_idx_[record_idx_];
-      *bases_length = base_len;
-      *bases = base_data_;
+      auto *bases = base_data_;
       base_data_  += base_len;
 
-      auto qual_len = qual_idx_[record_idx_];
-      *qualities_length = qual_len;
-      *qualities = qual_data_;
+      auto qual_len = qual_idx_[record_idx_++];
+      auto *qualities = qual_data_;
       qual_data_ += qual_len;
 
-      record_idx_++;
-      return Status::OK();
-    } else {
-      return ResourceExhausted("agd record container exhausted");
-    }
+      snap_read.init(nullptr, 0, bases, qualities, base_len);
 
-  }
-
-  Status AGDReadResource::get_next_record(const char **bases, std::size_t *bases_length,
-                                            const char **qualities, std::size_t *qualities_length,
-                                            const char **metadata, std::size_t *metadata_length)
-  {
-    if (record_idx_ < num_records_) {
-      auto base_len = base_idx_[record_idx_];
-      *bases_length = base_len;
-      *bases = base_data_;
-      base_data_  += base_len;
-
-      auto qual_len = qual_idx_[record_idx_];
-      *qualities_length = qual_len;
-      *qualities = qual_data_;
-      qual_data_ += qual_len;
-
-      auto meta_len = meta_idx_[record_idx_];
-      *metadata_length = meta_len;
-      *metadata = meta_data_;
-      meta_data_ += meta_len;
-
-      record_idx_++;
       return Status::OK();
     } else {
       return ResourceExhausted("agd record container exhausted");
@@ -217,32 +181,22 @@ namespace tensorflow {
                                                                                                                                          qual_data_(qual_data_offset), qual_start_(qual_data_offset),
                                                                                                                                          meta_data_(meta_data_offset), meta_start_(meta_data_offset) {}
 
-  Status AGDReadSubResource::get_next_record(const char **bases, size_t *bases_length,
-                                               const char **qualities, size_t *qualities_length,
-                                               const char **metadata, size_t *metadata_length)
-  {
-    return Unimplemented("AGDReadSubResource doesn't implement get_next_record with metadata");
+Status AGDReadSubResource::get_next_record(Read &snap_read) {
+  if (current_idx_ < max_idx_) {
+    auto base_len = base_idx_[current_idx_];
+    auto *bases = base_data_;
+    base_data_  += base_len;
+
+    auto qual_len = qual_idx_[current_idx_++];
+    auto *qualities = qual_data_;
+    qual_data_ += qual_len;
+    snap_read.init(nullptr, 0, bases, qualities, base_len);
+
+    return Status::OK();
+  } else {
+    return ResourceExhausted("agd record container exhausted");
   }
-
-  Status AGDReadSubResource::get_next_record(const char **bases, size_t *bases_length,
-                                               const char **qualities, size_t *qualities_length)
-  {
-    if (current_idx_ < max_idx_) {
-      auto base_len = base_idx_[current_idx_];
-      *bases_length = base_len;
-      *bases = base_data_;
-      base_data_  += base_len;
-
-      auto qual_len = qual_idx_[current_idx_++];
-      *qualities_length = qual_len;
-      *qualities = qual_data_;
-      qual_data_ += qual_len;
-
-      return Status::OK();
-    } else {
-      return ResourceExhausted("agd record container exhausted");
-    }
-  }
+}
 
   bool AGDReadSubResource::reset_iter() {
     base_data_ = base_start_;
@@ -250,16 +204,6 @@ namespace tensorflow {
     meta_data_ = meta_start_;
     current_idx_ = start_idx_;
     return true;
-  }
-
-  bool AGDReadSubResource::has_qualities()
-  {
-    return qual_start_ != nullptr;
-  }
-
-  bool AGDReadSubResource::has_metadata()
-  {
-    return meta_start_ != nullptr;
   }
 
   size_t AGDReadResource::num_records() {
