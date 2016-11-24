@@ -2,19 +2,33 @@
 
 #include "tensorflow/core/framework/types.h"
 #include <vector>
+#include <memory>
 #include "AlignmentResult.h"
 #include "AlignerOptions.h"
 #include "BaseAligner.h"
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "FileFormat.h"
-#include "SAM.h" 
+#include "SAM.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/ChimericPairedEndAligner.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/IntersectingPairedEndAligner.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/PairedAligner.h"
 
 namespace snap_wrapper {
     using namespace tensorflow;
     Status init();
 
-    GenomeIndex* loadIndex(const char* path);
+    class PairedAligner
+    {
+    public:
+      PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index_resource);
+      ~PairedAligner();
+
+    private:
+      std::unique_ptr<BigAllocator> allocator;
+      IntersectingPairedEndAligner *intersectingAligner;
+      ChimericPairedEndAligner *aligner;
+    };
 
     BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options);
 

@@ -55,7 +55,8 @@ cc_library(
                       "snap_results_decode.cc",
                       ],
                ),
-    copts = tf_copts(),
+    copts = tf_copts() + ["-fexceptions"],
+    nocopts = "-fno-exceptions",
     #linkopts = [
         #"-Wl,-Bsymbolic",
         #"-lm"

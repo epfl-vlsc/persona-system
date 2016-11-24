@@ -1,5 +1,7 @@
 #include <vector>
+#include <exception>
 
+#include "tensorflow/core/platform/logging.h"
 #include "AlignerOptions.h"
 #include "AlignmentResult.h"
 #include "BaseAligner.h"
@@ -14,15 +16,133 @@
 #include "SnapAlignerWrapper.h"
 
 namespace snap_wrapper {
+  using namespace tensorflow;
+  using namespace std;
+
+  namespace {
+    const int maxReadSize = MAX_READ_LENGTH;
+  }
+
   tensorflow::Status init() {
     InitializeSeedSequencers();
     return tensorflow::Status::OK();
   }
 
-  GenomeIndex* loadIndex(const char* path) {
-    // 1st argument is non-const for no reason, it's not actually modified
-    // 2nd and 3rd arguments are weird SNAP things that can safely be ignored
-    return GenomeIndex::loadFromDirectory(const_cast<char*>(path), false, false);
+  PairedAligner::PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index) {
+    size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(
+                                index,
+                                options->intersectingAlignerMaxHits,
+                                maxReadSize,
+                                index->getSeedLength(),
+                                options->numSeedsFromCommandLine,
+                                options->seedCoverage,
+                                options->maxDist,
+                                options->extraSearchDepth,
+                                options->maxCandidatePoolSize,
+                                options->maxSecondaryAlignmentsPerContig);
+
+    memoryPoolSize += ChimericPairedEndAligner::getBigAllocatorReservation(
+                                index,
+                                maxReadSize,
+                                options->maxHits,
+                                index->getSeedLength(),
+                                options->numSeedsFromCommandLine,
+                                options->seedCoverage,
+                                options->maxDist,
+                                options->extraSearchDepth,
+                                options->maxCandidatePoolSize,
+                                options->maxSecondaryAlignmentsPerContig);
+
+    unsigned maxPairedSecondaryHits, maxSingleSecondaryHits;
+
+    if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+      maxPairedSecondaryHits = 0;
+      maxSingleSecondaryHits = 0;
+    } else {
+      LOG(WARNING) << "Enabling secondary results. This feature is not yet supported!";
+      maxPairedSecondaryHits = IntersectingPairedEndAligner::getMaxSecondaryResults(
+                                options->numSeedsFromCommandLine,
+                                options->seedCoverage,
+                                maxReadSize,
+                                options->maxHits,
+                                index->getSeedLength(),
+                                options->minSpacing,
+                                options->maxSpacing);
+      maxSingleSecondaryHits = ChimericPairedEndAligner::getMaxSingleEndSecondaryResults(
+                                options->numSeedsFromCommandLine,
+                                options->seedCoverage,
+                                maxReadSize,
+                                options->maxHits,
+                                index->getSeedLength());
+    }
+
+    memoryPoolSize += (1 + maxPairedSecondaryHits) * sizeof(PairedAlignmentResult) + maxSingleSecondaryHits * sizeof(SingleAlignmentResult);
+
+    allocator.reset(new BigAllocator(memoryPoolSize));
+
+    if (!allocator) {
+      LOG(ERROR) << "Unable to create new big allocator for pool size " << memoryPoolSize;
+      throw logic_error("Allocation of big allocator failed");
+    }
+
+    auto *alloc = allocator.get();
+
+    intersectingAligner = new (alloc) IntersectingPairedEndAligner(
+                                index,
+                                maxReadSize,
+                                options->maxHits,
+                                options->maxDist,
+                                options->numSeedsFromCommandLine,
+                                options->seedCoverage,
+                                options->minSpacing,
+                                options->maxSpacing,
+                                options->intersectingAlignerMaxHits,
+                                options->extraSearchDepth,
+                                options->maxCandidatePoolSize,
+                                options->maxSecondaryAlignmentsPerContig,
+                                alloc,
+                                options->noUkkonen,
+                                options->noOrderedEvaluation,
+                                options->noTruncation);
+
+    if (!intersectingAligner) {
+      auto err = "Unable to create intersecting aligner";
+      LOG(ERROR) << err;
+      throw logic_error(err);
+    }
+
+    aligner = new (alloc) ChimericPairedEndAligner(
+                                index,
+                                maxReadSize,
+                                options->maxHits,
+                                options->maxDist,
+                                options->numSeedsFromCommandLine,
+                                options->seedCoverage,
+                                options->minWeightToCheck,
+                                options->forceSpacing,
+                                options->extraSearchDepth,
+                                options->noUkkonen,
+                                options->noOrderedEvaluation,
+                                options->noTruncation,
+                                intersectingAligner,
+                                options->minReadLength,
+                                options->maxSecondaryAlignmentsPerContig,
+                                alloc);
+
+    if (!aligner) {
+      intersectingAligner->~IntersectingPairedEndAligner();
+      auto err = "Unable to create chimeric aligner";
+      LOG(ERROR) << err;
+      throw logic_error(err);
+    }
+
+    allocator->checkCanaries();
+  }
+
+  PairedAligner::~PairedAligner() {
+    allocator->checkCanaries();
+    aligner->~ChimericPairedEndAligner();
+    intersectingAligner->~IntersectingPairedEndAligner();
   }
 
   BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options) {
