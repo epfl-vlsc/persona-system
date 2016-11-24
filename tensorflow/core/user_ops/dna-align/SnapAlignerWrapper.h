@@ -3,6 +3,7 @@
 #include "tensorflow/core/framework/types.h"
 #include <vector>
 #include <memory>
+#include <array>
 #include "AlignmentResult.h"
 #include "AlignerOptions.h"
 #include "BaseAligner.h"
@@ -24,10 +25,14 @@ namespace snap_wrapper {
       PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index_resource);
       ~PairedAligner();
 
+      // void for speed, as this is called per-read!
+      void align(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result);
+
     private:
       std::unique_ptr<BigAllocator> allocator;
       IntersectingPairedEndAligner *intersectingAligner;
       ChimericPairedEndAligner *aligner;
+      const PairedAlignerOptions *options;
     };
 
     BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options);

@@ -28,7 +28,7 @@ namespace snap_wrapper {
     return tensorflow::Status::OK();
   }
 
-  PairedAligner::PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index) {
+  PairedAligner::PairedAligner(const PairedAlignerOptions *options_, GenomeIndex *index) : options(options_) {
     size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(
                                 index,
                                 options->intersectingAlignerMaxHits,
@@ -140,9 +140,29 @@ namespace snap_wrapper {
   }
 
   PairedAligner::~PairedAligner() {
+    // This calls the destructor without calling operator delete, allocator owns the memory.
     allocator->checkCanaries();
     aligner->~ChimericPairedEndAligner();
     intersectingAligner->~IntersectingPairedEndAligner();
+    // No need to call delete on allocator. unique_ptr takes care of it
+  }
+
+  void
+  PairedAligner::align(array<Read, 2> &snap_reads, PairedAlignmentResult &result) {
+    int num_secondary_results, single_end_secondary_results_first_read,
+                               single_end_secondary_results_second_read;
+    aligner->align(&snap_reads[0], &snap_reads[1],
+                   &result,
+                   options->maxSecondaryAlignmentAdditionalEditDistance,
+                   0, // secondary results buffer size
+                   &num_secondary_results,
+                   nullptr, // secondary results buffer
+                   0, // single secondary buffer size
+                   0, // maxSecondaryAlignmentsToReturn
+                   // We don't use either of these, but we can't pass in nullptr
+                   &single_end_secondary_results_first_read,
+                   &single_end_secondary_results_second_read,
+                   nullptr); // more stuff related to secondary results
   }
 
   BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options) {

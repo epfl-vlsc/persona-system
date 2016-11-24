@@ -1,5 +1,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <array>
 #include <vector>
 #include <tuple>
 #include <thread>
@@ -221,73 +222,19 @@ private:
       //LOG(INFO) << "aligner thread spinning up";
       auto index = index_resource_->get();
 
-      int maxReadSize = MAX_READ_LENGTH;
-      size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(index, options_->intersectingAlignerMaxHits, maxReadSize, index->getSeedLength(), 
-                                                                                       options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxDist, options_->extraSearchDepth, options_->maxCandidatePoolSize,
-                                                                                       options_->maxSecondaryAlignmentsPerContig);
-
-      memoryPoolSize += ChimericPairedEndAligner::getBigAllocatorReservation(index, maxReadSize, options_->maxHits, index->getSeedLength(), options_->numSeedsFromCommandLine, options_->seedCoverage, options_->maxDist,
-                                                                             options_->extraSearchDepth, options_->maxCandidatePoolSize, options_->maxSecondaryAlignmentsPerContig);
-
-      unsigned maxPairedSecondaryHits, maxSingleSecondaryHits;
-
-      if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
-        maxPairedSecondaryHits = 0;
-        maxSingleSecondaryHits = 0;
-      } else {
-        maxPairedSecondaryHits = IntersectingPairedEndAligner::getMaxSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, maxReadSize, options_->maxHits, index->getSeedLength(), options_->minSpacing, options_->maxSpacing);
-        maxSingleSecondaryHits = ChimericPairedEndAligner::getMaxSingleEndSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage, maxReadSize, options_->maxHits, index->getSeedLength());
-      }
-
-      memoryPoolSize += (1 + maxPairedSecondaryHits) * sizeof(PairedAlignmentResult) + maxSingleSecondaryHits * sizeof(SingleAlignmentResult);
-
-      BigAllocator *allocator = new BigAllocator(memoryPoolSize);
-
-      IntersectingPairedEndAligner *intersectingAligner = new (allocator) IntersectingPairedEndAligner(index,
-                                                                                                       maxReadSize,
-                                                                                                       options_->maxHits,
-                                                                                                       options_->maxDist,
-                                                                                                       options_->numSeedsFromCommandLine,
-                                                                                                       options_->seedCoverage,
-                                                                                                       options_->minSpacing,
-                                                                                                       options_->maxSpacing,
-                                                                                                       options_->intersectingAlignerMaxHits,
-                                                                                                       options_->extraSearchDepth,
-                                                                                                       options_->maxCandidatePoolSize,
-                                                                                                       options_->maxSecondaryAlignmentsPerContig,
-                                                                                                       allocator,
-                                                                                                       options_->noUkkonen,
-                                                                                                       options_->noOrderedEvaluation,
-                                                                                                       options_->noTruncation);
-      ChimericPairedEndAligner *aligner = new (allocator) ChimericPairedEndAligner(index,
-                                                                                   maxReadSize,
-                                                                                   options_->maxHits,
-                                                                                   options_->maxDist,
-                                                                                   options_->numSeedsFromCommandLine,
-                                                                                   options_->seedCoverage,
-                                                                                   options_->minWeightToCheck,
-                                                                                   options_->forceSpacing,
-                                                                                   options_->extraSearchDepth,
-                                                                                   options_->noUkkonen,
-                                                                                   options_->noOrderedEvaluation,
-                                                                                   options_->noTruncation,
-                                                                                   intersectingAligner,
-                                                                                   options_->minReadLength,
-                                                                                   options_->maxSecondaryAlignmentsPerContig,
-                                                                                   allocator);
-      allocator->checkCanaries();
+      snap_wrapper::PairedAligner aligner(options_, index);
 
       bool first_is_primary = true; // we only ever generate one result
-      const char *bases, *qualities;
-      size_t bases_len, qualities_len;
+
       PairedAlignmentResult primaryResult;
-      int num_secondary_alignments = 0;
-      int num_secondary_results, single_end_2ndary_results_for_first_read, single_end_2ndary_results_for_second_read;
+      int num_secondary_alignments = 0, num_secondary_results, single_end_2ndary_results_for_first_read, single_end_2ndary_results_for_second_read;
       SAMFormat format(options_->useM);
       AlignmentResultBuilder result_builder;
       string cigarString;
       int flag;
-      Read snap_read[2];
+      //Read snap_read[2];
+      array<Read, 2> snap_read;
+
       LandauVishkinWithCigar lvc;
 
       BufferPair* result_buf = nullptr;
@@ -347,25 +294,16 @@ private:
                   }
                 }
               }
+              continue;
             }
 
-            // TODO(sw): this is verified to run ok by changing the equivalent command in SNAP
-            aligner->align(&snap_read[0], &snap_read[1],
-                           &primaryResult,
-                           options_->maxSecondaryAlignmentAdditionalEditDistance,
-                           0, // secondary results buffer size
-                           &num_secondary_results,
-                           nullptr, // secondary results buffer
-                           0, // single secondary buffer size
-                           0, // maxSecondaryAlignmentsToReturn
-                           // We don't use either of these, but we can't pass in nullptr
-                           &single_end_2ndary_results_for_first_read,
-                           &single_end_2ndary_results_for_second_read,
-                           nullptr); // more stuff related to secondary results
+            aligner.align(snap_read, primaryResult);
+
             flag = 0;
             // TODO need to write out the result!
             for (size_t i = 0; i < 2; ++i) {
               //result_builder.AppendAlignmentResult(result, i, ???);
+              // TODO how to deal with the cigar string?
             }
           }
 
@@ -388,12 +326,6 @@ private:
           return;
         }
       }
-
-      // This calls the destructor without calling operator delete, allocator owns the memory.
-      allocator->checkCanaries();
-      aligner->~ChimericPairedEndAligner();
-      intersectingAligner->~IntersectingPairedEndAligner();
-      delete allocator;
 
       VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_--;
