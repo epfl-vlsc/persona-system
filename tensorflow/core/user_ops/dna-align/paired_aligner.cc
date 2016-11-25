@@ -227,8 +227,6 @@ private:
       bool first_is_primary = true; // we only ever generate one result
 
       PairedAlignmentResult primaryResult;
-      int num_secondary_alignments = 0, num_secondary_results, single_end_2ndary_results_for_first_read, single_end_2ndary_results_for_second_read;
-      SAMFormat format(options_->useM);
       AlignmentResultBuilder result_builder;
       string cigarString;
       int flag;
@@ -298,13 +296,7 @@ private:
             }
 
             aligner.align(snap_read, primaryResult);
-
-            flag = 0;
-            // TODO need to write out the result!
-            for (size_t i = 0; i < 2; ++i) {
-              //result_builder.AppendAlignmentResult(result, i, ???);
-              // TODO how to deal with the cigar string?
-            }
+            subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builder);
           }
 
           if (!IsResourceExhausted(subchunk_status)) {

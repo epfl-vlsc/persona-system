@@ -3,6 +3,7 @@
 #include "tensorflow/core/framework/types.h"
 #include <vector>
 #include <memory>
+#include <string>
 #include <array>
 #include "AlignmentResult.h"
 #include "AlignerOptions.h"
@@ -14,6 +15,7 @@
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/ChimericPairedEndAligner.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/IntersectingPairedEndAligner.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/PairedAligner.h"
+#include "tensorflow/core/user_ops/agd-format/column_builder.h"
 
 namespace snap_wrapper {
     using namespace tensorflow;
@@ -27,21 +29,20 @@ namespace snap_wrapper {
 
       // void for speed, as this is called per-read!
       void align(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result);
+      Status writeResult(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result,
+                         AlignmentResultBuilder &result_column);
 
     private:
       std::unique_ptr<BigAllocator> allocator;
       IntersectingPairedEndAligner *intersectingAligner;
       ChimericPairedEndAligner *aligner;
       const PairedAlignerOptions *options;
+      SAMFormat format;
+      std::string cigar;
     };
 
     BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options);
 
-    Status alignSingle(BaseAligner* aligner, 
-        AlignerOptions* options, Read* read, 
-        std::vector<SingleAlignmentResult>* results, 
-        int num_secondary_alignments, bool& first_is_primary);
- 
     // Uses SNAP code to compute the 'cigar' and 'flags' fields from the SAM format
     bool computeCigarFlags(
         // inputs

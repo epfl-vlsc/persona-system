@@ -28,7 +28,7 @@ namespace snap_wrapper {
     return tensorflow::Status::OK();
   }
 
-  PairedAligner::PairedAligner(const PairedAlignerOptions *options_, GenomeIndex *index) : options(options_) {
+  PairedAligner::PairedAligner(const PairedAlignerOptions *options_, GenomeIndex *index) : options(options_), format(options_->useM) {
     size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(
                                 index,
                                 options->intersectingAlignerMaxHits,
@@ -165,6 +165,23 @@ namespace snap_wrapper {
                    nullptr); // more stuff related to secondary results
   }
 
+  Status
+  PairedAligner::writeResult(array<Read, 2> &snap_reads, PairedAlignmentResult &result, AlignmentResultBuilder &result_column) {
+    // First, we set invalid location on the pairs if the aligner couldn't find the result
+    for (size_t i = 0; i < 2; ++i) {
+      if (result.status[i] == NotFound) {
+        result.location[i] = InvalidGenomeLocation;
+      }
+    }
+    for (auto &read : snap_reads) {
+      read.setAdditionalFrontClipping(0);
+    }
+
+    // compute the CIGAR strings for both
+
+    return Status::OK();
+  }
+
   BaseAligner* createAligner(GenomeIndex* index, AlignerOptions* options) {
     return new BaseAligner(
         index,
@@ -185,58 +202,6 @@ namespace snap_wrapper {
 
   bool passesReadFilter(Read* read, AlignerOptions* options) {
     return read->getDataLength() >= options->minReadLength && read->countOfNs() <= options->maxDist;
-  }
-
-  tensorflow::Status alignSingle(BaseAligner* aligner, AlignerOptions* options, Read* read,
-      std::vector<SingleAlignmentResult>* results, int num_secondary_alignments, bool& first_is_primary) {
-    if (!passesReadFilter(read, options)) {
-      SingleAlignmentResult result;
-      result.status = AlignmentResult::NotFound;
-      result.location = InvalidGenomeLocation;
-      result.mapq = 0;
-      result.direction = 0;
-      results->push_back(result);
-      return tensorflow::Status::OK();
-    }
-
-    SingleAlignmentResult primaryResult;
-    SingleAlignmentResult* secondaryResults = nullptr;
-    if (num_secondary_alignments != 0) {
-      secondaryResults = new SingleAlignmentResult[num_secondary_alignments];
-    }
-    int secondaryResultsCount;
-
-    aligner->AlignRead(
-        read,
-        &primaryResult,
-        options->maxSecondaryAlignmentAdditionalEditDistance,
-        num_secondary_alignments * sizeof(SingleAlignmentResult),
-        &secondaryResultsCount,
-        num_secondary_alignments,
-        secondaryResults
-        );
-
-    /*LOG(INFO) << "Primary result: location " << primaryResult.location <<
-      " direction: " << primaryResult.direction << " score " << primaryResult.score;
-      LOG(INFO) << "secondaryResultsCount is " << secondaryResultsCount;*/
-
-    if (options->passFilter(read, primaryResult.status, false, false)) {
-      results->push_back(primaryResult);
-      first_is_primary = true;
-    }
-    else {
-      first_is_primary = false;
-    }
-
-    for (int i = 0; i < secondaryResultsCount; ++i) {
-      if (options->passFilter(read, secondaryResults[i].status, false, true)) {
-        results->push_back(secondaryResults[i]);
-      }
-    }
-
-    delete[] secondaryResults;
-
-    return tensorflow::Status::OK();
   }
 
   bool computeCigarFlags(
@@ -309,7 +274,6 @@ namespace snap_wrapper {
         qnameLen, read, result, genomeLocation, direction, secondaryAlignment,
         useM, hasMate, firstInPair, alignedAsPair, mate, mateResult, mateLocation, mateDirection,
         &extraBasesClippedBefore)) {
-			
 			return false;
 		}
 
@@ -346,9 +310,9 @@ namespace snap_wrapper {
           char clipAfter[16] = {'\0'};
           char hardClipBefore[16] = {'\0'};
           char hardClipAfter[16] = {'\0'};
-          
+
           cigarString = "";
-          
+
           if (frontHardClipping > 0) {
             snprintf(hardClipBefore, sizeof(hardClipBefore), "%uH", frontHardClipping);
             cigarString += hardClipBefore;
@@ -436,11 +400,6 @@ namespace snap_wrapper {
 
     return tensorflow::Status::OK();
 	} // adjustResults
-
-
-
-
-	
 
   tensorflow::Status writeRead(const ReaderContext& context, 
       Read *read, SingleAlignmentResult *results, int nResults,
