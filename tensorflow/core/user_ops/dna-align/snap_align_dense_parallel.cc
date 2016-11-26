@@ -249,7 +249,6 @@ private:
       base_aligner->setExplorePopularSeeds(options->explorePopularSeeds);
       base_aligner->setStopOnFirstHit(options->stopOnFirstHit);
 
-      bool first_is_primary = true; // we only ever generate one result
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
       SingleAlignmentResult primaryResult;
@@ -333,8 +332,17 @@ private:
             if (sam_format_){
               result_builder.AppendAlignmentResult(primaryResult);
             } else {
-              auto s = snap_wrapper::adjustResults(&snap_read, primaryResult, first_is_primary, format,
-                                                   options_->useM, lvc, genome_, cigarString, flag);
+              auto s = snap_wrapper::adjustResults(&snap_read,
+                                                   primaryResult.status,
+                                                   primaryResult.direction,
+                                                   primaryResult.mapq,
+                                                   primaryResult.location,
+                                                   format,
+                                                   options_->useM,
+                                                   lvc,
+                                                   genome_,
+                                                   cigarString,
+                                                   flag);
 
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";

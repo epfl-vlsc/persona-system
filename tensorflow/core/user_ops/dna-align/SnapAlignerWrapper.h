@@ -37,38 +37,49 @@ namespace snap_wrapper {
       IntersectingPairedEndAligner *intersectingAligner;
       ChimericPairedEndAligner *aligner;
       const PairedAlignerOptions *options;
+      const Genome *genome;
+
+      // members for writing out the cigar string
       SAMFormat format;
-      std::string cigar;
+      LandauVishkinWithCigar lvc;
+      // keep these around as members to avoid reallocating objects for them
+      std::array<std::string, 2> cigars;
     };
 
     // Uses SNAP code to compute the 'cigar' and 'flags' fields from the SAM format
     bool computeCigarFlags(
-        // inputs
-        Read *read,
-        SingleAlignmentResult* results,
-        int whichResult,
-        bool firstIsPrimary, 
-        GenomeLocation genomeLocation,
-        const SAMFormat &format,
-        bool useM,
-        LandauVishkinWithCigar& lvc, 
-        const Genome* genome,
-        //outputs
-        std::string &cigarString,
-        int &flags,
-        int &addFrontClipping);
+                           // input
+                           Read *read,
+                           AlignmentResult &result,
+                           Direction &direction,
+                           int &map_quality,
+                           GenomeLocation genomeLocation, // can differ from original location
+                           const SAMFormat &format,
+                           bool useM,
+                           LandauVishkinWithCigar& lvc,
+                           const Genome* genome,
+                           //output
+                           std::string &cigarString,
+                           int &flags,
+                           int &addFrontClipping);
 
     // Computes the CIGAR string and flags and adjusts location according to clipping
+
     tensorflow::Status adjustResults(
-        // inputs
-        Read *read,
-        SingleAlignmentResult& result,
-        bool firstIsPrimary, 
-        const SAMFormat &format,
-        bool useM,
-        LandauVishkinWithCigar& lvc, 
-        const Genome* genome,
-        //outputs
-        std::string &cigarString,
-        int &flags);
+                                     // inputs
+                                     Read *read,
+                                     AlignmentResult &status,
+                                     Direction &direction,
+                                     int &map_quality,
+                                     GenomeLocation &location,
+                                     const SAMFormat &format,
+                                     bool useM,
+                                     LandauVishkinWithCigar& lvc,
+                                     const Genome* genome,
+                                     //outputs
+                                     std::string &cigarString,
+                                     int &flags
+                                     );
+
+    int foobar(int a );
 }
