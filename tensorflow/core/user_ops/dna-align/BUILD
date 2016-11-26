@@ -24,14 +24,7 @@ cc_library(
     name = "snap_align",
     hdrs = ["SnapAlignerWrapper.h"],
     includes = ["."],
-    srcs = glob(["*.cc"] + ["work_queue.h"],
-           exclude = [
-                      "sam_writer_async_op.cc",
-                      "snap_align.cc",
-                      "snap_read_decode.cc",
-                      "snap_results_decode.cc",
-                      ],
-               ),
+    srcs = glob(["*.cc"] + ["work_queue.h"]),
     copts = tf_copts() + ["-fexceptions"],
     nocopts = "-fno-exceptions",
     #linkopts = [
