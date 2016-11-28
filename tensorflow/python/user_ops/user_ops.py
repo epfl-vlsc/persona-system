@@ -280,16 +280,15 @@ def _SnapAlignAGDParallelShape(op):
 
 _agd_p_a_string = "AGDPairedAligner"
 ops.NoGradient(_agd_p_a_string)
-def AGDPairedAligner(genome, options, buffer_list_pool, forward_read, reverse_read, num_threads, subchunk_size, work_queue_size=3, sam_format=False, name=None):
+def AGDPairedAligner(genome, options, buffer_list_pool, read, num_threads, subchunk_size, work_queue_size=3, sam_format=False, name=None):
   if num_threads < 1:
     raise EnvironmentError("number of threads must be greater than 0. Got {}".format(num_threads))
   if work_queue_size < 1:
     raise EnvironmentError("work queue size must be strictly positive. Got {}".format(work_queue_size))
   if subchunk_size < 1:
     raise EnvironmentError("must have a positive size for subchunks. Got {}".format(subchunk_size))
-  return gen_user_ops.snap_align_agd_parallel(genome_handle=genome, options_handle=options, num_threads=num_threads,
-                                              buffer_list_pool=buffer_list_pool, read_0=forward_read,
-                                              read_1=reverse_read,
+  return gen_user_ops.agd_paired_aligner(genome_handle=genome, options_handle=options, num_threads=num_threads,
+                                              buffer_list_pool=buffer_list_pool, read=read,
                                               subchunk_size=subchunk_size, work_queue_size=work_queue_size, sam_format=sam_format, name=name)
 
 @ops.RegisterShape(_agd_p_a_string)
