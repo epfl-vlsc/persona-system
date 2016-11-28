@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <utility>
+#include <string>
 
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/resource_mgr.h"
@@ -20,6 +21,10 @@
 
 namespace tensorflow {
   using namespace std;
+
+  namespace {
+    const string options_name("AlignerOptions"), paired_options_name("PairedAlignerOptions");
+  }
 
     template <typename T>
     class AlignerOptionsOp : public OpKernel {
@@ -82,12 +87,15 @@ namespace tensorflow {
         bool options_handle_set_ GUARDED_BY(mu_);
     };
 
-    REGISTER_OP("AlignerOptions")
-        .Output("handle: Ref(string)")
-        .Attr("cmd_line: string")
-        .Attr("container: string = ''")
-        .Attr("shared_name: string = ''")
-        .SetIsStateful()
+#define MAKE_OP(_name_)                         \
+  REGISTER_OP(_name_)                           \
+  .Output("handle: Ref(string)")                \
+  .Attr("cmd_line: string")                     \
+  .Attr("container: string = ''")               \
+  .Attr("shared_name: string = ''")             \
+  .SetIsStateful()
+
+MAKE_OP(options_name.c_str())
         .Doc(R"doc(
 An op that produces SNAP aligner options.
 handle: The handle to the options.
@@ -98,6 +106,18 @@ shared_name: If non-empty, this options will be shared under the given name
   across multiple sessions.
 )doc");
 
-  REGISTER_KERNEL_BUILDER(Name("AlignerOptions").Device(DEVICE_CPU), AlignerOptionsOp<AlignerOptions>);
-  REGISTER_KERNEL_BUILDER(Name("PairedAlignerOptions").Device(DEVICE_CPU), AlignerOptionsOp<PairedAlignerOptions>);
+MAKE_OP(paired_options_name.c_str())
+        .Doc(R"doc(
+An op taht produces SNAP paired aligner options.
+handle: The handle to the options.
+cmd_line: The SNAP command line parsed to create the options.
+container: If non-empty, this options is placed in the given container.
+        Otherwise, a default container is used.
+shared_name: If non-empty, this options will be shared under the given name
+  across multiple sessions.
+)doc");
+
+
+  REGISTER_KERNEL_BUILDER(Name(options_name.c_str()).Device(DEVICE_CPU), AlignerOptionsOp<AlignerOptions>);
+  REGISTER_KERNEL_BUILDER(Name(paired_options_name.c_str()).Device(DEVICE_CPU), AlignerOptionsOp<PairedAlignerOptions>);
 }  // namespace tensorflow
