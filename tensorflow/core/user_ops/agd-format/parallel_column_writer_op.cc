@@ -112,48 +112,6 @@ Thus we always need 3 of these for the full conversion pipeline
 
       if (compress_) {
         OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
-#if 0
-        buf_.clear(); outbuf_.clear();
-        for (auto &buffer_pair : buffers) {
-          if (i + recs_per_chunk > num_records) {
-            recs_per_chunk = num_records - i;
-          }
-
-          auto &data_buf = buffer.get(); // only need to do this on the first call
-          s = appendSegment(&data_buf[0], recs_per_chunk, buf_, true);
-          if (!s.ok())
-            break;
-
-          i += recs_per_chunk;
-        }
-        if (s.ok()) {
-          i = 0; recs_per_chunk = records_per_chunk;
-          size_t expected_size;
-          for (auto &buffer_pair : buffers) {
-            if (i + recs_per_chunk > num_records) {
-              recs_per_chunk = num_records - i;
-            }
-
-            auto &data_buf = buffer.get();
-
-            expected_size = data_buf.size() - recs_per_chunk;
-            s = appendSegment(&data_buf[recs_per_chunk], expected_size, buf_, true);
-            if (!s.ok())
-              break;
-            i += recs_per_chunk;
-          }
-
-          if (s.ok()) {
-            s = compressGZIP(&buf_[0], buf_.size(), outbuf_);
-            if (s.ok()) {
-              fwrite_ret = fwrite(&outbuf_[0], outbuf_.size(), 1, file_out);
-              if (fwrite_ret != 1) {
-                s = Internal("fwrite(compressed) return non-1 value of ", fwrite_ret);
-              }
-            }
-          }
-        }
-#endif
       } else {
         for (i = 0; i < num_buffers; ++i) {
           auto &index = (*buf_list)[i].index();

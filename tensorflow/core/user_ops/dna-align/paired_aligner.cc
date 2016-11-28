@@ -256,6 +256,7 @@ private:
         while (io_chunk_status.ok()) {
 
           result_builder.set_buffer_pair(result_buf);
+          subchunk_status = Status::OK();
           while (subchunk_status.ok()) {
             for (size_t i = 0; i < 2; ++i) {
               auto &sread = snap_read[i];
