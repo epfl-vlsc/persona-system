@@ -113,6 +113,7 @@ namespace tensorflow {
     switch (record_type) {
     case RecordType::BASES:
     case RecordType::QUALITIES:
+    case RecordType::ALIGNMENT:
     case RecordType::COMMENTS:
       break;
     default:
