@@ -502,10 +502,13 @@ def FASTQCreatorPool(size=0, bound=False, name=None):
 def _FASTQCreatorPoolOpShape(op):
     return [tensor_shape.vector(2)]
 
+def _make_zmq_url(addr, port):
+  return "tcp://{addr}:{port}".format(addr=addr, port=port)
+
 _zmq_str = "ZeroMqSource"
 ops.NoGradient(_zmq_str)
 def ZeroMqSource(server_address, server_port, name=None):
-  return gen_user_ops.zero_mq_source(url="tcp://{addr}:{port}".format(addr=server_address, port=server_port), name=name)
+  return gen_user_ops.zero_mq_source(url=_make_zmq_url(addr=server_address, port=server_port), name=name)
 
 @ops.RegisterShape(_zmq_str)
 def _ZeroMqPipeSourceShape(op):
@@ -514,9 +517,22 @@ def _ZeroMqPipeSourceShape(op):
 _zmq_sink_str = "ZeroMqSink"
 ops.NoGradient(_zmq_sink_str)
 def ZeroMqSink(tensor_input, server_address, server_port, name=None):
-  return gen_user_ops.zero_mq_sink(input=tensor_input, url="tcp://{addr}:{port}".format(addr=server_address, port=server_port), name=name)
+  return gen_user_ops.zero_mq_sink(input=tensor_input, url=_make_zmq_url(addr=server_address, port=server_port), name=name)
 
 @ops.RegisterShape(_zmq_sink_str)
 def _ZeroMqPipeSinkShape(op):
   _assert_scalar(op.inputs[0].get_shape())
   return []
+
+_zmq_csv_str = "ZeroMqCSVSource"
+ops.NoGradient(_zmq_csv_str)
+def ZeroMqCSVSource(server_address, server_port, columns, name=None):
+  if columns < 1:
+    raise Exception("CSV columns must be strictly positive. Got: {}".format(columns))
+  return gen_user_ops.zero_mq_csv_source(url=_make_zmq_url(addr=server_address, port=server_port),
+                                         columns=columns, name=name)
+
+@ops.RegisterShape(_zmq_csv_str)
+def _ZeroMqCSVSourceShape(op):
+  columns = op.get_attr("columns")
+  return [tensor_sahpe.vector(columns)]
