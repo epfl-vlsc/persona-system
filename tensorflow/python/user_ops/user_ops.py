@@ -535,4 +535,4 @@ def ZeroMqCSVSource(server_address, server_port, columns, name=None):
 @ops.RegisterShape(_zmq_csv_str)
 def _ZeroMqCSVSourceShape(op):
   columns = op.get_attr("columns")
-  return [tensor_sahpe.vector(columns)]
+  return [tensor_shape.vector(columns)]
