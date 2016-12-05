@@ -1,10 +1,10 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
-#include "shared_mmap_file_resource.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/platform/logging.h"
 #include "format.h"
+#include "column_builder.h"
 #include "agd_record_reader.h"
 #include "compression.h"
 #include "parser.h"
@@ -59,9 +59,24 @@ Currently does not support a general number of columns.
   
     Status GetOutputBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
     {
-      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
+      TF_RETURN_IF_ERROR(bufferlist_pool_->GetResource(ctr));
       (*ctr)->get()->reset();
       TF_RETURN_IF_ERROR((*ctr)->allocate_output("partial_handle", ctx));
+      return Status::OK();
+    }
+    
+    Status LoadDataResources(OpKernelContext* ctx, const Tensor* handles_t, 
+        vector<AGDRecordReader> &vec, const Tensor* num_records_t) {
+      auto rmgr = ctx->resource_manager();
+      auto handles_matrix = handles_t->matrix<string>();
+      auto num = handles_t->shape().dim_size(0);
+      auto num_records = num_records_t->vec<int32>();
+      ResourceContainer<Data> *input;
+
+      for (int i = 0; i < num; i++) {
+        TF_RETURN_IF_ERROR(rmgr->Lookup(handles_matrix(i, 0), handles_matrix(i, 1), &input));
+        vec.push_back(AGDRecordReader(input, num_records(i)));
+      }
       return Status::OK();
     }
 
@@ -73,28 +88,22 @@ Currently does not support a general number of columns.
 
       sort_index_.clear();
 
-      const Tensor *results_in, bases_in, qualities_in, metadata_in, num_records_t;
+      const Tensor *results_in, *bases_in, *qualities_in, *metadata_in, *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
-      auto num_records = num_records_t->vector<int32>();
+      auto num_records = num_records_t->vec<int32>();
       OP_REQUIRES_OK(ctx, ctx->input("results_handles", &results_in));
       OP_REQUIRES_OK(ctx, ctx->input("bases_handles", &bases_in));
       OP_REQUIRES_OK(ctx, ctx->input("qualities_handles", &qualities_in));
       OP_REQUIRES_OK(ctx, ctx->input("metadata_handles", &metadata_in));
 
       vector<AGDRecordReader> results_vec;
-      LoadDataResources(ctx, results_in, results_vec, num_records_t);
-
-      Tensor *output;
-      TensorShape matrix_shape({2}); // basically a list of (container, name) pairs
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("processed_buffers", matrix_shape, &output));
-      
-      auto output_matrix = output->matrix<string>();
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, results_in, results_vec, num_records_t));
 
       // phase 1: parse results sequentially, build up vector of (genome_location, index)
       const format::AlignmentResult* agd_result;
       auto num_results = results_in->shape().dim_size(0);
       const char* data;
-      uint32 size;
+      size_t size;
       Status status;
       SortEntry entry;
 
@@ -117,23 +126,25 @@ Currently does not support a general number of columns.
       }
 
       // phase 2: sort the vector by genome_location
-      std::qsort(sort_index_.begin(), sort_index_.end(), EntryCompare);
+      std::sort(sort_index_.begin(), sort_index_.end(), [](SortEntry const& a, SortEntry const& b) {
+          return a.location < b.location;
+          });
 
       // phase 3: using the sort vector, merge the chunks into superchunks in sorted
       // order
 
       // now we need all the chunk data
       vector<AGDRecordReader> bases_vec;
-      LoadDataResources(ctx, bases_in, bases_vec, num_records_t);
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, bases_in, bases_vec, num_records_t));
       vector<AGDRecordReader> qualities_vec;
-      LoadDataResources(ctx, qualities_in, qualities_vec, num_records_t);
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, qualities_in, qualities_vec, num_records_t));
       vector<AGDRecordReader> metadata_vec;
-      LoadDataResources(ctx, metadata_in, metadata_vec, num_records_t);
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, metadata_in, metadata_vec, num_records_t));
        
       // get output buffer pairs (pair holds [index, data] to construct 
       // AGD format temp output file in next dataflow stage)
       ResourceContainer<BufferList> *output_bufferlist_container;
-      OP_REQUIRES_OK(ctx, GetOutputBufferList(ctx, &bufferlist_resource_container));
+      OP_REQUIRES_OK(ctx, GetOutputBufferList(ctx, &output_bufferlist_container));
       auto output_bufferlist = output_bufferlist_container->get();
       output_bufferlist->resize(4);
       ColumnBuilder bases_builder;
@@ -145,20 +156,20 @@ Currently does not support a general number of columns.
       metadata_builder.SetBufferPair(&(*output_bufferlist)[2]);
       results_builder.SetBufferPair(&(*output_bufferlist)[3]);
 
-      for (int i = 0; i < sort_index_.size(); i++) {
+      for (size_t i = 0; i < sort_index_.size(); i++) {
         auto& entry = sort_index_[i];
         auto& result_reader = results_vec[entry.chunk];
         auto& bases_reader = bases_vec[entry.chunk];
         auto& qualities_reader = qualities_vec[entry.chunk];
-        auto& metdata_reader = metdata_vec[entry.chunk];
+        auto& metadata_reader = metadata_vec[entry.chunk];
 
-        bases_reader.GetRecordAt(&data, &size, entry.index);
+        bases_reader.GetRecordAt(entry.index, &data, &size);
         bases_builder.AppendRecord(data, size);
-        qualities_reader.GetRecordAt(&data, &size, entry.index);
+        qualities_reader.GetRecordAt(entry.index, &data, &size);
         qualities_builder.AppendRecord(data, size);
-        metadata_reader.GetRecordAt(&data, &size, entry.index);
+        metadata_reader.GetRecordAt(entry.index, &data, &size);
         metadata_builder.AppendRecord(data, size);
-        results_reader.GetRecordAt(&data, &size, entry.index);
+        result_reader.GetRecordAt(entry.index, &data, &size);
         results_builder.AppendRecord(data, size);
       }
 
@@ -177,24 +188,7 @@ Currently does not support a general number of columns.
     };
 
     vector<SortEntry> sort_index_;
-
-    bool EntryCompare(const SortEntry &a, const SortEntry &b) {
-      return a.location < b.location; 
-    }
     
-    Status LoadDataResources(OpKernelContext* ctx, const Tensor* handles_t, 
-        vector<AGDRecordReader> &vec, const Tensor* num_records_t) {
-      auto rmgr = ctx->resource_manager();
-      auto handles_matrix = handles_t->matrix<string>();
-      auto num = handles_t->shape().dim_size(0);
-      auto num_records = num_records_t->vector<int32>();
-      ResourceContainer<Data> *input;
-
-      for (int i = 0; i < num; i++) {
-        OP_REQUIRES_OK(ctx, rmgr->Lookup(handles_matrix(i, 0), handles_matrix(i, 1), &input));
-        vec.push_back(AGDRecordReader(input, num_records(i));
-      }
-    }
 
   };
 
