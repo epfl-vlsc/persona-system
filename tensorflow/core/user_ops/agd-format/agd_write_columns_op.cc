@@ -55,7 +55,7 @@ Thus we always need 3 of these for the full conversion pipeline
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &rec_id));
       auto max_size = sizeof(format::FileHeader::string_id);
       OP_REQUIRES(ctx, rec_id.length() < max_size,
-                  Internal("record_id for column header '", s, "' greater than 32 characters"));
+                  Internal("record_id for column header '", rec_id, "' greater than 32 characters"));
 
       vector<string> rec_types;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &rec_types));
@@ -74,14 +74,14 @@ Thus we always need 3 of these for the full conversion pipeline
         } else { // no need to check. we're saved by string enum types if TF
           t = RecordType::ALIGNMENT;
         }
-        record_suffixes_.push_back("." + t_in)
+        record_suffixes_.push_back("." + t_in);
         header.record_type = static_cast<uint8_t>(t);
         headers_.push_back(header);
       }
 
       string outdir;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &outdir));
-      if (!s.empty()) {
+      if (!outdir.empty()) {
         record_prefix_ = outdir;
       }
     }
@@ -95,7 +95,7 @@ Thus we always need 3 of these for the full conversion pipeline
       auto column_vec = column_t->vec<string>();
 
       ResourceContainer<BufferList> *columns;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &columns));
       core::ScopedUnref column_releaser(columns);
       ResourceReleaser<BufferList> a(*columns);
 
@@ -105,6 +105,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
       // do this after the wait, so we are only timing the write, and NOT part of the alignment
       //start = chrono::high_resolution_clock::now();
+      auto s = Status::OK();
 
       for (int i = 0; i < num_buffers; i++) {
 
@@ -117,11 +118,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
         OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out, i));
 
-        size_t i;
-        uint32_t num_records = headers_[i].last_ordinal - headers_[i].first_ordinal;
-
         int fwrite_ret;
-        auto s = Status::OK();
 
         if (compress_) {
           OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
@@ -171,7 +168,7 @@ Thus we always need 3 of these for the full conversion pipeline
     Status WriteHeader(OpKernelContext *ctx, FILE *file_out, int index) {
       const Tensor *tensor;
       uint64_t tmp64;
-      auto& header = headers_[i];
+      auto& header = headers_[index];
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
       tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int64>()());
       header.first_ordinal = tmp64;
