@@ -20,15 +20,23 @@ namespace tensorflow {
     cur_record_ = 0;
   }
 
-  Status AGDRecordReader::GetNextRecord(const char** data, size_t* size) {
+  Status AGDRecordReader::PeekNextRecord(const char** data, size_t* size) {
     if (cur_record_ < num_records_) {
       *size = (size_t) index_[cur_record_];
       *data = cur_data_;
-      cur_data_ += index_[cur_record_++];
+      cur_data_ += index_[cur_record_];
     } else {
       return ResourceExhausted("agd record container exhausted");
     }
     return Status::OK();
+  }
+
+  Status AGDRecordReader::GetNextRecord(const char** data, size_t* size) {
+    auto s = PeekNextRecord(data, size);
+    if (s.ok()) {
+      cur_record_++;
+    }
+    return s;
   }
 
   Status AGDRecordReader::GetRecordAt(size_t index, const char** data, size_t* size) {

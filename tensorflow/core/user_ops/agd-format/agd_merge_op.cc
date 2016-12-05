@@ -1,6 +1,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <queue>
 
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
@@ -22,6 +23,7 @@
 namespace tensorflow {
   using namespace std;
   using namespace errors;
+  using namespace format;
 
   namespace {
     const string op_name("AGDMerge");
@@ -30,6 +32,40 @@ namespace tensorflow {
       core::ScopedUnref a(data);
       data->release();
     }
+
+    class ColumnCursor {
+    public:
+      ColumnCursor(AGDRecordReader &&results, vector<AGDRecordReader> &&other_columns) :
+        results_(move(results)), other_columns_(move(other_columns)) {}
+
+      Status advance_record() {
+        const char* data;
+        TF_RETURN_IF_ERROR(results_.PeekNextRecord(&data, &current_result_size_));
+        current_result_ = reinterpret_cast<decltype(current_result_)>(data);
+        current_location_ = current_result_->location_;
+        return Status::OK();
+      }
+
+      inline int64_t get_location() {
+        return current_location_;
+      }
+
+    private:
+      vector<AGDRecordReader> other_columns_;
+      AGDRecordReader results_;
+      const AlignmentResult *current_result_ = nullptr;
+      size_t current_result_size_;
+      int64_t current_location_ = -2048;
+
+    };
+
+    typedef pair<int64_t, ColumnCursor*> GenomeScore;
+    struct ScoreComparator {
+      bool operator()(const GenomeScore &a, const GenomeScore &b) {
+        return a.first > b.first;
+      }
+    };
+
   }
 
   REGISTER_OP(op_name.c_str())
@@ -70,30 +106,59 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto chunk_group_shape = chunk_group_handles_t->shape();
       auto num_super_chunks = chunk_group_shape.dim_size(0);
+      decltype(num_super_chunks) super_chunk;
       auto num_columns = chunk_group_shape.dim_size(1);
+      decltype(num_columns) column;
       auto chunk_group_handles = chunk_group_handles_t->tensor<string, 3>();
       auto num_records = num_records_t->vec<int32>();
 
       auto rsrc_mgr = ctx->resource_manager();
 
-      vector<AGDRecordReader> flat_chunk_handles;
+      vector<ColumnCursor> columns;
       vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>> releasers;
+      priority_queue<GenomeScore, vector<GenomeScore>, ScoreComparator> score_heap;
 
-      auto num_records_needed = num_super_chunks * num_columns;
-
-      flat_chunk_handles.reserve(num_records_needed);
-      releasers.reserve(num_records_needed);
+      releasers.reserve(num_super_chunks * num_columns);
+      columns.reserve(num_super_chunks);
       ResourceContainer<Data> *data;
 
-      for (decltype(num_super_chunks) super_chunk = 0; super_chunk < num_super_chunks; ++super_chunk) {
+      for (super_chunk = 0; super_chunk < num_super_chunks; ++super_chunk) {
         auto super_chunk_record_count = num_records(super_chunk);
+        column = 0;
+        // First, we look up the results column
+        OP_REQUIRES_OK(ctx, rsrc_mgr->Lookup(chunk_group_handles(super_chunk, column, 0),
+                                             chunk_group_handles(super_chunk, column, 1), &data));
+        AGDRecordReader results_column(data, super_chunk_record_count);
+        releasers.push_back(move(decltype(releasers)::value_type(data, resource_releaser)));
 
-        for (decltype(num_columns) column = 0; column < num_columns; ++column) {
+        // Then we look up the rest of the columns
+        vector<AGDRecordReader> other_columns;
+        other_columns.reserve(num_columns-1);
+        for (column = 1; column < num_columns; ++column) {
           OP_REQUIRES_OK(ctx, rsrc_mgr->Lookup(chunk_group_handles(super_chunk, column, 0),
                                                chunk_group_handles(super_chunk, column, 1), &data));
-          flat_chunk_handles.push_back(AGDRecordReader(data, super_chunk_record_count));
+          other_columns.push_back(AGDRecordReader(data, super_chunk_record_count));
           releasers.push_back(move(decltype(releasers)::value_type(data, resource_releaser)));
         }
+        ColumnCursor a(move(results_column), move(other_columns));
+        OP_REQUIRES_OK(ctx, a.advance_record());
+        columns.push_back(move(a));
+      }
+
+      for (auto &cc : columns) {
+        score_heap.push(GenomeScore(cc.get_location(), &cc));
+      }
+
+      ColumnCursor *cc;
+      while (!score_heap.empty()) {
+        auto &top = score_heap.top();
+        cc = top.second;
+
+        // TODO actual stuff!
+
+        // TODO only do this if non-empty
+        score_heap.push(GenomeScore(cc->get_location(), cc));
+        score_heap.pop();
       }
     }
 

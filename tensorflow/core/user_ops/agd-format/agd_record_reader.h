@@ -20,6 +20,7 @@ namespace tensorflow {
     void Reset();
 
     Status GetNextRecord(const char** data, size_t* size);
+    Status PeekNextRecord(const char** data, size_t* size);
 
     Status GetRecordAt(size_t index, const char** data, size_t* size);
 
