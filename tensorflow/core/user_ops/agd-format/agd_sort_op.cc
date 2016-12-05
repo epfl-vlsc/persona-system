@@ -36,7 +36,7 @@ Outputs handle to merged, sorted superchunks in `partial_handles`.
 A BufferList that contains bases, qual, meta, results superchunk 
 BufferPairs ready for writing to disk.
 
-Inputs: (N, 2) string handles to buffers containing results, bases,
+Inputs -> (N, 2) string handles to buffers containing results, bases,
 qualities and metadata. num_records is a vector of int32's with the 
 number of records per chunk.
 
