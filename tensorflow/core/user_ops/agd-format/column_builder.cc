@@ -46,4 +46,19 @@ namespace tensorflow {
     char size = static_cast<char>(index_entry);
     index_->AppendBuffer(&size, 1);
   }
+
+  
+  void ColumnBuilder::SetBufferPair(BufferPair* data) {
+    data->reset();
+    data_ = &data->data();
+    index_ = &data->index();
+  }
+
+  void ColumnBuilder::AppendRecord(const char* data, const std::size_t size) {
+    if (size > 255) LOG(INFO) << "WARNING: Appending data larger than 255 bytes not supported by AGD.";
+    data_->AppendBuffer(data, size);
+    char cSize = static_cast<char>(size);
+    index_->AppendBuffer(&cSize, 1);
+  }
+
 } // namespace tensorflow {

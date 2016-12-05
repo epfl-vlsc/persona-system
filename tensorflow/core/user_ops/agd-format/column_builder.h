@@ -37,4 +37,14 @@ public:
     format::AlignmentResult converted_result;
   };
 
+class ColumnBuilder {
+  public:
+    void SetBufferPair(BufferPair* data);
+
+    void AppendRecord(const char* data, const std::size_t size);
+
+  private:
+    Buffer *data_ = nullptr, *index_ = nullptr;
+};
+
 } // namespace tensorflow

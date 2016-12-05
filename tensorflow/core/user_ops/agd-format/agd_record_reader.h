@@ -55,7 +55,7 @@ namespace tensorflow {
       const char *base_data_, data_, cur_data_;
       int num_records_;
       int cur_record_;
-  }
+  };
 
 }
 
