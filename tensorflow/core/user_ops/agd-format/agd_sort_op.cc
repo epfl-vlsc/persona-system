@@ -26,6 +26,7 @@ namespace tensorflow {
   .Input("metadata_handles: string")
   .Input("num_records: int32")
   .Output("partial_handle: string")
+  .Output("superchunk_records: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Takes N results buffers, and associated bases, qualities and metadata
@@ -55,6 +56,7 @@ Currently does not support a general number of columns.
 
     ~AGDSortOp() {
       core::ScopedUnref unref_pool(buffer_pool_);
+      core::ScopedUnref unref_listpool(bufferlist_pool_);
     }
   
     Status GetOutputBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
@@ -95,6 +97,14 @@ Currently does not support a general number of columns.
       OP_REQUIRES_OK(ctx, ctx->input("bases_handles", &bases_in));
       OP_REQUIRES_OK(ctx, ctx->input("qualities_handles", &qualities_in));
       OP_REQUIRES_OK(ctx, ctx->input("metadata_handles", &metadata_in));
+
+      int superchunk_records = 0;
+      for (int i = 0; i < num_records.size(); i++)
+        superchunk_records += num_records(i);
+
+      Tensor* records_out_t;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("superchunk_records", TensorShape({}), &records_out_t));
+      records_out_t->scalar<int32>()() = superchunk_records;
 
       vector<AGDRecordReader> results_vec;
       OP_REQUIRES_OK(ctx, LoadDataResources(ctx, results_in, results_vec, num_records_t));
