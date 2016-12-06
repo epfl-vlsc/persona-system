@@ -77,6 +77,16 @@ namespace tensorflow {
       static inline
       Status
       copy_record(BufferPair& bp, AGDRecordReader &r) {
+        const char *record_data;
+        size_t record_size;
+        auto &index = bp.index();
+        auto &data = bp.data();
+
+        TF_RETURN_IF_ERROR(r.GetNextRecord(&record_data, &record_size));
+        auto char_sz = static_cast<char>(record_size);
+        TF_RETURN_IF_ERROR(index.AppendBuffer(&char_sz, sizeof(char_sz)));
+        TF_RETURN_IF_ERROR(data.AppendBuffer(record_data, record_size));
+
         return Status::OK();
       }
     };
