@@ -208,7 +208,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
         // pre-increment because we just added 1 to the chunk size
         // we're guaranteed that chunk size is at least 1
         if (++current_chunk_size == chunk_size_) {
-          OP_REQUIRES_OK(ctx, EnqueueBufferList(bl_ctr));
+          OP_REQUIRES_OK(ctx, EnqueueBufferList(ctx, bl_ctr));
           OP_REQUIRES_OK(ctx, buflist_pool_->GetResource(&bl_ctr));
           bl = bl_ctr->get();
           bl->resize(num_columns);
@@ -221,6 +221,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
     QueueInterface *queue_ = nullptr;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
     ReferencePool<BufferList> *buflist_pool_ = nullptr;
+    TensorShape enqueue_shape_{{2}};
     int chunk_size_;
 
     Status Init(OpKernelContext *ctx) {
@@ -228,8 +229,25 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
     }
 
-    Status EnqueueBufferList(ResourceContainer<BufferList> *bl_ctr) {
-      // TODO figure out how to enqueue this thing
+    Status EnqueueBufferList(OpKernelContext *ctx, ResourceContainer<BufferList> *bl_ctr) {
+      QueueInterface::Tuple tuple; // just a vector<Tensor>
+      Tensor container_out;
+      TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_STRING, enqueue_shape_, &container_out));
+      auto container_out_vec = container_out.vec<string>();
+      container_out_vec(0) = bl_ctr->container();
+      container_out_vec(1) = bl_ctr->name();
+      tuple.push_back(container_out); // performs a shallow copy. Destructor doesn't release resources
+
+      TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
+
+      // This is the synchronous version
+      /*
+      Notification n;
+      queue_->TryEnqueue(tuple, ctx, [&n]() { n.Notify(); });
+      n.WaitForNotification();
+      */
+      queue_->TryEnqueue(tuple, ctx, [](){});
+
       return Status::OK();
     }
   };
