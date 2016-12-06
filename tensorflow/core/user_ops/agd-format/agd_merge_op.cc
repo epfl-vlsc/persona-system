@@ -103,9 +103,9 @@ namespace tensorflow {
   REGISTER_OP(op_name.c_str())
   .Attr("chunk_size: int >= 1")
   .Input("buffer_list_pool: Ref(string)")
+  .Input("output_buffer_queue_handle: Ref(string)")
   .Input("num_records: int32")
   .Input("chunk_group_handles: string") // a record of NUM_SUPER_CHUNKS x NUM_COLUMNS x 2 (2 for reference)
-  .Input("output_buffer_queue_handle: Ref(string)")
   .Doc(R"doc(
 Merges multiple input chunks into chunks based on `chunk_size`
 Only supports a single-stage of merging, i.e. this will not write out to an arbitrarily-large single chunk.
