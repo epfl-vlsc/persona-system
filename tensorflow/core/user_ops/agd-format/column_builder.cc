@@ -54,11 +54,12 @@ namespace tensorflow {
     index_ = &data->index();
   }
 
-  void ColumnBuilder::AppendRecord(const char* data, const std::size_t size) {
-    if (size > 255) LOG(INFO) << "WARNING: Appending data larger than 255 bytes not supported by AGD.";
+  void ColumnBuilder::AppendRecord(const char* data, const size_t size) {
+    if (size > UINT8_MAX)
+      LOG(ERROR) << "WARNING: Appending data larger than " << UINT8_MAX << " bytes not supported by AGD.";
     data_->AppendBuffer(data, size);
     char cSize = static_cast<char>(size);
-    index_->AppendBuffer(&cSize, 1);
+    index_->AppendBuffer(&cSize, sizeof(cSize));
   }
 
 } // namespace tensorflow {
