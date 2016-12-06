@@ -523,6 +523,41 @@ def _ZeroMqPipeSinkShape(op):
 
 ### MergeSort Ops ###
 
+_ms_sort_str = "AGDSort"
+ops.NoGradient(_ms_sort_str)
+def AGDSort(buffer_pool, results_handles, bases_handles, qualities_handles, 
+        metadata_handles, num_records, name=None):
+    return gen_user_ops.agd_sort(buffer_pool=buffer_pool, 
+                                 results_handles=results_handles,
+                                 bases_handles=bases_handles,
+                                 qualities_handles=qualities_handles,
+                                 metadata_handles=metadata_handles,
+                                 num_records=num_records,
+                                 name=name)
+
+@ops.RegisterShape(_ms_sort_str)
+def _AGDSortShape(op):
+  b_pool = op.inputs[0].get_shape()
+  r_handles = op.inputs[1].get_shape()
+  b_handles = op.inputs[2].get_shape()
+  q_handles = op.inputs[3].get_shape()
+  m_handles = op.inputs[4].get_shape()
+  num_recs = op.inputs[5].get_shape()
+  
+  _assert_vec(b_pool, 2)
+  _assert_matrix(r_handles)
+  _assert_matrix(b_handles)
+  _assert_matrix(q_handles)
+  _assert_matrix(m_handles)
+    
+  if r_handles[0] != b_handles[0] != q_handles[0] != m_handles[0]:
+    raise Exception("AGDSort: dim 0 of chunk handles do not match. i.e. you have mismatched numbers of b,q,m,r handles")
+  if num_recs.ndims != 1:
+    raise Exception("AGDSort: num_recs shape should be a vector, but got {}".format(num_recs))
+
+  return [tensor_shape.vec(), tensor_shape.scalar()]
+
+
 _ms_merge_str = "AGDMerge"
 ops.NoGradient(_ms_Merge_str)
 def AGDMerge(chunk_size, buffer_list_pool, num_records, chunk_group_handles, output_buffer_queue_handle, name=None):
