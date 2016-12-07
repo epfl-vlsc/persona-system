@@ -7,6 +7,8 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "compression.h"
 #include "buffer_list.h"
 #include "format.h"
@@ -69,14 +71,18 @@ Thus we always need 3 of these for the full conversion pipeline
       record_suffix_ = "." + s;
       header_.record_type = static_cast<uint8_t>(t);
 
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &s));
-      if (!s.empty()) {
-        record_prefix_ = s;
-      }
+      string outdir;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &outdir));
+
+      if (!outdir.empty()) {
+        struct stat outdir_info;
+        OP_REQUIRES(ctx, stat(outdir.c_str(), &outdir_info) == 0, Internal("Unable to stat path: ", outdir));
+        OP_REQUIRES(ctx, S_ISDIR(outdir_info.st_mode), Internal("Path ", outdir, " is not a directory"));
+      } // else it's just the current working directory
+      record_prefix_ = outdir;
     }
 
     void Compute(OpKernelContext* ctx) override {
-      using namespace errors;
       const Tensor *path, *column_t;
       OP_REQUIRES_OK(ctx, ctx->input("file_path", &path));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
@@ -105,7 +111,6 @@ Thus we always need 3 of these for the full conversion pipeline
 
       auto num_buffers = buf_list->size();
       size_t i;
-      uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
 
       int fwrite_ret;
       auto s = Status::OK();

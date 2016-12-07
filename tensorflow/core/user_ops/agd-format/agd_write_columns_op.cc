@@ -7,6 +7,8 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "compression.h"
 #include "buffer_list.h"
 #include "format.h"
@@ -59,7 +61,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
       vector<string> rec_types;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &rec_types));
-      for (int i = 0; i < rec_types.size(); i++) {
+      for (size_t i = 0; i < rec_types.size(); ++i) {
         auto& t_in = rec_types[i];
         format::FileHeader header;
         strncpy(header.string_id, rec_id.c_str(), max_size);
@@ -81,13 +83,16 @@ Thus we always need 3 of these for the full conversion pipeline
 
       string outdir;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &outdir));
+
       if (!outdir.empty()) {
-        record_prefix_ = outdir;
-      }
+        struct stat outdir_info;
+        OP_REQUIRES(ctx, stat(outdir.c_str(), &outdir_info) == 0, Internal("Unable to stat path: ", outdir));
+        OP_REQUIRES(ctx, S_ISDIR(outdir_info.st_mode), Internal("Path ", outdir, " is not a directory"));
+      } // else it's just the current working directory
+      record_prefix_ = outdir;
     }
 
     void Compute(OpKernelContext* ctx) override {
-      using namespace errors;
       const Tensor *path, *column_t;
       OP_REQUIRES_OK(ctx, ctx->input("file_path", &path));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
@@ -101,13 +106,12 @@ Thus we always need 3 of these for the full conversion pipeline
 
       auto *buf_list = columns->get();
       auto num_buffers = buf_list->size();
-      //buf_list->wait_for_ready();
 
       // do this after the wait, so we are only timing the write, and NOT part of the alignment
       //start = chrono::high_resolution_clock::now();
       auto s = Status::OK();
 
-      for (int i = 0; i < num_buffers; i++) {
+      for (size_t i = 0; i < num_buffers; ++i) {
 
         string full_path(record_prefix_ + filepath + record_suffixes_[i]);
 
@@ -123,7 +127,6 @@ Thus we always need 3 of these for the full conversion pipeline
         if (compress_) {
           OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
         } else {
-
           auto &index = (*buf_list)[i].index();
           auto s1 = index.size();
           if (s1 == 0) {
