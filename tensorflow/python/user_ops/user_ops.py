@@ -523,6 +523,43 @@ def _ZeroMqPipeSinkShape(op):
 
 ### MergeSort Ops ###
 
+_ms_wr_col_str = "AGDWriteColumns"
+ops.NoGradient(_ms_wr_col_str)
+  .Attr("compress: bool")
+  .Attr("record_id: string")
+  .Attr("record_type: list({'base', 'qual', 'meta', 'results'})")
+  .Attr("output_dir: string = ''")
+  .Input("column_handle: string")
+  .Input("file_path: string")
+  // TODO these can be collapsed into a vec(3) if that would help performance
+  .Input("first_ordinal: int64")
+  .Input("num_records: int32")
+def AGDWriteColumns(compress, record_id, record_type, output_dir, column_handle,
+        file_path, first_ordinal, num_records, name=None):
+  return gen_user_ops.agd_write_columns(compress=compress,
+                                        record_id=record_id,
+                                        record_type=record_type,
+                                        output_dir=output_dir,
+                                        column_handle=column_handle,
+                                        file_path=file_path,
+                                        first_ordinal=first_ordinal,
+                                        num_records=num_records,
+                                        name=name)
+
+@ops.RegisterShape(_ms_wr_col_str)
+def _AGDWriteColumnsShape(op):
+  handle = op.inputs[0].get_shape()
+  path = op.inputs[1].get_shape()
+  ordinal = op.inputs[2].get_shape()
+  num_recs = op.inputs[3].get_shape()
+
+  _assert_vec(handle, 2)
+  _assert_scalar(path)
+  _assert_scalar(ordinal)
+  _assert_scalar(num_recs)
+
+  return [tensor_shape.vector(2)]
+    
 _ms_sort_str = "AGDSort"
 ops.NoGradient(_ms_sort_str)
 def AGDSort(buffer_pool, results_handles, bases_handles, qualities_handles, 
@@ -555,7 +592,7 @@ def _AGDSortShape(op):
   if num_recs.ndims != 1:
     raise Exception("AGDSort: num_recs shape should be a vector, but got {}".format(num_recs))
 
-  return [tensor_shape.vec(), tensor_shape.scalar()]
+  return [tensor_shape.vector(2), tensor_shape.scalar()]
 
 
 _ms_merge_str = "AGDMerge"
