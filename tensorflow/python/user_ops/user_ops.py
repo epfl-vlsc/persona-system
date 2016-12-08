@@ -596,7 +596,7 @@ def _AGDSortShape(op):
 
 
 _ms_merge_str = "AGDMerge"
-ops.NoGradient(_ms_Merge_str)
+ops.NoGradient(_ms_merge_str)
 def AGDMerge(chunk_size, buffer_list_pool, num_records, chunk_group_handles, output_buffer_queue_handle, name=None):
   # chunk_size > 1 enforced by op registration
   return gen_user_ops.agd_merge(chunk_size=chunk_size,
