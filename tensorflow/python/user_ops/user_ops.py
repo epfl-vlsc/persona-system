@@ -524,16 +524,6 @@ def _ZeroMqPipeSinkShape(op):
 ### MergeSort Ops ###
 
 _ms_wr_col_str = "AGDWriteColumns"
-ops.NoGradient(_ms_wr_col_str)
-  .Attr("compress: bool")
-  .Attr("record_id: string")
-  .Attr("record_type: list({'base', 'qual', 'meta', 'results'})")
-  .Attr("output_dir: string = ''")
-  .Input("column_handle: string")
-  .Input("file_path: string")
-  // TODO these can be collapsed into a vec(3) if that would help performance
-  .Input("first_ordinal: int64")
-  .Input("num_records: int32")
 def AGDWriteColumns(compress, record_id, record_type, output_dir, column_handle,
         file_path, first_ordinal, num_records, name=None):
   return gen_user_ops.agd_write_columns(compress=compress,
@@ -558,7 +548,7 @@ def _AGDWriteColumnsShape(op):
   _assert_scalar(ordinal)
   _assert_scalar(num_recs)
 
-  return [tensor_shape.vector(2)]
+  return [tensor_shape.scalar()]
     
 _ms_sort_str = "AGDSort"
 ops.NoGradient(_ms_sort_str)
