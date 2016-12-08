@@ -26,6 +26,7 @@ from tensorflow.python.framework import ops, tensor_shape, common_shapes
 from tensorflow.python.ops import io_ops
 
 import os
+from tensorflow.python.user_ops import agd_merge_sort
 
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):

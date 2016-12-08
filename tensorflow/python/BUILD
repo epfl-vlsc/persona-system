@@ -861,6 +861,7 @@ py_library(
         "ops/variable_scope.py",
         "ops/variables.py",
         "user_ops/user_ops.py",
+        "user_ops/agd_merge_sort.py"
     ],
     srcs_version = "PY2AND3",
     deps = [
