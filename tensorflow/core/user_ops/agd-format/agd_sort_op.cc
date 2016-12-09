@@ -19,7 +19,7 @@
 namespace tensorflow {
 
   REGISTER_OP("AGDSort")
-  .Input("buffer_pool: Ref(string)")
+  .Input("buffer_list_pool: Ref(string)")
   .Input("results_handles: string")
   .Input("bases_handles: string")
   .Input("qualities_handles: string")
@@ -55,7 +55,6 @@ Currently does not support a general number of columns.
     }
 
     ~AGDSortOp() {
-      core::ScopedUnref unref_pool(buffer_pool_);
       core::ScopedUnref unref_listpool(bufferlist_pool_);
     }
   
@@ -83,8 +82,7 @@ Currently does not support a general number of columns.
     }
 
     void Compute(OpKernelContext* ctx) override {
-      if (!buffer_pool_) {
-        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_pool", &buffer_pool_));
+      if (!bufferlist_pool_) {
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "bufferlist_pool", &bufferlist_pool_));
       }
 
@@ -188,7 +186,6 @@ Currently does not support a general number of columns.
     }
 
   private:
-    ReferencePool<Buffer> *buffer_pool_ = nullptr;
     ReferencePool<BufferList> *bufferlist_pool_ = nullptr;
 
     struct SortEntry {
