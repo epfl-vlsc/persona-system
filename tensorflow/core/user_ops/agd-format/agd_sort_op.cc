@@ -19,8 +19,7 @@
 namespace tensorflow {
 
   REGISTER_OP("AGDSort")
-  .Input("buffer_pool: Ref(string)")
-  .Input("bufferlist_pool: Ref(string)")
+  .Input("buffer_list_pool: Ref(string)")
   .Input("results_handles: string")
   .Input("bases_handles: string")
   .Input("qualities_handles: string")
@@ -31,15 +30,15 @@ namespace tensorflow {
   .SetIsStateful()
   .Doc(R"doc(
 Takes N results buffers, and associated bases, qualities and metadata
-chunks, and sorts them into a merged a superchunk output buffer. This 
+chunks, and sorts them into a merged a superchunk output buffer. This
 is the main sort step in the AGD external merge sort.
 
-Outputs handle to merged, sorted superchunks in `partial_handles`. 
-A BufferList that contains bases, qual, meta, results superchunk 
+Outputs handle to merged, sorted superchunks in `partial_handles`.
+A BufferList that contains bases, qual, meta, results superchunk
 BufferPairs ready for writing to disk.
 
 Inputs -> (N, 2) string handles to buffers containing results, bases,
-qualities and metadata. num_records is a vector of int32's with the 
+qualities and metadata. num_records is a vector of int32's with the
 number of records per chunk.
 
 Currently does not support a general number of columns.
@@ -52,14 +51,12 @@ Currently does not support a general number of columns.
   class AGDSortOp : public OpKernel {
   public:
     AGDSortOp(OpKernelConstruction *context) : OpKernel(context) {
-    
     }
 
     ~AGDSortOp() {
-      core::ScopedUnref unref_pool(buffer_pool_);
       core::ScopedUnref unref_listpool(bufferlist_pool_);
     }
-  
+
     Status GetOutputBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
     {
       TF_RETURN_IF_ERROR(bufferlist_pool_->GetResource(ctr));
@@ -67,8 +64,8 @@ Currently does not support a general number of columns.
       TF_RETURN_IF_ERROR((*ctr)->allocate_output("partial_handle", ctx));
       return Status::OK();
     }
-    
-    Status LoadDataResources(OpKernelContext* ctx, const Tensor* handles_t, 
+
+    Status LoadDataResources(OpKernelContext* ctx, const Tensor* handles_t,
         vector<AGDRecordReader> &vec, const Tensor* num_records_t) {
       auto rmgr = ctx->resource_manager();
       auto handles_matrix = handles_t->matrix<string>();
@@ -84,8 +81,7 @@ Currently does not support a general number of columns.
     }
 
     void Compute(OpKernelContext* ctx) override {
-      if (!buffer_pool_) {
-        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_pool", &buffer_pool_));
+      if (!bufferlist_pool_) {
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "bufferlist_pool", &bufferlist_pool_));
       }
 
@@ -151,8 +147,8 @@ Currently does not support a general number of columns.
       OP_REQUIRES_OK(ctx, LoadDataResources(ctx, qualities_in, qualities_vec, num_records_t));
       vector<AGDRecordReader> metadata_vec;
       OP_REQUIRES_OK(ctx, LoadDataResources(ctx, metadata_in, metadata_vec, num_records_t));
-       
-      // get output buffer pairs (pair holds [index, data] to construct 
+
+      // get output buffer pairs (pair holds [index, data] to construct
       // AGD format temp output file in next dataflow stage)
       ResourceContainer<BufferList> *output_bufferlist_container;
       OP_REQUIRES_OK(ctx, GetOutputBufferList(ctx, &output_bufferlist_container));
@@ -189,7 +185,6 @@ Currently does not support a general number of columns.
     }
 
   private:
-    ReferencePool<Buffer> *buffer_pool_ = nullptr;
     ReferencePool<BufferList> *bufferlist_pool_ = nullptr;
 
     struct SortEntry {
@@ -199,7 +194,7 @@ Currently does not support a general number of columns.
     };
 
     vector<SortEntry> sort_index_;
-    
+
 
   };
 
