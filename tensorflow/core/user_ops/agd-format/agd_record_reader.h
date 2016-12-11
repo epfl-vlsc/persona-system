@@ -16,6 +16,7 @@ namespace tensorflow {
   class AGDRecordReader {
   public:
     AGDRecordReader(ResourceContainer<Data>* resource, size_t num_records);
+    AGDRecordReader(const char* resource, size_t num_records);
 
     void Reset();
 
@@ -27,7 +28,7 @@ namespace tensorflow {
   private:
     const format::RelativeIndex *index_;
     const char *data_, *cur_data_;
-    const size_t num_records_;
+    size_t num_records_;
     size_t cur_record_ = 0;
   };
 

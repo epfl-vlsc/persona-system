@@ -20,6 +20,7 @@ namespace tensorflow {
 
   REGISTER_OP("AGDSort")
   .Input("buffer_pool: Ref(string)")
+  .Input("bufferlist_pool: Ref(string)")
   .Input("results_handles: string")
   .Input("bases_handles: string")
   .Input("qualities_handles: string")

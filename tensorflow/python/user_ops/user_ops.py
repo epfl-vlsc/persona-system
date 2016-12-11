@@ -522,6 +522,20 @@ def _ZeroMqPipeSinkShape(op):
   _assert_scalar(op.inputs[0].get_shape())
   return []
 
+_agd_output_str = "AGDOutput"
+ops.NoGradient(_agd_output_str)
+def AGDOutput(path, chunk_names, chunk_size, start, finish):
+    return gen_user_ops.agd_output(path=path,
+                                   chunk_names=chunk_names,
+                                   chunk_size=chunk_size,
+                                   start=start,
+                                   finish=finish)
+
+@ops.RegisterShape(_agd_output_str)
+def _AGDOutputShape(op):
+    return []
+
+
 ### MergeSort Ops ###
 
 _ms_wr_col_str = "AGDWriteColumns"
@@ -553,9 +567,10 @@ def _AGDWriteColumnsShape(op):
     
 _ms_sort_str = "AGDSort"
 ops.NoGradient(_ms_sort_str)
-def AGDSort(buffer_pool, results_handles, bases_handles, qualities_handles, 
+def AGDSort(buffer_pool, bufferlist_pool, results_handles, bases_handles, qualities_handles, 
         metadata_handles, num_records, name=None):
     return gen_user_ops.agd_sort(buffer_pool=buffer_pool, 
+                                 bufferlist_pool=bufferlist_pool,
                                  results_handles=results_handles,
                                  bases_handles=bases_handles,
                                  qualities_handles=qualities_handles,
@@ -566,13 +581,15 @@ def AGDSort(buffer_pool, results_handles, bases_handles, qualities_handles,
 @ops.RegisterShape(_ms_sort_str)
 def _AGDSortShape(op):
   b_pool = op.inputs[0].get_shape()
-  r_handles = op.inputs[1].get_shape()
-  b_handles = op.inputs[2].get_shape()
-  q_handles = op.inputs[3].get_shape()
-  m_handles = op.inputs[4].get_shape()
-  num_recs = op.inputs[5].get_shape()
+  bl_pool = op.inputs[1].get_shape()
+  r_handles = op.inputs[2].get_shape()
+  b_handles = op.inputs[3].get_shape()
+  q_handles = op.inputs[4].get_shape()
+  m_handles = op.inputs[5].get_shape()
+  num_recs = op.inputs[6].get_shape()
   
   _assert_vec(b_pool, 2)
+  _assert_vec(bl_pool, 2)
   _assert_matrix(r_handles)
   _assert_matrix(b_handles)
   _assert_matrix(q_handles)

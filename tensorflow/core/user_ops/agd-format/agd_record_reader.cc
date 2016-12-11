@@ -14,6 +14,14 @@ namespace tensorflow {
     index_ = reinterpret_cast<const RelativeIndex*>(base_data);
     cur_data_ = data_ = base_data + idx_offset;
   }
+    
+  AGDRecordReader::AGDRecordReader(const char* resource, size_t num_records) :
+    num_records_(num_records) {
+    auto idx_offset = num_records * sizeof(RelativeIndex);
+    auto base_data = resource;
+    index_ = reinterpret_cast<const RelativeIndex*>(base_data);
+    cur_data_ = data_ = base_data + idx_offset;
+  }
 
   void AGDRecordReader::Reset() {
     cur_data_ = data_;
@@ -49,7 +57,7 @@ namespace tensorflow {
         offset += index_[i];
       }
 
-      *size = index_[i-1];
+      *size = index_[i];
       *data = data_ + offset;
     } else {
       return OutOfRange("agd record random access out of range");
