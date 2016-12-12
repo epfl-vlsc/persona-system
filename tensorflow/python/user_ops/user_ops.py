@@ -592,7 +592,7 @@ def _AGDSortShape(op):
   _assert_matrix(q_handles)
   _assert_matrix(m_handles)
 
-  if r_handles[0] != b_handles[0] != q_handles[0] != m_handles[0]:
+  if r_handles[0] != b_handles[0] != q_handles[0] != m_handles[0] != num_recs[0]:
     raise Exception("AGDSort: dim 0 of chunk handles do not match. i.e. you have mismatched numbers of b,q,m,r handles")
   if num_recs.ndims != 1:
     raise Exception("AGDSort: num_recs shape should be a vector, but got {}".format(num_recs))
