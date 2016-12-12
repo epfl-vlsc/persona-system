@@ -540,7 +540,7 @@ def _AGDOutputShape(op):
 
 _ms_wr_col_str = "AGDWriteColumns"
 def AGDWriteColumns(compress, record_id, record_type, output_dir, column_handle,
-        file_path, first_ordinal, num_records, name=None):
+                    file_path, first_ordinal, num_records, name=None):
   return gen_user_ops.agd_write_columns(compress=compress,
                                         record_id=record_id,
                                         record_type=record_type,
@@ -568,7 +568,7 @@ def _AGDWriteColumnsShape(op):
 _ms_sort_str = "AGDSort"
 ops.NoGradient(_ms_sort_str)
 def AGDSort(buffer_list_pool, results_handles, bases_handles, qualities_handles,
-        metadata_handles, num_records, name=None):
+            metadata_handles, num_records, name=None):
     return gen_user_ops.agd_sort(buffer_list_pool=buffer_list_pool,
                                  results_handles=results_handles,
                                  bases_handles=bases_handles,
@@ -598,7 +598,6 @@ def _AGDSortShape(op):
     raise Exception("AGDSort: num_recs shape should be a vector, but got {}".format(num_recs))
 
   return [tensor_shape.vector(2), tensor_shape.scalar()]
-
 
 _ms_merge_str = "AGDMerge"
 ops.NoGradient(_ms_merge_str)

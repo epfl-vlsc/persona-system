@@ -70,20 +70,21 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
         metas.append(string_ops.string_join([k, suffix_sep, meta_suffix]))
         results.append(string_ops.string_join([k, suffix_sep, result_suffix]))
 
-    # TODO need a buffer pool
-    #FIXME if this doesn't work, then you can chain them in with a list like above
-    base_reads, base_names = user_ops.FileMMap(filename=bases[0], pool_handle=mmap_pool_handle)
-    qual_reads, qual_names = user_ops.FileMMap(filename=quals[0], pool_handle=mmap_pool_handle)
-    meta_reads, meta_names = user_ops.FileMMap(filename=metas[0], pool_handle=mmap_pool_handle)
-    result_reads, result_names = user_ops.FileMMap(filename=results[0], pool_handle=mmap_pool_handle)
+    # TODO if this doesn't work, then you can chain them in with a list like above
+    base_reads, base_names = user_ops.FileMMap(filename=bases[0], handle=mmap_pool_handle, local_prefix=local_directory, name="base_mmap")
+    qual_reads, qual_names = user_ops.FileMMap(filename=quals[0], handle=mmap_pool_handle, local_prefix=local_directory, name="qual_mmap")
+    meta_reads, meta_names = user_ops.FileMMap(filename=metas[0], handle=mmap_pool_handle, local_prefix=local_directory, name="meta_mmap")
+    result_reads, result_names = user_ops.FileMMap(filename=results[0], handle=mmap_pool_handle, local_prefix=local_directory, name="result_mmap")
 
     for b, q, m, r in zip(base_reads[1:], quals[1:], metas[1:], results[1:]):
-        base_reads, base_names = user_ops.StagedFileMap(filename=b, upstream_files=base_reads, upstream_name=base_names, pool_handle=mmap_pool_handle)
-        qual_reads, qual_names = user_ops.StagedFileMap(filename=q, upstream_files=qual_reads, upstream_name=qual_names, pool_handle=mmap_pool_handle)
-        meta_reads, meta_names = user_ops.StagedFileMap(filename=m, upstream_files=meta_reads, upstream_name=meta_names, pool_handle=mmap_pool_handle)
-        result_reads, result_names = user_ops.StagedFileMap(filename=r, upstream_files=result_reads, upstream_names=result_names, pool_handle=mmap_pool_handle)
-
-    # TODO need a way to have the AGDReader op process all of these things
+        base_reads, base_names = user_ops.StagedFileMap(filename=b, upstream_files=base_reads, upstream_name=base_names, handle=mmap_pool_handle,
+                                                        local_prefix=local_directory, name="base_staged_mmap")
+        qual_reads, qual_names = user_ops.StagedFileMap(filename=q, upstream_files=qual_reads, upstream_name=qual_names, handle=mmap_pool_handle,
+                                                        local_prefix=local_directory, name="qual_staged_mmap")
+        meta_reads, meta_names = user_ops.StagedFileMap(filename=m, upstream_files=meta_reads, upstream_name=meta_names, handle=mmap_pool_handle,
+                                                        local_prefix=local_directory, name="meta_staged_mmap")
+        result_reads, result_names = user_ops.StagedFileMap(filename=r, upstream_files=result_reads, upstream_names=result_names, handle=mmap_pool_handle,
+                                                            local_prefix=local_directory, name="result_staged_mmap")
 
     return base_reads, qual_reads, meta_reads, result_reads
 
@@ -116,12 +117,20 @@ def _make_agd_batch(ready_batch, buffer_pool):
         # TODO we should have some sort of verification on ordinals here!
         yield base_reads, qual_reads, meta_reads, result_reads, base_num_records, inter_name
 
-def _make_writers(results_batch, output_directory):
-    for file_handle, num_records, im_name in results_batch:
-        writer = user_ops.AGDWriteColumns(record_id="fixme")
+def _make_writers(results_batch, output_dir):
+    first_ordinal = constant_op.constant(0) # first ordinal doesn't matter for the sort phase
+    for column_handle, num_records, im_name in results_batch:
+        writer = user_ops.AGDWriteColumns(record_id="fixme",
+                                          column_handle=column_handle,
+                                          compress=False,
+                                          output_dir=output_dir,
+                                          file_path=im_name, num_records,
+                                          first_ordinal=first_ordinal,
+                                          name="agd_column_writer")
+        yield writer # writes out the file path key (full path)
 
 # TODO I'm not sure what to do about the last param
-def local_read_pipeline(file_keys, local_directory, intermediate_file_prefix="intermediate_file",
+def local_sort_pipeline(file_keys, local_directory, intermediate_file_prefix="intermediate_file",
                         column_grouping_factor=5, parallel_batches=1, parallel_sort=1):
     """
     file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
@@ -152,3 +161,10 @@ def local_read_pipeline(file_keys, local_directory, intermediate_file_prefix="in
 
     batched_results = train.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
                                            batch_size=1, name="sorted_im_files_queue")
+
+    intermediate_keys = _make_writers(results_batch=batched_results, output_dir=local_directory)
+
+    all_im_keys = train.batch_join_pdq([tuple(im_key) for im_key in intermediate_keys], num_dq_ops=1,
+                                       batch_size=1, name="intermediate_key_queue")
+
+    return all_im_keys
