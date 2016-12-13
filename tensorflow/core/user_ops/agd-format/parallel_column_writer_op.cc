@@ -70,6 +70,7 @@ Thus we always need 3 of these for the full conversion pipeline
       }
       record_suffix_ = "." + s;
       header_.record_type = static_cast<uint8_t>(t);
+      header_.compression_type = format::CompressionType::UNCOMPRESSED;
 
       string outdir;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &outdir));

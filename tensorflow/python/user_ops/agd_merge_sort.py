@@ -124,8 +124,9 @@ def _make_writers(results_batch, output_dir):
                                           column_handle=column_handle,
                                           compress=False,
                                           output_dir=output_dir,
-                                          file_path=im_name, num_records,
+                                          file_path=im_name,
                                           first_ordinal=first_ordinal,
+                                          num_records=num_records,
                                           name="agd_column_writer")
         yield writer # writes out the file path key (full path)
 

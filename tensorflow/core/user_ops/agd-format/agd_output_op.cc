@@ -116,7 +116,12 @@ Prints records to stdout from record indices `start` to `finish`.
         printf("\n");
         OP_REQUIRES_OK(ctx, results_reader.GetRecordAt(chunk_offset, &data, &length));
         agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-        printf("%lld %04x %d %d\n\n", agd_result->location_, agd_result->flag_, agd_result->score_, agd_result->mapq_);
+        printf("%lld %04x %d %d\n", agd_result->location_, agd_result->flag_, agd_result->score_, agd_result->mapq_);
+        const char* cigardata = data + sizeof(format::AlignmentResult);
+        decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
+        fwrite(cigardata, cigarlen, 1, stdout);
+        printf("\n\n");
+
         current++;
       }
       mmap_bases_.reset(nullptr);
