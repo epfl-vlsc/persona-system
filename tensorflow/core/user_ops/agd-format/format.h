@@ -44,6 +44,7 @@ namespace format {
       // At least assign these basic fields
       version_major = current_major;
       version_minor = current_minor;
+      segment_start = sizeof(FileHeader);
     }
   };
 
