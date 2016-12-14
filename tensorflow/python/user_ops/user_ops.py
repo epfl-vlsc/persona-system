@@ -332,7 +332,7 @@ def _MMapPoolShape(op):
 
 _bp_str = "BufferPool"
 ops.NoGradient(_bp_str)
-def BufferPool(size, bound=True, name=None):
+def BufferPool(size=1, bound=True, name=None):
     return gen_user_ops.buffer_pool(size=size, bound=bound, name=name)
 
 @ops.RegisterShape(_bp_str)
@@ -341,7 +341,7 @@ def _BufferPoolShape(op):
 
 _blp_str = "BufferListPool"
 ops.NoGradient(_blp_str)
-def BufferListPool(size, bound=True, name=None):
+def BufferListPool(size=1, bound=True, name=None):
     return gen_user_ops.buffer_list_pool(size=size, bound=bound, name=name)
 
 @ops.RegisterShape(_blp_str)

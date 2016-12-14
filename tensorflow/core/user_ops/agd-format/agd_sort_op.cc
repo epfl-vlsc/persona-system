@@ -42,6 +42,7 @@ qualities and metadata. num_records is a vector of int32's with the
 number of records per chunk.
 
 Currently does not support a general number of columns.
+The column order (for passing into AGDWriteColumns) is [bases, qualities, metadata, results]
 
   )doc");
 

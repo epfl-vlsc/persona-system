@@ -8,8 +8,9 @@ from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
 from tensorflow.python.framework import ops, tensor_shape, common_shapes, constant_op, dtypes
-from tensorflow.python.ops import io_ops, variables, string_ops
+from tensorflow.python.ops import io_ops, variables, string_ops, array_ops
 from tensorflow.python import user_ops, training as train
+from tensorflow.python.user_ops import user_ops as uop
 
 import os
 import tensorflow as tf
@@ -38,7 +39,7 @@ def name_generator(base_name, separator="-"):
                                          shape=tensor_shape.scalar(), name="name_generator_base")
     return string_ops.string_join([base_name, var_as_string], separator=separator, name="name_generator")
 
-def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, parallel_batches):
+def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, parallel_read):
     extra_keys = (column_grouping_factor - (len(file_keys) % column_grouping_factor)) % column_grouping_factor
     print("extra keys: {}".format(extra_keys))
     if extra_keys > 0:
@@ -51,7 +52,7 @@ def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, para
     intermediate_name = name_generator(base_name=intermediate_file_prefix)
 
     # TODO parallelism can be specified here
-    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, num_dq_ops=parallel_batches)
+    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, num_dq_ops=parallel_read)
     return paired_output
 
 def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
@@ -64,26 +65,27 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
     quals = []
     metas = []
     results = []
-    for k in key_batch:
+    split_batch = array_ops.unpack(key_batch)
+    for k in split_batch:
         bases.append(string_ops.string_join([k, suffix_sep, base_suffix]))
         quals.append(string_ops.string_join([k, suffix_sep, qual_suffix]))
         metas.append(string_ops.string_join([k, suffix_sep, meta_suffix]))
         results.append(string_ops.string_join([k, suffix_sep, result_suffix]))
 
     # TODO if this doesn't work, then you can chain them in with a list like above
-    base_reads, base_names = user_ops.FileMMap(filename=bases[0], handle=mmap_pool_handle, local_prefix=local_directory, name="base_mmap")
-    qual_reads, qual_names = user_ops.FileMMap(filename=quals[0], handle=mmap_pool_handle, local_prefix=local_directory, name="qual_mmap")
-    meta_reads, meta_names = user_ops.FileMMap(filename=metas[0], handle=mmap_pool_handle, local_prefix=local_directory, name="meta_mmap")
-    result_reads, result_names = user_ops.FileMMap(filename=results[0], handle=mmap_pool_handle, local_prefix=local_directory, name="result_mmap")
+    base_reads, base_names = uop.FileMMap(filename=bases[0], handle=mmap_pool_handle, local_prefix=local_directory, name="base_mmap")
+    qual_reads, qual_names = uop.FileMMap(filename=quals[0], handle=mmap_pool_handle, local_prefix=local_directory, name="qual_mmap")
+    meta_reads, meta_names = uop.FileMMap(filename=metas[0], handle=mmap_pool_handle, local_prefix=local_directory, name="meta_mmap")
+    result_reads, result_names = uop.FileMMap(filename=results[0], handle=mmap_pool_handle, local_prefix=local_directory, name="result_mmap")
 
-    for b, q, m, r in zip(base_reads[1:], quals[1:], metas[1:], results[1:]):
-        base_reads, base_names = user_ops.StagedFileMap(filename=b, upstream_files=base_reads, upstream_name=base_names, handle=mmap_pool_handle,
+    for b, q, m, r in zip(bases[1:], quals[1:], metas[1:], results[1:]):
+        base_reads, base_names = uop.StagedFileMap(filename=b, upstream_files=base_reads, upstream_names=base_names, handle=mmap_pool_handle,
                                                         local_prefix=local_directory, name="base_staged_mmap")
-        qual_reads, qual_names = user_ops.StagedFileMap(filename=q, upstream_files=qual_reads, upstream_name=qual_names, handle=mmap_pool_handle,
+        qual_reads, qual_names = uop.StagedFileMap(filename=q, upstream_files=qual_reads, upstream_names=qual_names, handle=mmap_pool_handle,
                                                         local_prefix=local_directory, name="qual_staged_mmap")
-        meta_reads, meta_names = user_ops.StagedFileMap(filename=m, upstream_files=meta_reads, upstream_name=meta_names, handle=mmap_pool_handle,
+        meta_reads, meta_names = uop.StagedFileMap(filename=m, upstream_files=meta_reads, upstream_names=meta_names, handle=mmap_pool_handle,
                                                         local_prefix=local_directory, name="meta_staged_mmap")
-        result_reads, result_names = user_ops.StagedFileMap(filename=r, upstream_files=result_reads, upstream_names=result_names, handle=mmap_pool_handle,
+        result_reads, result_names = uop.StagedFileMap(filename=r, upstream_files=result_reads, upstream_names=result_names, handle=mmap_pool_handle,
                                                             local_prefix=local_directory, name="result_staged_mmap")
 
     return base_reads, qual_reads, meta_reads, result_reads
@@ -91,26 +93,26 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
 def _make_sorters(batch, buffer_list_pool):
     # FIXME this needs the number of records
     for b, q, m, r, num_records, im_name in batch:
-        yield user_ops.AGDSort(buffer_list_pool=buffer_list_pool,
-                               result_handles=r, base_handels=b,
-                               qualities_handles=q, metadata_handles=m,
-                               num_records=num_records, name="local_read_agd_sort"), im_name
+        yield uop.AGDSort(buffer_list_pool=buffer_list_pool,
+                          results_handles=r, bases_handles=b,
+                          qualities_handles=q, metadata_handles=m,
+                          num_records=num_records, name="local_read_agd_sort"), im_name
 
 def _make_agd_batch(ready_batch, buffer_pool):
     for b, q, m, r, inter_name in ready_batch:
-        base_reads, base_num_records, base_first_ordinals = user_ops.AGDReader(verify=False,
+        base_reads, base_num_records, base_first_ordinals = uop.AGDReader(verify=False,
                                                                                pool_handle=buffer_pool,
                                                                                file_handle=b,
                                                                                name="base_reader")
-        qual_reads, qual_num_records, qual_first_ordinals = user_ops.AGDReader(verify=False,
+        qual_reads, qual_num_records, qual_first_ordinals = uop.AGDReader(verify=False,
                                                                                pool_handle=buffer_pool,
                                                                                file_handle=q,
                                                                                name="qual_reader")
-        meta_reads, meta_num_records, meta_first_ordinals = user_ops.AGDReader(verify=False,
+        meta_reads, meta_num_records, meta_first_ordinals = uop.AGDReader(verify=False,
                                                                                pool_handle=buffer_pool,
                                                                                file_handle=m,
                                                                                name="meta_reader")
-        result_reads, result_num_records, result_first_ordinals = user_ops.AGDReader(verify=False,
+        result_reads, result_num_records, result_first_ordinals = uop.AGDReader(verify=False,
                                                                                      pool_handle=buffer_pool,
                                                                                      file_handle=r,
                                                                                      name="result_reader")
@@ -118,56 +120,57 @@ def _make_agd_batch(ready_batch, buffer_pool):
         yield base_reads, qual_reads, meta_reads, result_reads, base_num_records, inter_name
 
 def _make_writers(results_batch, output_dir):
-    first_ordinal = constant_op.constant(0) # first ordinal doesn't matter for the sort phase
+    first_ordinal = constant_op.constant(0, dtype=dtypes.int64) # first ordinal doesn't matter for the sort phase
     for column_handle, num_records, im_name in results_batch:
-        writer = user_ops.AGDWriteColumns(record_id="fixme",
-                                          column_handle=column_handle,
-                                          compress=False,
-                                          output_dir=output_dir,
-                                          file_path=im_name,
-                                          first_ordinal=first_ordinal,
-                                          num_records=num_records,
-                                          name="agd_column_writer")
+        writer = uop.AGDWriteColumns(record_id="fixme",
+                                     record_type=["base", "qual", "meta", "results"],
+                                     column_handle=column_handle,
+                                     compress=False,
+                                     output_dir=output_dir,
+                                     file_path=im_name,
+                                     first_ordinal=first_ordinal,
+                                     num_records=num_records,
+                                     name="agd_column_writer")
         yield writer # writes out the file path key (full path)
 
 # TODO I'm not sure what to do about the last param
 def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_file_prefix="intermediate_file",
-                        column_grouping_factor=5, parallel_batches=1, parallel_sort=1):
+                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1):
     """
     file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
     local_directory: the "base path" from which these should be read
     column_grouping_factor: the number of keys to put together
     parallel_process: the parallelism for processing records (reading, decomp)
-    parallel_batches: the number of parallel read pipelines
+    parallel_read: the number of parallel read pipelines
     parallel_sort: the number of parallel sort operations
     """
-    if parallel_batches < 1:
-        raise Exception("parallel_batches must be >1. Got {}".format(parallel_batches))
+    if parallel_read < 1:
+        raise Exception("parallel_read must be >1. Got {}".format(parallel_read))
     key_producers = _key_maker(file_keys=file_keys, intermediate_file_prefix=intermediate_file_prefix,
-                               parallel_batches=parallel_batches)
-    mapped_file_pool = user_ops.MMapPool(bound=False, name="local_read_mmap_pool")
+                               parallel_read=parallel_read, column_grouping_factor=column_grouping_factor)
+    mapped_file_pool = uop.MMapPool(bound=False, name="local_read_mmap_pool")
     read_pipelines = [(_make_read_pipeline(key_batch=kp[0], local_directory=local_directory, mmap_pool_handle=mapped_file_pool),
                        kp[1]) for kp in key_producers]
 
-    ready_record_batch = train.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dp_ops=parallel_process,
-                                              batch_size=1, name="ready_record_queue")
+    ready_record_batch = train.input.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dq_ops=parallel_process,
+                                                    batch_size=1, name="ready_record_queue")
 
     # now the AGD parallel stage
-    bp = user_ops.BufferPool(bound=False, name="local_read_buffer_pool")
+    bp = uop.BufferPool(bound=False, name="local_read_buffer_pool")
     processed_record_batch = _make_agd_batch(ready_batch=ready_record_batch, buffer_pool=bp)
 
-    blp = user_ops.BufferListPool(bound=False, name="local_read_buffer_list_pool")
+    blp = uop.BufferListPool(bound=False, name="local_read_buffer_list_pool")
 
     sorters = _make_sorters(batch=processed_record_batch, buffer_list_pool=blp)
 
-    batched_results = train.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
-                                           batch_size=1, name="sorted_im_files_queue")
+    batched_results = train.input.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
+                                                 batch_size=1, name="sorted_im_files_queue")
 
     if outdir is None:
         outdir = local_directory
     intermediate_keys = _make_writers(results_batch=batched_results, output_dir=outdir)
 
-    all_im_keys = train.batch_join_pdq([tuple(im_key) for im_key in intermediate_keys], num_dq_ops=1,
-                                       batch_size=1, name="intermediate_key_queue")
+    all_im_keys = train.input.batch_join_pdq([(im_key,) for im_key in intermediate_keys], num_dq_ops=1,
+                                             batch_size=1, name="intermediate_key_queue")
 
     return all_im_keys
