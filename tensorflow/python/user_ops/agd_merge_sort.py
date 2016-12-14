@@ -128,7 +128,7 @@ def _make_writers(results_batch, output_dir):
                                      record_type=["base", "qual", "meta", "results"],
                                      column_handle=column_handle,
                                      compress=False,
-                                     output_dir=output_dir,
+                                     output_dir=output_dir + "/",
                                      file_path=im_name,
                                      first_ordinal=first_ordinal,
                                      num_records=num_records,
