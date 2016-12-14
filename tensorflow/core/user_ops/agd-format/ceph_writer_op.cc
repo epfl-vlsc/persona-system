@@ -71,6 +71,7 @@ compress: whether or not to compress the column
       }
       record_suffix_ = "." + s;
       header_.record_type = static_cast<uint8_t>(t);
+      header_.compression_type = format::CompressionType::UNCOMPRESSED;
 
       // ceph cluster init
       OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_name", &cluster_name));
