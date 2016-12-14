@@ -131,7 +131,7 @@ def _make_writers(results_batch, output_dir):
         yield writer # writes out the file path key (full path)
 
 # TODO I'm not sure what to do about the last param
-def local_sort_pipeline(file_keys, local_directory, intermediate_file_prefix="intermediate_file",
+def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_file_prefix="intermediate_file",
                         column_grouping_factor=5, parallel_batches=1, parallel_sort=1):
     """
     file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
@@ -163,7 +163,9 @@ def local_sort_pipeline(file_keys, local_directory, intermediate_file_prefix="in
     batched_results = train.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
                                            batch_size=1, name="sorted_im_files_queue")
 
-    intermediate_keys = _make_writers(results_batch=batched_results, output_dir=local_directory)
+    if outdir is None:
+        outdir = local_directory
+    intermediate_keys = _make_writers(results_batch=batched_results, output_dir=outdir)
 
     all_im_keys = train.batch_join_pdq([tuple(im_key) for im_key in intermediate_keys], num_dq_ops=1,
                                        batch_size=1, name="intermediate_key_queue")
