@@ -49,6 +49,8 @@ def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, para
     sp_output = string_producer.dequeue()
 
     batched_output = train.input.batch_pdq([sp_output], batch_size=column_grouping_factor, num_dq_ops=1)
+    if column_grouping_factor == 1:
+        batched_output = [tf.pack((bo,)) for bo in batched_output]
     intermediate_name = name_generator(base_name=intermediate_file_prefix)
 
     # TODO parallelism can be specified here
