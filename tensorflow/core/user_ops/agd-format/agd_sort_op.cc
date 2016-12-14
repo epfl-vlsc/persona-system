@@ -83,7 +83,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
 
     void Compute(OpKernelContext* ctx) override {
       if (!bufferlist_pool_) {
-        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "bufferlist_pool", &bufferlist_pool_));
+        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_list_pool", &bufferlist_pool_));
       }
 
       LOG(INFO) << "calling AGD SORT!!";
