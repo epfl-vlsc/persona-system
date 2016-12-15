@@ -8,8 +8,9 @@ from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
 from tensorflow.python.framework import ops, tensor_shape, common_shapes, constant_op, dtypes
-from tensorflow.python.ops import io_ops, variables, string_ops, array_ops
+from tensorflow.python.ops import io_ops, variables, string_ops, array_ops, data_flow_ops, math_ops
 from tensorflow.python import user_ops, training as train
+from tensorflow.python.training import queue_runner
 from tensorflow.python.user_ops import user_ops as uop
 
 import os
@@ -176,3 +177,113 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
                                              batch_size=1, name="intermediate_key_queue")
 
     return all_im_keys
+
+### All the methods for creating the local merge pipeline
+
+def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
+    suffix_sep = tf.constant(".")
+    base_suffix = tf.constant("base")
+    qual_suffix = tf.constant("qual")
+    meta_suffix = tf.constant("metadata")
+    result_suffix = tf.constant("results")
+    # dictated by the merge op
+    suffix_order = [result_suffix, base_suffix, qual_suffix, meta_suffix]
+
+    def make_single_chunk_read(im_name):
+        appended_names = [string_ops.string_join([im_name, suffix_sep, a]) for a in suffix_order]
+        reads, names = uop.FileMMap(filename=appended_names[0], local_prefix=in_dir,
+                                    handle=mmap_pool_handle, name="result_mmap")
+        accum = [(reads, names)]
+        for column in appended_names[1:]:
+            prior_reads, prior_names = accum[-1]
+            reads, names = uop.StagedFileMap(filename=column,
+                                             upstream_files=prior_reads,
+                                             upstream_names=prior_names,
+                                             handle=mmap_pool_handle,
+                                             name="merge_column_mmap")
+            accum.append((reads, names))
+        return accum[-1][0]
+
+    for key_out in key_outs:
+        split_records = array_ops.unpack(key_out)
+        yield [make_single_chunk_read(im_name=im_name) for im_name in split_records]
+
+def _make_processed_records(ready_read_records, buffer_pool):
+    def process_ready_row(interm_columns):
+        columns_split = tf.unpack(interm_columns)
+        return zip(*(uop.AGDReader(verify=False,
+                                   pool_handle=buffer_pool,
+                                   file_handle=column,
+                                   name="column_agd_reader") for column in columns_split))
+
+
+    for interm_columns in ready_read_records:
+        readss, num_recordss, first_ordinalss = process_ready_row(interm_columns=interm_columns)
+        yield [nr[0] for nr in num_recordss], tf.pack(readss)
+
+def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, chunk_size=100000):
+    if chunk_size < 1:
+        raise Exception("Need strictly non-negative chunk size. Got {}".format(chunk_size))
+    key_producer = train.input.input_producer([intermediate_keys],
+                                              # this element_shape specification isn't necessary, but it's a good double-check
+                                              element_shape=tensor_shape.vector(len(intermediate_keys)),
+                                              capacity=1,
+                                              shuffle=False,
+                                              num_epochs=1,
+                                              name="merge_key_producer")
+    key_output = key_producer.dequeue()
+    key_outs = train.input.batch_pdq([key_output], batch_size=1, num_dq_ops=1)
+    mapped_file_pool = uop.MMapPool(bound=False, name="local_read_mmap_pool")
+    ready_read_records = _make_merge_read_records(key_outs=key_outs, in_dir=in_dir,
+                                                  mmap_pool_handle=mapped_file_pool)
+
+    bp = uop.BufferPool(bound=False, name="local_read_merge_buffer_pool")
+    processed_records = _make_processed_records(ready_read_records=ready_read_records, buffer_pool=bp)
+
+    merge_ready_queue = train.input.batch_join_pdq([p for p in processed_records],
+                                                   num_dq_ops=1, batch_size=1, name="merge_ready_queue")
+    q = data_flow_ops.FIFOQueue(capacity=100000, # big because who cares
+                                dtypes=[dtypes.int32, dtypes.string],
+                                shapes=[tensor_shape.scalar(), tensor_shape.vector(2)],
+                                name="merge_output_queue")
+
+    blp = uop.BufferListPool(bound=False, name="local_read_merge_buffer_list_pool")
+
+    num_records, chunk_group_handles = merge_ready_queue[0]
+    merge_op = uop.AGDMerge(chunk_size=chunk_size,
+                            buffer_list_pool=blp,
+                            num_records=num_records,
+                            chunk_group_handles=chunk_group_handles,
+                            output_buffer_queue_handle=q.queue_ref)
+    queue_runner.add_queue_runner(queue_runner.QueueRunner(q, [merge_op]))
+
+    if outdir is None:
+        outdir = in_dir
+
+    # FIXME if you don't have at least chunk_size records in your dataset, this will cause underflow
+    # this is a hack!
+    first_ordinal = tf.Variable(-1 * chunk_size, dtype=dtypes.int64)
+
+    record_name_constant = constant_op.constant(record_name+"-")
+    num_recs, buffer_list_handle = q.dequeue()
+    first_ord = first_ordinal.assign_add(math_ops.to_int64(num_recs))
+    first_ord_str = string_ops.as_string(first_ord)
+    file_name = string_ops.string_join([record_name_constant, first_ord_str])
+    write_join_queue = train.input.batch_pdq([buffer_list_handle, num_recs, first_ord, file_name],
+                                             num_dq_ops=1, batch_size=1, name="write_join_queue")
+    final_write_out = []
+
+    for buff_list, n_recs, first_o, file_key in write_join_queue:
+        file_key_passthru = uop.AGDWriteColumns(record_id=record_name,
+                                                record_type=["results", "base", "qual", "meta"],
+                                                column_handle=buff_list,
+                                                compress=False,
+                                                output_dir=outdir+"/",
+                                                file_path=file_key,
+                                                first_ordinal=first_o,
+                                                num_records=num_recs,
+                                                name="agd_column_writer_merge")
+        final_write_out.append((file_key_passthru, first_o, n_recs))
+
+    sink_queue = train.input.batch_join_pdq(final_write_out, num_dq_ops=1, batch_size=1, name="final_sink_queue")
+    return sink_queue[0]

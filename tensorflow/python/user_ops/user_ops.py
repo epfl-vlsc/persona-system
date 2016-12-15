@@ -617,7 +617,8 @@ def _AGDMergeShape(op):
   chunk_handle = op.inputs[3].get_shape()
 
   _assert_vec(bl_pool, 2)
-  _assert_vec(buffer_queue, 2)
+  #_assert_vec(buffer_queue, 2)
+  _assert_scalar(buffer_queue)
 
   if num_recs.ndims != 1:
     raise Exception("AGDMerge: num_recs shape should be a vector, but got {}".format(num_recs))

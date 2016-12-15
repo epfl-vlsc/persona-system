@@ -129,10 +129,6 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
     }
 
     void Compute(OpKernelContext* ctx) override {
-      if (completed_) {
-        OP_REQUIRES(ctx, false, Internal("AGDMerge can only be called once!"));
-      }
-
       if (!queue_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
@@ -212,7 +208,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
         // pre-increment because we just added 1 to the chunk size
         // we're guaranteed that chunk size is at least 1
         if (++current_chunk_size == chunk_size_) {
-          OP_REQUIRES_OK(ctx, EnqueueBufferList(ctx, bl_ctr));
+          OP_REQUIRES_OK(ctx, EnqueueBufferList(ctx, bl_ctr, current_chunk_size));
           OP_REQUIRES_OK(ctx, buflist_pool_->GetResource(&bl_ctr));
           bl = bl_ctr->get();
           bl->resize(num_columns);
@@ -220,28 +216,34 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
         }
       }
 
-      queue_->Close(ctx, false, [](){});
-      completed_ = true;
+      if (current_chunk_size > 0) {
+        OP_REQUIRES_OK(ctx, EnqueueBufferList(ctx, bl_ctr, current_chunk_size));
+      }
+
+      // Not sure if needed when using a queue runner?
+      //queue_->Close(ctx, false, [](){});
     }
 
   private:
     QueueInterface *queue_ = nullptr;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
     ReferencePool<BufferList> *buflist_pool_ = nullptr;
-    TensorShape enqueue_shape_{{2}};
+    TensorShape enqueue_shape_{{2}}, num_records_shape_{{}};
     int chunk_size_;
-    bool completed_ = false;
 
     Status Init(OpKernelContext *ctx) {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "output_buffer_queue_handle", &queue_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
     }
 
-    Status EnqueueBufferList(OpKernelContext *ctx, ResourceContainer<BufferList> *bl_ctr) {
+    Status EnqueueBufferList(OpKernelContext *ctx, ResourceContainer<BufferList> *bl_ctr, size_t chunk_size) {
       QueueInterface::Tuple tuple; // just a vector<Tensor>
-      Tensor container_out;
+      Tensor container_out, num_recs_out;
       TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_STRING, enqueue_shape_, &container_out));
+      TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_INT32, num_records_shape_, &num_recs_out));
       auto container_out_vec = container_out.vec<string>();
+      num_recs_out.scalar<int>()() = chunk_size;
+      tuple.push_back(num_recs_out);
       container_out_vec(0) = bl_ctr->container();
       container_out_vec(1) = bl_ctr->name();
       tuple.push_back(container_out); // performs a shallow copy. Destructor doesn't release resources
