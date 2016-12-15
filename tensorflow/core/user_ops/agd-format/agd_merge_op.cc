@@ -129,6 +129,10 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
     }
 
     void Compute(OpKernelContext* ctx) override {
+      if (completed_) {
+        OP_REQUIRES(ctx, false, Internal("AGDMerge can only be called once!"));
+      }
+
       if (!queue_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
@@ -215,6 +219,9 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
           current_chunk_size = 0;
         }
       }
+
+      queue_->Close(ctx, false, [](){});
+      completed_ = true;
     }
 
   private:
@@ -223,6 +230,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
     ReferencePool<BufferList> *buflist_pool_ = nullptr;
     TensorShape enqueue_shape_{{2}};
     int chunk_size_;
+    bool completed_ = false;
 
     Status Init(OpKernelContext *ctx) {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "output_buffer_queue_handle", &queue_));
