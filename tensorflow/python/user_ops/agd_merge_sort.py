@@ -8,7 +8,7 @@ from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
 from tensorflow.python.framework import ops, tensor_shape, common_shapes, constant_op, dtypes
-from tensorflow.python.ops import io_ops, variables, string_ops, array_ops
+from tensorflow.python.ops import io_ops, variables, string_ops, array_ops, data_flow_ops
 from tensorflow.python import user_ops, training as train
 from tensorflow.python.user_ops import user_ops as uop
 
@@ -176,3 +176,70 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
                                              batch_size=1, name="intermediate_key_queue")
 
     return all_im_keys
+
+### All the methods for creating the local merge pipeline
+
+def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
+    suffix_sep = tf.constant(".")
+    base_suffix = tf.constant("base")
+    qual_suffix = tf.constant("qual")
+    meta_suffix = tf.constant("metadata")
+    result_suffix = tf.constant("results")
+    # dictated by the merge op
+    suffix_order = [result_suffix, base_suffix, qual_suffix, meta_suffix]
+
+    def make_single_chunk_read(im_name):
+        appended_names = [string_ops.string_join([im_name, suffix_sep, a]) for a in suffix_order]
+        reads, names = uop.FileMMap(filename=appended_names[0], local_prefix=in_dir,
+                                    handle=mmap_pool_handle, name="result_mmap")
+        for column in appended_names[1:]:
+            reads, names = uop.StagedFileMap(filename=column,
+                                             upstream_files=reads,
+                                             upstream_names=names,
+                                             handle=mmap_pool_handle,
+                                             name="merge_column_mmap")
+        return reads
+
+    for key_out in key_outs:
+        split_records = array_ops.unpack(key_out)
+        yield [make_single_chunk_read(im_name=im_name) for im_name in split_records]
+
+def _make_processed_records(ready_read_records):
+    def process_ready_row(interm_columns):
+        columns_split = tf.unpack(interm_columns)
+        return zip(*(uop.AGDReader(verify=False,
+                                   pool_handle=buffer_pool,
+                                   file_handle=column,
+                                   name="column_agd_reader") for column in columns_split))
+
+
+    for interm_columns in ready_read_records:
+        readss, num_recordss, first_ordinalss = process_ready_row(interm_columns=interm_columns)
+        yield num_recordss[0], tf.pack(reads)
+
+def local_merge_pipeline(intermediate_keys, in_dir, outdir, chunk_size=100000):
+    key_producer = train.input.input_producer([intermediate_keys],
+                                              # this element_shape specification isn't necessary, but it's a good double-check
+                                              element_shape=tensor_shape.vector(len(intermediate_keys)),
+                                              capacity=1,
+                                              shuffle=False,
+                                              num_epochs=1,
+                                              name="merge_key_producer")
+    key_output = key_producer.dequeue()
+    key_outs = train.input.batch_pdq([key_output], batch_size=1, num_dq_ops=1)
+    mapped_file_pool = uop.MMapPool(bound=False, name="local_read_mmap_pool")
+    ready_read_records = _make_merge_read_records(key_outs=key_outs, in_dir=in_dir,
+                                                  mmap_pool_handle=mapped_file_pool)
+    processed_records = _make_processed_records(ready_read_records=ready_read_records)
+
+    q = data_flow_ops.FIFOQueue(capacity=100000, # big because who cares
+                                dtypes=[dtypes.string],
+                                shapes=[tensor_shape.scalar(), tensor_shape.vector(2)],
+                                name="merge_output_queue")
+
+    # create the 
+
+    # 2. create the op O
+    merge_op = uop.AGDMerge(chunk_size=chunk_size,
+                            buffer_list_pool=blp,)
+    # 3. call add_queue_runner(q, O)
