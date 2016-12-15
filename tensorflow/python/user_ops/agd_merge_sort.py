@@ -184,7 +184,7 @@ def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
     suffix_sep = tf.constant(".")
     base_suffix = tf.constant("base")
     qual_suffix = tf.constant("qual")
-    meta_suffix = tf.constant("metadata")
+    meta_suffix = tf.constant("meta")
     result_suffix = tf.constant("results")
     # dictated by the merge op
     suffix_order = [result_suffix, base_suffix, qual_suffix, meta_suffix]
@@ -196,10 +196,12 @@ def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
         accum = [(reads, names)]
         for column in appended_names[1:]:
             prior_reads, prior_names = accum[-1]
+            #import ipdb; ipdb.set_trace()
             reads, names = uop.StagedFileMap(filename=column,
                                              upstream_files=prior_reads,
                                              upstream_names=prior_names,
                                              handle=mmap_pool_handle,
+                                             local_prefix=in_dir,
                                              name="merge_column_mmap")
             accum.append((reads, names))
         return accum[-1][0]

@@ -141,6 +141,9 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
 
       // phase 3: using the sort vector, merge the chunks into superchunks in sorted
       // order
+      LOG(INFO) << "The sorted index is now: ";
+      for (auto& entry : sort_index_) 
+        LOG(INFO) << "Location: " << entry.location << ", chunk: " << entry.chunk << ", index: " << entry.index;
 
       // now we need all the chunk data
       vector<AGDRecordReader> bases_vec;
@@ -173,7 +176,10 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
         auto& metadata_reader = metadata_vec[entry.chunk];
 
         bases_reader.GetRecordAt(entry.index, &data, &size);
-        bases_builder.AppendRecord(data, size);
+        bases_scratch_.clear();
+        OP_REQUIRES_OK(ctx, format::IntoBases(data, size, bases_scratch_));
+        bases_builder.AppendRecord((const char*)(&bases_scratch_[0]), 
+            sizeof(format::BinaryBases)*bases_scratch_.size());
         qualities_reader.GetRecordAt(entry.index, &data, &size);
         qualities_builder.AppendRecord(data, size);
         metadata_reader.GetRecordAt(entry.index, &data, &size);
@@ -196,6 +202,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
     };
 
     vector<SortEntry> sort_index_;
+    vector<format::BinaryBases> bases_scratch_;
 
 
   };

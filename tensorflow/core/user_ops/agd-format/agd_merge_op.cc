@@ -133,6 +133,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
 
+      LOG(INFO) << "running merge op!";
       const Tensor *chunk_group_handles_t, *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("chunk_group_handles", &chunk_group_handles_t));
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
@@ -179,6 +180,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
       }
 
       // Now that everything is initialized, add the scores to the heap
+      LOG(INFO) << "everything is init";
       for (auto &cc : columns) {
         score_heap.push(GenomeScore(cc.get_location(), &cc));
       }
@@ -220,6 +222,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
         OP_REQUIRES_OK(ctx, EnqueueBufferList(ctx, bl_ctr, current_chunk_size));
       }
 
+      LOG(INFO) << "done";
       // Not sure if needed when using a queue runner?
       //queue_->Close(ctx, false, [](){});
     }
@@ -228,26 +231,30 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
     QueueInterface *queue_ = nullptr;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
     ReferencePool<BufferList> *buflist_pool_ = nullptr;
-    TensorShape enqueue_shape_{{2}}, num_records_shape_{{}};
+    TensorShape enqueue_shape_{{2}}, num_records_shape_{};
     int chunk_size_;
 
     Status Init(OpKernelContext *ctx) {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "output_buffer_queue_handle", &queue_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
+      return Status::OK();
     }
 
     Status EnqueueBufferList(OpKernelContext *ctx, ResourceContainer<BufferList> *bl_ctr, size_t chunk_size) {
+      LOG(INFO) << "enqueueing buffer list";
       QueueInterface::Tuple tuple; // just a vector<Tensor>
       Tensor container_out, num_recs_out;
       TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_STRING, enqueue_shape_, &container_out));
       TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_INT32, num_records_shape_, &num_recs_out));
       auto container_out_vec = container_out.vec<string>();
+      LOG(INFO) << "doing num recs out assignment";
       num_recs_out.scalar<int>()() = chunk_size;
       tuple.push_back(num_recs_out);
       container_out_vec(0) = bl_ctr->container();
       container_out_vec(1) = bl_ctr->name();
       tuple.push_back(container_out); // performs a shallow copy. Destructor doesn't release resources
 
+      LOG(INFO) << "validating";
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
 
       // This is the synchronous version
