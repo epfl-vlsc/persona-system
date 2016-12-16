@@ -78,6 +78,7 @@ Thus we always need 3 of these for the full conversion pipeline
         }
         record_suffixes_.push_back("." + t_in);
         header.record_type = static_cast<uint8_t>(t);
+        header.compression_type = compress_ ? CompressionType::GZIP : CompressionType::UNCOMPRESSED;
         headers_.push_back(header);
       }
 
