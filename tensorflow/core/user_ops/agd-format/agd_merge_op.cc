@@ -198,9 +198,10 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
 
         cc->append_to_buffer_list(bl);
 
+        score_heap.pop();
+
         s = cc->set_current_location();
         if (s.ok()) {
-          score_heap.pop();
           // get_location will have the location advanced by the append_to_buffer_list call above
           score_heap.push(GenomeScore(cc->get_location(), cc));
         } else if (!IsResourceExhausted(s)) {
