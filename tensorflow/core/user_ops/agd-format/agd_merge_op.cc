@@ -206,9 +206,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
           score_heap.push(GenomeScore(cc->get_location(), cc));
         } else if (!IsResourceExhausted(s)) {
           OP_REQUIRES_OK(ctx, s);
-        } else { // else we just drop it from the heap if we get an exhausted resource
-          score_heap.pop();
-        }
+        } 
 
         // pre-increment because we just added 1 to the chunk size
         // we're guaranteed that chunk size is at least 1
