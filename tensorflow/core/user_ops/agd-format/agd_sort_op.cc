@@ -86,7 +86,6 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_list_pool", &bufferlist_pool_));
       }
 
-      LOG(INFO) << "calling AGD SORT!!";
       sort_index_.clear();
 
       const Tensor *results_in, *bases_in, *qualities_in, *metadata_in, *num_records_t;
@@ -123,7 +122,6 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
         int j = 0;
         while(status.ok()) {
           agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-          LOG(INFO) << "The result location is: " << agd_result->location_;
           entry.location = agd_result->location_;
           entry.chunk = i;
           entry.index = j;
@@ -141,9 +139,6 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
 
       // phase 3: using the sort vector, merge the chunks into superchunks in sorted
       // order
-      LOG(INFO) << "The sorted index is now: ";
-      for (auto& entry : sort_index_) 
-        LOG(INFO) << "Location: " << entry.location << ", chunk: " << entry.chunk << ", index: " << entry.index;
 
       // now we need all the chunk data
       vector<AGDRecordReader> bases_vec;
