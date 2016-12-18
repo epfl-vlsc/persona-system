@@ -283,7 +283,7 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
                                                 output_dir=outdir+"/",
                                                 file_path=file_key,
                                                 first_ordinal=first_o,
-                                                num_records=num_recs,
+                                                num_records=n_recs,
                                                 name="agd_column_writer_merge")
         final_write_out.append((file_key_passthru, first_o, n_recs))
 
