@@ -73,9 +73,9 @@ reserve: the number of bytes to call 'reserve' on the vector.
       auto rmgr = cinfo.resource_manager();
 
       Tensor *output, *num_records_t, *first_ordinals_t;
-      auto fileset_shape = fileset->shape();
+      auto &fileset_shape = fileset->shape();
       TensorShape vec_shape({fileset_shape.dim_size(0)});
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("processed_buffers", fileset->shape(), &output));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("processed_buffers", fileset_shape, &output));
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records", vec_shape, &num_records_t));
       OP_REQUIRES_OK(ctx, ctx->allocate_output("first_ordinal", vec_shape, &first_ordinals_t));
       auto output_matrix = output->matrix<string>();

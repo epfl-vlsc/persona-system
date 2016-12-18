@@ -18,13 +18,13 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
   namespace {
-    const string op_name("ParallelColumnWriter");
+    const string op_name("AGDWriteColumns");
   }
 
   REGISTER_OP(op_name.c_str())
   .Attr("compress: bool")
   .Attr("record_id: string")
-  .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
+  .Attr("record_type: list({'base', 'qual', 'meta', 'results'})")
   .Attr("output_dir: string = ''")
   .Input("column_handle: string")
   .Input("file_path: string")
@@ -34,7 +34,10 @@ namespace tensorflow {
   .Output("key_out: string")
   .SetIsStateful()
   .Doc(R"doc(
-Writes out a column (just a character buffer) to the location specified by the input.
+Writes out columns from a specified BufferList. The list contains
+[data, index] BufferPairs. This Op constructs the header, unifies the buffers,
+and writes to disk. Normally, this corresponds to a set of bases, qual, meta, 
+results columns. 
 
 This writes out to local disk only
 
@@ -45,32 +48,39 @@ This also assumes that this writer only writes out a single record type.
 Thus we always need 3 of these for the full conversion pipeline
 )doc");
 
-  class ParallelColumnWriterOp : public OpKernel {
+  class AGDWriteColumnsOp : public OpKernel {
   public:
-    ParallelColumnWriterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
+    AGDWriteColumnsOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       using namespace format;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
-      string s;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &s));
-      auto max_size = sizeof(header_.string_id);
-      OP_REQUIRES(ctx, s.length() < max_size,
-                  Internal("record_id for column header '", s, "' greater than 32 characters"));
-      strncpy(header_.string_id, s.c_str(), max_size);
+      string rec_id;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &rec_id));
+      auto max_size = sizeof(format::FileHeader::string_id);
+      OP_REQUIRES(ctx, rec_id.length() < max_size,
+                  Internal("record_id for column header '", rec_id, "' greater than 32 characters"));
 
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &s));
-      RecordType t;
-      if (s.compare("base") == 0) {
-        t = RecordType::BASES;
-      } else if (s.compare("qual") == 0) {
-        t = RecordType::QUALITIES;
-      } else if (s.compare("meta") == 0) {
-        t = RecordType::COMMENTS;
-      } else { // no need to check. we're saved by string enum types if TF
-        t = RecordType::ALIGNMENT;
+      vector<string> rec_types;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &rec_types));
+      for (size_t i = 0; i < rec_types.size(); ++i) {
+        auto& t_in = rec_types[i];
+        format::FileHeader header;
+        strncpy(header.string_id, rec_id.c_str(), max_size);
+
+        RecordType t;
+        if (t_in.compare("base") == 0) {
+          t = RecordType::BASES;
+        } else if (t_in.compare("qual") == 0) {
+          t = RecordType::QUALITIES;
+        } else if (t_in.compare("meta") == 0) {
+          t = RecordType::COMMENTS;
+        } else { // no need to check. we're saved by string enum types if TF
+          t = RecordType::ALIGNMENT;
+        }
+        record_suffixes_.push_back("." + t_in);
+        header.record_type = static_cast<uint8_t>(t);
+        header.compression_type = compress_ ? CompressionType::GZIP : CompressionType::UNCOMPRESSED;
+        headers_.push_back(header);
       }
-      record_suffix_ = "." + s;
-      header_.record_type = static_cast<uint8_t>(t);
-      header_.compression_type = format::CompressionType::UNCOMPRESSED;
 
       string outdir;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &outdir));
@@ -90,38 +100,35 @@ Thus we always need 3 of these for the full conversion pipeline
       auto filepath = path->scalar<string>()();
       auto column_vec = column_t->vec<string>();
 
-      ResourceContainer<BufferList> *column;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
-      core::ScopedUnref column_releaser(column);
-      ResourceReleaser<BufferList> a(*column);
+      ResourceContainer<BufferList> *columns;
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &columns));
+      core::ScopedUnref column_releaser(columns);
+      ResourceReleaser<BufferList> a(*columns);
 
-      auto *buf_list = column->get();
-      buf_list->wait_for_ready();
+      auto *buf_list = columns->get();
+      auto num_buffers = buf_list->size();
 
       // do this after the wait, so we are only timing the write, and NOT part of the alignment
-      start = chrono::high_resolution_clock::now();
-
-      string full_path(record_prefix_ + filepath + record_suffix_);
-
-      FILE *file_out = fopen(full_path.c_str(), "w+");
-      // TODO get errno out of file
-      OP_REQUIRES(ctx, file_out != NULL,
-                  Internal("Unable to open file at path:", full_path));
-
-      OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out));
-
-      auto num_buffers = buf_list->size();
-      size_t i;
-
-      int fwrite_ret;
+      //start = chrono::high_resolution_clock::now();
       auto s = Status::OK();
 
-      if (compress_) {
-        OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
-      } else {
-        for (i = 0; i < num_buffers; ++i) {
-          auto &index = (*buf_list)[i].index();
+      for (size_t i = 0; i < num_buffers; ++i) {
 
+        string full_path(record_prefix_ + filepath + record_suffixes_[i]);
+
+        FILE *file_out = fopen(full_path.c_str(), "w+");
+        // TODO get errno out of file
+        OP_REQUIRES(ctx, file_out != NULL,
+                    Internal("Unable to open file at path:", full_path));
+
+        OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out, i));
+
+        int fwrite_ret;
+
+        if (compress_) {
+          OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
+        } else {
+          auto &index = (*buf_list)[i].index();
           auto s1 = index.size();
           if (s1 == 0) {
             OP_REQUIRES(ctx, s1 != 0,
@@ -132,9 +139,7 @@ Thus we always need 3 of these for the full conversion pipeline
             s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
             break;
           }
-        }
-        if (s.ok()) {
-          for (i = 0; i < num_buffers; ++i) {
+          if (s.ok()) {
             auto &data = (*buf_list)[i].data();
 
             fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
@@ -144,14 +149,13 @@ Thus we always need 3 of these for the full conversion pipeline
             }
           }
         }
+
+        fclose(file_out);
+
+        if (s.ok() && fwrite_ret != 1) {
+          s = Internal("Received non-1 fwrite return value: ", fwrite_ret);
+        }
       }
-
-      fclose(file_out);
-
-      if (s.ok() && fwrite_ret != 1) {
-        s = Internal("Received non-1 fwrite return value: ", fwrite_ret);
-      }
-
 
       OP_REQUIRES_OK(ctx, s); // in case s screws up
 
@@ -159,24 +163,25 @@ Thus we always need 3 of these for the full conversion pipeline
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &key_out));
       key_out->scalar<string>()() = filepath;
 
-      auto duration = TRACEPOINT_DURATION_CALC(start);
-      tracepoint(bioflow, chunk_read, filepath.c_str(), duration);
+      //auto duration = TRACEPOINT_DURATION_CALC(start);
+      //tracepoint(bioflow, chunk_read, filepath.c_str(), duration);
     }
 
   private:
 
-    Status WriteHeader(OpKernelContext *ctx, FILE *file_out) {
+    Status WriteHeader(OpKernelContext *ctx, FILE *file_out, int index) {
       const Tensor *tensor;
       uint64_t tmp64;
+      auto& header = headers_[index];
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
       tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int64>()());
-      header_.first_ordinal = tmp64;
+      header.first_ordinal = tmp64;
 
       TF_RETURN_IF_ERROR(ctx->input("num_records", &tensor));
       tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int32>()());
-      header_.last_ordinal = header_.first_ordinal + tmp64;
+      header.last_ordinal = header.first_ordinal + tmp64;
 
-      int fwrite_ret = fwrite(&header_, sizeof(header_), 1, file_out);
+      int fwrite_ret = fwrite(&header, sizeof(format::FileHeader), 1, file_out);
       if (fwrite_ret != 1) {
         // TODO get errno out of the file
         fclose(file_out);
@@ -187,10 +192,11 @@ Thus we always need 3 of these for the full conversion pipeline
 
     chrono::high_resolution_clock::time_point start;
     bool compress_;
-    string record_suffix_, record_prefix_;
+    vector<string> record_suffixes_;
+    string record_prefix_;
     vector<char> buf_, outbuf_; // used to compress into
-    format::FileHeader header_;
+    vector<format::FileHeader> headers_;
   };
 
-  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), ParallelColumnWriterOp);
+  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), AGDWriteColumnsOp);
 } //  namespace tensorflow {

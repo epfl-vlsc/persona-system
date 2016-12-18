@@ -26,6 +26,7 @@ from tensorflow.python.framework import ops, tensor_shape, common_shapes
 from tensorflow.python.ops import io_ops
 
 import os
+from tensorflow.python.user_ops import agd_merge_sort
 
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):
@@ -331,7 +332,7 @@ def _MMapPoolShape(op):
 
 _bp_str = "BufferPool"
 ops.NoGradient(_bp_str)
-def BufferPool(size, bound=True, name=None):
+def BufferPool(size=1, bound=True, name=None):
     return gen_user_ops.buffer_pool(size=size, bound=bound, name=name)
 
 @ops.RegisterShape(_bp_str)
@@ -340,7 +341,7 @@ def _BufferPoolShape(op):
 
 _blp_str = "BufferListPool"
 ops.NoGradient(_blp_str)
-def BufferListPool(size, bound=True, name=None):
+def BufferListPool(size=1, bound=True, name=None):
     return gen_user_ops.buffer_list_pool(size=size, bound=bound, name=name)
 
 @ops.RegisterShape(_blp_str)
@@ -536,3 +537,117 @@ def ZeroMqCSVSource(server_address, server_port, columns, name=None):
 def _ZeroMqCSVSourceShape(op):
   columns = op.get_attr("columns")
   return [tensor_shape.vector(columns)]
+
+_agd_output_str = "AGDOutput"
+ops.NoGradient(_agd_output_str)
+def AGDOutput(path, chunk_names, chunk_size, start, finish):
+    return gen_user_ops.agd_output(path=path,
+                                   chunk_names=chunk_names,
+                                   chunk_size=chunk_size,
+                                   start=start,
+                                   finish=finish)
+
+@ops.RegisterShape(_agd_output_str)
+def _AGDOutputShape(op):
+    return []
+
+
+### MergeSort Ops ###
+
+_ms_wr_col_str = "AGDWriteColumns"
+def AGDWriteColumns(compress, record_id, record_type, output_dir, column_handle,
+                    file_path, first_ordinal, num_records, name=None):
+  return gen_user_ops.agd_write_columns(compress=compress,
+                                        record_id=record_id,
+                                        record_type=record_type,
+                                        output_dir=output_dir,
+                                        column_handle=column_handle,
+                                        file_path=file_path,
+                                        first_ordinal=first_ordinal,
+                                        num_records=num_records,
+                                        name=name)
+
+@ops.RegisterShape(_ms_wr_col_str)
+def _AGDWriteColumnsShape(op):
+  handle = op.inputs[0].get_shape()
+  path = op.inputs[1].get_shape()
+  ordinal = op.inputs[2].get_shape()
+  num_recs = op.inputs[3].get_shape()
+
+  _assert_vec(handle, 2)
+  _assert_scalar(path)
+  _assert_scalar(ordinal)
+  _assert_scalar(num_recs)
+
+  return [tensor_shape.scalar()]
+
+_ms_sort_str = "AGDSort"
+ops.NoGradient(_ms_sort_str)
+def AGDSort(buffer_list_pool, results_handles, bases_handles, qualities_handles,
+            metadata_handles, num_records, name=None):
+    return gen_user_ops.agd_sort(buffer_list_pool=buffer_list_pool,
+                                 results_handles=results_handles,
+                                 bases_handles=bases_handles,
+                                 qualities_handles=qualities_handles,
+                                 metadata_handles=metadata_handles,
+                                 num_records=num_records,
+                                 name=name)
+
+@ops.RegisterShape(_ms_sort_str)
+def _AGDSortShape(op):
+  b_pool = op.inputs[0].get_shape()
+  r_handles = op.inputs[1].get_shape()
+  b_handles = op.inputs[2].get_shape()
+  q_handles = op.inputs[3].get_shape()
+  m_handles = op.inputs[4].get_shape()
+  num_recs = op.inputs[5].get_shape()
+
+  _assert_vec(b_pool, 2)
+  _assert_matrix(r_handles)
+  _assert_matrix(b_handles)
+  _assert_matrix(q_handles)
+  _assert_matrix(m_handles)
+
+  if r_handles[0] != b_handles[0] != q_handles[0] != m_handles[0] != num_recs[0]:
+    raise Exception("AGDSort: dim 0 of chunk handles do not match. i.e. you have mismatched numbers of b,q,m,r handles")
+  if num_recs.ndims != 1:
+    raise Exception("AGDSort: num_recs shape should be a vector, but got {}".format(num_recs))
+
+  return [tensor_shape.vector(2), tensor_shape.scalar()]
+
+_ms_merge_str = "AGDMerge"
+ops.NoGradient(_ms_merge_str)
+def AGDMerge(chunk_size, buffer_list_pool, num_records, chunk_group_handles, output_buffer_queue_handle, name=None):
+  # chunk_size > 1 enforced by op registration
+  return gen_user_ops.agd_merge(chunk_size=chunk_size,
+                                buffer_list_pool=buffer_list_pool,
+                                num_records=num_records,
+                                chunk_group_handles=chunk_group_handles,
+                                output_buffer_queue_handle=output_buffer_queue_handle, name=name)
+
+@ops.RegisterShape(_ms_merge_str)
+def _AGDMergeShape(op):
+  bl_pool = op.inputs[0].get_shape()
+  buffer_queue = op.inputs[1].get_shape()
+  num_recs = op.inputs[2].get_shape()
+  chunk_handle = op.inputs[3].get_shape()
+
+  _assert_vec(bl_pool, 2)
+  #_assert_vec(buffer_queue, 2)
+  _assert_scalar(buffer_queue)
+
+  if num_recs.ndims != 1:
+    raise Exception("AGDMerge: num_recs shape should be a vector, but got {}".format(num_recs))
+  if chunk_handle.ndims != 3:
+    raise Exception("AGDMerge: chunk_handle must be a 3-Tensor, but got {}".format(chunk_handle))
+
+  num_super_chunks = num_recs[0]
+  if chunk_handle[0] != num_super_chunks:
+    raise Exception("AGDMerge: number of super chunks must be the same (in the first dimension) for number of records and chunk handles.\nNum recs: {a}\nHandles: {b}".format(a=num_recs, b=chunk_handle))
+
+  if chunk_handle[1] < 1:
+    raise Exception("AGDMerge: number of columns (in chunk handle[1) must be >0, but got {}".format(chunk_handle[1]))
+  if chunk_handle[2] != 2:
+    raise Exception("AGDMerge: 3rd dimension of chunk handle must be exactly 2, but got {}".format(chunk_handle[2]))
+
+  return []
