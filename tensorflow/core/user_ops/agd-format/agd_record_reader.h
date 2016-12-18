@@ -4,6 +4,7 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "data.h"
 #include "format.h"
+#include <vector>
 
 namespace tensorflow {
 
@@ -30,6 +31,9 @@ namespace tensorflow {
     const char *data_, *cur_data_;
     size_t num_records_;
     size_t cur_record_ = 0;
+    std::vector<size_t> absolute_index_;
+
+    void InitializeIndex();
   };
 
 }
