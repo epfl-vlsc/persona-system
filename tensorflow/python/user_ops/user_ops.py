@@ -579,7 +579,7 @@ def _AGDWriteColumnsShape(op):
   _assert_scalar(ordinal)
   _assert_scalar(num_recs)
 
-  return [tensor_shape.scalar()]
+  return [tensor_shape.scalar()] * 2
 
 _ms_sort_str = "AGDSort"
 ops.NoGradient(_ms_sort_str)

@@ -8,7 +8,7 @@ from tensorflow.python.ops import gen_user_ops
 from tensorflow.python.ops.gen_user_ops import *
 
 from tensorflow.python.framework import ops, tensor_shape, common_shapes, constant_op, dtypes
-from tensorflow.python.ops import io_ops, variables, string_ops, array_ops, data_flow_ops, math_ops
+from tensorflow.python.ops import io_ops, variables, string_ops, array_ops, data_flow_ops, math_ops, control_flow_ops
 from tensorflow.python import user_ops, training as train
 from tensorflow.python.training import queue_runner
 from tensorflow.python.user_ops import user_ops as uop
@@ -125,15 +125,15 @@ def _make_agd_batch(ready_batch, buffer_pool):
 def _make_writers(results_batch, output_dir):
     first_ordinal = constant_op.constant(0, dtype=dtypes.int64) # first ordinal doesn't matter for the sort phase
     for column_handle, num_records, im_name in results_batch:
-        writer = uop.AGDWriteColumns(record_id="fixme",
-                                     record_type=["base", "qual", "meta", "results"],
-                                     column_handle=column_handle,
-                                     compress=False,
-                                     output_dir=output_dir + "/",
-                                     file_path=im_name,
-                                     first_ordinal=first_ordinal,
-                                     num_records=num_records,
-                                     name="agd_column_writer")
+        writer, first_o_passthru = uop.AGDWriteColumns(record_id="fixme",
+                                                       record_type=["base", "qual", "meta", "results"],
+                                                       column_handle=column_handle,
+                                                       compress=False,
+                                                       output_dir=output_dir + "/",
+                                                       file_path=im_name,
+                                                       first_ordinal=first_ordinal,
+                                                       num_records=num_records,
+                                                       name="agd_column_writer")
         yield writer # writes out the file path key (full path)
 
 # TODO I'm not sure what to do about the last param
@@ -264,28 +264,29 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
 
     # FIXME if you don't have at least chunk_size records in your dataset, this will cause underflow
     # this is a hack!
-    first_ordinal = tf.Variable(-1 * chunk_size, dtype=dtypes.int64)
+    first_ordinal = tf.Variable(-1 * chunk_size, dtype=dtypes.int64, name="first_ordinal")
 
     record_name_constant = constant_op.constant(record_name+"-")
     num_recs, buffer_list_handle = q.dequeue()
-    first_ord = first_ordinal.assign_add(math_ops.to_int64(num_recs))
-    first_ord_str = string_ops.as_string(first_ord)
-    file_name = string_ops.string_join([record_name_constant, first_ord_str])
-    write_join_queue = train.input.batch_pdq([buffer_list_handle, num_recs, first_ord, file_name],
-                                             num_dq_ops=1, batch_size=1, name="write_join_queue")
+    first_ord = first_ordinal.assign_add(math_ops.to_int64(num_recs, name="first_ord_cast_to_64"), use_locking=True)
+    first_ord_str = string_ops.as_string(first_ord, name="first_ord_string")
+    file_name = string_ops.string_join([record_name_constant, first_ord_str], name="file_name_string_joiner")
+    write_join_tensor = control_flow_ops.tuple(tensors=[buffer_list_handle, num_recs, first_ord, file_name], name="write_join_tensor")
+    write_join_queue = train.input.batch_pdq(write_join_tensor, num_dq_ops=1, batch_size=1, name="write_join_queue", capacity=1)
+
     final_write_out = []
-
     for buff_list, n_recs, first_o, file_key in write_join_queue:
-        file_key_passthru = uop.AGDWriteColumns(record_id=record_name,
-                                                record_type=["results", "base", "qual", "meta"],
-                                                column_handle=buff_list,
-                                                compress=False,
-                                                output_dir=outdir+"/",
-                                                file_path=file_key,
-                                                first_ordinal=first_o,
-                                                num_records=n_recs,
-                                                name="agd_column_writer_merge")
-        final_write_out.append((file_key_passthru, first_o, n_recs))
+        file_key_passthru, first_o_passthru = uop.AGDWriteColumns(record_id=record_name,
+                                                                  record_type=["results", "base", "qual", "meta"],
+                                                                  column_handle=buff_list,
+                                                                  compress=False,
+                                                                  output_dir=outdir+"/",
+                                                                  file_path=file_key,
+                                                                  first_ordinal=first_o,
+                                                                  num_records=n_recs,
+                                                                  name="agd_column_writer_merge")
+        final_write_out.append([file_key_passthru, first_o_passthru, n_recs])
+    #return final_write_out[0]
 
-    sink_queue = train.input.batch_join_pdq(final_write_out, num_dq_ops=1, batch_size=1, name="final_sink_queue")
+    sink_queue = train.input.batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name="final_sink_queue")
     return sink_queue[0]

@@ -32,6 +32,7 @@ namespace tensorflow {
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
   .Output("key_out: string")
+  .Output("first_ordinal_out: int64")
   .SetIsStateful()
   .Doc(R"doc(
 Writes out columns from a specified BufferList. The list contains
@@ -100,6 +101,8 @@ Thus we always need 3 of these for the full conversion pipeline
       auto filepath = path->scalar<string>()();
       auto column_vec = column_t->vec<string>();
 
+      OP_REQUIRES_OK(ctx, InitHeaders(ctx));
+
       ResourceContainer<BufferList> *columns;
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &columns));
       core::ScopedUnref column_releaser(columns);
@@ -118,8 +121,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
         FILE *file_out = fopen(full_path.c_str(), "w+");
         // TODO get errno out of file
-        OP_REQUIRES(ctx, file_out != NULL,
-                    Internal("Unable to open file at path:", full_path));
+        OP_REQUIRES(ctx, file_out != nullptr, Internal("Unable to open file at path:", full_path));
 
         OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out, i));
 
@@ -169,23 +171,36 @@ Thus we always need 3 of these for the full conversion pipeline
 
   private:
 
-    Status WriteHeader(OpKernelContext *ctx, FILE *file_out, int index) {
+    Status InitHeaders(OpKernelContext *ctx) {
+      uint64_t first_ord, last_ord;
       const Tensor *tensor;
-      uint64_t tmp64;
-      auto& header = headers_[index];
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
-      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int64>()());
-      header.first_ordinal = tmp64;
+      first_ord = static_cast<decltype(first_ord)>(tensor->scalar<int64>()());
 
       TF_RETURN_IF_ERROR(ctx->input("num_records", &tensor));
-      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int32>()());
-      header.last_ordinal = header.first_ordinal + tmp64;
+      auto num_recs = tensor->scalar<int32>()();
+      last_ord = first_ord + static_cast<decltype(last_ord)>(num_recs);
+
+      for (auto &header : headers_) {
+        header.first_ordinal = first_ord;
+        header.last_ordinal = last_ord;
+      }
+
+      Tensor *first_ord_out;
+      TF_RETURN_IF_ERROR(ctx->allocate_output("first_ordinal_out", TensorShape({}), &first_ord_out));
+      first_ord_out->scalar<int64>()() = first_ord;
+
+      return Status::OK();
+    }
+
+    Status WriteHeader(OpKernelContext *ctx, FILE *file_out, int index) {
+      auto& header = headers_[index];
 
       int fwrite_ret = fwrite(&header, sizeof(format::FileHeader), 1, file_out);
       if (fwrite_ret != 1) {
         // TODO get errno out of the file
         fclose(file_out);
-        return Internal("frwrite(header_) failed");
+        return Internal("fwrite(header_) failed");
       }
       return Status::OK();
     }
