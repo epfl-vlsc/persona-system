@@ -43,7 +43,6 @@ namespace tensorflow {
     if (cur_record_ < num_records_) {
       *size = (size_t) index_[cur_record_];
       *data = cur_data_;
-      cur_data_ += index_[cur_record_];
     } else {
       return ResourceExhausted("agd record container exhausted");
     }
@@ -52,6 +51,7 @@ namespace tensorflow {
 
   Status AGDRecordReader::GetNextRecord(const char** data, size_t* size) {
     auto s = PeekNextRecord(data, size);
+    cur_data_ += index_[cur_record_];
     if (s.ok()) {
       cur_record_++;
     }
