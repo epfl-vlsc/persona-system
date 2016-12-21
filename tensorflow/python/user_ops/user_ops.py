@@ -540,8 +540,9 @@ def _ZeroMqCSVSourceShape(op):
 
 _agd_output_str = "AGDOutput"
 ops.NoGradient(_agd_output_str)
-def AGDOutput(path, chunk_names, chunk_size, start, finish):
-    return gen_user_ops.agd_output(path=path,
+def AGDOutput(unpack, path, chunk_names, chunk_size, start, finish):
+    return gen_user_ops.agd_output(unpack=unpack, 
+                                   path=path,
                                    chunk_names=chunk_names,
                                    chunk_size=chunk_size,
                                    start=start,

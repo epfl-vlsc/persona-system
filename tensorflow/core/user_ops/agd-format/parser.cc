@@ -98,7 +98,7 @@ namespace tensorflow {
     return &a;
   }
 
-  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records, bool unpack)
   {
     using namespace errors;
     using namespace format;
@@ -165,7 +165,7 @@ namespace tensorflow {
       }
     }
 
-    if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
+    if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES && unpack) {
       conversion_scratch_.reset(); index_scratch_.reset();
 
       uint8_t current_record_length;
