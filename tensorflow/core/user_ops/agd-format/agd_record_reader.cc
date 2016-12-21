@@ -51,9 +51,8 @@ namespace tensorflow {
 
   Status AGDRecordReader::GetNextRecord(const char** data, size_t* size) {
     auto s = PeekNextRecord(data, size);
-    cur_data_ += index_[cur_record_];
     if (s.ok()) {
-      cur_record_++;
+      cur_data_ += index_[cur_record_++];
     }
     return s;
   }
