@@ -19,6 +19,7 @@
 namespace tensorflow {
 
   REGISTER_OP("AGDOutput")
+  .Attr("unpack: bool = true")
   .Input("path: string")
   .Input("chunk_names: string")
   .Input("chunk_size: int32")
@@ -38,7 +39,7 @@ Prints records to stdout from record indices `start` to `finish`.
   class AGDOutputOp : public OpKernel {
   public:
     AGDOutputOp(OpKernelConstruction *context) : OpKernel(context) {
-    
+      OP_REQUIRES_OK(context, context->GetAttr("unpack", &unpack_));
     }
 
     ~AGDOutputOp() {
@@ -51,7 +52,7 @@ Prints records to stdout from record indices `start` to `finish`.
       TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".base", &mmap_bases_));
       bases_buf_.reset();
       TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_bases_->data(), mmap_bases_->length(),
-            false, &bases_buf_, &bases_ord_, &num_bases_));
+            false, &bases_buf_, &bases_ord_, &num_bases_, unpack_));
       TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".qual", &mmap_qual_));
       qual_buf_.reset();
       TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_qual_->data(), mmap_qual_->length(),
@@ -141,6 +142,7 @@ Prints records to stdout from record indices `start` to `finish`.
     uint32_t num_bases_, num_qual_, num_meta_, num_results_;
     RecordParser rec_parser_;
     string path_;
+    bool unpack_;
 
   };
 

@@ -22,6 +22,7 @@ namespace tensorflow {
   .Attr("shared_name: string = ''")
   .Attr("verify: bool = false")
   .Attr("reserve: int = 8192")
+  .Attr("unpack: bool = true")
   .Input("buffer_pool: Ref(string)")
   .Input("file_handle: string")
   .Output("processed_buffers: string")
@@ -53,6 +54,8 @@ reserve: the number of bytes to call 'reserve' on the vector.
       int32_t i;
       OP_REQUIRES_OK(context, context->GetAttr("reserve", &i));
       reserve_bytes_ = static_cast<decltype(reserve_bytes_)>(i);
+      
+      OP_REQUIRES_OK(context, context->GetAttr("unpack", &unpack_));
     }
 
     ~AGDReaderOp() {
@@ -103,7 +106,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
         output_ptr->reserve(250*1024*1024); // make sure its big enough if its fresh.
 
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
-                                                 verify_, output_ptr, &first_ord, &num_recs));
+                                                 verify_, output_ptr, &first_ord, &num_recs, unpack_));
 
         output_matrix(i, 0) = output_buffer_rc->container();
         output_matrix(i, 1) = output_buffer_rc->name();
@@ -120,6 +123,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
     size_t reserve_bytes_;
     clock_t start;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
+    bool unpack_ = true;
   };
 
   REGISTER_KERNEL_BUILDER(Name("AGDReader").Device(DEVICE_CPU), AGDReaderOp);
