@@ -24,7 +24,7 @@ namespace tensorflow {
   REGISTER_OP(op_name.c_str())
   .Attr("compress: bool")
   .Attr("record_id: string")
-  .Attr("record_type: list({'base', 'qual', 'meta', 'results'})")
+  .Attr("record_type: list({'base', 'qual', 'metadata', 'results'})")
   .Attr("output_dir: string = ''")
   .Input("column_handle: string")
   .Input("file_path: string")
@@ -72,7 +72,7 @@ Thus we always need 3 of these for the full conversion pipeline
           t = RecordType::BASES;
         } else if (t_in.compare("qual") == 0) {
           t = RecordType::QUALITIES;
-        } else if (t_in.compare("meta") == 0) {
+        } else if (t_in.compare("metadata") == 0) {
           t = RecordType::COMMENTS;
         } else { // no need to check. we're saved by string enum types if TF
           t = RecordType::ALIGNMENT;

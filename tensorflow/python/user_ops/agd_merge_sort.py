@@ -126,7 +126,7 @@ def _make_writers(results_batch, output_dir):
     first_ordinal = constant_op.constant(0, dtype=dtypes.int64) # first ordinal doesn't matter for the sort phase
     for column_handle, num_records, im_name in results_batch:
         writer, first_o_passthru = uop.AGDWriteColumns(record_id="fixme",
-                                                       record_type=["base", "qual", "meta", "results"],
+                                                       record_type=["base", "qual", "metadata", "results"],
                                                        column_handle=column_handle,
                                                        compress=False,
                                                        output_dir=output_dir + "/",
@@ -184,7 +184,7 @@ def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
     suffix_sep = tf.constant(".")
     base_suffix = tf.constant("base")
     qual_suffix = tf.constant("qual")
-    meta_suffix = tf.constant("meta")
+    meta_suffix = tf.constant("metadata")
     result_suffix = tf.constant("results")
     # dictated by the merge op
     suffix_order = [result_suffix, base_suffix, qual_suffix, meta_suffix]
@@ -277,7 +277,7 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
     final_write_out = []
     for buff_list, n_recs, first_o, file_key in write_join_queue:
         file_key_passthru, first_o_passthru = uop.AGDWriteColumns(record_id=record_name,
-                                                                  record_type=["results", "base", "qual", "meta"],
+                                                                  record_type=["results", "base", "qual", "metadata"],
                                                                   column_handle=buff_list,
                                                                   compress=False,
                                                                   output_dir=outdir+"/",
