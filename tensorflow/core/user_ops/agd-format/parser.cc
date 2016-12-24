@@ -125,7 +125,6 @@ namespace tensorflow {
 
     Status status;
     auto compression_type = static_cast<CompressionType>(file_header->compression_type);
-    auto start = clock();
     switch (compression_type) {
     case CompressionType::GZIP:
       status = decompressGZIP(payload_start, payload_size, result_buffer);
@@ -165,7 +164,7 @@ namespace tensorflow {
       }
     }
 
-    if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES && unpack) {
+    if (unpack && static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
       conversion_scratch_.reset(); index_scratch_.reset();
 
       uint8_t current_record_length;

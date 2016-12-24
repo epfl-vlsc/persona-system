@@ -56,10 +56,10 @@ ops.RegisterShape(_fq_str)(common_shapes.scalar_shape)
 
 _ar_str = "AGDReader"
 ops.NoGradient(_ar_str)
-def AGDReader(file_handle, pool_handle, reserve=8192, name=None, verify=False):
+def AGDReader(file_handle, pool_handle, reserve=8192, name=None, unpack=True, verify=False):
   if reserve < 1:
     raise Exception ("AGD reader 'reserve' param must be strictly positive. Got {}".format(reserve))
-  return gen_user_ops.agd_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name, reserve=reserve)
+  return gen_user_ops.agd_reader(buffer_pool=pool_handle, file_handle=file_handle, verify=verify, name=name, reserve=reserve, unpack=unpack)
 
 @ops.RegisterShape(_ar_str)
 def _AGDReaderShape(op):
