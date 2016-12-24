@@ -162,9 +162,13 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
     bp = uop.BufferPool(bound=False, name="local_read_buffer_pool")
     processed_record_batch = _make_agd_batch(ready_batch=ready_record_batch, buffer_pool=bp)
 
+    batched_processed_records = train.input.batch_join_pdq([a for a in processed_record_batch],
+                                                           batch_size=1, num_dq_ops=parallel_sort,
+                                                           name="sortable_ready_queue")
+
     blp = uop.BufferListPool(bound=False, name="local_read_buffer_list_pool")
 
-    sorters = _make_sorters(batch=processed_record_batch, buffer_list_pool=blp)
+    sorters = _make_sorters(batch=batched_processed_records, buffer_list_pool=blp)
 
     batched_results = train.input.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
                                                  batch_size=1, name="sorted_im_files_queue")
