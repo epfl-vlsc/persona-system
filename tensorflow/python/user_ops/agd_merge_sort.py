@@ -104,21 +104,22 @@ def _make_sorters(batch, buffer_list_pool):
 def _make_agd_batch(ready_batch, buffer_pool):
     for b, q, m, r, inter_name in ready_batch:
         base_reads, base_num_records, base_first_ordinals = uop.AGDReader(verify=False,
-                                                                               pool_handle=buffer_pool,
-                                                                               file_handle=b,
-                                                                               name="base_reader")
+                                                                          unpack=False,
+                                                                          pool_handle=buffer_pool,
+                                                                          file_handle=b,
+                                                                          name="base_reader")
         qual_reads, qual_num_records, qual_first_ordinals = uop.AGDReader(verify=False,
-                                                                               pool_handle=buffer_pool,
-                                                                               file_handle=q,
-                                                                               name="qual_reader")
+                                                                          pool_handle=buffer_pool,
+                                                                          file_handle=q,
+                                                                          name="qual_reader")
         meta_reads, meta_num_records, meta_first_ordinals = uop.AGDReader(verify=False,
-                                                                               pool_handle=buffer_pool,
-                                                                               file_handle=m,
-                                                                               name="meta_reader")
+                                                                          pool_handle=buffer_pool,
+                                                                          file_handle=m,
+                                                                          name="meta_reader")
         result_reads, result_num_records, result_first_ordinals = uop.AGDReader(verify=False,
-                                                                                     pool_handle=buffer_pool,
-                                                                                     file_handle=r,
-                                                                                     name="result_reader")
+                                                                                pool_handle=buffer_pool,
+                                                                                file_handle=r,
+                                                                                name="result_reader")
         # TODO we should have some sort of verification on ordinals here!
         yield base_reads, qual_reads, meta_reads, result_reads, base_num_records, inter_name
 
@@ -217,7 +218,7 @@ def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
 def _make_processed_records(ready_read_records, buffer_pool):
     def process_ready_row(interm_columns):
         columns_split = tf.unpack(interm_columns)
-        return zip(*(uop.AGDReader(verify=False,
+        return zip(*(uop.AGDReader(verify=False, unpack=False,
                                    pool_handle=buffer_pool,
                                    file_handle=column,
                                    name="column_agd_reader") for column in columns_split))

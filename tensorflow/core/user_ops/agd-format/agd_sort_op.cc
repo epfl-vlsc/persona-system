@@ -171,10 +171,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
         auto& metadata_reader = metadata_vec[entry.chunk];
 
         bases_reader.GetRecordAt(entry.index, &data, &size);
-        bases_scratch_.clear();
-        OP_REQUIRES_OK(ctx, format::IntoBases(data, size, bases_scratch_));
-        bases_builder.AppendRecord((const char*)(&bases_scratch_[0]), 
-            sizeof(format::BinaryBases)*bases_scratch_.size());
+        bases_builder.AppendRecord(data, size);
         qualities_reader.GetRecordAt(entry.index, &data, &size);
         qualities_builder.AppendRecord(data, size);
         metadata_reader.GetRecordAt(entry.index, &data, &size);
@@ -197,8 +194,6 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
     };
 
     vector<SortEntry> sort_index_;
-    vector<format::BinaryBases> bases_scratch_;
-
 
   };
 
