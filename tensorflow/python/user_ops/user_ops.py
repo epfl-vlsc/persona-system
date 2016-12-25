@@ -552,6 +552,17 @@ def AGDOutput(unpack, path, chunk_names, chunk_size, start, finish):
 def _AGDOutputShape(op):
     return []
 
+_agd_sortverify_str = "AGDVerifySort"
+ops.NoGradient(_agd_sortverify_str)
+def AGDVerifySort(path, chunk_names, chunk_size):
+    return gen_user_ops.agd_verify_sort(path=path,
+                                   chunk_names=chunk_names,
+                                   chunk_size=chunk_size)
+
+@ops.RegisterShape(_agd_sortverify_str)
+def _AGDVerifySortShape(op):
+    return []
+
 
 ### MergeSort Ops ###
 
