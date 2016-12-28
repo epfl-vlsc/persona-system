@@ -42,9 +42,12 @@ def name_generator(base_name, separator="-"):
 
 def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, parallel_read):
     extra_keys = (column_grouping_factor - (len(file_keys) % column_grouping_factor)) % column_grouping_factor
+    print("keys: {}".format(file_keys))
     print("extra keys: {}".format(extra_keys))
     if extra_keys > 0:
         file_keys = list(itt.chain(file_keys, itt.repeat("", extra_keys)))
+    
+    print("keys: {}".format(file_keys))
 
     string_producer = train.input.string_input_producer(file_keys, num_epochs=1, shuffle=False)
     sp_output = string_producer.dequeue()
@@ -55,7 +58,7 @@ def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, para
     intermediate_name = name_generator(base_name=intermediate_file_prefix)
 
     # TODO parallelism can be specified here
-    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, num_dq_ops=parallel_read)
+    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, capacity=2, num_dq_ops=parallel_read)
     return paired_output
 
 def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
@@ -157,14 +160,14 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
                        kp[1]) for kp in key_producers]
 
     ready_record_batch = train.input.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dq_ops=parallel_process,
-                                                    batch_size=1, name="ready_record_queue")
+                                                    batch_size=1, capacity=4, name="ready_record_queue")
 
     # now the AGD parallel stage
     bp = uop.BufferPool(bound=False, name="local_read_buffer_pool")
     processed_record_batch = _make_agd_batch(ready_batch=ready_record_batch, buffer_pool=bp)
 
     batched_processed_records = train.input.batch_join_pdq([a for a in processed_record_batch],
-                                                           batch_size=1, num_dq_ops=parallel_sort,
+                                                           batch_size=1, num_dq_ops=parallel_sort, capacity=4,
                                                            name="sortable_ready_queue")
 
     blp = uop.BufferListPool(bound=False, name="local_read_buffer_list_pool")

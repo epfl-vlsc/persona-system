@@ -18,6 +18,13 @@
 
 namespace tensorflow {
 
+   namespace { 
+      void resource_releaser(ResourceContainer<Data> *data) {
+        core::ScopedUnref a(data);
+        data->release();
+      }
+   }
+
   REGISTER_OP("AGDSort")
   .Input("buffer_list_pool: Ref(string)")
   .Input("results_handles: string")
@@ -67,7 +74,8 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
     }
 
     Status LoadDataResources(OpKernelContext* ctx, const Tensor* handles_t,
-        vector<AGDRecordReader> &vec, const Tensor* num_records_t) {
+        vector<AGDRecordReader> &vec, const Tensor* num_records_t,
+        vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>> &releasers) {
       auto rmgr = ctx->resource_manager();
       auto handles_matrix = handles_t->matrix<string>();
       auto num = handles_t->shape().dim_size(0);
@@ -77,15 +85,18 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
       for (int i = 0; i < num; i++) {
         TF_RETURN_IF_ERROR(rmgr->Lookup(handles_matrix(i, 0), handles_matrix(i, 1), &input));
         vec.push_back(AGDRecordReader(input, num_records(i)));
+        releasers.push_back(move(vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>>::value_type(input, resource_releaser)));
       }
       return Status::OK();
     }
+    
 
     void Compute(OpKernelContext* ctx) override {
       if (!bufferlist_pool_) {
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_list_pool", &bufferlist_pool_));
       }
 
+      LOG(INFO) << "running sort!!";
       sort_index_.clear();
 
       const Tensor *results_in, *bases_in, *qualities_in, *metadata_in, *num_records_t;
@@ -95,6 +106,8 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
       OP_REQUIRES_OK(ctx, ctx->input("bases_handles", &bases_in));
       OP_REQUIRES_OK(ctx, ctx->input("qualities_handles", &qualities_in));
       OP_REQUIRES_OK(ctx, ctx->input("metadata_handles", &metadata_in));
+      
+      vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>> releasers;
 
       int superchunk_records = 0;
       for (int i = 0; i < num_records.size(); i++)
@@ -105,7 +118,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
       records_out_t->scalar<int32>()() = superchunk_records;
 
       vector<AGDRecordReader> results_vec;
-      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, results_in, results_vec, num_records_t));
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, results_in, results_vec, num_records_t, releasers));
 
       // phase 1: parse results sequentially, build up vector of (genome_location, index)
       const format::AlignmentResult* agd_result;
@@ -142,11 +155,11 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
 
       // now we need all the chunk data
       vector<AGDRecordReader> bases_vec;
-      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, bases_in, bases_vec, num_records_t));
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, bases_in, bases_vec, num_records_t, releasers));
       vector<AGDRecordReader> qualities_vec;
-      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, qualities_in, qualities_vec, num_records_t));
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, qualities_in, qualities_vec, num_records_t, releasers));
       vector<AGDRecordReader> metadata_vec;
-      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, metadata_in, metadata_vec, num_records_t));
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, metadata_in, metadata_vec, num_records_t, releasers));
 
       // get output buffer pairs (pair holds [index, data] to construct
       // AGD format temp output file in next dataflow stage)

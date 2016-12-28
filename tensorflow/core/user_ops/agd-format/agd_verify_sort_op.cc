@@ -77,10 +77,12 @@ Chunk names must be in contiguous order.
         status = results_reader.GetNextRecord(&data, &length);
         while (status.ok()) {
           agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-          LOG(INFO) << "AGD location is: " << agd_result->location_;
+          //LOG(INFO) << "AGD location is: " << agd_result->location_;
           if (agd_result->location_ < prev_location) {
             LOG(INFO) << "AGD SET IS NOT SORTED. Offending entry in chunk " << i 
-              << " at index " << index;
+              << " at index " << index << ". Prev: " << prev_location << " Curr: "
+              << agd_result->location_;
+
             return;
           } 
           index++;
