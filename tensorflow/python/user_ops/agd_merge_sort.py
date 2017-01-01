@@ -42,12 +42,10 @@ def name_generator(base_name, separator="-"):
 
 def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, parallel_read):
     extra_keys = (column_grouping_factor - (len(file_keys) % column_grouping_factor)) % column_grouping_factor
-    print("keys: {}".format(file_keys))
     print("extra keys: {}".format(extra_keys))
     if extra_keys > 0:
         file_keys = list(itt.chain(file_keys, itt.repeat("", extra_keys)))
     
-    print("keys: {}".format(file_keys))
 
     string_producer = train.input.string_input_producer(file_keys, num_epochs=1, shuffle=False)
     sp_output = string_producer.dequeue()
@@ -183,7 +181,6 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
     intermediate_keys_records = _make_writers(results_batch=batched_results, output_dir=outdir)
 
     recs = [rec for rec in intermediate_keys_records]
-    print(recs)
     all_im_keys = train.input.batch_join_pdq(recs, num_dq_ops=1,
                                              batch_size=1, name="intermediate_key_queue")
 
@@ -247,7 +244,6 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, ou
                             buffer_list_pool=blp)
 
    
-    print("handle: {}, recs: {}".format(new_chunk_handle, num_recs))
     chunk_handle = train.input.batch_pdq([new_chunk_handle, num_recs], num_dq_ops=1,
                                          batch_size=1, capacity=8, name="chunk_handle_out_queue")
 

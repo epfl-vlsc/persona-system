@@ -140,11 +140,12 @@ num_records: vector of number of records
         OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(meta_file, &meta_mmap));
         OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(qual_file, &qual_mmap));
         OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(results_file, &results_mmap));
-        AGDRecordReader results_column((const char*)results_mmap->data(), num_records_[i]);
+        // the system is assuming the files are uncompressed and formatted with the usual header
+        AGDRecordReader results_column((const char*)results_mmap->data() + sizeof(format::FileHeader), num_records_[i]);
         vector<AGDRecordReader> other_columns;
-        other_columns.push_back(AGDRecordReader((const char*)bases_mmap->data(), num_records_[i]));
-        other_columns.push_back(AGDRecordReader((const char*)qual_mmap->data(), num_records_[i]));
-        other_columns.push_back(AGDRecordReader((const char*)meta_mmap->data(), num_records_[i]));
+        other_columns.push_back(AGDRecordReader((const char*)bases_mmap->data() + sizeof(format::FileHeader), num_records_[i]));
+        other_columns.push_back(AGDRecordReader((const char*)qual_mmap->data() + sizeof(format::FileHeader), num_records_[i]));
+        other_columns.push_back(AGDRecordReader((const char*)meta_mmap->data() + sizeof(format::FileHeader), num_records_[i]));
         mapped_files_.push_back(move(results_mmap));
         mapped_files_.push_back(move(bases_mmap));
         mapped_files_.push_back(move(qual_mmap));
@@ -182,6 +183,7 @@ num_records: vector of number of records
         auto &top = score_heap_.top();
         cc = top.second;
 
+        LOG(INFO) << "processing location: " << top.first;
         cc->append_to_buffer_list(bl);
 
         score_heap_.pop();
