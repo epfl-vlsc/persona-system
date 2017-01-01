@@ -128,6 +128,8 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
       Status status;
       SortEntry entry;
 
+      sort_index_.reserve(num_results * num_records(0));
+
       for (int i = 0; i < num_results; i++) {
         auto& result_reader = results_vec[i];
         status = result_reader.GetNextRecord(&data, &size);
@@ -139,6 +141,9 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
           entry.chunk = i;
           entry.index = j;
           sort_index_.push_back(entry);
+          if (entry.location < 0)
+            LOG(INFO) << "location: " << entry.location << " at index " << entry.index << " in chunk "
+              << entry.chunk << " appears to be invalid.";
 
           status = result_reader.GetNextRecord(&data, &size);
           j++;
@@ -146,10 +151,12 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
       }
 
       // phase 2: sort the vector by genome_location
-      std::sort(sort_index_.begin(), sort_index_.end(), [](SortEntry const& a, SortEntry const& b) {
+      LOG(INFO) << "running std sort on " << sort_index_.size() << " SortEntry's";
+      std::sort(sort_index_.begin(), sort_index_.end(), [](const SortEntry& a, const SortEntry& b) {
           return a.location < b.location;
           });
 
+      LOG(INFO) << "Sort finished.";
       // phase 3: using the sort vector, merge the chunks into superchunks in sorted
       // order
 
@@ -194,6 +201,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
       }
 
       // done
+      LOG(INFO) << "DONE running sort!!";
 
     }
 
@@ -202,7 +210,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
 
     struct SortEntry {
       int64 location;
-      int chunk;
+      uint8_t chunk;
       int index;
     };
 

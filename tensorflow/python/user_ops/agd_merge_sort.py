@@ -58,7 +58,7 @@ def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, para
     intermediate_name = name_generator(base_name=intermediate_file_prefix)
 
     # TODO parallelism can be specified here
-    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, capacity=2, num_dq_ops=parallel_read)
+    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, capacity=2, num_dq_ops=parallel_read, name="keys_and_intermediate")
     return paired_output
 
 def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
@@ -138,7 +138,7 @@ def _make_writers(results_batch, output_dir):
                                                        first_ordinal=first_ordinal,
                                                        num_records=num_records,
                                                        name="agd_column_writer")
-        yield writer # writes out the file path key (full path)
+        yield writer, num_records # writes out the file path key (full path)
 
 # TODO I'm not sure what to do about the last param
 def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_file_prefix="intermediate_file",
@@ -160,7 +160,7 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
                        kp[1]) for kp in key_producers]
 
     ready_record_batch = train.input.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dq_ops=parallel_process,
-                                                    batch_size=1, capacity=4, name="ready_record_queue")
+                                                    batch_size=1, capacity=2, name="ready_record_queue")
 
     # now the AGD parallel stage
     bp = uop.BufferPool(bound=False, name="local_read_buffer_pool")
@@ -177,11 +177,14 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
     batched_results = train.input.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
                                                  batch_size=1, name="sorted_im_files_queue")
 
+    #import ipdb; ipdb.set_trace()
     if outdir is None:
         outdir = local_directory
-    intermediate_keys = _make_writers(results_batch=batched_results, output_dir=outdir)
+    intermediate_keys_records = _make_writers(results_batch=batched_results, output_dir=outdir)
 
-    all_im_keys = train.input.batch_join_pdq([(im_key,) for im_key in intermediate_keys], num_dq_ops=1,
+    recs = [rec for rec in intermediate_keys_records]
+    print(recs)
+    all_im_keys = train.input.batch_join_pdq(recs, num_dq_ops=1,
                                              batch_size=1, name="intermediate_key_queue")
 
     return all_im_keys
@@ -231,41 +234,23 @@ def _make_processed_records(ready_read_records, buffer_pool):
         readss, num_recordss, first_ordinalss = process_ready_row(interm_columns=interm_columns)
         yield [nr[0] for nr in num_recordss], tf.pack(readss)
 
-def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, chunk_size=100000):
+def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, outdir=None, chunk_size=100000):
     if chunk_size < 1:
         raise Exception("Need strictly non-negative chunk size. Got {}".format(chunk_size))
-    key_producer = train.input.input_producer([intermediate_keys],
-                                              # this element_shape specification isn't necessary, but it's a good double-check
-                                              element_shape=tensor_shape.vector(len(intermediate_keys)),
-                                              capacity=1,
-                                              shuffle=False,
-                                              num_epochs=1,
-                                              name="merge_key_producer")
-    key_output = key_producer.dequeue()
-    key_outs = train.input.batch_pdq([key_output], batch_size=1, num_dq_ops=1)
-    mapped_file_pool = uop.MMapPool(bound=False, name="local_read_mmap_pool")
-    ready_read_records = _make_merge_read_records(key_outs=key_outs, in_dir=in_dir,
-                                                  mmap_pool_handle=mapped_file_pool)
-
-    bp = uop.BufferPool(bound=False, name="local_read_merge_buffer_pool")
-    processed_records = _make_processed_records(ready_read_records=ready_read_records, buffer_pool=bp)
-
-    merge_ready_queue = train.input.batch_join_pdq([p for p in processed_records],
-                                                   num_dq_ops=1, batch_size=1, name="merge_ready_queue")
-    q = data_flow_ops.FIFOQueue(capacity=100000, # big because who cares
-                                dtypes=[dtypes.int32, dtypes.string],
-                                shapes=[tensor_shape.scalar(), tensor_shape.vector(2)],
-                                name="merge_output_queue")
 
     blp = uop.BufferListPool(bound=False, name="local_read_merge_buffer_list_pool")
 
-    num_records, chunk_group_handles = merge_ready_queue[0]
-    merge_op = uop.AGDMerge(chunk_size=chunk_size,
-                            buffer_list_pool=blp,
+    new_chunk_handle, num_recs = uop.AGDMerge(chunk_size=chunk_size,
+                            intermediate_files=intermediate_keys,
+                            path=in_dir,
                             num_records=num_records,
-                            chunk_group_handles=chunk_group_handles,
-                            output_buffer_queue_handle=q.queue_ref)
-    queue_runner.add_queue_runner(queue_runner.QueueRunner(q, [merge_op]))
+                            buffer_list_pool=blp)
+
+   
+    print("handle: {}, recs: {}".format(new_chunk_handle, num_recs))
+    chunk_handle = train.input.batch_pdq([new_chunk_handle, num_recs], num_dq_ops=1,
+                                         batch_size=1, capacity=8, name="chunk_handle_out_queue")
+
 
     if outdir is None:
         outdir = in_dir
@@ -275,7 +260,7 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
     first_ordinal = tf.Variable(-1 * chunk_size, dtype=dtypes.int64, name="first_ordinal")
 
     record_name_constant = constant_op.constant(record_name+"-")
-    num_recs, buffer_list_handle = q.dequeue()
+    num_recs, buffer_list_handle = chunk_handle[0][1], chunk_handle[0][0]
     first_ord = first_ordinal.assign_add(math_ops.to_int64(num_recs, name="first_ord_cast_to_64"), use_locking=True)
     first_ord_str = string_ops.as_string(first_ord, name="first_ord_string")
     file_name = string_ops.string_join([record_name_constant, first_ord_str], name="file_name_string_joiner")
