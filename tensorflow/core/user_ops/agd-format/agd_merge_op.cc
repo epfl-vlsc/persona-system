@@ -183,7 +183,7 @@ num_records: vector of number of records
         auto &top = score_heap_.top();
         cc = top.second;
 
-        LOG(INFO) << "processing location: " << top.first;
+        //LOG(INFO) << "processing location: " << top.first;
         cc->append_to_buffer_list(bl);
 
         score_heap_.pop();
