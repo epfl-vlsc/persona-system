@@ -56,7 +56,7 @@ def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, para
     intermediate_name = name_generator(base_name=intermediate_file_prefix)
 
     # TODO parallelism can be specified here
-    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, capacity=2, num_dq_ops=parallel_read, name="keys_and_intermediate")
+    paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, num_dq_ops=parallel_read, name="keys_and_intermediate")
     return paired_output
 
 def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
@@ -70,12 +70,33 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
     metas = []
     results = []
     split_batch = array_ops.unpack(key_batch)
+
+    
     for k in split_batch:
         bases.append(string_ops.string_join([k, suffix_sep, base_suffix]))
         quals.append(string_ops.string_join([k, suffix_sep, qual_suffix]))
         metas.append(string_ops.string_join([k, suffix_sep, meta_suffix]))
         results.append(string_ops.string_join([k, suffix_sep, result_suffix]))
 
+    reads, names = uop.FileMMap(filename=bases[0], handle=mmap_pool_handle, local_prefix=local_directory, name="base_mmap")
+
+    for b in bases[1:]:
+        reads, names = uop.StagedFileMap(filename=b, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
+                                                        local_prefix=local_directory, name="base_staged_mmap")
+    for q in quals:
+        reads, names = uop.StagedFileMap(filename=q, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
+                                                        local_prefix=local_directory, name="qual_staged_mmap")
+    for m in metas:
+        reads, names = uop.StagedFileMap(filename=m, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
+                                                        local_prefix=local_directory, name="meta_staged_mmap")
+    for r in results:
+        reads, names = uop.StagedFileMap(filename=r, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
+                                                        local_prefix=local_directory, name="result_staged_mmap")
+
+    base_reads, qual_reads, meta_reads, result_reads = tf.split(0, 4, reads)
+    
+    return base_reads, qual_reads, meta_reads, result_reads
+    '''
     # TODO if this doesn't work, then you can chain them in with a list like above
     base_reads, base_names = uop.FileMMap(filename=bases[0], handle=mmap_pool_handle, local_prefix=local_directory, name="base_mmap")
     qual_reads, qual_names = uop.FileMMap(filename=quals[0], handle=mmap_pool_handle, local_prefix=local_directory, name="qual_mmap")
@@ -93,6 +114,7 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
                                                             local_prefix=local_directory, name="result_staged_mmap")
 
     return base_reads, qual_reads, meta_reads, result_reads
+    '''
 
 def _make_sorters(batch, buffer_list_pool):
     # FIXME this needs the number of records
@@ -158,14 +180,14 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
                        kp[1]) for kp in key_producers]
 
     ready_record_batch = train.input.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dq_ops=parallel_process,
-                                                    batch_size=1, capacity=2, name="ready_record_queue")
+                                                    batch_size=1, capacity=8, name="ready_record_queue")
 
     # now the AGD parallel stage
     bp = uop.BufferPool(bound=False, name="local_read_buffer_pool")
     processed_record_batch = _make_agd_batch(ready_batch=ready_record_batch, buffer_pool=bp)
 
     batched_processed_records = train.input.batch_join_pdq([a for a in processed_record_batch],
-                                                           batch_size=1, num_dq_ops=parallel_sort, capacity=4,
+                                                           batch_size=1, num_dq_ops=parallel_sort, capacity=8,
                                                            name="sortable_ready_queue")
 
     blp = uop.BufferListPool(bound=False, name="local_read_buffer_list_pool")
