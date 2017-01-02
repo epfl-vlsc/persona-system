@@ -56,6 +56,13 @@ class FileSystem {
   virtual Status NewReadOnlyMemoryRegionFromFile(
       const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result) = 0;
 
+  /// If synchronous is set, take all the page faults (or whatever else is necessary) to load
+  /// all of the data in the file into memory.
+  /// synchronous = false should act just like the standard, unflagged version
+  /// With synchronous set, all the data should be in memory (or in page cache) upon the return of the call
+  virtual Status NewReadOnlyMemoryRegionFromFile(
+      const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result, bool synchronous);
+
   virtual bool FileExists(const string& fname) = 0;
 
   virtual Status GetChildren(const string& dir,

@@ -38,6 +38,11 @@ Status FileSystem::IsDirectory(const string& name) {
   return Status(tensorflow::error::FAILED_PRECONDITION, "Not a directory");
 }
 
+Status  FileSystem::NewReadOnlyMemoryRegionFromFile(const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result, bool synchronous) {
+  VLOG(WARNING) << "NewReadOnlyMemoryRegionFromFile with synchronous flag called without an override. Calling base method. Ignores synchronous flag!";
+  return NewReadOnlyMemoryRegionFromFile(fname, result);
+}
+
 RandomAccessFile::~RandomAccessFile() {}
 
 WritableFile::~WritableFile() {}

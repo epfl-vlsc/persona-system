@@ -129,8 +129,11 @@ class Env {
   /// The ownership of the returned ReadOnlyMemoryRegion is passed to the caller
   /// and the object should be deleted when is not used. The memory region
   /// object shouldn't live longer than the Env object.
+  /// Synchronous flag will cause the read only region to be populated during the call.
+  /// All the data will be in memory upon return.
+  /// See the documentation in the corresponding call in file_system.h
   Status NewReadOnlyMemoryRegionFromFile(
-      const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result);
+                                         const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result, bool synchronous = false);
 
   /// Returns true iff the named file exists.
   bool FileExists(const string& fname);

@@ -73,10 +73,10 @@ def _AGDReaderShape(op):
 
 _fm_str = "FileMMap"
 ops.NoGradient(_fm_str)
-def FileMMap(filename, handle, local_prefix="", name=None):
+def FileMMap(filename, handle, local_prefix="", synchronous=False, name=None):
   if len(local_prefix) > 0 and not local_prefix.endswith("/"):
     local_prefix += "/"
-  return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, local_prefix=local_prefix, name=name)
+  return gen_user_ops.file_m_map(filename=filename, pool_handle=handle, local_prefix=local_prefix, name=name, synchronous=synchronous)
 
 @ops.RegisterShape(_fm_str)
 def _FileMMapShape(op):
@@ -88,10 +88,10 @@ def _FileMMapShape(op):
 
 _sm_str = "StagedFileMap"
 ops.NoGradient(_sm_str)
-def StagedFileMap(filename, upstream_files, upstream_names, handle, local_prefix="", name=None):
+def StagedFileMap(filename, upstream_files, upstream_names, handle, local_prefix="", synchronous=False, name=None):
   if len(local_prefix) > 0 and not local_prefix.endswith("/"):
     local_prefix += "/"
-  return gen_user_ops.staged_file_map(filename=filename, pool_handle=handle,
+  return gen_user_ops.staged_file_map(filename=filename, pool_handle=handle, synchronous=synchronous,
                                       upstream_refs=upstream_files, local_prefix=local_prefix,
                                       upstream_names=upstream_names, name=name)
 

@@ -18,6 +18,7 @@ namespace tensorflow {
   .Attr("local_prefix: string = ''")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Attr("synchronous: bool = false")
   .Input("pool_handle: Ref(string)")
   .Input("filename: string")
   .Output("file_handle: string")
@@ -38,6 +39,7 @@ file_name: a Tensor() of string for the unique key for this file
   .Attr("local_prefix: string = ''")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
+  .Attr("synchronous: bool = false")
   .Input("filename: string")
   .Input("upstream_refs: string")
   .Input("upstream_names: string")
@@ -62,6 +64,7 @@ file_names: [{this map op's name}] + upstream_name
   public:
     StagedFileMapOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("local_prefix", &path_prefix_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("synchronous", &synchronous_));
 
       struct stat info;
       OP_REQUIRES(ctx, stat(path_prefix_.c_str(), &info) == 0,
@@ -100,7 +103,7 @@ file_names: [{this map op's name}] + upstream_name
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
       unique_ptr<ReadOnlyMemoryRegion> rmr;
-      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
+      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr, synchronous_));
       mmf->get()->own(move(rmr));
 
       Tensor *file_handles, *file_names;
@@ -134,12 +137,14 @@ file_names: [{this map op's name}] + upstream_name
     chrono::high_resolution_clock::time_point start;
     ReferencePool<MemoryMappedFile> *ref_pool = nullptr;
     string path_prefix_;
+    bool synchronous_;
   };
 
   class FileMMapOp : public OpKernel {
   public:
     FileMMapOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("local_prefix", &path_prefix_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("synchronous", &synchronous_));
 
       struct stat info;
       OP_REQUIRES(ctx, stat(path_prefix_.c_str(), &info) == 0,
@@ -169,7 +174,7 @@ file_names: [{this map op's name}] + upstream_name
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
       unique_ptr<ReadOnlyMemoryRegion> rmr;
-      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr));
+      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr, synchronous_));
       mmf->get()->own(move(rmr));
 
       Tensor *output_tensor;
@@ -190,6 +195,7 @@ file_names: [{this map op's name}] + upstream_name
     chrono::high_resolution_clock::time_point start;
     ReferencePool<MemoryMappedFile> *ref_pool = nullptr;
     string path_prefix_;
+    bool synchronous_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("FileMMap").Device(DEVICE_CPU), FileMMapOp);

@@ -97,10 +97,10 @@ Status Env::NewRandomAccessFile(const string& fname,
 }
 
 Status Env::NewReadOnlyMemoryRegionFromFile(
-    const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result) {
+                                            const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result, bool synchronous) {
   FileSystem* fs;
   TF_RETURN_IF_ERROR(GetFileSystemForFile(fname, &fs));
-  return fs->NewReadOnlyMemoryRegionFromFile(fname, result);
+  return fs->NewReadOnlyMemoryRegionFromFile(fname, result, synchronous);
 }
 
 Status Env::NewWritableFile(const string& fname,

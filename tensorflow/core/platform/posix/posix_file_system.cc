@@ -300,7 +300,12 @@ Status PosixFileSystem::NewAppendableFile(
 }
 
 Status PosixFileSystem::NewReadOnlyMemoryRegionFromFile(
-    const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result) {
+  const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result) {
+  return NewReadOnlyMemoryRegionFromFile(fname, result, false);
+}
+
+Status PosixFileSystem::NewReadOnlyMemoryRegionFromFile(
+  const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result, bool synchronous) {
   string translated_fname = TranslateName(fname);
   Status s = Status::OK();
   int fd = open(translated_fname.c_str(), O_RDONLY);
@@ -310,9 +315,7 @@ Status PosixFileSystem::NewReadOnlyMemoryRegionFromFile(
     struct stat st;
     ::fstat(fd, &st);
     const void* address =
-        //mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
-    // old
-        mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+      mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE | synchronous ? MAP_POPULATE : 0, fd, 0);
     if (address == MAP_FAILED) {
       s = IOError(fname, errno);
     } else {

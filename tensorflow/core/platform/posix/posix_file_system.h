@@ -40,6 +40,10 @@ class PosixFileSystem : public FileSystem {
       const string& filename,
       std::unique_ptr<ReadOnlyMemoryRegion>* result) override;
 
+  Status NewReadOnlyMemoryRegionFromFile(
+      const string& filename,
+      std::unique_ptr<ReadOnlyMemoryRegion>* result, bool synchronous) override;
+
   bool FileExists(const string& fname) override;
 
   Status GetChildren(const string& dir, std::vector<string>* result) override;
