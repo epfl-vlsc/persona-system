@@ -45,13 +45,12 @@ Writes out columns from a specified BufferList. The list contains
 and writes to disk. Normally, this corresponds to a set of bases, qual, meta, 
 results columns. 
 
-This writes out to local disk only
+This writes out to a Ceph object store only, defined by `cluster_name, user_name, 
+pool_name, and ceph_conf_path`. 
 
 Assumes that the record_id for a given set does not change for the runtime of the graph
 and is thus passed as an Attr instead of an input (for efficiency);
 
-This also assumes that this writer only writes out a single record type.
-Thus we always need 3 of these for the full conversion pipeline
 )doc");
 
   class AGDCephWriteColumnsOp : public OpKernel {
