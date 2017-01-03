@@ -96,7 +96,6 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_list_pool", &bufferlist_pool_));
       }
 
-      LOG(INFO) << "running sort!!";
       sort_index_.clear();
 
       const Tensor *results_in, *bases_in, *qualities_in, *metadata_in, *num_records_t;
