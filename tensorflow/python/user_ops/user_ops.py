@@ -563,6 +563,25 @@ def AGDVerifySort(path, chunk_names, chunk_size):
 def _AGDVerifySortShape(op):
     return []
 
+_cwc_str = "AGDCephWriteColumns"
+ops.NoGradient(_cwc_str)
+def AGDCephWriteColumns(cluster_name, user_name, pool_name, ceph_conf_path, compress,
+        record_id, record_type, column_handle, file_path, first_ordinal,
+        num_records, name=None):
+  return gen_user_ops.agd_ceph_write_columns(cluster_name=cluster_name, user_name=user_name,
+                                  pool_name=pool_name, ceph_conf_path=ceph_conf_path, compress=compress,
+                                  record_id=record_id, record_type=record_type,
+                                  column_handle=column_handle, file_path=file_path,
+                                  first_ordinal=first_ordinal, num_records=num_records, name=name)
+
+@ops.RegisterShape(_cwc_str)
+def _AGDCephWriteColumnsShape(op):
+  handle_shape = op.inputs[0].get_shape()
+  _assert_vec(handle_shape, 2)
+  for i in range(1,4):
+    scalar_shape = op.inputs[i].get_shape()
+    _assert_scalar(scalar_shape)
+  return [tensor_shape.scalar(), tensor_shape.scalar()]
 
 ### MergeSort Ops ###
 
