@@ -664,3 +664,28 @@ def _AGDMergeShape(op):
   _assert_vec(bl_pool, 2)
 
   return [tensor_shape.vector(2), tensor_shape.scalar()]
+
+_ms_cephmerge_str = "AGDCephMerge"
+ops.NoGradient(_ms_cephmerge_str)
+def AGDCephMerge(chunk_size, intermediate_files, num_records, cluster_name, user_name,
+    pool_name, ceph_conf_path, file_buf_size, buffer_list_pool, name=None):
+  # chunk_size > 1 enforced by op registration
+  return gen_user_ops.agd_ceph_merge(chunk_size=chunk_size,
+                                intermediate_files=intermediate_files,
+                                num_records=num_records,
+                                cluster_name=cluster_name,
+                                user_name=user_name,
+                                pool_name=pool_name,
+                                ceph_conf_path=ceph_conf_path,
+                                file_buf_size=file_buf_size,
+                                buffer_list_pool=buffer_list_pool,
+                                name=name)
+
+@ops.RegisterShape(_ms_cephmerge_str)
+def _AGDCephMergeShape(op):
+  bl_pool = op.inputs[0].get_shape()
+
+  _assert_vec(bl_pool, 2)
+
+  return [tensor_shape.vector(2), tensor_shape.scalar()]
+
