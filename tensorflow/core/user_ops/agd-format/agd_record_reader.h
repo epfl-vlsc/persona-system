@@ -79,11 +79,11 @@ namespace tensorflow {
     size_t cur_record_prefetched_ = 0;
     librados::IoCtx* io_ctx_ = nullptr;
     char* base_buf_;
+    size_t base_size_ = 0;
 
     // two buffers, a basic double buffering scheme
     RecordBuffer buf_0_;
     RecordBuffer buf_1_;
-    size_t base_size_ = 0;
     RecordBuffer* active_buf_ = nullptr;
     size_t current_offset_ = 0; // current offset into ceph object
     string filename_; // ceph object full path within `io_ctx_`

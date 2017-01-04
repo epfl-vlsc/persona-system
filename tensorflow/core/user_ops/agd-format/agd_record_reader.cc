@@ -104,6 +104,8 @@ namespace tensorflow {
     return Status::OK();
   }
 
+  // read in the index, and fill the first data buffer full of records
+  // as much as will fit
   Status AGDRemoteRecordReader::Initialize() {
     if (init)
       return Status::OK();
@@ -127,6 +129,7 @@ namespace tensorflow {
     buf_0_.recs = i;
     buf_0_.cur_data = buf_0_.data;
     active_buf_ = &buf_0_;
+    init = true;
     return Status::OK();
   }
 
@@ -179,6 +182,9 @@ namespace tensorflow {
   }
 
   Status AGDRemoteRecordReader::PrefetchRecords() {
+    if (!init)
+      return Internal("Tried to use uninitialized remote record reader");
+
     auto other_buf = OtherBuffer();
     if (other_buf->recs == 0 && cur_record_prefetched_ < num_records_) { 
       // fill that shit
@@ -197,6 +203,7 @@ namespace tensorflow {
         return s;
       other_buf->cur_data = other_buf->data;
       other_buf->recs = recs;
+      ready_cv_.notify_one();
     } else if (cur_record_prefetched_ == num_records_)
       return ResourceExhausted("Remote data in ceph is fully prefetched");
 
