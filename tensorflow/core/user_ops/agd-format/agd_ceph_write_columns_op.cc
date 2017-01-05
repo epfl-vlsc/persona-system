@@ -107,6 +107,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
       /* Set up IO context */
       OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
+      LOG(INFO) << "poolname: " << pool_name;
       ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
       OP_REQUIRES(ctx, ret == 0, Internal("ceph writer couldn't set up ioctx! error code: ", ret));
     }

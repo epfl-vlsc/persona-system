@@ -127,7 +127,12 @@ file_name: a Tensor() of string for the unique key for this file
       auto buf = ((ResourceContainer<Buffer> *) ref_buffer)->get();
 
       size_t file_size;
-      io_ctx.stat(file_key, &file_size, nullptr); // Get file size
+      time_t pmtime;
+      io_ctx.stat(file_key, &file_size, &pmtime); // Get file size
+      /*char bufff[32];
+      struct tm* tt = localtime(&pmtime);
+      strftime(bufff, sizeof(bufff), "%b %d %H:%M", tt);
+      LOG(INFO) << "Object " << file_key << " was last modified " << bufff;*/
 
       size_t data_read = 0;
       size_t read_len;
@@ -167,6 +172,7 @@ file_name: a Tensor() of string for the unique key for this file
         read_buf.clear();*/
 
       }
+      VLOG(INFO) << "reader read " << data_read << " bytes from ceph object " << file_key;
       io_ctx.close();
       return Status::OK();
     }

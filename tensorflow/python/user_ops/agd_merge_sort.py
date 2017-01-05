@@ -82,24 +82,35 @@ def _make_ceph_read_pipeline(key_batch, cluster_name, user_name, pool_name, ceph
     meta_bufs = []
     result_bufs = []
 
+    # we take [0] of CephReader here because we don't need the filename it outputs
     for b in bases:
-        base_bufs.append(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+        bb = uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
                                   ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
-                                  queue_key=b, name=None))
+                                  queue_key=b, name=None)[0]
+        bbe = tf.expand_dims(bb, 0)
+        print(bbe)
+        base_bufs.append(bbe)
     for q in quals:
-        qual_bufs.append(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+        qq = uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
                                   ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
-                                  queue_key=q, name=None))
+                                  queue_key=q, name=None)[0]
+        qqe = tf.expand_dims(qq, 0)
+        qual_bufs.append(qqe)
     for m in metas:
-        meta_bufs.appnd(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+        mm = uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
                                   ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
-                                  queue_key=m, name=None))
+                                  queue_key=m, name=None)[0]
+        mme = tf.expand_dims(mm, 0)
+        meta_bufs.append(mme)
     for r in results:
-        result_bufs.appnd(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+        rr = uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
                                   ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
-                                  queue_key=r, name=None))
-
-    return base_bufs, qual_bufs, meta_bufs, result_bufs
+                                  queue_key=r, name=None)[0]
+        rre = tf.expand_dims(rr, 0)
+        result_bufs.append(rre)
+    
+    print("base bufs: {}".format(base_bufs))
+    return tf.concat(0, base_bufs), tf.concat(0, qual_bufs), tf.concat(0, meta_bufs), tf.concat(0, result_bufs)
     
 
 def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
@@ -136,7 +147,7 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
                                                         local_prefix=local_directory, synchronous=True, name="result_staged_mmap")
 
     base_reads, qual_reads, meta_reads, result_reads = tf.split(0, 4, reads)
-    
+    print(base_reads) 
     return base_reads, qual_reads, meta_reads, result_reads
     '''
     # TODO if this doesn't work, then you can chain them in with a list like above
@@ -267,7 +278,7 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
 
     return all_im_keys
 
-def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_path, intermediate_file_prefix="intermediate_file",
+def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_path, ceph_read_size, intermediate_file_prefix="intermediate_file",
                         column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1):
     """
     file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
@@ -283,13 +294,16 @@ def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_
                                parallel_read=parallel_read, column_grouping_factor=column_grouping_factor)
     
     bp = uop.BufferPool(bound=False, name="ceph_read_buffer_pool")
-    read_pipelines = [(_make_ceph_read_pipeline(key_batch=kp[0], cluster_name, user_name, pool_name, ceph_conf_path, read_size, bp),
+    read_pipelines = [(_make_ceph_read_pipeline(key_batch=kp[0], cluster_name=cluster_name, user_name=user_name, 
+                       pool_name=pool_name, ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_pool_handle=bp),
                        kp[1]) for kp in key_producers]
 
+    print(read_pipelines)
     ready_record_batch = train.input.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dq_ops=parallel_process,
                                                     batch_size=1, capacity=8, name="ready_record_queue")
 
     # now the AGD parallel stage
+    print(ready_record_batch)
     processed_record_batch = _make_agd_batch(ready_batch=ready_record_batch, buffer_pool=bp)
 
     batched_processed_records = train.input.batch_join_pdq([a for a in processed_record_batch],

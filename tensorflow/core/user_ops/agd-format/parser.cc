@@ -117,7 +117,7 @@ namespace tensorflow {
     case RecordType::COMMENTS:
       break;
     default:
-      return Internal("Invalid record type", file_header->record_type);
+      return Internal("Invalid record type ", file_header->record_type);
     }
 
     auto payload_start = data + file_header->segment_start;
