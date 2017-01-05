@@ -59,6 +59,49 @@ def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, para
     paired_output = train.input.batch_pdq([batched_output[0], intermediate_name], batch_size=1, num_dq_ops=parallel_read, name="keys_and_intermediate")
     return paired_output
 
+def _make_ceph_read_pipeline(key_batch, cluster_name, user_name, pool_name, ceph_conf_path, read_size, buffer_pool_handle):
+    suffix_sep = tf.constant(".")
+    base_suffix = tf.constant("base")
+    qual_suffix = tf.constant("qual")
+    meta_suffix = tf.constant("metadata")
+    result_suffix = tf.constant("results")
+    bases = []
+    quals = []
+    metas = []
+    results = []
+    split_batch = array_ops.unpack(key_batch)
+
+    for k in split_batch:
+        bases.append(string_ops.string_join([k, suffix_sep, base_suffix]))
+        quals.append(string_ops.string_join([k, suffix_sep, qual_suffix]))
+        metas.append(string_ops.string_join([k, suffix_sep, meta_suffix]))
+        results.append(string_ops.string_join([k, suffix_sep, result_suffix]))
+    
+    base_bufs = []
+    qual_bufs = []
+    meta_bufs = []
+    result_bufs = []
+
+    for b in bases:
+        base_bufs.append(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+                                  ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
+                                  queue_key=b, name=None))
+    for q in quals:
+        qual_bufs.append(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+                                  ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
+                                  queue_key=q, name=None))
+    for m in metas:
+        meta_bufs.appnd(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+                                  ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
+                                  queue_key=m, name=None))
+    for r in results:
+        result_bufs.appnd(uop.CephReader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name, 
+                                  ceph_conf_path=ceph_conf_path, read_size=read_size, buffer_handle=buffer_pool_handle, 
+                                  queue_key=r, name=None))
+
+    return base_bufs, qual_bufs, meta_bufs, result_bufs
+    
+
 def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
     suffix_sep = tf.constant(".")
     base_suffix = tf.constant("base")
@@ -71,7 +114,6 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
     results = []
     split_batch = array_ops.unpack(key_batch)
 
-    
     for k in split_batch:
         bases.append(string_ops.string_join([k, suffix_sep, base_suffix]))
         quals.append(string_ops.string_join([k, suffix_sep, qual_suffix]))
@@ -160,6 +202,23 @@ def _make_writers(results_batch, output_dir):
                                                        name="agd_column_writer")
         yield writer, num_records # writes out the file path key (full path)
 
+def _make_ceph_writers(results_batch, cluster_name, user_name, pool_name, ceph_conf_path):
+    first_ordinal = constant_op.constant(0, dtype=dtypes.int64) # first ordinal doesn't matter for the sort phase
+    for column_handle, num_records, im_name in results_batch:
+        writer, first_o_passthru = uop.AGDCephWriteColumns(cluster_name=cluster_name,
+                                                       user_name=user_name,
+                                                       pool_name=pool_name,
+                                                       ceph_conf_path=ceph_conf_path,
+                                                       record_id="fixme",
+                                                       record_type=["base", "qual", "metadata", "results"],
+                                                       column_handle=column_handle,
+                                                       compress=False,
+                                                       file_path=im_name,
+                                                       first_ordinal=first_ordinal,
+                                                       num_records=num_records,
+                                                       name="agd_column_writer")
+        yield writer, num_records # writes out the file path key (full path)
+
 # TODO I'm not sure what to do about the last param
 def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_file_prefix="intermediate_file",
                         column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1):
@@ -208,50 +267,56 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
 
     return all_im_keys
 
+def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_path, intermediate_file_prefix="intermediate_file",
+                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1):
+    """
+    file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
+    cluster_name, user_name, pool_name, ceph_conf_path: Ceph parameters
+    column_grouping_factor: the number of keys to put together
+    parallel_process: the parallelism for processing records (reading, decomp)
+    parallel_read: the number of parallel read pipelines
+    parallel_sort: the number of parallel sort operations
+    """
+    if parallel_read < 1:
+        raise Exception("parallel_read must be >1. Got {}".format(parallel_read))
+    key_producers = _key_maker(file_keys=file_keys, intermediate_file_prefix=intermediate_file_prefix,
+                               parallel_read=parallel_read, column_grouping_factor=column_grouping_factor)
+    
+    bp = uop.BufferPool(bound=False, name="ceph_read_buffer_pool")
+    read_pipelines = [(_make_ceph_read_pipeline(key_batch=kp[0], cluster_name, user_name, pool_name, ceph_conf_path, read_size, bp),
+                       kp[1]) for kp in key_producers]
+
+    ready_record_batch = train.input.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dq_ops=parallel_process,
+                                                    batch_size=1, capacity=8, name="ready_record_queue")
+
+    # now the AGD parallel stage
+    processed_record_batch = _make_agd_batch(ready_batch=ready_record_batch, buffer_pool=bp)
+
+    batched_processed_records = train.input.batch_join_pdq([a for a in processed_record_batch],
+                                                           batch_size=1, num_dq_ops=parallel_sort, capacity=8,
+                                                           name="sortable_ready_queue")
+
+    blp = uop.BufferListPool(bound=False, name="ceph_read_buffer_list_pool")
+
+    sorters = _make_sorters(batch=batched_processed_records, buffer_list_pool=blp)
+
+    batched_results = train.input.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
+                                                 batch_size=1, name="sorted_im_files_queue")
+
+    #import ipdb; ipdb.set_trace()
+    intermediate_keys_records = _make_ceph_writers(results_batch=batched_results,
+                                                   cluster_name=cluster_name,
+                                                   user_name=user_name, 
+                                                   pool_name=pool_name,
+                                                   ceph_conf_path=ceph_conf_path)
+
+    recs = [rec for rec in intermediate_keys_records]
+    all_im_keys = train.input.batch_join_pdq(recs, num_dq_ops=1,
+                                             batch_size=1, name="intermediate_key_queue")
+
+    return all_im_keys
+
 ### All the methods for creating the local merge pipeline
-
-def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
-    suffix_sep = tf.constant(".")
-    base_suffix = tf.constant("base")
-    qual_suffix = tf.constant("qual")
-    meta_suffix = tf.constant("metadata")
-    result_suffix = tf.constant("results")
-    # dictated by the merge op
-    suffix_order = [result_suffix, base_suffix, qual_suffix, meta_suffix]
-
-    def make_single_chunk_read(im_name):
-        appended_names = [string_ops.string_join([im_name, suffix_sep, a]) for a in suffix_order]
-        reads, names = uop.FileMMap(filename=appended_names[0], local_prefix=in_dir,
-                                    handle=mmap_pool_handle, name="result_mmap")
-        accum = [(reads, names)]
-        for column in appended_names[1:]:
-            prior_reads, prior_names = accum[-1]
-            #import ipdb; ipdb.set_trace()
-            reads, names = uop.StagedFileMap(filename=column,
-                                             upstream_files=prior_reads,
-                                             upstream_names=prior_names,
-                                             handle=mmap_pool_handle,
-                                             local_prefix=in_dir,
-                                             name="merge_column_mmap")
-            accum.append((reads, names))
-        return accum[-1][0]
-
-    for key_out in key_outs:
-        split_records = array_ops.unpack(key_out)
-        yield [make_single_chunk_read(im_name=im_name) for im_name in split_records]
-
-def _make_processed_records(ready_read_records, buffer_pool):
-    def process_ready_row(interm_columns):
-        columns_split = tf.unpack(interm_columns)
-        return zip(*(uop.AGDReader(verify=False, unpack=False,
-                                   pool_handle=buffer_pool,
-                                   file_handle=column,
-                                   name="column_agd_reader") for column in columns_split))
-
-
-    for interm_columns in ready_read_records:
-        readss, num_recordss, first_ordinalss = process_ready_row(interm_columns=interm_columns)
-        yield [nr[0] for nr in num_recordss], tf.pack(readss)
 
 def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, outdir=None, chunk_size=100000):
     if chunk_size < 1:
@@ -292,6 +357,60 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, ou
                                                                   column_handle=buff_list,
                                                                   compress=False,
                                                                   output_dir=outdir+"/",
+                                                                  file_path=file_key,
+                                                                  first_ordinal=first_o,
+                                                                  num_records=n_recs,
+                                                                  name="agd_column_writer_merge")
+        final_write_out.append([file_key_passthru, first_o_passthru, n_recs])
+    #return final_write_out[0]
+
+    sink_queue = train.input.batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name="final_sink_queue")
+    return sink_queue[0]
+
+def ceph_merge_pipeline(intermediate_keys, record_name, num_records, cluster_name, user_name, pool_name, 
+        ceph_conf_path, chunk_size=100000):
+    if chunk_size < 1:
+        raise Exception("Need strictly non-negative chunk size. Got {}".format(chunk_size))
+
+    blp = uop.BufferListPool(bound=False, name="ceph_read_merge_buffer_list_pool")
+
+    new_chunk_handle, num_recs = uop.AGDMerge(chunk_size=chunk_size,
+                            intermediate_files=intermediate_keys,
+                            num_records=num_records,
+                            cluster_name=cluster_name,
+                            user_name=user_name, 
+                            pool_name=pool_name,
+                            ceph_conf_path=ceph_conf_path,
+                            file_buf_size=len(intermediate_keys)*10,
+                            buffer_list_pool=blp)
+
+   
+    chunk_handle = train.input.batch_pdq([new_chunk_handle, num_recs], num_dq_ops=1,
+                                         batch_size=1, capacity=8, name="chunk_handle_out_queue")
+
+
+    # FIXME if you don't have at least chunk_size records in your dataset, this will cause underflow
+    # this is a hack!
+    first_ordinal = tf.Variable(-1 * chunk_size, dtype=dtypes.int64, name="first_ordinal")
+
+    record_name_constant = constant_op.constant(record_name+"-")
+    num_recs, buffer_list_handle = chunk_handle[0][1], chunk_handle[0][0]
+    first_ord = first_ordinal.assign_add(math_ops.to_int64(num_recs, name="first_ord_cast_to_64"), use_locking=True)
+    first_ord_str = string_ops.as_string(first_ord, name="first_ord_string")
+    file_name = string_ops.string_join([record_name_constant, first_ord_str], name="file_name_string_joiner")
+    write_join_tensor = control_flow_ops.tuple(tensors=[buffer_list_handle, num_recs, first_ord, file_name], name="write_join_tensor")
+    write_join_queue = train.input.batch_pdq(write_join_tensor, num_dq_ops=1, batch_size=1, name="write_join_queue", capacity=1)
+
+    final_write_out = []
+    for buff_list, n_recs, first_o, file_key in write_join_queue:
+        file_key_passthru, first_o_passthru = uop.AGDCephWriteColumns(cluster_name=cluster_name,
+                                                                  user_name=user_name,
+                                                                  pool_name=pool_name,
+                                                                  ceph_conf_path=ceph_conf_path,
+                                                                  record_id=record_name,
+                                                                  record_type=["results", "base", "qual", "metadata"],
+                                                                  column_handle=buff_list,
+                                                                  compress=False,
                                                                   file_path=file_key,
                                                                   first_ordinal=first_o,
                                                                   num_records=n_recs,
