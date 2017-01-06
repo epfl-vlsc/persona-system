@@ -381,14 +381,14 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, ou
     sink_queue = train.input.batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name="final_sink_queue")
     return sink_queue[0]
 
-def ceph_merge_pipeline(intermediate_keys, record_name, num_records, cluster_name, user_name, pool_name, 
+def ceph_merge_pipeline(intermediate_keys, record_name, num_records, cluster_name, user_name, pool_name, output_pool_name,
         ceph_conf_path, chunk_size=100000):
     if chunk_size < 1:
         raise Exception("Need strictly non-negative chunk size. Got {}".format(chunk_size))
 
     blp = uop.BufferListPool(bound=False, name="ceph_read_merge_buffer_list_pool")
 
-    new_chunk_handle, num_recs = uop.AGDMerge(chunk_size=chunk_size,
+    new_chunk_handle, num_recs = uop.AGDCephMerge(chunk_size=chunk_size,
                             intermediate_files=intermediate_keys,
                             num_records=num_records,
                             cluster_name=cluster_name,
@@ -419,7 +419,7 @@ def ceph_merge_pipeline(intermediate_keys, record_name, num_records, cluster_nam
     for buff_list, n_recs, first_o, file_key in write_join_queue:
         file_key_passthru, first_o_passthru = uop.AGDCephWriteColumns(cluster_name=cluster_name,
                                                                   user_name=user_name,
-                                                                  pool_name=pool_name,
+                                                                  pool_name=output_pool_name,
                                                                   ceph_conf_path=ceph_conf_path,
                                                                   record_id=record_name,
                                                                   record_type=["results", "base", "qual", "metadata"],

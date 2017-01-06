@@ -34,9 +34,18 @@ namespace tensorflow {
       ColumnCursor(unique_ptr<AGDRemoteRecordReader> &&results, 
           vector<unique_ptr<AGDRemoteRecordReader>> &&other_columns) :
         results_(move(results)), other_columns_(move(other_columns)) {
-        results_->Initialize(); 
-        for (auto& col : other_columns_)
-          col->Initialize();
+      }
+
+      Status Initialize() {
+        Status s = results_->Initialize(); 
+        if (!s.ok())
+          return s;
+        for (auto& col : other_columns_) {
+          s = col->Initialize();
+          if (!s.ok())
+            return s;
+        }
+        return Status::OK();
       }
 
       Status set_current_location() {
@@ -73,12 +82,14 @@ namespace tensorflow {
       // if there is no data
       void PrefetchData() {
         Status s = results_->PrefetchRecords();
-        if (!(s.ok() || IsOutOfRange(s)))
-          LOG(INFO) << "Prefetching ceph data failed: " << s;
+        if (!IsResourceExhausted(s))
+          if (!s.ok())
+            LOG(INFO) << "Prefetching ceph data failed: " << s;
         for (auto& reader : other_columns_) {
           s = reader->PrefetchRecords();
-          if (!(s.ok() || IsOutOfRange(s)))
-            LOG(INFO) << "Prefetching ceph data failed: " << s;
+          if (!IsResourceExhausted(s))
+            if (!s.ok())
+              LOG(INFO) << "Prefetching ceph data failed: " << s;
         }
       }
 
@@ -181,7 +192,6 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
         unique_ptr<char[]> meta_buf(new char[file_buf_size_]);
         unique_ptr<char[]> qual_buf(new char[file_buf_size_]);
        
-        // the ColumnCursor will call initialize
         // RemoteRecordReader owns nothing
         auto results_column = unique_ptr<AGDRemoteRecordReader>(new AGDRemoteRecordReader(results_file, num_records_[i], result_buf.get(), 
             file_buf_size_, &io_ctx_ ));
@@ -200,13 +210,10 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
         file_buffers_.push_back(move(qual_buf));
         
         ColumnCursor a(move(results_column), move(other_columns));
-        OP_REQUIRES_OK(ctx, a.set_current_location());
+        //OP_REQUIRES_OK(ctx, a.set_current_location());
         columns_.push_back(move(a));
       }
       
-      for (auto &cc : columns_) {
-        score_heap_.push(GenomeScore(cc.get_location(), &cc));
-      }
 
     }
 
@@ -243,7 +250,7 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
         auto &top = score_heap_.top();
         cc = top.second;
 
-        //LOG(INFO) << "processing location: " << top.first;
+        LOG(INFO) << "processing location: " << top.first;
         cc->append_to_buffer_list(bl);
 
         score_heap_.pop();
@@ -300,6 +307,11 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
 
     Status Init(OpKernelContext *ctx) {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
+      for (auto& col : columns_) {
+        TF_RETURN_IF_ERROR(col.Initialize());
+        TF_RETURN_IF_ERROR(col.set_current_location());
+        score_heap_.push(GenomeScore(col.get_location(), &col));
+      }
       return Status::OK();
     }
 

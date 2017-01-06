@@ -143,7 +143,7 @@ namespace tensorflow {
   Status AGDRemoteRecordReader::GetNextRecord(const char** data, size_t* size) {
     auto s = PeekNextRecord(data, size);
     if (s.ok()) {
-      cur_record_++;
+      active_buf_->cur_data += index_[cur_record_++];
       if (active_buf_->recs > 1)
         active_buf_->recs--;
       else if (active_buf_->recs == 1) {
