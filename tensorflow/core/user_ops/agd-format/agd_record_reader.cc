@@ -149,9 +149,10 @@ namespace tensorflow {
       else if (active_buf_->recs == 1) {
         // we need to switch buffers, but make sure the other is filled first
         auto other_buf = OtherBuffer();
-        if (other_buf->recs == 0) {
+        if (other_buf->recs == 0 && cur_record_prefetched_ < num_records_) {
           mutex_lock l(mu_);
           // may need to make recs volatile?
+          LOG(INFO) << "GetNextRecord is waiting for more data ...";
           ready_cv_.wait(l, [other_buf]() {
               return other_buf->recs == 0;
             });
@@ -197,6 +198,8 @@ namespace tensorflow {
           break;
       }
       auto recs = i - cur_record_prefetched_;
+      if (recs == 0) 
+        return Internal("No records were prefetched, you may need to increase the file buffer size");
       cur_record_prefetched_ = i;
       Status s = ReadData(other_buf->data, total);
       if (!s.ok())

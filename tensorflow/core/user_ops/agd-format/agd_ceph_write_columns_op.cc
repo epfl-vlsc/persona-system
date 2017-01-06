@@ -136,6 +136,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
         write_buf_.clear();
         string full_path(filepath + record_suffixes_[i]);
+        LOG(INFO) << "writing file to ceph " << full_path;
 
         write_buf_.push_back(ceph::buffer::create_static(sizeof(format::FileHeader), (char*)(&headers_[i])));
 
@@ -149,13 +150,24 @@ and is thus passed as an Attr instead of an input (for efficiency);
                         Internal("Parallel column writer got an empty index entry (size 0)!"));
           }
           write_buf_.push_back(ceph::buffer::create_static(s1, const_cast<char*>(&index[0])));
-
-          auto &data = (*buf_list)[i].data();
           
-          write_buf_.push_back(ceph::buffer::create_static(data.size(), const_cast<char*>(&data[0])));
-
           auto ret = io_ctx.write_full(full_path, write_buf_);
           OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
+
+          auto &data = (*buf_list)[i].data();
+          size_t bytes_to_append = data.size();
+          size_t offset = 0;
+          // append in pieces, because there is a max write size
+          while (bytes_to_append > 0) {
+            // 90M is the default max write size in Rados
+            write_buf_.clear();
+            auto size = (bytes_to_append > 90000000) ? 90000000 : bytes_to_append;
+            write_buf_.push_back(ceph::buffer::create_static(size, const_cast<char*>(&data[offset])));
+            auto ret = io_ctx.append(full_path, write_buf_, size);
+            OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
+            bytes_to_append -= size;
+            offset += size;
+          }
         }
       }
 

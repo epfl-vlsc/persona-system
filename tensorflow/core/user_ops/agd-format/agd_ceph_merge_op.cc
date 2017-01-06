@@ -250,7 +250,7 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
         auto &top = score_heap_.top();
         cc = top.second;
 
-        LOG(INFO) << "processing location: " << top.first;
+        //LOG(INFO) << "processing location: " << top.first;
         cc->append_to_buffer_list(bl);
 
         score_heap_.pop();
