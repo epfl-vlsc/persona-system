@@ -181,39 +181,41 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
       OP_REQUIRES(ctx, ret == 0, Internal("Unable to create Ceph io ctx with pool name ", pool_name_, 
             " returned ", ret));
 
+      uint64_t size =  file_buf_size_*4*intermediate_files_.size();
+      LOG(INFO) << "allocating " << size << " bytes of memory for merge";
+      big_buf_.reset(new char[size]);
+      char* the_ptr = big_buf_.get();
+      LOG(INFO) << "done";
+
       for (size_t i = 0; i < intermediate_files_.size(); i++) {
         string bases_file = intermediate_files_[i] + ".base";
         string meta_file = intermediate_files_[i] + ".metadata";
         string qual_file = intermediate_files_[i] + ".qual";
         string results_file = intermediate_files_[i] + ".results";
 
-        unique_ptr<char[]> result_buf(new char[file_buf_size_]);
-        unique_ptr<char[]> base_buf(new char[file_buf_size_]);
-        unique_ptr<char[]> meta_buf(new char[file_buf_size_]);
-        unique_ptr<char[]> qual_buf(new char[file_buf_size_]);
-       
         // RemoteRecordReader owns nothing
-        auto results_column = unique_ptr<AGDRemoteRecordReader>(new AGDRemoteRecordReader(results_file, num_records_[i], result_buf.get(), 
-            file_buf_size_, &io_ctx_ ));
+        auto results_column = unique_ptr<AGDRemoteRecordReader>(new AGDRemoteRecordReader(results_file, num_records_[i], the_ptr, 
+            file_buf_size_, &io_ctx_));
 
+        the_ptr += file_buf_size_;
         vector<unique_ptr<AGDRemoteRecordReader>> other_columns;
         other_columns.push_back(move(unique_ptr<AGDRemoteRecordReader>(new AGDRemoteRecordReader(bases_file, num_records_[i], 
-              base_buf.get(), file_buf_size_, &io_ctx_))));
+              the_ptr, file_buf_size_, &io_ctx_))));
+        the_ptr += file_buf_size_;
         other_columns.push_back(move(unique_ptr<AGDRemoteRecordReader>(new AGDRemoteRecordReader(meta_file, num_records_[i], 
-              meta_buf.get(), file_buf_size_, &io_ctx_))));
+              the_ptr, file_buf_size_, &io_ctx_))));
+        the_ptr += file_buf_size_;
         other_columns.push_back(move(unique_ptr<AGDRemoteRecordReader>(new AGDRemoteRecordReader(qual_file, num_records_[i], 
-              qual_buf.get(), file_buf_size_, &io_ctx_))));
+              the_ptr, file_buf_size_, &io_ctx_))));
+        the_ptr += file_buf_size_;
 
-        file_buffers_.push_back(move(result_buf));
-        file_buffers_.push_back(move(base_buf));
-        file_buffers_.push_back(move(meta_buf));
-        file_buffers_.push_back(move(qual_buf));
-        
         ColumnCursor a(move(results_column), move(other_columns));
         //OP_REQUIRES_OK(ctx, a.set_current_location());
         columns_.push_back(move(a));
       }
       
+      LOG(INFO) << "done merge setup";
+
 
     }
 
@@ -300,8 +302,8 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
     string pool_name_;
     string ceph_conf_;
     librados::Rados cluster_;
-    int file_buf_size_;
-    vector<unique_ptr<char[]>> file_buffers_;
+    uint64_t file_buf_size_;
+    unique_ptr<char[]> big_buf_;
     volatile bool thread_active_;
     volatile bool run_;
 

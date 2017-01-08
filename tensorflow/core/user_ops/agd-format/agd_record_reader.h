@@ -49,7 +49,7 @@ namespace tensorflow {
   class AGDRemoteRecordReader {
   public:
     AGDRemoteRecordReader(string filename, size_t num_records, 
-        char* buffer, size_t buffer_size, librados::IoCtx* io_ctx);
+        char* buffer, uint64_t buffer_size, librados::IoCtx* io_ctx);
 
     void Reset();
 
@@ -61,12 +61,12 @@ namespace tensorflow {
 
   private:
   
-    Status ReadData(char* dest, size_t size);
+    Status ReadData(char* dest, uint64_t size);
 
     struct RecordBuffer {
       char* data;
       const char* cur_data;
-      size_t size;
+      uint64_t size;
       size_t recs;
     };
 
@@ -79,13 +79,13 @@ namespace tensorflow {
     size_t cur_record_prefetched_ = 0;
     librados::IoCtx* io_ctx_ = nullptr;
     char* base_buf_;
-    size_t base_size_ = 0;
+    uint64_t base_size_ = 0;
 
     // two buffers, a basic double buffering scheme
     RecordBuffer buf_0_;
     RecordBuffer buf_1_;
     RecordBuffer* active_buf_ = nullptr;
-    size_t current_offset_ = 0; // current offset into ceph object
+    uint64_t current_offset_ = 0; // current offset into ceph object
     string filename_; // ceph object full path within `io_ctx_`
 
     mutable mutex mu_;

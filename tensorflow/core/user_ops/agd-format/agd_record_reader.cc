@@ -69,24 +69,29 @@ namespace tensorflow {
 
 
   AGDRemoteRecordReader::AGDRemoteRecordReader(string filename, size_t num_records, 
-        char* buffer, size_t buffer_size, librados::IoCtx* io_ctx) :
+        char* buffer, uint64_t buffer_size, librados::IoCtx* io_ctx) :
     io_ctx_(io_ctx), base_buf_(buffer), base_size_(buffer_size), num_records_(num_records),
     filename_(filename) {
 
+    LOG(INFO) << "i got base pointer: " << (uint64_t)buffer;
+    LOG(INFO) << "with base size: " << base_size_;
     current_offset_ = sizeof(format::FileHeader);
     buf_0_.data = base_buf_ + num_records_;
     auto size = (buffer_size - num_records_) / 2;
     buf_1_.data = buf_0_.data + size;
     buf_0_.size = base_size_ - (base_buf_ + base_size_ - buf_1_.data) - num_records_;
     buf_1_.size = base_size_ - buf_0_.size - num_records_;
+    LOG(INFO) << "buf 0 size: " << buf_0_.size;
+    LOG(INFO) << "buf 1 size: " << buf_1_.size;
     buf_0_.recs = 0;
     buf_1_.recs = 0;
   }
 
-  Status AGDRemoteRecordReader::ReadData(char* dest, size_t size) {
+  Status AGDRemoteRecordReader::ReadData(char* dest, uint64_t size) {
     librados::bufferlist read_buf;
     read_buf.push_back(ceph::buffer::create_static(size, dest));
     librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
+    LOG(INFO) << "executing read of " << size << " bytes";
     int ret = io_ctx_->aio_read(filename_, read_completion, &read_buf, size, current_offset_);
     if (ret < 0) {
       return errors::Internal("Couldn't start read object in remote record reader");
@@ -114,7 +119,7 @@ namespace tensorflow {
     if (!s.ok())
       return s;
     index_ = reinterpret_cast<const RelativeIndex*>(base_buf_);
-    size_t total = 0;
+    uint64_t total = 0;
     size_t i;
     for (i = 0; i < num_records_; i++) {
       if (total + index_[i] < buf_0_.size)
@@ -189,7 +194,7 @@ namespace tensorflow {
     auto other_buf = OtherBuffer();
     if (other_buf->recs == 0 && cur_record_prefetched_ < num_records_) { 
       // fill that shit
-      size_t total = 0;
+      uint64_t total = 0;
       size_t i;
       for (i = cur_record_prefetched_; i < num_records_; i++) {
         if (total + index_[i] < other_buf->size) {

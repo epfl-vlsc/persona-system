@@ -279,7 +279,7 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
     return all_im_keys
 
 def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_path, ceph_read_size, intermediate_file_prefix="intermediate_file",
-                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1):
+                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1, parallel_write=1):
     """
     file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
     cluster_name, user_name, pool_name, ceph_conf_path: Ceph parameters
@@ -314,7 +314,7 @@ def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_
 
     sorters = _make_sorters(batch=batched_processed_records, buffer_list_pool=blp)
 
-    batched_results = train.input.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
+    batched_results = train.input.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=parallel_write,
                                                  batch_size=1, name="sorted_im_files_queue")
 
     #import ipdb; ipdb.set_trace()
@@ -382,7 +382,7 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, ou
     return sink_queue[0]
 
 def ceph_merge_pipeline(intermediate_keys, record_name, num_records, cluster_name, user_name, pool_name, output_pool_name,
-        ceph_conf_path, chunk_size=100000):
+        ceph_conf_path, chunk_size=100000, parallel_write=1):
     if chunk_size < 1:
         raise Exception("Need strictly non-negative chunk size. Got {}".format(chunk_size))
 
@@ -395,7 +395,7 @@ def ceph_merge_pipeline(intermediate_keys, record_name, num_records, cluster_nam
                             user_name=user_name, 
                             pool_name=pool_name,
                             ceph_conf_path=ceph_conf_path,
-                            file_buf_size=len(intermediate_keys)*10,
+                            file_buf_size=10,
                             buffer_list_pool=blp)
 
    
@@ -413,7 +413,7 @@ def ceph_merge_pipeline(intermediate_keys, record_name, num_records, cluster_nam
     first_ord_str = string_ops.as_string(first_ord, name="first_ord_string")
     file_name = string_ops.string_join([record_name_constant, first_ord_str], name="file_name_string_joiner")
     write_join_tensor = control_flow_ops.tuple(tensors=[buffer_list_handle, num_recs, first_ord, file_name], name="write_join_tensor")
-    write_join_queue = train.input.batch_pdq(write_join_tensor, num_dq_ops=1, batch_size=1, name="write_join_queue", capacity=1)
+    write_join_queue = train.input.batch_pdq(write_join_tensor, num_dq_ops=parallel_write, batch_size=1, name="write_join_queue", capacity=1)
 
     final_write_out = []
     for buff_list, n_recs, first_o, file_key in write_join_queue:
