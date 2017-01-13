@@ -70,13 +70,28 @@ namespace format {
     END = 7
   };
 
+  enum ResultFlag {                     // if the field is set, then ...
+    MULTI = 0x1,                        // there are multiple segments (usually, this is part of a read pair)
+    ALL_MAPPED = 0x2,                   // all segments (reads) mapped properly 
+    UNMAPPED = 0x4,                     // this segment (read) unmapped
+    NEXT_UNMAPPED = 0x8,                // the next read is unmapped
+    REVERSE_COMPLEMENTED = 0x10,        // this read is mapped as a reverse complemente
+    NEXT_REVERSE_COMPLEMENTED = 0x20,   // the next read is mapped as a reverse complemented
+    FIRST = 0x40,                       // this is the first read 
+    LAST = 0x80,                        // this is the last read
+    SECONDARY = 0x100,                  // this is a secondary alignment
+    FILTERED = 0x200,                   // this read was filtered for some reason
+    PCR_DUPLICATE = 0x400,              // this read is a duplicate
+    SUPPLEMENTAL = 0x800                // this is a supplemental alignment
+  };
+
   struct __attribute__((packed)) AlignmentResult {
-    uint16_t flag_ = 0; // replaces status and direction
-    int score_ = 0;
+    uint16_t flag_ = 0; // ResultFlag
     int mapq_ = 0;
     int64_t location_ = 0; // POS field in SAM format
+    int64_t next_location_ = 0; // the relative genomeLocation of the next segment (read)
+    int64_t template_length_ = 0; // signed distance from leftmost mapped base to rightmost mapped base
 
-    void convertFromSNAP(const PairedAlignmentResult &result, const std::size_t result_idx, const int flag);
     void convertFromSNAP(const SingleAlignmentResult &result, const int flag);
    };
 

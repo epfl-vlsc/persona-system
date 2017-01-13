@@ -169,227 +169,341 @@ namespace snap_wrapper {
 
   Status
   PairedAligner::writeResult(array<Read, 2> &snap_reads, PairedAlignmentResult &result, AlignmentResultBuilder &result_column) {
-    auto foo = foobar(2);
-    array<int, 2> flags;
+    array<format::AlignmentResult, 2> results;
+    array<string, 2> cigars;
+    snap_reads[0].setAdditionalFrontClipping(0);
+    snap_reads[1].setAdditionalFrontClipping(0);
     // we don't write out the results yet in case one of them fails
-    for (size_t i = 0; i < 2; ++i) {
-      if (result.status[i] == NotFound) {
-        result.location[i] = InvalidGenomeLocation;
-      }
+    int addFrontClipping;
+    int cumulativePositiveAddFrontClipping[2] = { 0, 0 };
+    GenomeLocation finalLocations[2];
+    finalLocations[0] = result.status[0] != NotFound ? result.location[0] : InvalidGenomeLocation;
+    finalLocations[1] = result.status[1] != NotFound ? result.location[1] : InvalidGenomeLocation;
+    for (int i = 0; i < 2; ++i) {
       auto &read = snap_reads[i];
-      read.setAdditionalFrontClipping(0);
-      TF_RETURN_IF_ERROR(adjustResults(&read,
+
+      TF_RETURN_IF_ERROR(PostProcess(genome,
+                                       &lvc,
+                                       &read,
                                        result.status[i],
-                                       result.direction[i],
                                        result.mapq[i],
-                                       result.location[i],
-                                       format, options->useM,
-                                       lvc,
-                                       genome,
+                                       finalLocations[i],
+                                       result.direction[i],
+                                       false, 
+                                       results[i],
                                        cigars[i],
-                                       flags[i]));
+                                       &addFrontClipping,
+                                       true, // useM
+                                       true,
+                                       (i == 0) ? true : false,
+                                       &snap_reads[1 - i],
+                                       result.status[1 - i],
+                                       finalLocations[1 - i],
+                                       result.direction[1 - i],
+                                       result.alignedAsPair));
+
+      if (addFrontClipping != 0) {
+        const Genome::Contig *originalContig = genome->getContigAtLocation(finalLocations[i]);
+        const Genome::Contig *newContig = genome->getContigAtLocation(finalLocations[i] + addFrontClipping);
+        if (newContig != originalContig || NULL == newContig || finalLocations[i] + addFrontClipping > originalContig->beginningLocation + originalContig->length - genome->getChromosomePadding()) {
+          //
+          // Altering this would push us over a contig boundary.  Just give up on the read.
+          //
+          result.status[i] = NotFound;
+          result.location[i] = InvalidGenomeLocation;
+          finalLocations[i] = InvalidGenomeLocation;
+        } else {
+          if (addFrontClipping > 0) {
+            cumulativePositiveAddFrontClipping[i] += addFrontClipping;
+            read.setAdditionalFrontClipping(cumulativePositiveAddFrontClipping[i]);
+          }
+          finalLocations[i] += addFrontClipping;
+        }
+        if (i == 1) // if i is 1 we need to redo the first one because the second has a location change
+          i = -1;
+      }
+      //LOG(INFO) << "cigar is: " << cigars[i];
     }
 
     // Loop again now that all the adjustments worked correctly
     for (size_t i = 0; i < 2; ++i) {
-      result_column.AppendAlignmentResult(result, i, cigars[i], flags[i]);
+      result_column.AppendAlignmentResult(results[i], cigars[i]);
     }
 
     return Status::OK();
   }
 
-  bool computeCigarFlags(
-    // input
-    Read *read,
-    AlignmentResult &result,
-    Direction &direction,
-    int &map_quality,
-    GenomeLocation genomeLocation, // can differ from original location
-    const SAMFormat &format,
-    bool useM,
-    LandauVishkinWithCigar& lvc,
+
+  Status WriteSingleResult(Read &snap_read, SingleAlignmentResult &result, AlignmentResultBuilder &result_column, 
+      const Genome* genome, LandauVishkinWithCigar* lvc) {
+    string cigar;
+    format::AlignmentResult format_result;
+    snap_read.setAdditionalFrontClipping(0);
+
+    int addFrontClipping = -1;
+    GenomeLocation finalLocation = result.status != NotFound ? result.location : InvalidGenomeLocation;
+    unsigned nAdjustments = 0;
+    int cumulativeAddFrontClipping = 0;
+    while (addFrontClipping != 0) {
+      addFrontClipping = 0;
+      TF_RETURN_IF_ERROR(PostProcess(genome,
+                                       lvc,
+                                       &snap_read,
+                                       result.status,
+                                       result.mapq,
+                                       finalLocation,
+                                       result.direction,
+                                       false, 
+                                       format_result,
+                                       cigar,
+                                       &addFrontClipping,
+                                       true));
+      // redo if read modified (e.g. to add soft clipping, or move alignment for a leading I.
+      if (addFrontClipping != 0) {
+                
+        nAdjustments++;
+        const Genome::Contig *originalContig = result.status == NotFound ? NULL
+          : genome->getContigAtLocation(result.location);
+        const Genome::Contig *newContig = result.status == NotFound ? NULL
+          : genome->getContigAtLocation(result.location + addFrontClipping);
+        if (newContig == NULL || newContig != originalContig || finalLocation + addFrontClipping > originalContig->beginningLocation + originalContig->length - genome->getChromosomePadding() ||
+            nAdjustments > snap_read.getDataLength()) {
+          //
+          // Altering this would push us over a contig boundary, or we're stuck in a loop.  Just give up on the read.
+          //
+          result.status = NotFound;
+          result.location = InvalidGenomeLocation;
+          finalLocation = InvalidGenomeLocation;
+        } else {
+          cumulativeAddFrontClipping += addFrontClipping;
+          if (addFrontClipping > 0) {
+            snap_read.setAdditionalFrontClipping(cumulativeAddFrontClipping);
+          }
+          finalLocation = result.location + cumulativeAddFrontClipping;
+        }
+      }
+    }
+    result_column.AppendAlignmentResult(format_result, cigar);
+  }
+
+  Status PostProcess(
     const Genome* genome,
-    //output
-    string &cigarString,
-    int &flags,
-    int &addFrontClipping)
+    LandauVishkinWithCigar * lv,
+    Read * read,
+    AlignmentResult result, 
+    int mapQuality,
+    GenomeLocation genomeLocation,
+    Direction direction,
+    bool secondaryAlignment,
+    format::AlignmentResult &finalResult,
+    string &cigar,
+    int * addFrontClipping,
+    bool useM,
+    bool hasMate,
+    bool firstInPair,
+    Read * mate, 
+    AlignmentResult mateResult,
+    GenomeLocation mateLocation,
+    Direction mateDirection,
+    bool alignedAsPair
+    ) 
   {
-    // needed for ComputeCigarString
+
+    cigar = "*";
     const int MAX_READ = MAX_READ_LENGTH;
-    const int cigarBufSize = MAX_READ * 2;
-    char cigarBuf[cigarBufSize];
-
-//    const int cigarBufWithClippingSize = MAX_READ * 2 + 32;
-//    char cigarBufWithClipping[cigarBufWithClippingSize];
-
-    int editDistance = -1;
-
-    // needed for createSAMLine
     char data[MAX_READ];
     char quality[MAX_READ];
-    const char *contigName = "*";
-    int contigIndex = -1;
-    GenomeDistance positionInContig = 0;
-    const char *mateContigName = "*";
+    /*const int cigarBufSize = MAX_READ * 2;
+    char cigarBuf[cigarBufSize];
+
+    const int cigarBufWithClippingSize = MAX_READ * 2 + 32;
+    char cigarBufWithClipping[cigarBufWithClippingSize];
+
+    int flags = 0;
+    const char *cigar = "*";
+    const char *matecontigName = "*";
     int mateContigIndex = -1;
     GenomeDistance matePositionInContig = 0;
     _int64 templateLength = 0;
-    unsigned fullLength;
+
+    char data[MAX_READ];
+    char quality[MAX_READ];
+
     const char* clippedData;
+    unsigned fullLength;
+    unsigned clippedLength;
+    unsigned basesClippedBefore;
+    GenomeDistance extraBasesClippedBefore;   // Clipping added if we align before the beginning of a chromosome
+    unsigned basesClippedAfter;
+    int editDistance = -1;*/
+
+    *addFrontClipping = 0;
+    const char *contigName = "*";
+    const char *matecontigName = "*";
+    int contigIndex = -1;
+    GenomeDistance positionInContig = 0;
+    int mateContigIndex = -1;
+    GenomeDistance matePositionInContig = 0;
+    
+    GenomeDistance extraBasesClippedBefore;   // Clipping added if we align before the beginning of a chromosome
+    _int64 templateLength = 0;
+    const char* clippedData;
+    unsigned fullLength;
     unsigned clippedLength;
     unsigned basesClippedBefore;
     unsigned basesClippedAfter;
-    size_t qnameLen = read->getIdLength();
-    bool hasMate = false;
-    bool firstInPair = false;
-    bool alignedAsPair = false;
-    Read *mate = NULL;
-    AlignmentResult mateResult = NotFound;
-    GenomeLocation mateLocation = 0;
-    Direction mateDirection = FORWARD;
-    GenomeDistance extraBasesClippedBefore;   // Clipping added if we align before the beginning of a chromosome
+    int editDistance = -1;
+    uint16_t flags = 0;
+    GenomeLocation orig_location = genomeLocation;
 
-    flags = 0;
-    addFrontClipping = 0;
+    if (secondaryAlignment) {
+        flags |= SAM_SECONDARY;
+    }
 
-    if (! format.createSAMLine(
-        genome, &lvc,
-        // output data
-        data, quality, MAX_READ, contigName, contigIndex, flags, positionInContig,
-        map_quality, mateContigName, mateContigIndex, matePositionInContig,
-        templateLength, fullLength, clippedData, clippedLength, basesClippedBefore,
-        basesClippedAfter,
-        // input data
-        qnameLen, read, result, genomeLocation, direction, false, // false: this is not a secondary alignment. We don't support that yet
-        useM, hasMate, firstInPair, alignedAsPair, mate, mateResult, mateLocation, mateDirection,
-        &extraBasesClippedBefore)) {
-      return false;
+    //
+    // If the aligner said it didn't find anything, treat it as such.  Sometimes it will emit the
+    // best match that it found, even if it's not within the maximum edit distance limit (but will
+    // then say NotFound).  Here, we force that to be SAM_UNMAPPED.
+    //
+    if (NotFound == result) {
+        genomeLocation = InvalidGenomeLocation;
+    }
+
+    if (InvalidGenomeLocation == genomeLocation) {
+        //
+        // If it's unmapped, then always emit it in the forward direction.  This is necessary because we don't even include
+        // the SAM_REVERSE_COMPLEMENT flag for unmapped reads, so there's no way to tell that we reversed it.
+        //
+        direction = FORWARD;
+    }
+    
+    clippedLength = read->getDataLength();
+    fullLength = read->getUnclippedLength();
+
+    if (direction == RC) {
+      for (unsigned i = 0; i < fullLength; i++) {
+        data[fullLength - 1 - i] = COMPLEMENT[read->getUnclippedData()[i]];
+        quality[fullLength - 1 - i] = read->getUnclippedQuality()[i];
+      }
+      clippedData = &data[fullLength - clippedLength - read->getFrontClippedLength()];
+      basesClippedBefore = fullLength - clippedLength - read->getFrontClippedLength();
+      basesClippedAfter = read->getFrontClippedLength();
+    } else {
+      clippedData = read->getData();
+      basesClippedBefore = read->getFrontClippedLength();
+      basesClippedAfter = fullLength - clippedLength - basesClippedBefore;
     }
 
     if (genomeLocation != InvalidGenomeLocation) {
-      // the computeCigarString method which should have been used here is private, but the
-      // computeCigar method which it calls is public, so we'll use that one
-      GenomeDistance extraBasesClippedAfter;
-      int cigarBufUsed;
-      unsigned frontHardClipping = read->getOriginalFrontHardClipping();
-      unsigned backHardClipping = read->getOriginalBackHardClipping();
+      if (direction == RC) {
+        flags |= SAM_REVERSE_COMPLEMENT;
+      }
+      const Genome::Contig *contig = genome->getContigForRead(genomeLocation, read->getDataLength(), &extraBasesClippedBefore);
+      _ASSERT(NULL != contig && contig->length > genome->getChromosomePadding());
+      genomeLocation += extraBasesClippedBefore;
 
-      format.computeCigar(
-        COMPACT_CIGAR_STRING, genome, &lvc, cigarBuf, cigarBufSize, clippedData, clippedLength,
-        basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, &extraBasesClippedAfter,
-        genomeLocation, useM, &editDistance, &cigarBufUsed, &addFrontClipping);
+      contigName = contig->name;
+      contigIndex = (int)(contig - genome->getContigs());
+      positionInContig = genomeLocation - contig->beginningLocation + 1; // SAM is 1-based
+      mapQuality = max(0, min(70, mapQuality));       // FIXME: manifest constant.
+    } else {
+      flags |= SAM_UNMAPPED;
+      mapQuality = 0;
+      extraBasesClippedBefore = 0;
+    }
 
-      if (addFrontClipping != 0) {
-        return false;
-      } else {
-        // *o_editDistance -> editDistance
-        if (editDistance == -2) {
-          WriteErrorMessage( "WARNING: computeEditDistance returned -2; cigarBuf may be too small\n");
-          // strcpy(cigarBufWithClipping, "*"); // already set by default
-        } else if (editDistance == -1) {
-          static bool warningPrinted = false;
-          if (!warningPrinted) {
-              WriteErrorMessage( "WARNING: computeEditDistance returned -1; this shouldn't happen\n");
-              warningPrinted = true;
-          }
-          // strcpy(cigarBufWithClipping, "*"); // already set by default
-        } else {
-          // Add some CIGAR instructions for soft-clipping if we've ignored some bases in the read.
-          char clipBefore[16] = {'\0'};
-          char clipAfter[16] = {'\0'};
-          char hardClipBefore[16] = {'\0'};
-          char hardClipAfter[16] = {'\0'};
 
-          cigarString = "";
+    if (hasMate) {
+      flags |= SAM_MULTI_SEGMENT;
+      flags |= (firstInPair ? SAM_FIRST_SEGMENT : SAM_LAST_SEGMENT);
+      if (mateLocation != InvalidGenomeLocation) {
+        GenomeDistance mateExtraBasesClippedBefore;
+        const Genome::Contig *mateContig = genome->getContigForRead(mateLocation, mate->getDataLength(), &mateExtraBasesClippedBefore);
+        mateLocation += mateExtraBasesClippedBefore;
+        matecontigName = mateContig->name;
+        mateContigIndex = (int)(mateContig - genome->getContigs());
+        matePositionInContig = mateLocation - mateContig->beginningLocation + 1;
 
-          if (frontHardClipping > 0) {
-            snprintf(hardClipBefore, sizeof(hardClipBefore), "%uH", frontHardClipping);
-            cigarString += hardClipBefore;
-          }
-          if (basesClippedBefore + extraBasesClippedBefore > 0) {
-            snprintf(clipBefore, sizeof(clipBefore), "%luS", basesClippedBefore + extraBasesClippedBefore);
-            cigarString += clipBefore;
-          }
-
-          cigarString += cigarBuf;
-
-          if (basesClippedAfter + extraBasesClippedAfter > 0) {
-            snprintf(clipAfter, sizeof(clipAfter), "%luS", basesClippedAfter + extraBasesClippedAfter);
-            cigarString += clipAfter;
-          }
-          if (backHardClipping > 0) {
-            snprintf(hardClipAfter, sizeof(hardClipAfter), "%uH", backHardClipping);
-            cigarString += hardClipAfter;
-          }
-//          snprintf(cigarBufWithClipping, cigarBufWithClippingSize, "%s%s%s%s%s", hardClipBefore, clipBefore, cigarBuf, clipAfter, hardClipAfter);
-//          cigarString = cigarBufWithClipping;
-
+        if (mateDirection == RC) {
+          flags |= SAM_NEXT_REVERSED;
         }
 
+        if (genomeLocation == InvalidGenomeLocation) {
+          //
+          // The SAM spec says that for paired reads where exactly one end is unmapped that the unmapped
+          // half should just have RNAME and POS copied from the mate.
+          //
+          contigName = matecontigName;
+          contigIndex = mateContigIndex;
+          matecontigName = "=";
+          positionInContig = matePositionInContig;
+        }
+
+      } else {
+        flags |= SAM_NEXT_UNMAPPED;
+        //
+        // The mate's unmapped, so point it at us.
+        //  in AGD this doesnt matter
+        matecontigName = "=";
+        mateContigIndex = contigIndex;
+        matePositionInContig = positionInContig;
+      }
+
+      if (genomeLocation != InvalidGenomeLocation && mateLocation != InvalidGenomeLocation) {
+        if (alignedAsPair) {
+          flags |= SAM_ALL_ALIGNED;
+        }
+        // Also compute the length of the whole paired-end string whose ends we saw. This is slightly
+        // tricky because (a) we may have clipped some bases before/after each end and (b) we need to
+        // give a signed result based on whether our read is first or second in the pair.
+        GenomeLocation myStart = genomeLocation - basesClippedBefore;
+        GenomeLocation myEnd = genomeLocation + clippedLength + basesClippedAfter;
+        _int64 mateBasesClippedBefore = mate->getFrontClippedLength();
+        _int64 mateBasesClippedAfter = mate->getUnclippedLength() - mate->getDataLength() - mateBasesClippedBefore;
+        GenomeLocation mateStart = mateLocation - (mateDirection == RC ? mateBasesClippedAfter : mateBasesClippedBefore);
+        GenomeLocation mateEnd = mateLocation + mate->getDataLength() + (mateDirection == FORWARD ? mateBasesClippedAfter : mateBasesClippedBefore);
+        if (contigName == matecontigName) { // pointer (not value) comparison, but that's OK.
+          if (myStart < mateStart) {
+            templateLength = mateEnd - myStart;
+          } else {
+            templateLength = -(myEnd - mateStart);
+          }
+        } // otherwise leave TLEN as zero.
+      }
+
+      if (contigName == matecontigName) {
+        matecontigName = "=";     // SAM Spec says to do this when they're equal (and not *, which won't happen because this is a pointer, not string, compare)
       }
     }
 
-    return true;
-  } // computeCigarFlags
+    finalResult.location_ = genomeLocation;
+    finalResult.mapq_ = mapQuality;
+    finalResult.flag_ = flags;
+    finalResult.next_location_ = mateLocation;
+    finalResult.template_length_ = templateLength;
 
-  Status adjustResults(
-                       // inputs
-                       Read *read,
-                       AlignmentResult &status,
-                       Direction &direction,
-                       int &map_quality,
-                       GenomeLocation &location,
-                       const SAMFormat &format,
-                       bool useM,
-                       LandauVishkinWithCigar& lvc,
-                       const Genome* genome,
-                       //outputs
-                       std::string &cigarString,
-                       int &flags
-  ) {
-    cigarString = "*"; // default value
+    const int cigarBufSize = MAX_READ * 2;
+    char cigarBuf[cigarBufSize];
 
-    if (status == NotFound) {
-      location = InvalidGenomeLocation;
+    const int cigarBufWithClippingSize = MAX_READ * 2 + 32;
+    char cigarBufWithClipping[cigarBufWithClippingSize];
+
+    if (orig_location != InvalidGenomeLocation) {
+      const char * thecigar = SAMFormat::computeCigarString(genome, lv, cigarBuf, cigarBufSize, cigarBufWithClipping, cigarBufWithClippingSize,
+        clippedData, clippedLength, basesClippedBefore, extraBasesClippedBefore, basesClippedAfter, 
+        read->getOriginalFrontHardClipping(), read->getOriginalBackHardClipping(), orig_location, direction, useM,
+        &editDistance, addFrontClipping);
+
+      LOG(INFO) << "cigar output was : " << thecigar << " and frontclipping was " << *addFrontClipping;
+
+      if (*addFrontClipping != 0) {
+        // higher up the call stack deals with this
+        //return errors::Internal("something went horribly wrong creating a cigar string");
+      } else
+        cigar = thecigar;
     }
-
-    int addFrontClipping = 0, cumulativeAddFrontClipping = 0;
-    read->setAdditionalFrontClipping(0);
-    GenomeLocation finalLocation = location;
-
-    unsigned nAdjustments = 0;
-
-    while (!computeCigarFlags(read, status, direction, map_quality, finalLocation,
-                              format, useM, lvc, genome, cigarString, flags, addFrontClipping)) {
-      // redo if read modified (e.g. to add soft clipping, or move alignment for a leading I.
-      const Genome::Contig *originalContig = status == NotFound ? NULL
-        : genome->getContigAtLocation(location);
-      const Genome::Contig *newContig = status == NotFound ? NULL
-        : genome->getContigAtLocation(location + addFrontClipping);
-      if (newContig == NULL || newContig != originalContig || finalLocation + addFrontClipping >
-        originalContig->beginningLocation + originalContig->length - genome->getChromosomePadding() ||
-        nAdjustments > read->getDataLength()) {
-
-        // Altering this would push us over a contig boundary, or we're stuck in a loop.  Just give up on the read.
-        status = NotFound;
-        location = InvalidGenomeLocation;
-        finalLocation = InvalidGenomeLocation;
-      } else {
-        cumulativeAddFrontClipping += addFrontClipping;
-        if (addFrontClipping > 0) {
-          read->setAdditionalFrontClipping(cumulativeAddFrontClipping);
-        }
-        finalLocation = location + cumulativeAddFrontClipping;
-      }
-    } // while formatting doesn't work
-
-    location = finalLocation;
 
     return Status::OK();
-  } // adjustResults
-
-  int foobar(int a) {
-    return a+2;
   }
 
 }

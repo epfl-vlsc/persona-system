@@ -45,41 +45,29 @@ namespace snap_wrapper {
       // keep these around as members to avoid reallocating objects for them
       std::array<std::string, 2> cigars;
     };
-
-    // Uses SNAP code to compute the 'cigar' and 'flags' fields from the SAM format
-    bool computeCigarFlags(
-                           // input
-                           Read *read,
-                           AlignmentResult &result,
-                           Direction &direction,
-                           int &map_quality,
-                           GenomeLocation genomeLocation, // can differ from original location
-                           const SAMFormat &format,
-                           bool useM,
-                           LandauVishkinWithCigar& lvc,
-                           const Genome* genome,
-                           //output
-                           std::string &cigarString,
-                           int &flags,
-                           int &addFrontClipping);
-
-    // Computes the CIGAR string and flags and adjusts location according to clipping
-
-    tensorflow::Status adjustResults(
-                                     // inputs
-                                     Read *read,
-                                     AlignmentResult &status,
-                                     Direction &direction,
-                                     int &map_quality,
-                                     GenomeLocation &location,
-                                     const SAMFormat &format,
-                                     bool useM,
-                                     LandauVishkinWithCigar& lvc,
-                                     const Genome* genome,
-                                     //outputs
-                                     std::string &cigarString,
-                                     int &flags
-                                     );
-
-    int foobar(int a );
+  
+    Status WriteSingleResult(Read &snap_read, SingleAlignmentResult &result, AlignmentResultBuilder &result_column, 
+      const Genome* genome, LandauVishkinWithCigar* lvc);
+  
+    Status PostProcess(
+      const Genome* genome,
+      LandauVishkinWithCigar * lv,
+      Read * read,
+      AlignmentResult result, 
+      int mapQuality,
+      GenomeLocation genomeLocation,
+      Direction direction,
+      bool secondaryAlignment,
+      format::AlignmentResult &finalResult,
+      string &cigar,
+      int * addFrontClipping,
+      bool useM,
+      bool hasMate = false,
+      bool firstInPair = false,
+      Read * mate = NULL, 
+      AlignmentResult mateResult = NotFound,
+      GenomeLocation mateLocation = 0,
+      Direction mateDirection = FORWARD,
+      bool alignedAsPair = false
+      );
 }

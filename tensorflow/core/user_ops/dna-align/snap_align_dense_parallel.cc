@@ -308,9 +308,14 @@ private:
                 primaryResult.mapq = 0;
                 primaryResult.direction = FORWARD;
                 if (sam_format_) {
-                  result_builder.AppendAlignmentResult(primaryResult);
+                  LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
                 } else {
-                  result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                  //result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                  auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builder, genome_, &lvc);
+
+                  if (!s.ok()) {
+                    LOG(ERROR) << "adjustResults did not return OK!!!";
+                  }
                 }
               }
               continue;
@@ -330,19 +335,11 @@ private:
 
             // TODO: rename it to sam_writer or smth
             if (sam_format_){
-              result_builder.AppendAlignmentResult(primaryResult);
+              //result_builder.AppendAlignmentResult(primaryResult);
+              LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
             } else {
-              auto s = snap_wrapper::adjustResults(&snap_read,
-                                                   primaryResult.status,
-                                                   primaryResult.direction,
-                                                   primaryResult.mapq,
-                                                   primaryResult.location,
-                                                   format,
-                                                   options_->useM,
-                                                   lvc,
-                                                   genome_,
-                                                   cigarString,
-                                                   flag);
+              
+              auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builder, genome_, &lvc);
 
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
@@ -351,7 +348,7 @@ private:
               //auto t1 = std::chrono::high_resolution_clock::now();
 
 
-              result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
+              //result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
 
               //auto t2 = std::chrono::high_resolution_clock::now();
               //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);

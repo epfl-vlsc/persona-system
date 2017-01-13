@@ -23,14 +23,14 @@ public:
     */
   void set_buffer_pair(BufferPair *data);
 
-  void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, const int flag);
+  //void AppendAlignmentResult(const SingleAlignmentResult &result, const std::string &var_string, const int flag);
 
-  void AppendAlignmentResult(const SingleAlignmentResult &result);
+  //void AppendAlignmentResult(const SingleAlignmentResult &result);
 
-  // Methods for adding paired alignment results
-  void AppendAlignmentResult(const PairedAlignmentResult &result, const std::size_t result_idx, const std::string &var_string, const int flag);
+  // This is the only one we should use now
+  void AppendAlignmentResult(const format::AlignmentResult &result, const string &var_string);
 
-  void AppendAlignmentResult(const PairedAlignmentResult &result, const std::size_t result_idx);
+  //void AppendAlignmentResult(const PairedAlignmentResult &result, const std::size_t result_idx);
 
   private:
     Buffer *data_ = nullptr, *index_ = nullptr;

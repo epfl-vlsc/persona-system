@@ -287,9 +287,10 @@ private:
                   primaryResult.mapq[i] = 0;
                   primaryResult.direction[i] = i; // TODO this is a hack! second direction = reverse. see directions.h in SNAP
                   if (sam_format_) {
-                    result_builder.AppendAlignmentResult(primaryResult, i);
+                    //result_builder.AppendAlignmentResult(primaryResult, i);
+                    LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
                   } else {
-                    result_builder.AppendAlignmentResult(primaryResult, i, "*", 4);
+                    subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builder);
                   }
                 }
               }

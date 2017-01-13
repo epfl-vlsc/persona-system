@@ -302,7 +302,7 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
     string pool_name_;
     string ceph_conf_;
     librados::Rados cluster_;
-    uint64_t file_buf_size_;
+    int64 file_buf_size_;
     unique_ptr<char[]> big_buf_;
     volatile bool thread_active_;
     volatile bool run_;
