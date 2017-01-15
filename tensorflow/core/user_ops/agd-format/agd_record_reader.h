@@ -15,6 +15,9 @@ namespace tensorflow {
   /*
    * A class that provides a "view" over the data in the resource container.
    * Does not take ownership of the underlying data
+   *
+   * This is the class to inherit from if you want another interface to 
+   * AGD chunk records. 
    */
   class AGDRecordReader {
   public:
@@ -31,11 +34,14 @@ namespace tensorflow {
   private:
     const format::RelativeIndex *index_;
     const char *data_, *cur_data_;
-    size_t num_records_;
     size_t cur_record_ = 0;
     std::vector<size_t> absolute_index_;
 
     void InitializeIndex();
+
+  protected:
+    size_t num_records_;
+
   };
 
   /* Provides a "view" over remote data in a ceph object store.
@@ -45,6 +51,8 @@ namespace tensorflow {
    * `buffer` should be large enough to hold a reasonable number 
    * of records. It is split in 3 and used to hold the index
    * and a double buffer of records read from Ceph.
+   * 
+   * Generally best to avoid using this class
    */
   class AGDRemoteRecordReader {
   public:
