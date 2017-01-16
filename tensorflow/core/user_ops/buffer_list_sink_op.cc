@@ -39,7 +39,7 @@ we can use it in other pipelines where writers are used
 
         Tensor *output;
         OP_REQUIRES_OK(ctx, ctx->allocate_output("id", TensorShape({}), &output));
-        output->scalar<string>()() = "i whoop yo head boy";
+        output->scalar<string>()() = "results sent to sink! you probably didn't want this";
       }
     }
   };
