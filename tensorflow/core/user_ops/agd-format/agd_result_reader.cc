@@ -16,13 +16,33 @@ namespace tensorflow {
     start_location_ = result->location_;
     GetResultAtIndex(num_records - 1, &result, &cigar, &cigar_len);
     end_location_ = result->location_;
+    if (metadata_)
+      metadata_->Reset();
+    LOG(INFO) << "AGDResult reader has chunk with first: " << start_location_ << " and last: " 
+      << end_location_;
+  }
+  
+  AGDResultReader::AGDResultReader(ResourceContainer<Data>* resource, size_t num_records, 
+      AGDRecordReader* metadata) : AGDRecordReader(resource, num_records), metadata_(metadata) {
+    const AlignmentResult* result;
+    const char* cigar;
+    size_t cigar_len;
+    Status s = PeekNextResult(&result, &cigar, &cigar_len);
+    start_location_ = result->location_;
+    GetResultAtIndex(num_records - 1, &result, &cigar, &cigar_len);
+    end_location_ = result->location_;
+    if (metadata_)
+      metadata_->Reset();
     LOG(INFO) << "AGDResult reader has chunk with first: " << start_location_ << " and last: " 
       << end_location_;
   }
     
   Status AGDResultReader::GetResultAtLocation(int64_t location, const char* metadata, 
         size_t metadata_len, const format::AlignmentResult** result, const char** cigar, 
-        size_t* cigar_len) {
+        size_t* cigar_len, size_t* index) {
+
+    if (!metadata_)
+      return Internal("metadata was not supplied so GetResultAtLocation cannot work.");
 
     if (!IsPossiblyContained(location))
       return NotFound("Location ", location, " is out of the genome location bounds ",
@@ -74,7 +94,10 @@ namespace tensorflow {
     
     if (!found)
       return NotFound("Location ", location, " was not found.");
-    
+   
+    if (index)
+      *index = first;
+
     *result = temp_result;
     *cigar = temp_str;
     *cigar_len = len;

@@ -18,14 +18,18 @@ namespace tensorflow {
   public:
     // metadata column is required to disambiguate results that mapped to 
     // the same position.
-    AGDResultReader(const char* resource, size_t num_records, AGDRecordReader* metadata);
+    // if null is passed, GetResultAtLocation will not work.
+    AGDResultReader(const char* resource, size_t num_records, AGDRecordReader* metadata=nullptr);
+    AGDResultReader(ResourceContainer<Data>* resource, size_t num_records, AGDRecordReader* metadata=nullptr);
 
     // Get the result at specified GenomeLocation. Uses a binary search
     // for log(n) performance. metadata may be used to disambiguate reads
-    // that have mapped to the same position, which is likely. 
+    // that have mapped to the same position, which is likely. Also returns
+    // the index position the read was found at.
     // NB cigar is not a proper c-string
     Status GetResultAtLocation(int64_t location, const char* metadata, 
-        size_t metadata_len, const format::AlignmentResult** result, const char** cigar, size_t* cigar_len);
+        size_t metadata_len, const format::AlignmentResult** result, const char** cigar, 
+        size_t* cigar_len, size_t* index=nullptr);
 
     // Get or peek next alignment result in the index. 
     // NB again cigar is not a proper c-string

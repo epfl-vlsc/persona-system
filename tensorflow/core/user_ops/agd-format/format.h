@@ -94,6 +94,53 @@ namespace format {
 
     void convertFromSNAP(const SingleAlignmentResult &result, const int flag);
    };
+ 
+  // a bunch of helper functions for flags (currently equivalent to the SAM format)
+  inline bool IsPrimary(const AlignmentResult *r) { 
+    return !(r->flag_ & ResultFlag::SECONDARY || r->flag_ & ResultFlag::SUPPLEMENTAL);
+  }
+  inline bool IsPaired(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::MULTI) != 0;
+  }
+  inline bool IsDiscordant(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::ALL_MAPPED) == 0;
+  }
+  inline bool IsMapped(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::UNMAPPED) == 0;
+  }
+  inline bool IsUnmapped(const AlignmentResult *r) {
+    return !IsMapped(r);
+  }
+  inline bool IsNextUnmapped(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::NEXT_UNMAPPED) != 0;
+  }
+  inline bool IsNextMapped(const AlignmentResult *r) {
+    return !IsNextUnmapped(r);
+  }
+  inline bool IsReverseStrand(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::REVERSE_COMPLEMENTED) != 0;
+  }
+  inline bool IsForwardStrand(const AlignmentResult *r) {
+    return !IsReverseStrand(r);
+  }
+  inline bool IsFirstRead(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::FIRST) != 0;
+  }
+  inline bool IsLastRead(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::LAST) != 0;
+  }
+  inline bool IsSecondary(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::SECONDARY) != 0;
+  }
+  inline bool IsSupplemental(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::SUPPLEMENTAL) != 0;
+  }
+  inline bool IsDuplicate(const AlignmentResult *r) {
+    return (r->flag_ & ResultFlag::PCR_DUPLICATE) != 0;
+  }
+
+
+
 
   struct __attribute__((packed)) BinaryBases {
     BinaryBases() : bases(0) {};
