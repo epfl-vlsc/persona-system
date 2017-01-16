@@ -130,7 +130,7 @@ file_name: a Tensor() of string for the unique key for this file
       time_t pmtime;
       ret = io_ctx.stat(file_key, &file_size, &pmtime); // Get file size
       if (ret != 0) {
-        return Internal("io_ctx.stat() return ", ret);
+        return Internal("CephReader: io_ctx.stat() return ", ret, " for key ", file_key);
       }
       /*char bufff[32];
       struct tm* tt = localtime(&pmtime);
