@@ -46,7 +46,6 @@ def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, para
     if extra_keys > 0:
         file_keys = list(itt.chain(file_keys, itt.repeat("", extra_keys)))
     
-
     string_producer = train.input.string_input_producer(file_keys, num_epochs=1, shuffle=False)
     sp_output = string_producer.dequeue()
 
@@ -298,12 +297,9 @@ def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_
                        pool_name=pool_name, ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_pool_handle=bp),
                        kp[1]) for kp in key_producers]
 
-    print(read_pipelines)
     ready_record_batch = train.input.batch_join_pdq([tuple(k[0])+(k[1],) for k in read_pipelines], num_dq_ops=parallel_process,
                                                     batch_size=1, capacity=8, name="ready_record_queue")
-
     # now the AGD parallel stage
-    print(ready_record_batch)
     processed_record_batch = _make_agd_batch(ready_batch=ready_record_batch, buffer_pool=bp)
 
     batched_processed_records = train.input.batch_join_pdq([a for a in processed_record_batch],
