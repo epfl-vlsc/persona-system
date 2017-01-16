@@ -41,6 +41,15 @@ def name_generator(base_name, separator="-"):
     return string_ops.string_join([base_name, var_as_string], separator=separator, name="name_generator")
 
 def _key_maker(file_keys, intermediate_file_prefix, column_grouping_factor, parallel_read):
+    num_file_keys = len(file_keys)
+    if num_file_keys < column_grouping_factor:
+        print("Column grouping factor too low! Setting to number of file keys ({})".format(num_file_keys))
+        column_grouping_factor = num_file_keys
+    if num_file_keys % column_grouping_factor != 0:
+        print("Column grouping factor not an even divisor of num_file_keys! ({})".format(num_file_keys))
+        while num_file_keys % column_grouping_factor != 0:
+            column_grouping_factor -= 1
+        print("Reducing column grouping factor to {}".format(column_grouping_factor))
     extra_keys = (column_grouping_factor - (len(file_keys) % column_grouping_factor)) % column_grouping_factor
     print("extra keys: {}".format(extra_keys))
     if extra_keys > 0:
