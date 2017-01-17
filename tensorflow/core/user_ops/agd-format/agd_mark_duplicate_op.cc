@@ -33,13 +33,20 @@ namespace tensorflow {
   .Output("num_records: int32")
   .SetIsStateful()
   .Doc(R"doc(
-Remove duplicate reads that map to the same location. 
+Mark duplicate reads/pairs that map to the same location. 
 
 This Op depends on data being sorted by metadata (QNAME), 
 i.e. A paired read is immediately followed by its mate. 
 
 Normally this step would be run on the aligner output before
 sorting by genome location.
+
+The implementation follows the approach used by SamBlaster
+github.com/GregoryFaust/samblaster
+wherein read pair signatures are looked up in a hash table
+to determine if there are reads/pairs mapped to the exact 
+same location. Our implementation uses google::dense_hash_table,
+trading memory for faster execution. 
   )doc");
 
   using namespace std;
@@ -133,6 +140,8 @@ sorting by genome location.
         // but if it goes for every signature then it shouldn't matter
         position = (int32_t)(result->location_ + ralen + eclip - 1);
       }
+      if (position < 0)
+        return Internal("A position after applying clipping was < 0!");
       return Status::OK();
     }
 
@@ -140,6 +149,9 @@ sorting by genome location.
         size_t cigar_len, AlignmentResultBuilder &builder) {
       AlignmentResult result_out = *result; // simple copy suffices
       result_out.flag_ = result_out.flag_ | ResultFlag::PCR_DUPLICATE;
+      // yes we are copying and rebuilding the entire structure
+      // modifying in place is a huge pain in the ass, and the results aren't that
+      // big anyway
       builder.AppendAlignmentResult(result_out, string(cigar, cigar_len));
       return Status::OK();
     }
@@ -154,6 +166,8 @@ sorting by genome location.
       auto sig_map_iter = signature_map_->find(sig);
       if (sig_map_iter == signature_map_->end()) { // not found, insert it
         signature_map_->insert(make_pair(sig, 1));
+        // its the first here, others will be marked dup
+        builder.AppendAlignmentResult(*result, string(cigar, cigar_len));
         return Status::OK();
       } else { 
         // found, mark a dup
@@ -232,6 +246,8 @@ sorting by genome location.
             auto sig_map_iter = signature_map_->find(sig);
             if (sig_map_iter == signature_map_->end()) { // not found, insert it
               signature_map_->insert(make_pair(sig, 1));
+              results_builder.AppendAlignmentResult(*result, string(result_cigar, result_cigar_len));
+              results_builder.AppendAlignmentResult(*mate, string(mate_cigar, mate_cigar_len));
             } else { 
               // found, mark a dup
               OP_REQUIRES_OK(ctx, MarkDuplicate(result, result_cigar, result_cigar_len, results_builder));

@@ -156,7 +156,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
       // phase 2: sort the vector by genome_location
       //LOG(INFO) << "running std sort on " << sort_index_.size() << " SortEntry's";
       std::sort(sort_index_.begin(), sort_index_.end(), [](const SortEntry& a, const SortEntry& b) {
-          if (strncmp(a.meta, b.meta, min(a.meta_len, b.meta_len)) < 0);
+          return strncmp(a.meta, b.meta, min(a.meta_len, b.meta_len)) < 0;
           });
 
       //LOG(INFO) << "Sort finished.";
