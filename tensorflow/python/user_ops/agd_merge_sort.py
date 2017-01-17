@@ -177,13 +177,19 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
     return base_reads, qual_reads, meta_reads, result_reads
     '''
 
-def _make_sorters(batch, buffer_list_pool):
+def _make_sorters(batch, buffer_list_pool, order_by):
     # FIXME this needs the number of records
     for b, q, m, r, num_records, im_name in batch:
-        yield uop.AGDSort(buffer_list_pool=buffer_list_pool,
-                          results_handles=r, bases_handles=b,
-                          qualities_handles=q, metadata_handles=m,
-                          num_records=num_records, name="local_read_agd_sort"), im_name
+        if order_by == "location":
+            yield uop.AGDSort(buffer_list_pool=buffer_list_pool,
+                              results_handles=r, bases_handles=b,
+                              qualities_handles=q, metadata_handles=m,
+                              num_records=num_records, name="local_read_agd_sort"), im_name
+        else:
+            yield uop.AGDSortMetadata(buffer_list_pool=buffer_list_pool,
+                              results_handles=r, bases_handles=b,
+                              qualities_handles=q, metadata_handles=m,
+                              num_records=num_records, name="local_read_agd_sort"), im_name
 
 def _make_agd_batch(ready_batch, buffer_pool):
     for b, q, m, r, inter_name in ready_batch:
@@ -240,7 +246,7 @@ def _make_ceph_writers(results_batch, cluster_name, user_name, pool_name, ceph_c
 
 # TODO I'm not sure what to do about the last param
 def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_file_prefix="intermediate_file",
-                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1):
+                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1, order_by="location"):
     """
     file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
     local_directory: the "base path" from which these should be read
@@ -270,7 +276,7 @@ def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_fi
 
     blp = uop.BufferListPool(bound=False, name="local_read_buffer_list_pool")
 
-    sorters = _make_sorters(batch=batched_processed_records, buffer_list_pool=blp)
+    sorters = _make_sorters(batch=batched_processed_records, buffer_list_pool=blp, order_by=order_by)
 
     batched_results = train.input.batch_join_pdq([a[0] + (a[1],) for a in sorters], num_dq_ops=1,
                                                  batch_size=1, name="sorted_im_files_queue")
@@ -337,17 +343,24 @@ def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_
 
 ### All the methods for creating the local merge pipeline
 
-def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, outdir=None, chunk_size=100000):
+def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, outdir=None, chunk_size=100000, order_by="location"):
     if chunk_size < 1:
         raise Exception("Need strictly non-negative chunk size. Got {}".format(chunk_size))
 
     blp = uop.BufferListPool(bound=False, name="local_read_merge_buffer_list_pool")
 
-    new_chunk_handle, num_recs = uop.AGDMerge(chunk_size=chunk_size,
-                            intermediate_files=intermediate_keys,
-                            path=in_dir,
-                            num_records=num_records,
-                            buffer_list_pool=blp)
+    if order_by == "location":
+        new_chunk_handle, num_recs = uop.AGDMerge(chunk_size=chunk_size,
+                                intermediate_files=intermediate_keys,
+                                path=in_dir,
+                                num_records=num_records,
+                                buffer_list_pool=blp)
+    else:
+        new_chunk_handle, num_recs = uop.AGDMergeMetadata(chunk_size=chunk_size,
+                                intermediate_files=intermediate_keys,
+                                path=in_dir,
+                                num_records=num_records,
+                                buffer_list_pool=blp)
 
    
     chunk_handle = train.input.batch_pdq([new_chunk_handle, num_recs], num_dq_ops=1,
@@ -369,10 +382,15 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, num_records, ou
     write_join_tensor = control_flow_ops.tuple(tensors=[buffer_list_handle, num_recs, first_ord, file_name], name="write_join_tensor")
     write_join_queue = train.input.batch_pdq(write_join_tensor, num_dq_ops=1, batch_size=1, name="write_join_queue", capacity=1)
 
+    if order_by == "location":
+        record_type = ["results", "base", "qual", "metadata"]
+    else:
+        record_type = ["metadata", "base", "qual", "results"]
+
     final_write_out = []
     for buff_list, n_recs, first_o, file_key in write_join_queue:
         file_key_passthru, first_o_passthru = uop.AGDWriteColumns(record_id=record_name,
-                                                                  record_type=["results", "base", "qual", "metadata"],
+                                                                  record_type=record_type,
                                                                   column_handle=buff_list,
                                                                   compress=False,
                                                                   output_dir=outdir+"/",

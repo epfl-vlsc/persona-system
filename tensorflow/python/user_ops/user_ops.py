@@ -646,6 +646,40 @@ def _AGDSortShape(op):
 
   return [tensor_shape.vector(2), tensor_shape.scalar()]
 
+_msmd_sort_str = "AGDSortMetadata"
+ops.NoGradient(_msmd_sort_str)
+def AGDSortMetadata(buffer_list_pool, results_handles, bases_handles, qualities_handles,
+            metadata_handles, num_records, name=None):
+    return gen_user_ops.agd_sort_metadata(buffer_list_pool=buffer_list_pool,
+                                 results_handles=results_handles,
+                                 bases_handles=bases_handles,
+                                 qualities_handles=qualities_handles,
+                                 metadata_handles=metadata_handles,
+                                 num_records=num_records,
+                                 name=name)
+
+@ops.RegisterShape(_msmd_sort_str)
+def _AGDSortMetadataShape(op):
+  b_pool = op.inputs[0].get_shape()
+  r_handles = op.inputs[1].get_shape()
+  b_handles = op.inputs[2].get_shape()
+  q_handles = op.inputs[3].get_shape()
+  m_handles = op.inputs[4].get_shape()
+  num_recs = op.inputs[5].get_shape()
+
+  _assert_vec(b_pool, 2)
+  _assert_matrix(r_handles)
+  _assert_matrix(b_handles)
+  _assert_matrix(q_handles)
+  _assert_matrix(m_handles)
+
+  if r_handles[0] != b_handles[0] != q_handles[0] != m_handles[0] != num_recs[0]:
+    raise Exception("AGDSort: dim 0 of chunk handles do not match. i.e. you have mismatched numbers of b,q,m,r handles")
+  if num_recs.ndims != 1:
+    raise Exception("AGDSort: num_recs shape should be a vector, but got {}".format(num_recs))
+
+  return [tensor_shape.vector(2), tensor_shape.scalar()]
+
 _ms_merge_str = "AGDMerge"
 ops.NoGradient(_ms_merge_str)
 def AGDMerge(chunk_size, intermediate_files, path, num_records, buffer_list_pool, name=None):
@@ -659,6 +693,25 @@ def AGDMerge(chunk_size, intermediate_files, path, num_records, buffer_list_pool
 
 @ops.RegisterShape(_ms_merge_str)
 def _AGDMergeShape(op):
+  bl_pool = op.inputs[0].get_shape()
+
+  _assert_vec(bl_pool, 2)
+
+  return [tensor_shape.vector(2), tensor_shape.scalar()]
+
+_msmd_merge_str = "AGDMergeMetadata"
+ops.NoGradient(_msmd_merge_str)
+def AGDMergeMetadata(chunk_size, intermediate_files, path, num_records, buffer_list_pool, name=None):
+  # chunk_size > 1 enforced by op registration
+  return gen_user_ops.agd_merge_metadata(chunk_size=chunk_size,
+                                intermediate_files=intermediate_files,
+                                path=path,
+                                num_records=num_records,
+                                buffer_list_pool=buffer_list_pool,
+                                name=name)
+
+@ops.RegisterShape(_msmd_merge_str)
+def _AGDMergeMetadataShape(op):
   bl_pool = op.inputs[0].get_shape()
 
   _assert_vec(bl_pool, 2)
