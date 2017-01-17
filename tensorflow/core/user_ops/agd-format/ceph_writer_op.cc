@@ -51,11 +51,12 @@ compress: whether or not to compress the column
       // file format init
       using namespace format;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
+      OP_REQUIRES(ctx, !compress_, Internal("op doesn't support compression yet"));
       string s;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &s));
       auto max_size = sizeof(header_.string_id);
       OP_REQUIRES(ctx, s.length() < max_size,
-                  errors::Internal("record_id for column header '", s, "' greater than 32 characters"));
+                  Internal("record_id for column header '", s, "' greater than 32 characters"));
       strncpy(header_.string_id, s.c_str(), max_size);
 
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &s));
@@ -121,63 +122,28 @@ compress: whether or not to compress the column
       buf_list->wait_for_ready();
 
       string full_path(filepath + record_suffix_);
-
-      OP_REQUIRES_OK(ctx, WriteHeader(ctx, output_buf_));
+      PrepHeader(ctx);
 
       auto num_buffers = buf_list->size();
       size_t i;
-      uint32_t num_records = header_.last_ordinal - header_.first_ordinal;
       index_.reset();
       payload_.reset();
 
-      if (compress_) {
-        OP_REQUIRES(ctx, false, Internal("Compression not supported for ceph writers"));
-#if 0
-        compress_buf_.clear();
+      // We currently check to make sure compression output is off in the constructor
+      for (i = 0; i < num_buffers; ++i) {
+        auto &index = (*buf_list)[i].index();
+        //OP_REQUIRES(ctx, s1 != 0, Internal("ceph write got empty record!"));
+        OP_REQUIRES_OK(ctx, index_.AppendBuffer(&index[0], index.size()));
+      }
 
-        for (auto &buffer : buffers) {
-          if (i + recs_per_chunk > num_records) {
-            recs_per_chunk = num_records - i;
-          }
-
-          auto &data_buf = buffer.get(); // only need to do this on the first call
-          OP_REQUIRES_OK(ctx, appendSegment(&data_buf[0], recs_per_chunk, compress_buf_, true));
-          i += recs_per_chunk;
-        }
-
-        i = 0; recs_per_chunk = records_per_chunk;
-        size_t expected_size;
-        for (auto &buffer : buffers) {
-          if (i + recs_per_chunk > num_records) {
-            recs_per_chunk = num_records - i;
-          }
-
-          auto &data_buf = buffer.get();
-
-          expected_size = data_buf.size() - recs_per_chunk;
-          OP_REQUIRES_OK(ctx, appendSegment(&data_buf[recs_per_chunk], expected_size, compress_buf_, true));
-          i += recs_per_chunk;
-        }
-
-        output_buf_.clear();
-        OP_REQUIRES_OK(ctx, compressGZIP(&compress_buf_[0], compress_buf_.size(), output_buf_));
-        OP_REQUIRES_OK(ctx, CephWriteColumn(full_path, &output_buf_[0], output_buf_.size()));
-#endif
-      } else {
-        for (i = 0; i < num_buffers; ++i) {
-          auto &index = (*buf_list)[i].index();
-          //OP_REQUIRES(ctx, s1 != 0, Internal("ceph write got empty record!"));
-          OP_REQUIRES_OK(ctx, index_.AppendBuffer(&index[0], index.size()));
-        }
-
-        for (i = 0; i < num_buffers; ++i) {
-          auto &data = (*buf_list)[i].data();
-          OP_REQUIRES_OK(ctx, payload_.AppendBuffer(&data[0], data.size()));
-        }
+      for (i = 0; i < num_buffers; ++i) {
+        auto &data = (*buf_list)[i].data();
+        OP_REQUIRES_OK(ctx, payload_.AppendBuffer(&data[0], data.size()));
       }
 
       auto write_only_start = chrono::high_resolution_clock::now();
       write_buf.clear();
+      write_buf.push_back(ceph::buffer::create_static(sizeof(header_), reinterpret_cast<char*>(&header_)));
       write_buf.push_back(ceph::buffer::create_static(index_.size(), const_cast<char*>(index_.data())));
       write_buf.push_back(ceph::buffer::create_static(payload_.size(), const_cast<char*>(payload_.data())));
 
@@ -202,13 +168,11 @@ compress: whether or not to compress the column
     Buffer index_, payload_;
     librados::Rados cluster;
     librados::IoCtx io_ctx;
-    vector<char> compress_buf_; // used to compress into
-    vector<char> output_buf_; // used to compress into
     format::FileHeader header_;
     bool compress_ = false;
     string record_suffix_;
 
-    Status WriteHeader(OpKernelContext *ctx, vector<char>& buf) {
+    Status PrepHeader(OpKernelContext *ctx) {
       const Tensor *tensor;
       uint64_t tmp64;
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
@@ -219,7 +183,6 @@ compress: whether or not to compress the column
       tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int32>()());
       header_.last_ordinal = header_.first_ordinal + tmp64;
 
-      appendSegment(reinterpret_cast<const char*>(&header_), sizeof(header_), buf, false);
       return Status::OK();
     }
 
