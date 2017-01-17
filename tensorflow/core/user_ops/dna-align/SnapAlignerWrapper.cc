@@ -171,6 +171,8 @@ namespace snap_wrapper {
   PairedAligner::writeResult(array<Read, 2> &snap_reads, PairedAlignmentResult &result, AlignmentResultBuilder &result_column) {
     array<format::AlignmentResult, 2> results;
     array<string, 2> cigars;
+    // always write pair 1 before pair 2
+    // make sure 'first in pair'/'second in pair' matches original data
     snap_reads[0].setAdditionalFrontClipping(0);
     snap_reads[1].setAdditionalFrontClipping(0);
     // we don't write out the results yet in case one of them fails
@@ -180,6 +182,7 @@ namespace snap_wrapper {
     finalLocations[0] = result.status[0] != NotFound ? result.location[0] : InvalidGenomeLocation;
     finalLocations[1] = result.status[1] != NotFound ? result.location[1] : InvalidGenomeLocation;
     for (int i = 0; i < 2; ++i) {
+      
       auto &read = snap_reads[i];
 
       TF_RETURN_IF_ERROR(PostProcess(genome,
