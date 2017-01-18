@@ -94,7 +94,6 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
       for (int64 i = 0; i < fileset->dim_size(0); i++)
       {
-        start = clock();
         OP_REQUIRES_OK(ctx, rmgr->Lookup(fileset_matrix(i, 0), fileset_matrix(i, 1), &agd_input));
         core::ScopedUnref unref_me(agd_input);
         ResourceReleaser<Data> agd_releaser(*agd_input);
@@ -121,7 +120,6 @@ reserve: the number of bytes to call 'reserve' on the vector.
     bool verify_ = false;
     RecordParser rec_parser_;
     size_t reserve_bytes_;
-    clock_t start;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
     bool unpack_ = true;
   };

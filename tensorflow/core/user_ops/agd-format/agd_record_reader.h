@@ -16,8 +16,8 @@ namespace tensorflow {
    * A class that provides a "view" over the data in the resource container.
    * Does not take ownership of the underlying data
    *
-   * This is the class to inherit from if you want another interface to 
-   * AGD chunk records. 
+   * This is the class to inherit from if you want another interface to
+   * AGD chunk records.
    */
   class AGDRecordReader {
   public:
@@ -48,15 +48,15 @@ namespace tensorflow {
    * does not own buffers or io_ctx. Simply uses them to get and
    * buffer data. Only supports sequential access of records.
    *
-   * `buffer` should be large enough to hold a reasonable number 
+   * `buffer` should be large enough to hold a reasonable number
    * of records. It is split in 3 and used to hold the index
    * and a double buffer of records read from Ceph.
-   * 
+   *
    * Generally best to avoid using this class
    */
   class AGDRemoteRecordReader {
   public:
-    AGDRemoteRecordReader(string filename, size_t num_records, 
+    AGDRemoteRecordReader(string filename, size_t num_records,
         char* buffer, uint64_t buffer_size, librados::IoCtx* io_ctx);
 
     void Reset();
@@ -68,7 +68,7 @@ namespace tensorflow {
     Status Initialize();
 
   private:
-  
+
     Status ReadData(char* dest, uint64_t size);
 
     struct RecordBuffer {
@@ -102,4 +102,3 @@ namespace tensorflow {
   };
 
 }
-
