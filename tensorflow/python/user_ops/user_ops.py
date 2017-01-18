@@ -716,24 +716,20 @@ def _AGDMergeShape(op):
 
   return []
 
-_msmd_merge_str = "AGDMergeMetadata"
-ops.NoGradient(_msmd_merge_str)
-def AGDMergeMetadata(chunk_size, intermediate_files, path, num_records, buffer_list_pool, name=None):
+_ms_merge_metadata_str = "AGDMergeMetadata"
+ops.NoGradient(_ms_merge_metadata_str)
+def AGDMergeMetadata(chunk_size, buffer_list_pool, chunk_group_handles, num_records, output_buffer_queue_handle, name=None):
   # chunk_size > 1 enforced by op registration
-  return gen_user_ops.agd_merge_metadata(chunk_size=chunk_size,
-                                intermediate_files=intermediate_files,
-                                path=path,
-                                num_records=num_records,
-                                buffer_list_pool=buffer_list_pool,
-                                name=name)
+  return gen_user_ops.agd_merge_metadata(chunk_size=chunk_size, num_records=num_records,
+                                         buffer_list_pool=buffer_list_pool,
+                                         chunk_group_handles=chunk_group_handles,
+                                         output_buffer_queue_handle=output_buffer_queue_handle,
+                                         name=name)
 
-@ops.RegisterShape(_msmd_merge_str)
-def _AGDMergeMetadataShape(op):
-  bl_pool = op.inputs[0].get_shape()
-
-  _assert_vec(bl_pool, 2)
-
-  return [tensor_shape.vector(2), tensor_shape.scalar()]
+@ops.RegisterShape(_ms_merge_metadata_str)
+def _AGDMetadataMergeShape(op):
+  # I think we can do this?
+  return _AGDMergeShape(op)
 
 _ms_cephmerge_str = "AGDCephMerge"
 ops.NoGradient(_ms_cephmerge_str)

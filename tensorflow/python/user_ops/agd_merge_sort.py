@@ -16,6 +16,8 @@ from tensorflow.python.user_ops import user_ops as uop
 import os
 import tensorflow as tf
 
+location_value = "location"
+
 """
 User ops specifically pertaining to agd merge sort
 
@@ -179,7 +181,7 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
 def _make_sorters(batch, buffer_list_pool, order_by):
     # FIXME this needs the number of records
     for b, q, m, r, num_records, im_name in batch:
-        if order_by == "location":
+        if order_by == location_value:
             yield uop.AGDSort(buffer_list_pool=buffer_list_pool,
                               results_handles=r, bases_handles=b,
                               qualities_handles=q, metadata_handles=m,
@@ -245,7 +247,7 @@ def _make_ceph_writers(results_batch, cluster_name, user_name, pool_name, ceph_c
 
 # TODO I'm not sure what to do about the last param
 def local_sort_pipeline(file_keys, local_directory, outdir=None, intermediate_file_prefix="intermediate_file",
-                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1, order_by="location"):
+                        column_grouping_factor=5, parallel_read=1, parallel_process=1, parallel_sort=1, order_by=location_value):
     """
     file_keys: a list of Python strings of the file keys, which you should extract from the metadata file
     local_directory: the "base path" from which these should be read
@@ -340,14 +342,17 @@ def ceph_sort_pipeline(file_keys, cluster_name, user_name, pool_name, ceph_conf_
 
 ### All the methods for creating the local merge pipeline
 
-def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle):
+def _make_merge_read_records(key_outs, in_dir, mmap_pool_handle, order_by):
     suffix_sep = tf.constant(".")
     base_suffix = tf.constant("base")
     qual_suffix = tf.constant("qual")
     meta_suffix = tf.constant("metadata")
     result_suffix = tf.constant("results")
     # dictated by the merge op
-    suffix_order = [result_suffix, base_suffix, qual_suffix, meta_suffix]
+    if order_by == location_value:
+        suffix_order = [result_suffix, base_suffix, qual_suffix, meta_suffix]
+    else:
+        suffix_order = [meta_suffix, base_suffix, qual_suffix, result_suffix]
 
     def make_single_chunk_read(im_name):
         appended_names = [string_ops.string_join([im_name, suffix_sep, a]) for a in suffix_order]
@@ -382,7 +387,7 @@ def _make_processed_records(ready_read_records, buffer_pool):
         readss, num_recordss, first_ordinalss = process_ready_row(interm_columns=interm_columns)
         yield [nr[0] for nr in num_recordss], tf.pack(readss)
 
-def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, chunk_size=100000, order_by="location"):
+def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, chunk_size=100000, order_by=location_value):
     if chunk_size < 1:
         raise Exception("Need strictly non-negative chunk size. Got {}".format(chunk_size))
     key_producer = train.input.input_producer([intermediate_keys],
@@ -396,7 +401,7 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
     key_outs = train.input.batch_pdq([key_output], batch_size=1, num_dq_ops=1)
     mapped_file_pool = uop.MMapPool(bound=False, name="local_read_mmap_pool")
     ready_read_records = _make_merge_read_records(key_outs=key_outs, in_dir=in_dir,
-                                                  mmap_pool_handle=mapped_file_pool)
+                                                  mmap_pool_handle=mapped_file_pool, order_by=order_by)
 
     bp = uop.BufferPool(bound=False, name="local_read_merge_buffer_pool")
     processed_records = _make_processed_records(ready_read_records=ready_read_records, buffer_pool=bp)
@@ -411,7 +416,7 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
     blp = uop.BufferListPool(bound=False, name="local_read_merge_buffer_list_pool")
     num_records, chunk_group_handles = merge_ready_queue[0]
 
-    if order_by == "location":
+    if order_by == location_value:
         merge_op = uop.AGDMerge(chunk_size=chunk_size,
                                 buffer_list_pool=blp,
                                 num_records=num_records,
@@ -419,8 +424,12 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
                                 output_buffer_queue_handle=q.queue_ref,
                                 name="agd_local_merge")
     else:
-        # TODO put the metadata sorting in this version
-        print("Sorting by metadata currently unsupported!")
+        merge_op = uop.AGDMergeMetadata(chunk_size=chunk_size,
+                                        buffer_list_pool=blp,
+                                        num_records=num_records,
+                                        chunk_group_handles=chunk_group_handles,
+                                        output_buffer_queue_handle=q.queue_ref,
+                                        name="agd_local_merge_metadata")
 
     queue_runner.add_queue_runner(queue_runner.QueueRunner(q, [merge_op]))
 
@@ -439,7 +448,7 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
     write_join_tensor = control_flow_ops.tuple(tensors=[buffer_list_handle, num_recs, first_ord, file_name], name="write_join_tensor")
     write_join_queue = train.input.batch_pdq(write_join_tensor, num_dq_ops=1, batch_size=1, name="write_join_queue", capacity=1)
 
-    if order_by == "location":
+    if order_by == location_value:
         record_type = ["results", "base", "qual", "metadata"]
     else:
         record_type = ["metadata", "base", "qual", "results"]
