@@ -682,22 +682,39 @@ def _AGDSortMetadataShape(op):
 
 _ms_merge_str = "AGDMerge"
 ops.NoGradient(_ms_merge_str)
-def AGDMerge(chunk_size, intermediate_files, path, num_records, buffer_list_pool, name=None):
+def AGDMerge(chunk_size, buffer_list_pool, chunk_group_handles, num_records, output_buffer_queue_handle, name=None):
   # chunk_size > 1 enforced by op registration
-  return gen_user_ops.agd_merge(chunk_size=chunk_size,
-                                intermediate_files=intermediate_files,
-                                path=path,
-                                num_records=num_records,
+  return gen_user_ops.agd_merge(chunk_size=chunk_size, num_records=num_records,
                                 buffer_list_pool=buffer_list_pool,
+                                chunk_group_handles=chunk_group_handles,
+                                output_buffer_queue_handle=output_buffer_queue_handle,
                                 name=name)
 
 @ops.RegisterShape(_ms_merge_str)
 def _AGDMergeShape(op):
   bl_pool = op.inputs[0].get_shape()
+  buffer_queue = op.inputs[1].get_shape()
+  num_recs = op.inputs[2].get_shape()
+  chunk_handle = op.inputs[3].get_shape()
 
   _assert_vec(bl_pool, 2)
+  _assert_scalar(buffer_queue)
 
-  return [tensor_shape.vector(2), tensor_shape.scalar()]
+  if num_recs.ndims != 1:
+    raise Exception("AGDMerge: num_recs shape should be a vector, but got {}".format(num_recs))
+  if chunk_handle.ndims != 3:
+    raise Exception("AGDMerge: chunk_handle must be a 3-Tensor, but got {}".format(chunk_handle))
+
+  num_super_chunks = num_recs[0]
+  if chunk_handle[0] != num_super_chunks:
+    raise Exception("AGDMerge: number of super chunks must be the same (in the first dimension) for number of records and chunk handles.\nNum recs: {a}\nHandles: {b}".format(a=num_recs, b=chunk_handle))
+
+  if chunk_handle[1] < 1:
+    raise Exception("AGDMerge: number of columns (in chunk handle[1) must be >0, but got {}".format(chunk_handle[1]))
+  if chunk_handle[2] != 2:
+    raise Exception("AGDMerge: 3rd dimension of chunk handle must be exactly 2, but got {}".format(chunk_handle[2]))
+
+  return []
 
 _msmd_merge_str = "AGDMergeMetadata"
 ops.NoGradient(_msmd_merge_str)
