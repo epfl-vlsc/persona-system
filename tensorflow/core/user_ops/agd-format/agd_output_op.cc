@@ -61,10 +61,14 @@ Prints records to stdout from record indices `start` to `finish`.
       meta_buf_.reset();
       TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_meta_->data(), mmap_meta_->length(),
             false, &meta_buf_, &meta_ord_, &num_meta_));
-      TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".results", &mmap_results_));
+      Status s = ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".results", &mmap_results_);
       results_buf_.reset();
-      TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_results_->data(), mmap_results_->length(),
-            false, &results_buf_, &results_ord_, &num_results_));
+      if (!s.ok())
+        LOG(INFO) << "Results file not found, assuming there are no results for this dataset yet.";
+      else {
+        TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_results_->data(), mmap_results_->length(),
+              false, &results_buf_, &results_ord_, &num_results_));
+      }
       return Status::OK();
     }
 
@@ -92,7 +96,10 @@ Prints records to stdout from record indices `start` to `finish`.
       AGDRecordReader bases_reader(bases_buf_.data(), chunksize);
       AGDRecordReader qualities_reader(qual_buf_.data(), chunksize);
       AGDRecordReader metadata_reader(meta_buf_.data(), chunksize);
-      AGDRecordReader results_reader(results_buf_.data(), chunksize);
+      AGDRecordReader* results_reader = nullptr;
+      if (mmap_results_)
+        results_reader = new AGDRecordReader(results_buf_.data(), chunksize);
+
       const format::AlignmentResult* agd_result;
 
       while (current <= end) {
@@ -103,7 +110,8 @@ Prints records to stdout from record indices `start` to `finish`.
           bases_reader = AGDRecordReader(bases_buf_.data(), chunksize);
           qualities_reader = AGDRecordReader(qual_buf_.data(), chunksize);
           metadata_reader = AGDRecordReader(meta_buf_.data(), chunksize);
-          results_reader = AGDRecordReader(results_buf_.data(), chunksize);
+          if (results_reader)
+            *results_reader = AGDRecordReader(results_buf_.data(), chunksize);
           continue;
         }
         OP_REQUIRES_OK(ctx, metadata_reader.GetRecordAt(chunk_offset, &data, &length));
@@ -115,13 +123,16 @@ Prints records to stdout from record indices `start` to `finish`.
         OP_REQUIRES_OK(ctx, qualities_reader.GetRecordAt(chunk_offset, &data, &length));
         fwrite(data, length, 1, stdout);
         printf("\n");
-        OP_REQUIRES_OK(ctx, results_reader.GetRecordAt(chunk_offset, &data, &length));
-        agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-        printf("%lld %04x %d\n", agd_result->location_, agd_result->flag_, agd_result->mapq_);
-        const char* cigardata = data + sizeof(format::AlignmentResult);
-        decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
-        fwrite(cigardata, cigarlen, 1, stdout);
-        printf("\n\n");
+        if (results_reader) {
+          OP_REQUIRES_OK(ctx, results_reader->GetRecordAt(chunk_offset, &data, &length));
+          agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
+          printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result->location_, agd_result->flag_, agd_result->mapq_, agd_result->next_location_);
+          const char* cigardata = data + sizeof(format::AlignmentResult);
+          decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
+          fwrite(cigardata, cigarlen, 1, stdout);
+          printf("\n\n");
+        } else 
+          printf("\n");
 
         current++;
       }
