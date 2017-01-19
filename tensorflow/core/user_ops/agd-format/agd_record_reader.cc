@@ -25,6 +25,36 @@ namespace tensorflow {
     InitializeIndex();
   }
 
+  AGDRecordReader AGDRecordReader::fromUncompressed(ResourceContainer<Data>* resource, bool *success) {
+    const char* a = nullptr;
+    auto d = resource->get();
+    auto d_sz = d->size();
+    auto d_data = d->data();
+    if (d_sz < sizeof(FileHeader)) {
+      LOG(ERROR) << "Received a chunk with less than " << sizeof(FileHeader) << " bytes needed for the header";
+      *success = false;
+      return AGDRecordReader(a, 0);
+    }
+
+    auto header = reinterpret_cast<const FileHeader*>(d_data);
+    int64_t num_records = header->last_ordinal - header->first_ordinal;
+    if (num_records < 1) {
+      LOG(ERROR) << "Receive a chunk with " << num_records << " records";
+      *success = false;
+      return AGDRecordReader(a, 0);
+    }
+
+    size_t minimum_index_size = (d_sz - sizeof(FileHeader)) * sizeof(RelativeIndex);
+    if (minimum_index_size < num_records) {
+      LOG(ERROR) << "Received invalid chunk. Header specifices " << num_records << " records, but payload is only " << minimum_index_size << " bytes";
+      *success = false;
+      return AGDRecordReader(a, 0);
+    }
+
+    *success = true;
+    return AGDRecordReader(d_data + sizeof(FileHeader), num_records);
+  }
+
   void AGDRecordReader::InitializeIndex() {
     absolute_index_.clear();
     size_t current = 0;
