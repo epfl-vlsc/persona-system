@@ -63,8 +63,10 @@ here](https://www.tensorflow.org/code/tensorflow/core/example/feature.proto).
 @@VarLenFeature
 @@FixedLenFeature
 @@FixedLenSequenceFeature
+@@SparseFeature
 @@parse_example
 @@parse_single_example
+@@parse_tensor
 @@decode_json_example
 
 ## Queues
@@ -79,11 +81,19 @@ Queues](../../how_tos/threading_and_queues/index.md).
 @@FIFOQueue
 @@PaddingFIFOQueue
 @@RandomShuffleQueue
+@@PriorityQueue
+
+## Conditional Accumulators
+
+@@ConditionalAccumulatorBase
+@@ConditionalAccumulator
+@@SparseConditionalAccumulator
 
 ## Dealing with the filesystem
 
 @@matching_files
 @@read_file
+@@write_file
 
 ## Input pipeline
 
@@ -121,23 +131,26 @@ single subgraph producing examples but you want to run it in *N* threads
 (where you increase *N* until it can keep the queue full).  Use
 [`batch_join`](#batch_join) or [`shuffle_batch_join`](#shuffle_batch_join)
 if you have *N* different subgraphs producing examples to batch and you
-want them run by *N* threads.
+want them run by *N* threads. Use `maybe_*` to enqueue conditionally.
 
 @@batch
+@@maybe_batch
 @@batch_join
+@@maybe_batch_join
 @@shuffle_batch
+@@maybe_shuffle_batch
 @@shuffle_batch_join
+@@maybe_shuffle_batch_join
 """
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from tensorflow.python.framework import common_shapes
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
-from tensorflow.python.framework import tensor_shape
 from tensorflow.python.lib.io import python_io
+from tensorflow.python.ops import gen_data_flow_ops
 from tensorflow.python.ops import gen_io_ops
 # go/tf-wildcard-import
 # pylint: disable=wildcard-import
@@ -203,174 +216,6 @@ def _restore_slice(file_pattern, tensor_name, shape_and_slice, tensor_type,
       preferred_shard, name=name)
 
 
-@ops.RegisterShape("Restore")
-def _RestoreShape(op):
-  """Shape function for Restore op."""
-  # Validate input shapes.
-  unused_file_pattern = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_tensor_name = op.inputs[1].get_shape().merge_with(
-      tensor_shape.scalar())
-  return [tensor_shape.unknown_shape()]
-
-
-@ops.RegisterShape("RestoreSlice")
-def _RestoreSliceShape(op):
-  """Shape function for RestoreSlice op."""
-  # Validate input shapes.
-  unused_file_pattern = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_tensor_name = op.inputs[1].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_shape_and_slice_shape = op.inputs[2].get_shape().merge_with(
-      tensor_shape.scalar())
-  # TODO(mrry): Attempt to parse the shape_and_slice value and use it
-  # to form the shape of the output.
-  return [tensor_shape.unknown_shape()]
-
-
-@ops.RegisterShape("Save")
-def _SaveShape(op):
-  """Shape function for Save op."""
-  # Validate input shapes.
-  unused_filename = op.inputs[0].get_shape().merge_with(tensor_shape.scalar())
-  data_count = len(op.inputs) - 2
-  unused_tensor_names_shape = op.inputs[1].get_shape().merge_with(
-      tensor_shape.vector(data_count))
-  return []
-
-
-@ops.RegisterShape("SaveSlices")
-def _SaveSlicesShape(op):
-  """Shape function for SaveSlices op."""
-  # Validate input shapes.
-  unused_filename = op.inputs[0].get_shape().merge_with(tensor_shape.scalar())
-  data_count = len(op.inputs) - 3
-  unused_tensor_names_shape = op.inputs[1].get_shape().merge_with(
-      tensor_shape.vector(data_count))
-  unused_shapes_and_slices_shape = op.inputs[2].get_shape().merge_with(
-      tensor_shape.vector(data_count))
-  # TODO(mrry): Attempt to parse the shapes_and_slices values and use
-  # them to constrain the shape of the remaining inputs.
-  return []
-
-
-@ops.RegisterShape("ShardedFilename")
-def _ShardedFilenameShape(op):
-  """Shape function for ShardedFilename op."""
-  # Validate input shapes.
-  unused_basename_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_shard_shape = op.inputs[1].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_num_shards_shape = op.inputs[2].get_shape().merge_with(
-      tensor_shape.scalar())
-  return [tensor_shape.scalar()]
-
-
-@ops.RegisterShape("ShardedFilespec")
-def _ShardedFilespecShape(op):
-  """Shape function for ShardedFilespec op."""
-  # Validate input shapes.
-  unused_basename_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_num_shards_shape = op.inputs[1].get_shape().merge_with(
-      tensor_shape.scalar())
-  return [tensor_shape.scalar()]
-
-class WriterBase(object):
-  """Base class for different Writer types, that write a record every step. 
-
-  Writers take values and write them to a specific file.
-  """
-
-  def __init__(self, writer_ref, supports_serialize=False):
-    """Creates a new WriterBase.
-
-    Args:
-      reader_ref: The operation that implements the reader.
-      supports_serialize: True if the writer implementation can
-        serialize its state.
-    """
-    self._writer_ref = writer_ref
-    self._supports_serialize = supports_serialize
-
-  @property
-  def writer_ref(self):
-    """Op that implements the writer."""
-    return self._writer_ref
-
-  def write(self, values, key, meta, name=None):
-    """Instructs the Writer to write values to file.
-
-    Args:
-      values: List of tensors needed by the writer to 
-      write to file.
-      name: A name for the operation (optional).
-      meta: Metadata handles the writer interface may need.
-
-    """
-    return gen_io_ops.writer_write(self._writer_ref, values, key, meta, name=name)
-
-  def done(self, name=None):
-    """Instructs the Writer to complete writing a file. 
-
-    Args:
-      name: A name for the operation (optional).
-
-    """
-    return gen_io_ops.writer_done(self._writer_ref, name=name)
-
-  def num_records_produced(self, name=None):
-    """Returns the number of records this writer has written.
-
-    This is the same as the number of Write executions that have
-    succeeded.
-
-    Args:
-      name: A name for the operation (optional).
-
-    Returns:
-      An int64 Tensor.
-
-    """
-    return gen_io_ops.writer_num_records_produced(self._writer_ref, name=name)
-
-  def serialize_state(self, name=None):
-    """Produce a string tensor that encodes the state of a writer.
-
-    Not all writers support being serialized, so this can produce an
-    Unimplemented error.
-
-    Args:
-      name: A name for the operation (optional).
-
-    Returns:
-      A string Tensor.
-    """
-    return gen_io_ops._writer_serialize_state(self._writer_ref, name=name)
-
-  def restore_state(self, state, name=None):
-    """Restore a writer to a previously saved state.
-
-    Not all Writers support being restored, so this can produce an
-    Unimplemented error.
-
-    Args:
-      state: A string Tensor.
-        Result of a SerializeState of a Writer with matching type.
-      name: A name for the operation (optional).
-
-    Returns:
-      The created Operation.
-    """
-    return gen_io_ops._writer_restore_state(self._writer_ref, state, name=name)
-
-  @property
-  def supports_serialize(self):
-    """Whether the Reader implementation can serialize its state."""
-    return self._supports_serialize
-
 class ReaderBase(object):
   """Base class for different Reader types, that produce a record every step.
 
@@ -423,32 +268,13 @@ class ReaderBase(object):
       queue_ref = queue
     else:
       queue_ref = queue.queue_ref
-    return gen_io_ops._reader_read(self._reader_ref, queue_ref, name=name)
-
-  def read_batch(self, queue, name=None):
-    """Returns the next record batch (key, value pair) produced by a reader.
-    Depends on the reader interface to give the approprate batch size 
-    (tensor shape).
-
-    Will dequeue a work unit from queue if necessary (e.g. when the
-    Reader needs to start reading from a new file since it has
-    finished with the previous file).
-
-    Args:
-      queue: A Queue or a mutable string Tensor representing a handle
-        to a Queue, with string work items.
-      name: A name for the operation (optional).
-
-    Returns:
-      A tuple of Tensors (key, value).
-      key: A string scalar Tensor.
-      value: A string 1D Tensor.
-    """
-    if isinstance(queue, ops.Tensor):
-      queue_ref = queue
+    if self._reader_ref.dtype == dtypes.resource:
+      return gen_io_ops._reader_read_v2(self._reader_ref, queue_ref, name=name)
     else:
-      queue_ref = queue.queue_ref
-    return gen_io_ops.reader_read_batch(self._reader_ref, queue_ref, name=name)
+      # For compatibility with pre-resource queues, create a ref(string) tensor
+      # which can be looked up as the same queue by a resource manager.
+      old_queue_op = gen_data_flow_ops._fake_queue(queue_ref)
+      return gen_io_ops._reader_read(self._reader_ref, old_queue_op, name=name)
 
   def read_up_to(self, queue, num_records,  # pylint: disable=invalid-name
                  name=None):
@@ -474,10 +300,19 @@ class ReaderBase(object):
       queue_ref = queue
     else:
       queue_ref = queue.queue_ref
-    return gen_io_ops._reader_read_up_to(self._reader_ref,
-                                         queue_ref,
-                                         num_records,
-                                         name=name)
+    if self._reader_ref.dtype == dtypes.resource:
+      return gen_io_ops._reader_read_up_to_v2(self._reader_ref,
+                                              queue_ref,
+                                              num_records,
+                                              name=name)
+    else:
+      # For compatibility with pre-resource queues, create a ref(string) tensor
+      # which can be looked up as the same queue by a resource manager.
+      old_queue_op = gen_data_flow_ops._fake_queue(queue_ref)
+      return gen_io_ops._reader_read_up_to_v2(self._reader_ref,
+                                              old_queue_op,
+                                              num_records,
+                                              name=name)
 
   def num_records_produced(self, name=None):
     """Returns the number of records this reader has produced.
@@ -492,7 +327,12 @@ class ReaderBase(object):
       An int64 Tensor.
 
     """
-    return gen_io_ops._reader_num_records_produced(self._reader_ref, name=name)
+    if self._reader_ref.dtype == dtypes.resource:
+      return gen_io_ops._reader_num_records_produced_v2(self._reader_ref,
+                                                        name=name)
+    else:
+      return gen_io_ops._reader_num_records_produced(self._reader_ref,
+                                                     name=name)
 
   def num_work_units_completed(self, name=None):
     """Returns the number of work units this reader has finished processing.
@@ -503,8 +343,12 @@ class ReaderBase(object):
     Returns:
       An int64 Tensor.
     """
-    return gen_io_ops._reader_num_work_units_completed(self._reader_ref,
-                                                       name=name)
+    if self._reader_ref.dtype == dtypes.resource:
+      return gen_io_ops._reader_num_work_units_completed_v2(self._reader_ref,
+                                                            name=name)
+    else:
+      return gen_io_ops._reader_num_work_units_completed(self._reader_ref,
+                                                         name=name)
 
   def serialize_state(self, name=None):
     """Produce a string tensor that encodes the state of a reader.
@@ -518,7 +362,10 @@ class ReaderBase(object):
     Returns:
       A string Tensor.
     """
-    return gen_io_ops._reader_serialize_state(self._reader_ref, name=name)
+    if self._reader_ref.dtype == dtypes.resource:
+      return gen_io_ops._reader_serialize_state_v2(self._reader_ref, name=name)
+    else:
+      return gen_io_ops._reader_serialize_state(self._reader_ref, name=name)
 
   def restore_state(self, state, name=None):
     """Restore a reader to a previously saved state.
@@ -534,7 +381,12 @@ class ReaderBase(object):
     Returns:
       The created Operation.
     """
-    return gen_io_ops._reader_restore_state(self._reader_ref, state, name=name)
+    if self._reader_ref.dtype == dtypes.resource:
+      return gen_io_ops._reader_restore_state_v2(
+          self._reader_ref, state, name=name)
+    else:
+      return gen_io_ops._reader_restore_state(
+          self._reader_ref, state, name=name)
 
   @property
   def supports_serialize(self):
@@ -550,17 +402,19 @@ class ReaderBase(object):
     Returns:
       The created Operation.
     """
-    return gen_io_ops._reader_reset(self._reader_ref, name=name)
+    if self._reader_ref.dtype == dtypes.resource:
+      return gen_io_ops._reader_reset_v2(self._reader_ref, name=name)
+    else:
+      return gen_io_ops._reader_reset(self._reader_ref, name=name)
 
 
-ops.NoGradient("ReaderRead")
-ops.NoGradient("ReaderReadBatch")
-ops.NoGradient("ReaderReadUpTo")
-ops.NoGradient("ReaderNumRecordsProduced")
-ops.NoGradient("ReaderNumWorkUnitsCompleted")
-ops.NoGradient("ReaderSerializeState")
-ops.NoGradient("ReaderRestoreState")
-ops.NoGradient("ReaderReset")
+ops.NotDifferentiable("ReaderRead")
+ops.NotDifferentiable("ReaderReadUpTo")
+ops.NotDifferentiable("ReaderNumRecordsProduced")
+ops.NotDifferentiable("ReaderNumWorkUnitsCompleted")
+ops.NotDifferentiable("ReaderSerializeState")
+ops.NotDifferentiable("ReaderRestoreState")
+ops.NotDifferentiable("ReaderReset")
 
 
 class WholeFileReader(ReaderBase):
@@ -578,11 +432,11 @@ class WholeFileReader(ReaderBase):
     Args:
       name: A name for the operation (optional).
     """
-    rr = gen_io_ops._whole_file_reader(name=name)
+    rr = gen_io_ops._whole_file_reader_v2(name=name)
     super(WholeFileReader, self).__init__(rr, supports_serialize=True)
 
 
-ops.NoGradient("WholeFileReader")
+ops.NotDifferentiable("WholeFileReader")
 
 
 class TextLineReader(ReaderBase):
@@ -601,12 +455,12 @@ class TextLineReader(ReaderBase):
         to skip from the beginning of every file.
       name: A name for the operation (optional).
     """
-    rr = gen_io_ops._text_line_reader(skip_header_lines=skip_header_lines,
-                                      name=name)
+    rr = gen_io_ops._text_line_reader_v2(skip_header_lines=skip_header_lines,
+                                         name=name)
     super(TextLineReader, self).__init__(rr)
 
 
-ops.NoGradient("TextLineReader")
+ops.NotDifferentiable("TextLineReader")
 
 
 class FixedLengthRecordReader(ReaderBase):
@@ -626,13 +480,13 @@ class FixedLengthRecordReader(ReaderBase):
       footer_bytes: An optional int. Defaults to 0.
       name: A name for the operation (optional).
     """
-    rr = gen_io_ops._fixed_length_record_reader(
+    rr = gen_io_ops._fixed_length_record_reader_v2(
         record_bytes=record_bytes, header_bytes=header_bytes,
         footer_bytes=footer_bytes, name=name)
     super(FixedLengthRecordReader, self).__init__(rr)
 
 
-ops.NoGradient("FixedLengthRecordReader")
+ops.NotDifferentiable("FixedLengthRecordReader")
 
 
 class TFRecordReader(ReaderBase):
@@ -649,17 +503,15 @@ class TFRecordReader(ReaderBase):
       name: A name for the operation (optional).
       options: A TFRecordOptions object (optional).
     """
-    compression_type_string = ""
-    if (options and
-        options.compression_type == python_io.TFRecordCompressionType.ZLIB):
-      compression_type_string = "ZLIB"
+    compression_type = python_io.TFRecordOptions.get_compression_type_string(
+        options)
 
-    rr = gen_io_ops._tf_record_reader(name=name,
-                                      compression_type=compression_type_string)
+    rr = gen_io_ops._tf_record_reader_v2(
+        name=name, compression_type=compression_type)
     super(TFRecordReader, self).__init__(rr)
 
 
-ops.NoGradient("TFRecordReader")
+ops.NotDifferentiable("TFRecordReader")
 
 
 class IdentityReader(ReaderBase):
@@ -677,102 +529,8 @@ class IdentityReader(ReaderBase):
     Args:
       name: A name for the operation (optional).
     """
-    rr = gen_io_ops._identity_reader(name=name)
+    rr = gen_io_ops._identity_reader_v2(name=name)
     super(IdentityReader, self).__init__(rr, supports_serialize=True)
 
 
-ops.NoGradient("IdentityReader")
-
-
-ops.RegisterShape("FixedLengthRecordReader")(common_shapes.scalar_shape)
-ops.RegisterShape("IdentityReader")(common_shapes.scalar_shape)
-ops.RegisterShape("TextLineReader")(common_shapes.scalar_shape)
-ops.RegisterShape("WholeFileReader")(common_shapes.scalar_shape)
-ops.RegisterShape("TFRecordReader")(common_shapes.scalar_shape)
-
-
-@ops.RegisterShape("ReaderNumRecordsProduced")
-@ops.RegisterShape("ReaderNumWorkUnitsCompleted")
-@ops.RegisterShape("ReaderSerializeState")
-def _ReaderScalarShape(op):
-  """Shape function for ops that transform a reader to a scalar."""
-  unused_handle_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  return [tensor_shape.scalar()]
-
-
-@ops.RegisterShape("ReaderRead")
-def _ReaderReadShape(op):
-  """Shape function for the ReaderBase.Read op."""
-  unused_handle_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_queue_shape = op.inputs[1].get_shape().merge_with(
-      tensor_shape.scalar())
-  return [tensor_shape.scalar(), tensor_shape.scalar()]
-
-@ops.RegisterShape("ReaderReadBatch")
-def _ReaderReadBatchShape(op):
-  """Shape function for the ReaderBase.Read op."""
-  unused_handle_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_queue_shape = op.inputs[1].get_shape().merge_with(
-      tensor_shape.scalar())
-  #return [tensor_shape.scalar(), tensor_shape.vector(op.get_attr("batch_size"))]
-  return [tensor_shape.scalar(), tensor_shape.unknown_shape()]
-
-@ops.RegisterShape("ReaderReadUpTo")
-def _ReaderReadUpToShape(_):
-  """Shape function for the ReaderBase.ReadUpTo op."""
-  return [tensor_shape.unknown_shape(ndims=1),
-          tensor_shape.unknown_shape(ndims=1)]
-
-
-@ops.RegisterShape("ReaderReset")
-def _ReaderResetShape(op):
-  """Shape function for the ReaderBase.Reset op."""
-  unused_handle_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  return []
-
-
-@ops.RegisterShape("ReaderRestoreState")
-def _ReaderRestoreStateShape(op):
-  """Shape function for the ReaderBase.Restore op."""
-  unused_handle_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  unused_state_shape = op.inputs[1].get_shape().merge_with(
-      tensor_shape.scalar())
-  return []
-
-
-@ops.RegisterShape("ReadFile")
-def _ReadFileShape(op):
-  """Shape function for the ReadFile op."""
-  return [op.inputs[0].get_shape().merge_with(tensor_shape.scalar())]
-
-
-@ops.RegisterShape("MatchingFiles")
-def _MatchingFilesShape(op):
-  """Shape function for the MatchingFiles op."""
-  unused_patern_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  return [tensor_shape.unknown_shape(ndims=1)]
-
-
-@ops.RegisterShape("WriterWrite")
-@ops.RegisterShape("WriterWriteBatch")
-def _WriterWriteShape(op):
-  """Shape function for the WriterBase.Write op."""
-  return []
-
-@ops.RegisterShape("WriterDone")
-def _WriterDoneShape(op):
-  """Shape function for the WriterBase.Done op."""
-  return []
-
-@ops.RegisterShape("WriterNumRecordsProduced")
-def _WriterScalarShape(op):
-  """Shape function for ops that transform a reader to a scalar."""
-  unused_handle_shape = op.inputs[0].get_shape().merge_with(
-      tensor_shape.scalar())
-  return [tensor_shape.scalar()]
+ops.NotDifferentiable("IdentityReader")
