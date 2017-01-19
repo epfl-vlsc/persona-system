@@ -141,20 +141,20 @@ def _make_read_pipeline(key_batch, local_directory, mmap_pool_handle):
         metas.append(string_ops.string_join([k, suffix_sep, meta_suffix]))
         results.append(string_ops.string_join([k, suffix_sep, result_suffix]))
 
-    reads, names = uop.FileMMap(filename=bases[0], handle=mmap_pool_handle, local_prefix=local_directory, synchronous=True, name="base_mmap")
+    reads, names = uop.FileMMap(filename=bases[0], handle=mmap_pool_handle, local_prefix=local_directory, synchronous=False, name="base_mmap")
 
     for b in bases[1:]:
         reads, names = uop.StagedFileMap(filename=b, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
-                                                        local_prefix=local_directory, synchronous=True, name="base_staged_mmap")
+                                                        local_prefix=local_directory, synchronous=False, name="base_staged_mmap")
     for q in quals:
         reads, names = uop.StagedFileMap(filename=q, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
-                                                        local_prefix=local_directory, synchronous=True, name="qual_staged_mmap")
+                                                        local_prefix=local_directory, synchronous=False, name="qual_staged_mmap")
     for m in metas:
         reads, names = uop.StagedFileMap(filename=m, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
-                                                        local_prefix=local_directory, synchronous=True, name="meta_staged_mmap")
+                                                        local_prefix=local_directory, synchronous=False, name="meta_staged_mmap")
     for r in results:
         reads, names = uop.StagedFileMap(filename=r, upstream_files=reads, upstream_names=names, handle=mmap_pool_handle,
-                                                        local_prefix=local_directory, synchronous=True, name="result_staged_mmap")
+                                                        local_prefix=local_directory, synchronous=False, name="result_staged_mmap")
 
     base_reads, qual_reads, meta_reads, result_reads = tf.split(0, 4, reads)
     return base_reads, qual_reads, meta_reads, result_reads
