@@ -27,6 +27,7 @@ from tensorflow.python.ops import io_ops
 
 import os
 from tensorflow.python.user_ops import agd_merge_sort
+from tensorflow.python.user_ops import agd_mark_duplicates
 
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):
@@ -582,6 +583,27 @@ def _AGDCephWriteColumnsShape(op):
     scalar_shape = op.inputs[i].get_shape()
     _assert_scalar(scalar_shape)
   return [tensor_shape.scalar(), tensor_shape.scalar()]
+
+### Mark Dups ###
+
+_md_str = "AGDMarkDuplicates"
+def AGDMarkDuplicates(results_handle, num_records, buffer_list_pool, name=None):
+  return gen_user_ops.agd_mark_duplicates(buffer_list_pool=buffer_list_pool,
+                                        results_handle=results_handle,
+                                        num_records=num_records,
+                                        name=name)
+
+@ops.RegisterShape(_md_str)
+def _AGDMarkDuplicates(op):
+  bl_handle = op.inputs[0].get_shape()
+  r_handle = op.inputs[1].get_shape()
+  num_recs = op.inputs[2].get_shape()
+
+  _assert_vec(bl_handle, 2)
+  _assert_vec(r_handle, 2)
+  _assert_scalar(num_recs)
+
+  return [tensor_shape.vector(2)] 
 
 ### MergeSort Ops ###
 

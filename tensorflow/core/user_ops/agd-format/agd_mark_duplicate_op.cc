@@ -29,8 +29,8 @@ namespace tensorflow {
   REGISTER_OP("AGDMarkDuplicates")
   .Input("buffer_list_pool: Ref(string)")
   .Input("results_handle: Ref(string)")
+  .Input("num_records: int32")
   .Output("marked_results: string")
-  .Output("num_records: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Mark duplicate reads/pairs that map to the same location. 
@@ -250,6 +250,7 @@ trading memory for faster execution.
               results_builder.AppendAlignmentResult(*mate, string(mate_cigar, mate_cigar_len));
             } else { 
               // found, mark a dup
+              LOG(INFO) << "omg we found a duplicate";
               OP_REQUIRES_OK(ctx, MarkDuplicate(result, result_cigar, result_cigar_len, results_builder));
               OP_REQUIRES_OK(ctx, MarkDuplicate(mate, mate_cigar, mate_cigar_len, results_builder));
             }
