@@ -27,7 +27,6 @@ from tensorflow.python.ops import io_ops
 
 import os
 from tensorflow.python.user_ops import agd_merge_sort
-from tensorflow.python.user_ops import agd_mark_duplicates
 
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):

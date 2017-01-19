@@ -116,7 +116,5 @@ def agd_mark_duplicates_local(file_keys, local_directory, outdir=None, parallel_
 
     print("all written keys: {}".format(all_written_keys))
     return all_written_keys
-
-  
   
   
