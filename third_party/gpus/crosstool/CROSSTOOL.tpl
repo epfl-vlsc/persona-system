@@ -54,16 +54,11 @@ toolchain {
   # Use "-std=c++11" for nvcc. For consistency, force both the host compiler
   # and the device compiler to use "-std=c++11".
   cxx_flag: "-std=c++11"
+  linker_flag: "-Wl,-no-as-needed"
   linker_flag: "-lstdc++"
   linker_flag: "-B/usr/bin/"
 
-  # TODO(bazel-team): In theory, the path here ought to exactly match the path
-  # used by gcc. That works because bazel currently doesn't track files at
-  # absolute locations and has no remote execution, yet. However, this will need
-  # to be fixed, maybe with auto-detection?
-  cxx_builtin_include_directory: "/usr/lib/gcc/"
-  cxx_builtin_include_directory: "/usr/local/include"
-  cxx_builtin_include_directory: "/usr/include"
+%{gcc_host_compiler_includes}
   tool_path { name: "gcov" path: "/usr/bin/gcov" }
 
   # C(++) compiles invoke the compiler (as that is the one knowing where
@@ -126,7 +121,7 @@ toolchain {
   # linker_flag: "-Wl,--detect-odr-violations"
 
   # Include directory for cuda headers.
-  cxx_builtin_include_directory: "/usr/local/cuda%{cuda_version}/include"
+  cxx_builtin_include_directory: "%{cuda_include_path}"
 
   compilation_mode_flags {
     mode: DBG
@@ -225,7 +220,7 @@ toolchain {
   linker_flag: "-no-canonical-prefixes"
 
   # Include directory for cuda headers.
-  cxx_builtin_include_directory: "/usr/local/cuda%{cuda_version}/include"
+  cxx_builtin_include_directory: "%{cuda_include_path}"
 
   compilation_mode_flags {
     mode: DBG
