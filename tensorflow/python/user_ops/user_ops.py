@@ -28,7 +28,7 @@ from tensorflow.python.framework import ops, tensor_shape, common_shapes
 from tensorflow.python.ops import io_ops
 
 import os
-from tensorflow.python.user_ops import agd_merge_sort
+#from tensorflow.python.user_ops import agd_merge_sort
 
 # default is 2 for the shared resource ref
 def _assert_matrix(shape, column_dim=2):
@@ -213,7 +213,7 @@ def _AGDTesterShape(op):
   _assert_scalar(op.inputs[2].get_shape())
 #  return [tensor_shape.vector(2), tensor_shape.scalar()]
   return [op.inputs[1].get_shape(), op.inputs[2].get_shape()]
-
+"""
 _sw_str = "SAMWriter"
 ops.NoGradient("SAMWriter")
 class SAMWriter(io_ops.WriterBase):
@@ -234,7 +234,7 @@ class SAMAsyncWriter(io_ops.WriterBase):
             num_buffers=num_buffers, buffer_size=buffer_size)
         super(SAMAsyncWriter, self).__init__(ww)
 ops.RegisterShape("SAMAsyncWriter")(common_shapes.scalar_shape)
-
+"""
 _gi_str = "GenomeIndex"
 ops.NoGradient(_gi_str)
 def GenomeIndex(index_path, name=None):

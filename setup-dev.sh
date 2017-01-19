@@ -34,7 +34,7 @@ prep_dirs() {
         sudo easy_install pip
     else
         # assume Ubuntu
-        sudo apt-get -y install python3-pip python3-dev python3-ipaddr bc python-virtualenv
+        sudo apt-get -y install python3-pip python3-dev bc python-virtualenv
     fi
     [ ! -e $build_virtualenv_dir ] || rm -rf $build_virtualenv_dir
     [ ! -e $dev_dir ] || rm -rf $dev_dir

@@ -134,6 +134,8 @@ if you have *N* different subgraphs producing examples to batch and you
 want them run by *N* threads. Use `maybe_*` to enqueue conditionally.
 
 @@batch
+@@batch_pdq
+@@batch_join_pdq
 @@maybe_batch
 @@batch_join
 @@maybe_batch_join
