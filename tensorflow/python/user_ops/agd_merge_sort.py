@@ -382,7 +382,6 @@ def _make_processed_records(ready_read_records, buffer_pool):
                                    file_handle=column,
                                    name="column_agd_reader") for column in columns_split))
 
-
     for interm_columns in ready_read_records:
         readss, num_recordss, first_ordinalss = process_ready_row(interm_columns=interm_columns)
         yield [nr[0] for nr in num_recordss], tf.pack(readss)
@@ -403,10 +402,9 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
     ready_read_records = _make_merge_read_records(key_outs=key_outs, in_dir=in_dir,
                                                   mmap_pool_handle=mapped_file_pool, order_by=order_by)
 
-    bp = uop.BufferPool(bound=False, name="local_read_merge_buffer_pool")
-    processed_records = _make_processed_records(ready_read_records=ready_read_records, buffer_pool=bp)
+    # Note: we are skippng the processing part here because we just use the big buffers directly
 
-    merge_ready_queue = train.input.batch_join_pdq([p for p in processed_records],
+    merge_ready_queue = train.input.batch_join_pdq([(tf.pack(p),) for p in ready_read_records],
                                                    num_dq_ops=1, batch_size=1, name="merge_ready_queue")
     q = data_flow_ops.FIFOQueue(capacity=100000, # big because who cares
                                 dtypes=[dtypes.int32, dtypes.string],
@@ -414,19 +412,17 @@ def local_merge_pipeline(intermediate_keys, in_dir, record_name, outdir=None, ch
                                 name="merge_output_queue")
 
     blp = uop.BufferListPool(bound=False, name="local_read_merge_buffer_list_pool")
-    num_records, chunk_group_handles = merge_ready_queue[0]
+    chunk_group_handles = merge_ready_queue[0]
 
     if order_by == location_value:
         merge_op = uop.AGDMerge(chunk_size=chunk_size,
                                 buffer_list_pool=blp,
-                                num_records=num_records,
                                 chunk_group_handles=chunk_group_handles,
                                 output_buffer_queue_handle=q.queue_ref,
                                 name="agd_local_merge")
     else:
         merge_op = uop.AGDMergeMetadata(chunk_size=chunk_size,
                                         buffer_list_pool=blp,
-                                        num_records=num_records,
                                         chunk_group_handles=chunk_group_handles,
                                         output_buffer_queue_handle=q.queue_ref,
                                         name="agd_local_merge_metadata")

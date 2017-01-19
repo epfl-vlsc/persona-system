@@ -24,6 +24,10 @@ namespace tensorflow {
     AGDRecordReader(ResourceContainer<Data>* resource, size_t num_records);
     AGDRecordReader(const char* resource, size_t num_records);
 
+    // This constructor is yet more technical debt we'll have to pay back eventually
+    // It is used for the merge op, and assumes that it gets data with a header
+    static AGDRecordReader fromUncompressed(ResourceContainer<Data> *resource, bool *success);
+
     void Reset();
 
     Status GetNextRecord(const char** data, size_t* size);

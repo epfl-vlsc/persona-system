@@ -101,7 +101,6 @@ namespace tensorflow {
   .Attr("chunk_size: int >= 1")
   .Input("buffer_list_pool: Ref(string)")
   .Input("output_buffer_queue_handle: Ref(string)")
-  .Input("num_records: int32")
   .Input("chunk_group_handles: string") // a record of NUM_SUPER_CHUNKS x NUM_COLUMNS x 2 (2 for reference)
   .Doc(R"doc(
 Merges multiple input chunks into chunks based on `chunk_size`
@@ -110,7 +109,6 @@ Only supports a single-stage of merging, i.e. this will not write out to an arbi
 Each buffer list dequeued will have the same number of elements as the NUM_COLUMNS dimension for chunk_group_handles
 
 chunk_size: the size, in number of records, of the output chunks
-num_records: vector of number of records
 *_handles: matrix of processed handles
 output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferList instance handles.
 )doc");
@@ -130,14 +128,12 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
 
-      const Tensor *chunk_group_handles_t, *num_records_t;
+      const Tensor *chunk_group_handles_t;
       OP_REQUIRES_OK(ctx, ctx->input("chunk_group_handles", &chunk_group_handles_t));
-      OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto chunk_group_shape = chunk_group_handles_t->shape();
       auto num_super_chunks = chunk_group_shape.dim_size(0);
       auto num_columns = chunk_group_shape.dim_size(1);
       auto chunk_group_handles = chunk_group_handles_t->tensor<string, 3>();
-      auto num_records = num_records_t->vec<int32>();
 
       auto rsrc_mgr = ctx->resource_manager();
 
@@ -149,18 +145,17 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
 
       releasers.reserve(num_super_chunks * num_columns);
       columns.reserve(num_super_chunks);
+      bool success = false;
       ResourceContainer<Data> *data;
-      Data *data_p;
 
       decltype(num_columns) column;
       for (decltype(num_super_chunks) super_chunk = 0; super_chunk < num_super_chunks; ++super_chunk) {
-        auto super_chunk_record_count = num_records(super_chunk);
         column = 0;
         // First, we look up the results column
         OP_REQUIRES_OK(ctx, rsrc_mgr->Lookup(chunk_group_handles(super_chunk, column, 0),
                                              chunk_group_handles(super_chunk, column, 1), &data));
-        data_p = data->get();
-        AGDRecordReader results_column(data_p->data(), super_chunk_record_count);
+        AGDRecordReader results_column { AGDRecordReader::fromUncompressed(data, &success) };
+        OP_REQUIRES(ctx, success, Internal("Unable to parse results column fromUncompressed for Merge"));
         releasers.push_back(move(decltype(releasers)::value_type(data, resource_releaser)));
 
         // Then we look up the rest of the columns
@@ -169,8 +164,9 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
         for (column = 1; column < num_columns; ++column) {
           OP_REQUIRES_OK(ctx, rsrc_mgr->Lookup(chunk_group_handles(super_chunk, column, 0),
                                                chunk_group_handles(super_chunk, column, 1), &data));
-          data_p = data->get();
-          other_columns.push_back(AGDRecordReader(data_p->data(), super_chunk_record_count));
+          AGDRecordReader other_column { AGDRecordReader::fromUncompressed(data, &success) };
+          OP_REQUIRES(ctx, success, Internal("Unable to parse other column fromUncompressed for Merge"));
+          other_columns.push_back(move(other_column));
           releasers.push_back(move(decltype(releasers)::value_type(data, resource_releaser)));
         }
 
