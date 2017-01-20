@@ -93,6 +93,11 @@ namespace format {
     int64_t template_length_ = 0; // signed distance from leftmost mapped base to rightmost mapped base
 
     void convertFromSNAP(const SingleAlignmentResult &result, const int flag);
+    std::string ToString() const {
+      return string("flag: ") + std::to_string(flag_) + " mapq: " + std::to_string(mapq_) +
+        " location: " + std::to_string(location_) + " nextLocation: " + std::to_string(next_location_) +
+        "templateLen: " + std::to_string(template_length_);
+    }
    };
  
   // a bunch of helper functions for flags (currently equivalent to the SAM format)

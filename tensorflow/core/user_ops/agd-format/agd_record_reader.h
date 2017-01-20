@@ -35,6 +35,10 @@ namespace tensorflow {
 
     Status GetRecordAt(size_t index, const char** data, size_t* size);
 
+    size_t GetCurrentIndex() {
+      return cur_record_;
+    }
+
   private:
     const format::RelativeIndex *index_;
     const char *data_, *cur_data_;
