@@ -215,12 +215,14 @@ namespace snap_wrapper {
           result.status[i] = NotFound;
           result.location[i] = InvalidGenomeLocation;
           finalLocations[i] = InvalidGenomeLocation;
+          results[i].location_ = finalLocations[i];
         } else {
           if (addFrontClipping > 0) {
             cumulativePositiveAddFrontClipping[i] += addFrontClipping;
             read.setAdditionalFrontClipping(cumulativePositiveAddFrontClipping[i]);
           }
           finalLocations[i] += addFrontClipping;
+          results[i].location_ = finalLocations[i]; //update in the result itself
         }
         if (i == 1) // if i is 1 we need to redo the first one because the second has a location change
           i = -1;
@@ -229,6 +231,7 @@ namespace snap_wrapper {
     }
 
     // Loop again now that all the adjustments worked correctly
+    // TODO put an assert check here to make sure the read pair is properly formed
     for (size_t i = 0; i < 2; ++i) {
       result_column.AppendAlignmentResult(results[i], cigars[i]);
     }

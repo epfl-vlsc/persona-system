@@ -28,7 +28,7 @@ namespace tensorflow {
 
   REGISTER_OP("AGDMarkDuplicates")
   .Input("buffer_list_pool: Ref(string)")
-  .Input("results_handle: Ref(string)")
+  .Input("results_handle: string")
   .Input("num_records: int32")
   .Output("marked_results: string")
   .SetIsStateful()
@@ -57,10 +57,12 @@ trading memory for faster execution.
   public:
     AGDMarkDuplicatesOp(OpKernelConstruction *context) : OpKernel(context) {
       signature_map_ = new SignatureMap();
-      signature_map_->set_deleted_key(Signature());
+      Signature sig;
+      signature_map_->set_empty_key(sig);
     }
 
     ~AGDMarkDuplicatesOp() {
+      LOG(INFO) << "Found a total of " << num_dups_found_ << " duplicates.";
       core::ScopedUnref unref_listpool(bufferlist_pool_);
       delete signature_map_;
     }
@@ -95,7 +97,7 @@ trading memory for faster execution.
     }
    
     Status CalculatePosition(const AlignmentResult *result, const char* cigar, size_t cigar_len,
-        int32_t &position) {
+        uint32_t &position) {
       // figure out the 5' position
       // the result->location is already genome relative, we shouldn't have to worry 
       // about negative index after clipping, but double check anyway
@@ -108,7 +110,8 @@ trading memory for faster execution.
         size_t len = parseNextOp(cigar, op, op_len);
         cigar += len;
         cigar_len -= len;         
-        LOG(INFO) << "cigar was " << op_len << " " << op;
+        //LOG(INFO) << "cigar was " << op_len << " " << op;
+        //LOG(INFO) << "cigar len is now: " << cigar_len;
         if (op == 'M' || op == '=' || op == 'X')
         {
           ralen += op_len;
@@ -133,15 +136,17 @@ trading memory for faster execution.
           return Internal("Unknown opcode ", string(&op, 1), " in CIGAR string: ", string(cigar, cigar_len));
         }
       }
+      //LOG(INFO) << "the location is: " << result->location_;
       if (IsForwardStrand(result)) {
-        position = (int32_t)(result->location_ - sclip);
+        position = static_cast<uint32_t>(result->location_ - sclip);
       } else {
         // im not 100% sure this is correct ...
         // but if it goes for every signature then it shouldn't matter
-        position = (int32_t)(result->location_ + ralen + eclip - 1);
+        position = static_cast<uint32_t>(result->location_ + ralen + eclip - 1);
       }
+      //LOG(INFO) << "position is now: " << position;
       if (position < 0)
-        return Internal("A position after applying clipping was < 0!");
+        return Internal("A position after applying clipping was < 0! --> ", position);
       return Status::OK();
     }
 
@@ -162,6 +167,7 @@ trading memory for faster execution.
       sig.is_forward = IsForwardStrand(result);
       TF_RETURN_IF_ERROR(CalculatePosition(result, cigar, cigar_len, sig.position));
 
+      //LOG(INFO) << "sig is: " << sig.ToString();
       // attempt to find the signature
       auto sig_map_iter = signature_map_->find(sig);
       if (sig_map_iter == signature_map_->end()) { // not found, insert it
@@ -171,6 +177,7 @@ trading memory for faster execution.
         return Status::OK();
       } else { 
         // found, mark a dup
+        num_dups_found_++;
         return MarkDuplicate(result, cigar, cigar_len, builder);
       }
     }
@@ -197,7 +204,7 @@ trading memory for faster execution.
       auto output_bufferlist = output_bufferlist_container->get();
       output_bufferlist->resize(1);
       AlignmentResultBuilder results_builder;
-      results_builder.set_buffer_pair(&(*output_bufferlist)[3]);
+      results_builder.set_buffer_pair(&(*output_bufferlist)[0]);
 
 
       const AlignmentResult* result;
@@ -218,13 +225,17 @@ trading memory for faster execution.
             continue;
           }
 
+          LOG(INFO) << "processing mapped orphan at " << result->location_;
           OP_REQUIRES_OK(ctx, ProcessOrphan(result, result_cigar, result_cigar_len, results_builder));
 
         } else { // we have a pair, get the mate
           OP_REQUIRES_OK(ctx, results_reader.GetNextResult(&mate, &mate_cigar, &mate_cigar_len));
 
           OP_REQUIRES(ctx, (result->next_location_ == mate->location_) && (mate->next_location_ == result->location_),
-              Internal("Malformed pair or the data is not in metadata (QNAME) order"));
+              Internal("Malformed pair or the data is not in metadata (QNAME) order. At index: ", results_reader.GetCurrentIndex()-1,
+                "result 1: ", result->ToString(), " result2: ", mate->ToString()));
+
+          LOG(INFO) << "processing mapped pair at " << result->location_ << ", " << mate->location_;
 
           if (IsUnmapped(result) && IsUnmapped(mate)) {
             s = results_reader.GetNextResult(&result, &result_cigar, &result_cigar_len);
@@ -253,6 +264,7 @@ trading memory for faster execution.
               LOG(INFO) << "omg we found a duplicate";
               OP_REQUIRES_OK(ctx, MarkDuplicate(result, result_cigar, result_cigar_len, results_builder));
               OP_REQUIRES_OK(ctx, MarkDuplicate(mate, mate_cigar, mate_cigar_len, results_builder));
+              num_dups_found_++;
             }
           }
         }
@@ -261,7 +273,7 @@ trading memory for faster execution.
 
       // done
       resource_releaser(results_container);
-      LOG(INFO) << "DONE running mark duplicates!!";
+      LOG(INFO) << "DONE running mark duplicates!! Found so far: " << num_dups_found_;
 
     }
 
@@ -269,38 +281,46 @@ trading memory for faster execution.
     ReferencePool<BufferList> *bufferlist_pool_ = nullptr;
 
     struct Signature {
-      int32 position = 0;
-      int32 position_mate = 0;
+      uint32_t position = 0;
+      uint32_t position_mate = 0;
       bool is_forward = true;
       bool is_mate_forward = true;
       bool operator==(const Signature& s) {
         return (s.position == position) && (s.position_mate == position_mate)
           && (s.is_forward == is_forward) && (s.is_mate_forward == is_mate_forward);
       }
+      string ToString() const {
+        return string("pos: ") + to_string(position) + " matepos: " + to_string(position_mate)
+          + " isfor: " + to_string(is_forward) + " ismatefor: " + to_string(is_mate_forward) ;
+      }
     };
 
     struct EqSignature {
       bool operator()(Signature sig1, Signature sig2) const {
-        return sig1 == sig2;
+        return (sig1.position == sig2.position) && (sig1.position_mate == sig2.position_mate) 
+          && (sig1.is_forward == sig2.is_forward) && (sig1.is_mate_forward == sig2.is_mate_forward);
       }
     };
 
     struct SigHash {
       size_t operator()(Signature const& s) const {
-        size_t p = hash<int32>{}(s.position);
-        size_t pm = hash<int32>{}(s.position_mate);
+        size_t p = hash<uint32_t>{}(s.position);
+        size_t pm = hash<uint32_t>{}(s.position_mate);
         size_t i = hash<bool>{}(s.is_forward);
         size_t m = hash<bool>{}(s.is_mate_forward);
         // maybe this is too expensive
         boost::hash_combine(p, pm);
         boost::hash_combine(i, m);
         boost::hash_combine(p, i);
+        //LOG(INFO) << "hash was called on " << s.ToString() << " and value was: " << p;
         return p;
       }
     };
 
     typedef google::dense_hash_map<Signature, int, SigHash, EqSignature> SignatureMap;
     SignatureMap* signature_map_;
+
+    int num_dups_found_ = 0;
 
   };
 

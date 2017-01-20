@@ -32,8 +32,8 @@ namespace tensorflow {
 
   void AlignmentResultBuilder::AppendAlignmentResult(const format::AlignmentResult &result, const string &var_string)
   {
-    LOG(INFO) << "appending alignment result location: " << result.location_ << " mapq: " << result.mapq_ << " flags: "
-      << result.flag_ << " next: " << result.next_location_ << " template_len: " << result.template_length_ << " cigar: " << var_string;
+    //LOG(INFO) << "appending alignment result location: " << result.location_ << " mapq: " << result.mapq_ << " flags: "
+      //<< result.flag_ << " next: " << result.next_location_ << " template_len: " << result.template_length_ << " cigar: " << var_string;
     data_->AppendBuffer(reinterpret_cast<const char*>(&result), sizeof(format::AlignmentResult));
     data_->AppendBuffer(var_string.data(), var_string.size());
     size_t index_entry = sizeof(format::AlignmentResult) + var_string.size();
