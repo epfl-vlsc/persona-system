@@ -53,14 +53,14 @@ trading memory for faster execution.
   using namespace errors;
   using namespace format;
 
-  class AGDMarkDuplicateOp : public OpKernel {
+  class AGDMarkDuplicatesOp : public OpKernel {
   public:
-    AGDMarkDuplicateOp(OpKernelConstruction *context) : OpKernel(context) {
+    AGDMarkDuplicatesOp(OpKernelConstruction *context) : OpKernel(context) {
       signature_map_ = new SignatureMap();
       signature_map_->set_deleted_key(Signature());
     }
 
-    ~AGDMarkDuplicateOp() {
+    ~AGDMarkDuplicatesOp() {
       core::ScopedUnref unref_listpool(bufferlist_pool_);
       delete signature_map_;
     }
@@ -304,5 +304,5 @@ trading memory for faster execution.
 
   };
 
-  REGISTER_KERNEL_BUILDER(Name("AGDMarkDuplicate").Device(DEVICE_CPU), AGDMarkDuplicateOp);
+  REGISTER_KERNEL_BUILDER(Name("AGDMarkDuplicates").Device(DEVICE_CPU), AGDMarkDuplicatesOp);
 } //  namespace tensorflow {
