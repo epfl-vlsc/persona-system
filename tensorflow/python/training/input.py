@@ -935,7 +935,7 @@ def batch_pdq(tensor_list, batch_size, num_threads=1, capacity=32, num_dq_ops=1,
     ValueError: If the `shapes` are not specified, and cannot be
       inferred from the elements of `tensor_list`.
   """
-  with ops.op_scope(tensor_list, name, "batch_pdq") as name:
+  with ops.name_scope(name, "batch_pdq", tensor_list) as name:
     tensor_list = _validate(tensor_list)
     types = _dtypes([tensor_list])
     shapes = _shapes([tensor_list], shapes, enqueue_many)
@@ -1074,7 +1074,7 @@ def batch_join_pdq(tensor_list_list, batch_size, num_dq_ops=1, capacity=32,
     ValueError: If the `shapes` are not specified, and cannot be
       inferred from the elements of `tensor_list_list`.
   """
-  with ops.op_scope(_flatten(tensor_list_list), name, "batch_join_pdq") as name:
+  with ops.name_scope(name, "batch_join_pdq",_flatten(tensor_list_list)) as name:
     tensor_list_list = _validate_join(tensor_list_list)
     types = _dtypes(tensor_list_list)
     shapes = _shapes(tensor_list_list, shapes, enqueue_many)
