@@ -106,8 +106,6 @@ namespace bwa_wrapper {
 
   Status BWAAligner::AlignSubchunk(ReadResource *subchunk, AlignmentResultBuilder &result_builder) {
     // generate candidates
-    extern int mem_sam_pe_results(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
-        const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2], mem_aln_t aa[2][2], int n_aa[2]);
 
     mem_pestat_t pes[4];
 
