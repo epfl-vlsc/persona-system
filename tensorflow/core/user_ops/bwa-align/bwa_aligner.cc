@@ -10,10 +10,6 @@
 #include <locale>
 #include <pthread.h>
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/framework/resource_mgr.h"
-#include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/threadpool.h"
@@ -22,18 +18,10 @@
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/agd-format/buffer_list.h"
-#include "tensorflow/core/user_ops/agd-format/column_builder.h"
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/FileFormat.h"
 #include "tensorflow/core/user_ops/object-pool/basic_container.h"
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/ChimericPairedEndAligner.h"
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/IntersectingPairedEndAligner.h"
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/PairedAligner.h"
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/AlignmentResult.h"
 #include "tensorflow/core/user_ops/agd-format/column_builder.h"
-#include "GenomeIndex.h"
+#include "bwa_wrapper.h"
 #include "work_queue.h"
-#include "Read.h"
-#include "SnapAlignerWrapper.h"
 #include "tensorflow/core/user_ops/agd-format/read_resource.h"
 #include "tensorflow/core/user_ops/lttng/tracepoints.h"
 
@@ -58,8 +46,8 @@ class AGDBwaAlignerOp : public OpKernel {
   public:
     explicit AGDBwaAlignerOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("max_read_size", &max_read_size_));
       subchunk_size_ *= 2;
 
       int capacity;
@@ -125,11 +113,7 @@ class AGDBwaAlignerOp : public OpKernel {
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
 
-    if (sam_format_) {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
-    } else {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
-    }
+    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
     t_last = std::chrono::high_resolution_clock::now();
   }
 
@@ -166,12 +150,11 @@ private:
   Status InitHandles(OpKernelContext* ctx)
   {
     TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
-    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &index_resource_));
+    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "index_handle", &index_resource_));
     TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
-    TF_RETURN_IF_ERROR(snap_wrapper::init());
 
     bwa_options_ = options_resource_->get();
-    bwt_index_ = index_resource_->get();
+    bwa_index_ = index_resource_->get();
 
     /*if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
       num_secondary_alignments_ = 0;
@@ -221,25 +204,16 @@ private:
       int capacity = request_queue_->capacity();
       //LOG(INFO) << "aligner thread spinning up";
 
-      snap_wrapper::PairedAligner aligner(bwa_options_, bwt_index_);
+      bwa_wrapper::BWAAligner aligner(bwa_options_, bwa_index_, max_read_size_);
 
-      bool first_is_primary = true; // we only ever generate one result
 
-      PairedAlignmentResult primaryResult;
       AlignmentResultBuilder result_builder;
-      string cigarString;
-      int flag;
-      //Read snap_read[2];
-      array<Read, 2> bwa_read;
-
-      LandauVishkinWithCigar lvc;
 
       BufferPair* result_buf = nullptr;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
       //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
-      bool useless[2], pass[2], pass_all;
 
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
@@ -252,30 +226,14 @@ private:
         auto *reads = reads_container->get();
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
-        while (io_chunk_status.ok()) {
+        if (io_chunk_status.ok()) {
 
           result_builder.set_buffer_pair(result_buf);
-          subchunk_status = Status::OK();
-          while (subchunk_status.ok()) {
-            for (size_t i = 0; i < 2; ++i) {
-              auto &bread = bwa_read[i];
-              subchunk_status = subchunk_resource->get_next_record(sread);
-              if (!subchunk_status.ok()) {
-                break;
-              }
-            }
 
-            if (!subchunk_status.ok()) {
-              break;
-            }
+          Status s = aligner.AlignSubchunk(subchunk_resource, result_builder);
 
-            aligner.align(snap_read, primaryResult);
-            subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builder);
-          }
-
-          if (!IsResourceExhausted(subchunk_status)) {
-            LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
-            compute_status_ = subchunk_status;
+          if (!s.ok()){
+            compute_status_ = s;
             return;
           }
 
@@ -304,9 +262,9 @@ private:
   }
 
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
-  BasicContainer<bwt_t> *index_resource_ = nullptr;
+  BasicContainer<bwaidx_t> *index_resource_ = nullptr;
   BasicContainer<mem_opt_t>* options_resource_ = nullptr;
-  bwt_t* bwt_index_ = nullptr;
+  bwaidx_t* bwa_index_ = nullptr;
   mem_opt_t *bwa_options_ = nullptr;
   int subchunk_size_;
   volatile bool run_ = true;
@@ -315,6 +273,7 @@ private:
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
   int thread_id_ = 0;
+  int max_read_size_;
 
   int num_threads_;
 
@@ -328,7 +287,7 @@ private:
   .Attr("num_threads: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 3")
-  .Attr("sam_format: bool = false")
+  .Attr("max_read_size: int = 400")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
