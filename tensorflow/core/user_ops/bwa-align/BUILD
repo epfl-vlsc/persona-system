@@ -4,7 +4,7 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 cc_library(
     name = "bwa_lib",
     #srcs = glob(["libsnap.a"]),
-    srcs = glob(["bwa/*.c"]),
+    srcs = glob(["bwa/*.c"], exclude=["bwa/main*"]),
     hdrs = glob(["bwa/*.h"]),
     includes = ["bwa"],
     linkopts = [
