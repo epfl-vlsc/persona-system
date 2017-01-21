@@ -1,66 +1,51 @@
 #pragma once
 
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/user_ops/agd-format/read_resource.h"
+#include "tensorflow/core/user_ops/agd-format/column_builder.h"
 #include <vector>
 #include <memory>
 #include <string>
 #include <array>
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/ChimericPairedEndAligner.h"
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/IntersectingPairedEndAligner.h"
-#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/BWAAligner.h"
-#include "tensorflow/core/user_ops/agd-format/column_builder.h"
+#include "bwa/bwamem.h"
+#include "bwa/bwa.h"
+#include "bwa/bwt.h"
 
 namespace bwa_wrapper {
     using namespace tensorflow;
-    Status init();
+    using namespace std;
 
     class BWAAligner
     {
     public:
-      BWAAligner(const BWAAlignerOptions *options, BWAIndex *index_resource);
-      ~BWAAligner();
+      BWAAligner(const mem_opt_t *options, const bwaidx_t *index_resource, size_t max_read_len) :
+        index_(index_resource), options_(options), max_read_len_(max_read_len) {
+     
+         two_bit_seq_ = new char[max_read_len_]; 
+      }
 
-      // void for speed, as this is called per-read!
-      void align(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result);
-      Status writeResult(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result,
-                         AlignmentResultBuilder &result_column);
+      ~BWAAligner() {
+        delete [] two_bit_seq_;
+      }
+
+      // align a whole subchunk since BWA infers insert distance from the data
+      Status AlignSubchunk(ReadResource *subchunk, AlignmentResultBuilder &result_builder);
 
     private:
-      std::unique_ptr<BigAllocator> allocator;
-      IntersectingPairedEndAligner *intersectingAligner;
-      ChimericPairedEndAligner *aligner;
-      const BWAAlignerOptions *options;
-      const Genome *genome;
+      // we dont own these
+      const mem_opt_t *options_;
+      const bwaidx_t *index_;
+      size_t max_read_len_;
+      char * two_bit_seq_;
+      
+      vector<mem_alnreg_v> regs_; 
 
-      // members for writing out the cigar string
-      SAMFormat format;
-      LandauVishkinWithCigar lvc;
-      // keep these around as members to avoid reallocating objects for them
-      std::array<std::string, 2> cigars;
+      void ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, format::AlignmentResult& result, string& cigar);
+      Status GenerateAndInfer(ReadResource* subchunk, mem_pestat_t pes[4]);
+
+      const string placeholder = "i'm mr meeseeks look at me!";
+
     };
   
-    Status WriteSingleResult(Read &snap_read, SingleAlignmentResult &result, AlignmentResultBuilder &result_column, 
-      const Genome* genome, LandauVishkinWithCigar* lvc);
-  
-    Status PostProcess(
-      const Genome* genome,
-      LandauVishkinWithCigar * lv,
-      Read * read,
-      AlignmentResult result, 
-      int mapQuality,
-      GenomeLocation genomeLocation,
-      Direction direction,
-      bool secondaryAlignment,
-      format::AlignmentResult &finalResult,
-      string &cigar,
-      int * addFrontClipping,
-      bool useM,
-      bool hasMate = false,
-      bool firstInPair = false,
-      Read * mate = NULL, 
-      AlignmentResult mateResult = NotFound,
-      GenomeLocation mateLocation = 0,
-      Direction mateDirection = FORWARD,
-      bool alignedAsPair = false
-      );
 }

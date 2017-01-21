@@ -19,7 +19,8 @@
 #include "tensorflow/core/platform/thread_annotations.h"
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/user_ops/object-pool/basic_container.h"
-#include "bwa/bwt.h"
+#include "bwa/bwa.h"
+#include "bwa/bwamem.h"
 
 namespace tensorflow {
   using namespace std;
@@ -27,14 +28,15 @@ namespace tensorflow {
 
     class BWAIndexOp : public OpKernel {
     public:
-      typedef BasicContainer<bwt_t> BWAIndexContainer;
+      typedef BasicContainer<bwaidx_t> BWAIndexContainer;
 
         BWAIndexOp(OpKernelConstruction* context)
             : OpKernel(context), index_handle_set_(false) {
           OP_REQUIRES_OK(context, context->GetAttr("index_location", &index_location_));
+          OP_REQUIRES_OK(context, context->GetAttr("ignore_alt", &ignore_alt_));
           struct stat buf;
           auto ret = stat(index_location_.c_str(), &buf);
-          OP_REQUIRES(context, ret == 0 && buf.st_mode & S_IFDIR != 0,
+          OP_REQUIRES(context, (ret == 0) && (buf.st_mode & S_IFDIR) != 0,
                       Internal("Index location '", index_location_, "' is not a valid directory"));
           OP_REQUIRES_OK(context,
                          context->allocate_persistent(DT_STRING, TensorShape({ 2 }),
@@ -52,7 +54,7 @@ namespace tensorflow {
     protected:
         ~BWAIndexOp() override {
             // If the genome object was not shared, delete it.
-            if (genome_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
+            if (index_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
                 TF_CHECK_OK(cinfo_.resource_manager()->Delete<BWAIndexContainer>(
                     cinfo_.container(), cinfo_.name()));
             }
@@ -68,9 +70,23 @@ namespace tensorflow {
             BWAIndexContainer* bwa_index;
 
             auto creator = [this, index_location](BWAIndexContainer** index) {
-                LOG(INFO) << "loading bwt index";
+                LOG(INFO) << "loading aidxwt index";
                 auto begin = std::chrono::high_resolution_clock::now();
-                unique_ptr<bwt_t> value(bwt_restore_bwt(index_location_));
+
+                bwaidx_t* idx = bwa_idx_load_from_shm(index_location_.c_str());
+                if (idx == 0) {
+                  if ((idx = bwa_idx_load(index_location_.c_str(), BWA_IDX_ALL)) == 0) 
+                    return Internal("Failed to load BWA Index"); 
+                }                 
+                if (ignore_alt_)
+                  for (int i = 0; i < idx->bns->n_seqs; ++i)
+                    idx->bns->anns[i].is_alt = 0;
+               
+                // basic container does not pass the deleter yet ...
+                /*auto deleter=[&](bwaidx_t* idx){
+	                bwa_idx_destroy(idx);
+                };*/
+                unique_ptr<bwaidx_t> value(idx);
                 auto end = std::chrono::high_resolution_clock::now();
                 LOG(INFO) << "index load time is: " << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(end-begin).count())/1000000000.0f;
                 *index = new BWAIndexContainer(move(value));
@@ -90,6 +106,7 @@ namespace tensorflow {
 
         mutex mu_;
         string index_location_;
+        bool ignore_alt_ = false;
         PersistentTensor index_handle_ GUARDED_BY(mu_);
         bool index_handle_set_ GUARDED_BY(mu_);
     };
@@ -97,6 +114,7 @@ namespace tensorflow {
     REGISTER_OP("BWAIndex")
         .Output("handle: Ref(string)")
         .Attr("index_location: string")
+        .Attr("ignore_alt: bool")
         .Attr("container: string = ''")
         .Attr("shared_name: string = ''")
         .SetIsStateful()
