@@ -31,6 +31,8 @@ namespace tensorflow {
     // this avoids unnecessary conditionals
 
     Status get_next_record(Read &snap_read) override;
+    Status get_next_record(const char** bases, size_t* bases_len,
+        const char** quals) override;
 
     bool reset_iter() override;
 
@@ -70,6 +72,8 @@ namespace tensorflow {
 
   public:
     Status get_next_record(Read &snap_read) override;
+    Status get_next_record(const char** bases, size_t* bases_len,
+        const char** quals) override;
 
     bool reset_iter() override;
 

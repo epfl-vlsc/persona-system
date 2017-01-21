@@ -107,6 +107,24 @@ namespace tensorflow {
       return ResourceExhausted("agd record container exhausted");
     }
   }
+    
+  Status AGDReadResource::get_next_record(const char** bases, size_t* bases_len,
+        const char** quals) {
+    if (record_idx_ < num_records_) {
+      *bases_len = base_idx_[record_idx_];
+      *bases = base_data_;
+      base_data_  += *bases_len;
+
+      auto qual_len = qual_idx_[record_idx_++];
+      *quals = qual_data_;
+      qual_data_ += qual_len;
+
+      return Status::OK();
+    } else {
+      return ResourceExhausted("agd record container exhausted");
+    }
+  }
+
 
   void AGDReadResource::release() {
     if (bases_) {
@@ -172,31 +190,48 @@ namespace tensorflow {
   }
 
   AGDReadSubResource::AGDReadSubResource(const AGDReadResource &parent_resource,
-                                             size_t index_offset, size_t max_idx,
-                                             const char *base_data_offset, const char *qual_data_offset, const char *meta_data_offset) : start_idx_(index_offset), max_idx_(max_idx), current_idx_(index_offset),
-                                                                                                                                         base_idx_(parent_resource.base_idx_),
-                                                                                                                                         qual_idx_(parent_resource.qual_idx_),
-                                                                                                                                         meta_idx_(parent_resource.meta_idx_),
-                                                                                                                                         base_data_(base_data_offset), base_start_(base_data_offset),
-                                                                                                                                         qual_data_(qual_data_offset), qual_start_(qual_data_offset),
-                                                                                                                                         meta_data_(meta_data_offset), meta_start_(meta_data_offset) {}
+      size_t index_offset, size_t max_idx,
+      const char *base_data_offset, const char *qual_data_offset, const char *meta_data_offset) : start_idx_(index_offset), max_idx_(max_idx), current_idx_(index_offset),
+  base_idx_(parent_resource.base_idx_),
+  qual_idx_(parent_resource.qual_idx_),
+  meta_idx_(parent_resource.meta_idx_),
+  base_data_(base_data_offset), base_start_(base_data_offset),
+  qual_data_(qual_data_offset), qual_start_(qual_data_offset),
+  meta_data_(meta_data_offset), meta_start_(meta_data_offset) {}
 
-Status AGDReadSubResource::get_next_record(Read &snap_read) {
-  if (current_idx_ < max_idx_) {
-    auto base_len = base_idx_[current_idx_];
-    auto *bases = base_data_;
-    base_data_  += base_len;
+  Status AGDReadSubResource::get_next_record(Read &snap_read) {
+    if (current_idx_ < max_idx_) {
+      auto base_len = base_idx_[current_idx_];
+      auto *bases = base_data_;
+      base_data_  += base_len;
 
-    auto qual_len = qual_idx_[current_idx_++];
-    auto *qualities = qual_data_;
-    qual_data_ += qual_len;
-    snap_read.init(nullptr, 0, bases, qualities, base_len);
+      auto qual_len = qual_idx_[current_idx_++];
+      auto *qualities = qual_data_;
+      qual_data_ += qual_len;
+      snap_read.init(nullptr, 0, bases, qualities, base_len);
 
-    return Status::OK();
-  } else {
-    return ResourceExhausted("agd record container exhausted");
+      return Status::OK();
+    } else {
+      return ResourceExhausted("agd record container exhausted");
+    }
   }
-}
+
+  Status AGDReadSubResource::get_next_record(const char** bases, size_t* bases_len,
+        const char** quals) {
+    if (current_idx_ < max_idx_) {
+      *bases_len = base_idx_[current_idx_];
+      *bases = base_data_;
+      base_data_  += *bases_len;
+
+      auto qual_len = qual_idx_[current_idx_++];
+      *quals = qual_data_;
+      qual_data_ += qual_len;
+
+      return Status::OK();
+    } else {
+      return ResourceExhausted("agd record container exhausted");
+    }
+  }
 
   bool AGDReadSubResource::reset_iter() {
     base_data_ = base_start_;

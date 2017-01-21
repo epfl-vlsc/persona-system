@@ -20,6 +20,9 @@ namespace tensorflow {
      */
 
     virtual Status get_next_record(Read &snap_read) = 0;
+    
+    virtual Status get_next_record(const char** bases, size_t* bases_len,
+        const char** quals) = 0;
 
     virtual std::size_t num_records();
 

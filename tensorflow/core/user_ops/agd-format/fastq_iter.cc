@@ -20,6 +20,11 @@ namespace tensorflow {
 
   FASTQIterator::FASTQIterator(ResourceContainer<Data> *fastq_file) : fastq_file_(fastq_file), data_size_(fastq_file->get()->size()), data_(fastq_file->get()) {}
 
+  Status FASTQIterator::get_next_record(const char** bases, size_t* bases_len,
+        const char** quals) {
+    return Internal("unimplemented");
+  }
+
   Status FASTQIterator::get_next_record(Read &snap_read)
   {
     if (!fastq_file_) {
