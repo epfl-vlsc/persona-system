@@ -288,7 +288,7 @@ private:
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 3")
   .Attr("max_read_size: int = 400")
-  .Input("genome_handle: Ref(string)")
+  .Input("index_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
