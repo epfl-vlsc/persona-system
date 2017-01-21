@@ -16,6 +16,9 @@ namespace tensorflow {
     FASTQIterator& operator=(FASTQIterator &&other);
 
     Status get_next_record(Read &snap_read) override;
+    
+    Status get_next_record(const char** bases, size_t* bases_len,
+        const char** quals) override;
 
     bool reset_iter() override;
 
