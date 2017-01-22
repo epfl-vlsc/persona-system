@@ -97,8 +97,10 @@ namespace tensorflow {
                 char c;
                 const char* optarg;
                 for (size_t i = 0; i < options_string.size(); i++) {
-                  c = options_string[i][1];
-                  optarg = options_string[i+1].c_str();
+                  c = options_string[i][0]; // should just be one char ...
+                  if (i != options_string.size() - 1)
+                    optarg = options_string[i+1].c_str();
+                  LOG(INFO) << "option is: " << options_string[i];
 
                   if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
                   else if (c == '1') no_mt_io = 1;

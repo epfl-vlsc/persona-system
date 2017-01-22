@@ -36,8 +36,9 @@ namespace tensorflow {
           OP_REQUIRES_OK(context, context->GetAttr("ignore_alt", &ignore_alt_));
           struct stat buf;
           auto ret = stat(index_location_.c_str(), &buf);
-          OP_REQUIRES(context, (ret == 0) && (buf.st_mode & S_IFDIR) != 0,
-                      Internal("Index location '", index_location_, "' is not a valid directory"));
+          LOG(INFO) << "stat returned: " << ret;
+          OP_REQUIRES(context, (ret >=  0),
+                      Internal("Index location '", index_location_, "' does not appear to exist"));
           OP_REQUIRES_OK(context,
                          context->allocate_persistent(DT_STRING, TensorShape({ 2 }),
                                                       &index_handle_, nullptr));
@@ -70,7 +71,7 @@ namespace tensorflow {
             BWAIndexContainer* bwa_index;
 
             auto creator = [this, index_location](BWAIndexContainer** index) {
-                LOG(INFO) << "loading aidxwt index";
+                LOG(INFO) << "loading bwa index at path: " << index_location;
                 auto begin = std::chrono::high_resolution_clock::now();
 
                 bwaidx_t* idx = bwa_idx_load_from_shm(index_location_.c_str());
