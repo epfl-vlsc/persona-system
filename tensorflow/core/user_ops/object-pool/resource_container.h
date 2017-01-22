@@ -27,6 +27,10 @@ public:
     return data_.get();
   }
 
+  void assign(T* obj) {
+    data_.reset(obj);
+  }
+
   void release() {
     ref_pool_->ReleaseResource(this);
   }

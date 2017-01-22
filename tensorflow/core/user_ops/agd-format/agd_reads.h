@@ -43,6 +43,11 @@ namespace tensorflow {
     Status split(std::size_t chunk, BufferList *bl) override;
     Status get_next_subchunk(ReadResource **rr, BufferPair **b) override;
 
+  protected:
+    std::vector<AGDReadSubResource> sub_resources_;
+    std::atomic_size_t sub_resource_index_;
+    BufferList *buffer_list_ = nullptr;
+
   private:
     DataContainer *bases_ = nullptr, *quals_ = nullptr, *meta_ = nullptr;
     const format::RelativeIndex *base_idx_ = nullptr, *qual_idx_ = nullptr, *meta_idx_ = nullptr;
@@ -54,9 +59,6 @@ namespace tensorflow {
     AGDReadResource(const AGDReadResource &other) = delete;
     AGDReadResource& operator=(const AGDReadResource &other) = delete;
     AGDReadResource(AGDReadResource &&other) = delete;
-    std::vector<AGDReadSubResource> sub_resources_;
-    std::atomic_size_t sub_resource_index_;
-    BufferList *buffer_list_ = nullptr;
 
     friend class AGDReadSubResource;
   };

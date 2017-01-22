@@ -36,6 +36,9 @@ namespace tensorflow {
     virtual Status split(std::size_t chunk, BufferList *bl);
 
     virtual Status get_next_subchunk(ReadResource **rr, BufferPair **b);
+   
+    // sometimes we don't need a buffer
+    //virtual Status get_next_subchunk(ReadResource **rr);
   };
 
   class ReadResourceReleaser
