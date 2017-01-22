@@ -19,43 +19,46 @@ namespace bwa_wrapper {
     return l;
   }
 
-  Status BWAAligner::GenerateAndInfer(ReadResource* subchunk, mem_pestat_t pes[4]) {
+  Status BWAAligner::AlignSubchunk(ReadResource* subchunk, size_t index, vector<mem_alnreg_v>& regs) {
 
-    regs_.clear();
     const char* bases, *bases_mate;
     const char* quals, *quals_mate;
     size_t bases_len, mate_len;
     Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
-    regs_.reserve(subchunk->num_records());
+    auto num_recs = subchunk->num_records();
+    // this should only happen once
+    if (two_bit_seqs_.size() < num_recs) {
+      two_bit_seqs_.resize(num_recs);
+      for (int i = 0; i < num_recs; i++) {
+        two_bit_seqs_[i].resize(max_read_len_);
+      }
+    }
 
+    int cur_seq = 0;
     while (s.ok()) {
       s = subchunk->get_next_record(&bases_mate, &mate_len, &quals_mate);
       if (!s.ok())
         return Internal("subchunk was missing a read mate!");
 
       for (int i = 0; i < bases_len; ++i) // convert to 2-bit encoding 
-        two_bit_seq_[i] = nst_nt4_table[(int)bases[i]];
+        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases[i]];
 
-      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, two_bit_seq_, nullptr);
-      regs_.push_back(reg);
+      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, &two_bit_seqs_[cur_seq][0], nullptr);
+      regs[index++] = reg;
 
+      cur_seq++;
       for (int i = 0; i < mate_len; ++i) // convert to 2-bit encoding 
-        two_bit_seq_[i] = nst_nt4_table[(int)bases_mate[i]];
+        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases_mate[i]];
 
-      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, two_bit_seq_, nullptr);
-      regs_.push_back(reg);
+      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, &two_bit_seqs_[cur_seq][0], nullptr);
+      regs[index++] = reg;
 
       s = subchunk->get_next_record(&bases, &bases_len, &quals);
+      cur_seq++;
     }
 
     if (!IsResourceExhausted(s))
       return s;
-
-    // infer insert sizes a la BWAmem
-    mem_pestat(options_, index_->bns->l_pac, subchunk->num_records(), &regs_[0], pes);
-
-    if (!subchunk->reset_iter()) 
-      return Internal("BWA aligner requires its read resource to be resettable");
 
     return Status::OK();
   }
@@ -71,6 +74,7 @@ namespace bwa_wrapper {
     } else
       result.location_ = bwaresult->pos + index_->bns->anns[bwaresult->rid].offset;
 
+    //LOG(INFO) << "location is: " << result.location_ - index_->bns->anns[bwaresult->rid].offset;
     result.flag_ |= bwaresult->is_rev? 0x10 : 0; // is on the reverse strand
     result.flag_ |= bwamate && bwamate->is_rev? 0x20 : 0; // is mate on the reverse strand
     result.next_location_ = 0;
@@ -91,10 +95,15 @@ namespace bwa_wrapper {
       } else cigar = "*"; // having a coordinate but unaligned (e.g. when copy_mate is true)
     } 
 
+    if (bwamate && bwamate->rid >= 0)
+      result.next_location_ = bwamate->pos + index_->bns->anns[bwamate->rid].offset;
+    else if (bwamate)
+      result.next_location_ = result.location_; // mate unmapped, set next to this ones location
+    else
+      result.next_location_ = 0; // there is no mate
+
     if (bwamate && bwamate->rid >= 0) {
 
-      result.next_location_ = bwamate->pos +(bwamate->is_rev? get_rlen(bwamate->n_cigar, bwamate->cigar) - 1 : 0);
-      result.next_location_ += index_->bns->anns[bwamate->rid].offset;
       if (bwaresult->rid == bwamate->rid) {
         int64_t p0 = bwaresult->pos + (bwaresult->is_rev? get_rlen(bwaresult->n_cigar, bwaresult->cigar) - 1 : 0);
         int64_t p1 = bwamate->pos + (bwamate->is_rev? get_rlen(bwamate->n_cigar, bwamate->cigar) - 1 : 0);
@@ -104,12 +113,8 @@ namespace bwa_wrapper {
     } 
   }
 
-  Status BWAAligner::AlignSubchunk(ReadResource *subchunk, AlignmentResultBuilder &result_builder) {
-    // generate candidates
-
-    mem_pestat_t pes[4];
-
-    TF_RETURN_IF_ERROR(GenerateAndInfer(subchunk, pes));
+  Status BWAAligner::FinalizeSubchunk(ReadResource *subchunk, size_t regs_index, vector<mem_alnreg_v>& regs, 
+      mem_pestat_t pes[4], AlignmentResultBuilder &result_builder) {
 
     // to get abs position: bns->anns[p->rid] where p is mem_aln_t
     const char* bases, *bases_mate;
@@ -117,34 +122,54 @@ namespace bwa_wrapper {
     size_t bases_len, mate_len;
     Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
 
+    auto num_recs = subchunk->num_records();
+    // this should only happen once
+    if (two_bit_seqs_.size() < num_recs) {
+      two_bit_seqs_.resize(num_recs);
+      for (int i = 0; i < num_recs; i++) {
+        two_bit_seqs_[i].resize(max_read_len_);
+      }
+    }
+
+    int cur_seq = 0;
     uint64_t id = 0; // num pairs
-    size_t regs_index = 0;
     while (s.ok()) {
       s = subchunk->get_next_record(&bases_mate, &mate_len, &quals_mate);
       if (!s.ok())
         return Internal("subchunk was missing a read mate!");
 
+      for (int i = 0; i < bases_len; ++i) // convert to 2-bit encoding 
+        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases[i]];
+
+      cur_seq++;
+      for (int i = 0; i < mate_len; ++i) // convert to 2-bit encoding 
+        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases_mate[i]];
+
       // BWA requires modifiable c-str buffers, so we have to copy :-(
       bseq1_t reads[2];
       reads[0].comment = 0; reads[1].comment = 0;
       reads[0].qual = strndup(quals, bases_len); reads[1].qual = strndup(quals_mate, mate_len);
-      reads[0].seq = strndup(bases, bases_len); reads[1].seq = strndup(bases_mate, mate_len);
+      // we use the remembered two bit seqs
+      reads[0].seq = &two_bit_seqs_[cur_seq-1][0]; reads[1].seq = &two_bit_seqs_[cur_seq][0];
       reads[0].name = strdup(placeholder.c_str()); reads[1].name = strdup(placeholder.c_str());
       reads[0].l_seq = bases_len; reads[1].l_seq = mate_len;
 
+      //LOG(INFO) << "regs index: " << regs_index;
+      //LOG(INFO) << "read0: " << reads[0].seq << " : " << reads[0].qual << " : " << reads[0].l_seq;
+      //LOG(INFO) << "read1: " << reads[1].seq << " : " << reads[1].qual << " : " << reads[1].l_seq;
+
       mem_aln_t results[2][2];
       int num_results[2];
-      int ret = mem_sam_pe_results(options_, index_->bns, index_->pac, pes, id, reads, &regs_[regs_index], results, num_results);
+      int ret = mem_sam_pe_results(options_, index_->bns, index_->pac, pes, id, reads, &regs[regs_index], results, num_results);
       id++;
       regs_index += 2;
 
       format::AlignmentResult result, result_mate;
       string cigar, cigar_mate;
       ProcessResult(&results[0][0], &results[1][0], result, cigar);
-      LOG(INFO) << "the absolute location is: " << result.location_;
-      ProcessResult(&results[1][0], &results[2][0], result_mate, cigar_mate);
-      LOG(INFO) << "the absolute location of mate is: " << result_mate.location_;
-
+      //LOG(INFO) << "cigar is: " << cigar;
+      ProcessResult(&results[1][0], &results[0][0], result_mate, cigar_mate);
+      //LOG(INFO) << "cigarmate is: " << cigar_mate;
       result_builder.AppendAlignmentResult(result, cigar);
       result_builder.AppendAlignmentResult(result_mate, cigar_mate);
 

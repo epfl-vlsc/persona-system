@@ -43,9 +43,9 @@ using namespace errors;
     }
   }
 
-class BWAAlignerOp : public OpKernel {
+class BWAFinalizeOp : public OpKernel {
   public:
-    explicit BWAAlignerOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    explicit BWAFinalizeOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("max_read_size", &max_read_size_));
@@ -57,9 +57,9 @@ class BWAAlignerOp : public OpKernel {
       compute_status_ = Status::OK();
     }
 
-    ~BWAAlignerOp() override {
+    ~BWAFinalizeOp() override {
       if (!run_) {
-        LOG(ERROR) << "Unable to safely wait in ~BWAAlignerOp for all threads. run_ was toggled to false\n";
+        LOG(ERROR) << "Unable to safely wait in ~BWAFinalizeOp for all threads. run_ was toggled to false\n";
       }
       run_ = false;
       request_queue_->unblock();
@@ -69,17 +69,17 @@ class BWAAlignerOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
-      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
-      LOG(INFO) << "request queue peek wait: " << request_queue_->num_peek_waits();
+      LOG(INFO) << "finalize request queue push wait: " << request_queue_->num_push_waits();
+      LOG(INFO) << "finalize request queue pop wait: " << request_queue_->num_pop_waits();
+      LOG(INFO) << "finalize request queue peek wait: " << request_queue_->num_peek_waits();
       uint64_t avg_inter_time = 0;
       if (total_usec > 0)
         avg_inter_time = total_usec / total_invoke_intervals;
 
-      LOG(INFO) << "average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
+      LOG(INFO) << "finalize average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
-      VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
+      VLOG(DEBUG) << "bwa finalize Destructor(" << this << ") finished\n";
     }
 
   void Compute(OpKernelContext* ctx) override {
@@ -105,6 +105,9 @@ class BWAAlignerOp : public OpKernel {
 
     OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
 
+    ResourceContainer<BufferList> *bufferlist_resource_container;
+    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
+
     ResourceContainer<BWAReadResource> *reads_container;
     OP_REQUIRES_OK(ctx, GetInput(ctx, "read", &reads_container));
 
@@ -112,9 +115,10 @@ class BWAAlignerOp : public OpKernel {
     //core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
 
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, nullptr)); // no bufferlist
+    auto* bl = bufferlist_resource_container->get();
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, bl)); // no bufferlist
 
-    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, no_resource_releaser)), 
+    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, resource_releaser)), 
         Internal("Unable to push item onto work queue. Is it already closed?"));
     t_last = std::chrono::high_resolution_clock::now();
   }
@@ -130,6 +134,7 @@ private:
   {
     TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
     TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "index_handle", &index_resource_));
+    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
 
     bwa_options_ = options_resource_->get();
     bwa_index_ = index_resource_->get();
@@ -144,7 +149,14 @@ private:
     auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
     TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(data(0), data(1), reads_container));
    
-    // input is output as well
+    return Status::OK();
+  }
+  
+  Status GetResultBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
+  {
+    TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
+    (*ctr)->get()->reset();
+    TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
     return Status::OK();
   }
 
@@ -158,7 +170,9 @@ private:
       }
 
       bwa_wrapper::BWAAligner aligner(bwa_options_, bwa_index_, max_read_size_);
+      AlignmentResultBuilder result_builder;
 
+      BufferPair* result_buf = nullptr;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
@@ -175,19 +189,20 @@ private:
         auto *reads = reads_container->get();
 
         size_t interval;
-        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &interval);
+        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf, &interval);
         vector<mem_alnreg_v>& regs = reads->get_regs();
+        mem_pestat_t* pes = reads->get_pes();
         while (io_chunk_status.ok()) {
 
+          result_builder.set_buffer_pair(result_buf);
 
-          Status s = aligner.AlignSubchunk(subchunk_resource, interval, regs);
+          Status s = aligner.FinalizeSubchunk(subchunk_resource, interval, regs, pes,
+              result_builder);
 
           if (!s.ok()){
             compute_status_ = s;
             return;
           }
-
-          reads->decrement_outstanding();
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &interval);
         }
@@ -212,6 +227,7 @@ private:
     num_active_threads_ = num_threads_;
   }
 
+  ReferencePool<BufferList> *buflist_pool_ = nullptr;
   BasicContainer<bwaidx_t> *index_resource_ = nullptr;
   BasicContainer<mem_opt_t>* options_resource_ = nullptr;
   bwaidx_t* bwa_index_ = nullptr;
@@ -230,16 +246,17 @@ private:
   unique_ptr<WorkQueue<shared_ptr<ResourceContainer<BWAReadResource>>>> request_queue_;
 
   Status compute_status_;
-  TF_DISALLOW_COPY_AND_ASSIGN(BWAAlignerOp);
+  TF_DISALLOW_COPY_AND_ASSIGN(BWAFinalizeOp);
 };
 
-  REGISTER_OP("BWAAligner")
+  REGISTER_OP("BWAFinalize")
   .Attr("num_threads: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 3")
   .Attr("max_read_size: int = 400")
   .Input("index_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
+  .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
       c->set_output(0, c->Vector(2));
@@ -253,6 +270,6 @@ private:
   object resource that should be passed to the BWAPairedEndStatOp node.
 )doc");
 
-  REGISTER_KERNEL_BUILDER(Name("BWAAligner").Device(DEVICE_CPU), BWAAlignerOp);
+  REGISTER_KERNEL_BUILDER(Name("BWAFinalize").Device(DEVICE_CPU), BWAFinalizeOp);
 
 }  // namespace tensorflow
