@@ -6,4 +6,4 @@
 	url = https://github.com/nlohmann/json.git
 [submodule "tensorflow/core/user_ops/bwa-align/bwa"]
 	path = tensorflow/core/user_ops/bwa-align/bwa
-	url = https://github.com/lh3/bwa.git
+	url = git@github.com:epfl-vlsc/bwa.git
