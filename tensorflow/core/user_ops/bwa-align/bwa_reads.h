@@ -14,16 +14,24 @@ namespace tensorflow {
     public:
       explicit BWAReadResource() = default;
       explicit BWAReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals, DataContainer *meta) :
-        AGDReadResource(num_records, bases, quals, meta) {}
+        AGDReadResource(num_records, bases, quals, meta) {
+        regs_.resize(num_records);
+      }
       explicit BWAReadResource(std::size_t num_records, DataContainer *bases, DataContainer *quals) : 
-        AGDReadResource(num_records, bases, quals) {}
+        AGDReadResource(num_records, bases, quals) {
+        regs_.resize(num_records);
+      }
 
       Status split(std::size_t chunk, BufferList* bl) override {
         TF_RETURN_IF_ERROR(AGDReadResource::split(chunk, bl));
         auto total = num_records();
+        intervals_.clear();
         for (size_t i = 0; i < total; i += chunk)
           intervals_.push_back(i);
-    
+   
+        if (intervals_.size() != sub_resources_.size())
+          return errors::Internal("BWA read resource got different number intervals and rsrcs??");
+
         outstanding_subchunks_.store(sub_resources_.size(), std::memory_order_relaxed);
 
         return Status::OK();
@@ -47,12 +55,7 @@ namespace tensorflow {
         } else if (a == 0) {
           buffer_list_->set_start_time();
         }
-          //decltype(idx) next;
-          //do {
-          //  idx = sub_resource_index_;
-          //  next = idx+1;
-          //  // weak has a few false positives, but is better for loops, according to the spec
-          //} while (!sub_resource_index_.compare_exchange_weak(idx, next));
+        
         *rr = &sub_resources_[a];
         *b = &(*buffer_list_)[a];
         *interval = intervals_[a];

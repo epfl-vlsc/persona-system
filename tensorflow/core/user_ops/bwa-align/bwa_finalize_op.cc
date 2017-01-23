@@ -193,6 +193,7 @@ private:
         vector<mem_alnreg_v>& regs = reads->get_regs();
         mem_pestat_t* pes = reads->get_pes();
         while (io_chunk_status.ok()) {
+          LOG(INFO) << "finalizer thread " << my_id << " got  interval: " << interval;
 
           result_builder.set_buffer_pair(result_buf);
 
@@ -262,7 +263,7 @@ private:
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
-  .Output("read_handle: string")
+  .Output("result_buf_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
   Using a number of threads, generates candidate alignments for 
