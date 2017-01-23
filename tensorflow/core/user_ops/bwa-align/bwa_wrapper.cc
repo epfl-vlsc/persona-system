@@ -24,37 +24,40 @@ namespace bwa_wrapper {
     const char* bases, *bases_mate;
     const char* quals, *quals_mate;
     size_t bases_len, mate_len;
-    Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
     auto num_recs = subchunk->num_records();
     // this should only happen once
-    if (two_bit_seqs_.size() < num_recs) {
+    /*if (two_bit_seqs_.size() < num_recs) {
       two_bit_seqs_.resize(num_recs);
       for (int i = 0; i < num_recs; i++) {
         two_bit_seqs_[i].resize(max_read_len_);
       }
-    }
+    }*/
 
-    int cur_seq = 0;
+    Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
     while (s.ok()) {
       s = subchunk->get_next_record(&bases_mate, &mate_len, &quals_mate);
       if (!s.ok())
         return Internal("subchunk was missing a read mate!");
 
-      for (int i = 0; i < bases_len; ++i) // convert to 2-bit encoding 
-        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases[i]];
 
-      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, &two_bit_seqs_[cur_seq][0], nullptr);
+      char* seq = strndup(bases, bases_len);
+      for (int i  =0; i < bases_len; i++)
+        if (seq[i] > 4)
+          printf("seq is fucked\n");
+        else
+          printf("%u", (uint8_t)(seq[i] + '0'));
+      printf("\n");
+      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, seq, nullptr);
       regs[index++] = reg;
 
-      cur_seq++;
-      for (int i = 0; i < mate_len; ++i) // convert to 2-bit encoding 
-        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases_mate[i]];
 
-      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, &two_bit_seqs_[cur_seq][0], nullptr);
+      char* seqmate = strndup(bases_mate, mate_len);
+      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, seqmate, nullptr);
       regs[index++] = reg;
 
+      free(seq);
+      free(seqmate);
       s = subchunk->get_next_record(&bases, &bases_len, &quals);
-      cur_seq++;
     }
 
     if (!IsResourceExhausted(s))
@@ -74,7 +77,7 @@ namespace bwa_wrapper {
     } else
       result.location_ = bwaresult->pos + index_->bns->anns[bwaresult->rid].offset;
 
-    LOG(INFO) << "location is: " << result.location_ - index_->bns->anns[bwaresult->rid].offset;
+    //LOG(INFO) << "location is: " << result.location_ - index_->bns->anns[bwaresult->rid].offset;
     result.flag_ |= bwaresult->is_rev? 0x10 : 0; // is on the reverse strand
     result.flag_ |= bwamate && bwamate->is_rev? 0x20 : 0; // is mate on the reverse strand
     result.next_location_ = 0;
@@ -124,12 +127,12 @@ namespace bwa_wrapper {
 
     auto num_recs = subchunk->num_records();
     // this should only happen once
-    if (two_bit_seqs_.size() < num_recs) {
+    /*if (two_bit_seqs_.size() < num_recs) {
       two_bit_seqs_.resize(num_recs);
       for (int i = 0; i < num_recs; i++) {
         two_bit_seqs_[i].resize(max_read_len_);
       }
-    }
+    }*/
 
     int cur_seq = 0;
     uint64_t id = 0; // num pairs
@@ -138,19 +141,12 @@ namespace bwa_wrapper {
       if (!s.ok())
         return Internal("subchunk was missing a read mate!");
 
-      for (int i = 0; i < bases_len; ++i) // convert to 2-bit encoding 
-        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases[i]];
-
-      cur_seq++;
-      for (int i = 0; i < mate_len; ++i) // convert to 2-bit encoding 
-        two_bit_seqs_[cur_seq][i] = nst_nt4_table[(int)bases_mate[i]];
-
       // BWA requires modifiable c-str buffers, so we have to copy :-(
       bseq1_t reads[2];
       reads[0].comment = 0; reads[1].comment = 0;
       reads[0].qual = strndup(quals, bases_len); reads[1].qual = strndup(quals_mate, mate_len);
       // we use the remembered two bit seqs
-      reads[0].seq = &two_bit_seqs_[cur_seq-1][0]; reads[1].seq = &two_bit_seqs_[cur_seq][0];
+      reads[0].seq = strndup(bases, bases_len); reads[1].seq = strndup(bases_mate, mate_len);
       reads[0].name = strdup(placeholder.c_str()); reads[1].name = strdup(placeholder.c_str());
       reads[0].l_seq = bases_len; reads[1].l_seq = mate_len;
 
