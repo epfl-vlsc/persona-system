@@ -108,6 +108,7 @@ class BWAAlignerOp : public OpKernel {
     ResourceContainer<BWAReadResource> *reads_container;
     OP_REQUIRES_OK(ctx, GetInput(ctx, "read", &reads_container));
 
+    LOG(INFO) << "aligner got reads";
     // dont want to delete yet
     //core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
@@ -178,6 +179,7 @@ private:
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &interval);
         vector<mem_alnreg_v>& regs = reads->get_regs();
         while (io_chunk_status.ok()) {
+          LOG(INFO) << "aligner thread " << my_id << " got interval " << interval;
 
 
           Status s = aligner.AlignSubchunk(subchunk_resource, interval, regs);

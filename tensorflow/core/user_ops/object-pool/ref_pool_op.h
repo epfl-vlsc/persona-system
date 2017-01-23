@@ -21,6 +21,10 @@ namespace tensorflow {
     .Attr("bound: bool = true") \
     .Attr("container: string = ''") \
     .Attr("shared_name: string = ''") \
+    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) { \
+        c->set_output(0, c->Vector(2)); \
+        return Status::OK(); \
+        }) \
     .Output("pool_handle: Ref(string)") \
     .SetIsStateful()
 

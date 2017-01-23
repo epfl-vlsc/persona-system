@@ -23,6 +23,10 @@ namespace tensorflow {
   .Input("qual_handle: string")
   .Input("meta_handle: string")
   .Input("num_records: int32")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+      })
   .Output("bwa_read_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
@@ -38,6 +42,10 @@ If we need to only process a subset in the future, we must make a separate op.
   .Input("base_handle: string")
   .Input("qual_handle: string")
   .Input("num_records: int32")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+      })
   .Output("bwa_read_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
@@ -132,6 +140,7 @@ Intended to be used for BWAAssembler
 
       //auto dr = bwa_reads->get();
 
+      LOG(INFO) << "assembler outputting read resource!";
       bwa_reads->assign(new BWAReadResource(num_records, base_data, qual_data));
       OP_REQUIRES_OK(ctx, bwa_reads->allocate_output("bwa_read_handle", ctx));
     }

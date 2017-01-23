@@ -65,6 +65,7 @@ using namespace errors;
 
         std::vector<mem_alnreg_v>& regs = bwareads->get_regs();
         mem_pestat_t* pes = bwareads->get_pes();
+        LOG(INFO) << "pestat op calculating over " << regs.size() << " regs.";
         // set the pestat
         mem_pestat(bwa_options_, bwa_index_->bns->l_pac, regs.size(), &regs[0], pes);
 

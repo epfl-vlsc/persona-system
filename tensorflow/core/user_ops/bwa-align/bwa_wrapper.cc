@@ -161,6 +161,10 @@ namespace bwa_wrapper {
       mem_aln_t results[2][2];
       int num_results[2];
       int ret = mem_sam_pe_results(options_, index_->bns, index_->pac, pes, id, reads, &regs[regs_index], results, num_results);
+	
+      // free data allocated by the align op
+      free(regs[regs_index|0].a); free(regs[regs_index|1].a);
+
       id++;
       regs_index += 2;
 
