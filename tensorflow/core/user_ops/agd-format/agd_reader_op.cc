@@ -23,6 +23,7 @@ namespace tensorflow {
   .Attr("verify: bool = false")
   .Attr("reserve: int = 8192")
   .Attr("unpack: bool = true")
+  .Attr("twobit: bool = false")
   .Input("buffer_pool: Ref(string)")
   .Input("file_handle: string")
   .Output("processed_buffers: string")
@@ -47,6 +48,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
   public:
     AGDReaderOp(OpKernelConstruction *context) : OpKernel(context) {
       OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
+      OP_REQUIRES_OK(context, context->GetAttr("twobit", &twobit_));
       if (verify_) {
         LOG(DEBUG) << name() << " enabled verification\n";
       }
@@ -105,7 +107,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
         output_ptr->reserve(250*1024*1024); // make sure its big enough if its fresh.
 
         OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
-                                                 verify_, output_ptr, &first_ord, &num_recs, unpack_));
+                                                 verify_, output_ptr, &first_ord, &num_recs, unpack_, twobit_));
 
         output_matrix(i, 0) = output_buffer_rc->container();
         output_matrix(i, 1) = output_buffer_rc->name();
@@ -118,6 +120,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
   private:
     size_t round_ = 0;
     bool verify_ = false;
+    bool twobit_ = false;
     RecordParser rec_parser_;
     size_t reserve_bytes_;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;

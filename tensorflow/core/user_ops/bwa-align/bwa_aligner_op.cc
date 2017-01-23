@@ -146,6 +146,12 @@ private:
     TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(data(0), data(1), reads_container));
    
     // input is output as well
+    //ctx->set_output("read_handle", *read_input);
+    Tensor* output;
+    TF_RETURN_IF_ERROR(ctx->allocate_output(0, read_input->shape(), &output));
+    auto out = output->vec<string>();
+    out(0) = data(0);
+    out(1) = data(1);
     return Status::OK();
   }
 

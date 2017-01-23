@@ -74,7 +74,7 @@ namespace bwa_wrapper {
     } else
       result.location_ = bwaresult->pos + index_->bns->anns[bwaresult->rid].offset;
 
-    //LOG(INFO) << "location is: " << result.location_ - index_->bns->anns[bwaresult->rid].offset;
+    LOG(INFO) << "location is: " << result.location_ - index_->bns->anns[bwaresult->rid].offset;
     result.flag_ |= bwaresult->is_rev? 0x10 : 0; // is on the reverse strand
     result.flag_ |= bwamate && bwamate->is_rev? 0x20 : 0; // is mate on the reverse strand
     result.next_location_ = 0;

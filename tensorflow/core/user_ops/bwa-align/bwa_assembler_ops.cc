@@ -155,9 +155,9 @@ Intended to be used for BWAAssembler
     ReferencePool<BWAReadResource> *drr_pool_ = nullptr;
   };
 
-  class BWAAssemblerPoolOp : public ReferencePoolOp<BWAReadResource, ReadResource> {
+  class BWAAssemblerPoolOp : public ReferencePoolOp<BWAReadResource, BWAReadResource> {
   public:
-    BWAAssemblerPoolOp(OpKernelConstruction *ctx) : ReferencePoolOp<BWAReadResource, ReadResource>(ctx) {}
+    BWAAssemblerPoolOp(OpKernelConstruction *ctx) : ReferencePoolOp<BWAReadResource, BWAReadResource>(ctx) {}
 
   protected:
     unique_ptr<BWAReadResource> CreateObject() override {
