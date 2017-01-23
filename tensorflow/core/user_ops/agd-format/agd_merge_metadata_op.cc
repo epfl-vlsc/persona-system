@@ -105,7 +105,7 @@ namespace tensorflow {
   REGISTER_OP(op_name.c_str())
   .Attr("chunk_size: int >= 1")
   .Input("buffer_list_pool: Ref(string)")
-  .Input("output_buffer_queue_handle: Ref(string)")
+  .Input("output_buffer_queue_handle: resource")
   .Input("chunk_group_handles: string") // a record of NUM_SUPER_CHUNKS x NUM_COLUMNS x 2 (2 for reference)
   .Doc(R"doc(
 Merges multiple input chunks into chunks based on `chunk_size`, using the metadata field 
@@ -241,8 +241,7 @@ chunk_size: the size, in number of records, of the output chunks
     int chunk_size_;
 
     Status Init(OpKernelContext *ctx) {
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "output_buffer_queue_handle", &queue_));
-      // FIXME do we need to unref this?
+      TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 1), &queue_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
       return Status::OK();
     }
