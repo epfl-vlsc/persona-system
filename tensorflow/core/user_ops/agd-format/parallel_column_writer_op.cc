@@ -103,6 +103,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
       string full_path(record_prefix_ + filepath + record_suffix_);
 
+      LOG(INFO) << "writing file " << full_path;
       FILE *file_out = fopen(full_path.c_str(), "w+");
       // TODO get errno out of file
       OP_REQUIRES(ctx, file_out != NULL,

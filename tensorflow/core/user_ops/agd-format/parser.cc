@@ -10,6 +10,27 @@
 
 namespace tensorflow {
 
+  namespace {
+    unsigned char nst_nt4_table[256] = {
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 5 /*'-'*/, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
+    };
+  }
+
   using namespace std;
   namespace {
     volatile bool table_needs_init_ = true;
@@ -98,7 +119,7 @@ namespace tensorflow {
     return &a;
   }
 
-  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records, bool unpack)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records, bool unpack, bool twobit)
   {
     using namespace errors;
     using namespace format;
@@ -179,11 +200,26 @@ namespace tensorflow {
         TF_RETURN_IF_ERROR(append(bases, current_record_length, conversion_scratch_, index_scratch_));
       }
 
+      if (twobit) {
+        for (int i = 0; i < conversion_scratch_.size(); ++i) // convert to 2-bit encoding 
+          conversion_scratch_[i] = nst_nt4_table[(int)conversion_scratch_[i]];
+      }
       // append everything in converted_records to the index
       result_buffer->reserve(index_scratch_.size() + conversion_scratch_.size());
       TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(&index_scratch_[0], index_scratch_.size()));
       TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
+    } else if (twobit) {
+      const char* start_ptr = &(*result_buffer)[index_size];
+      conversion_scratch_.resize(payload_size - index_size);
+      for (int i = 0; i < payload_size-index_size; ++i) // convert to 2-bit encoding 
+        conversion_scratch_[i] = nst_nt4_table[(int)conversion_scratch_[i]];
+      
+      TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(payload_start, index_size));
+      TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
     }
+
+
+
 
     *first_ordinal = file_header->first_ordinal;
     *num_records = index_size;
