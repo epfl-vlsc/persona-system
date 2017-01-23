@@ -38,7 +38,6 @@ namespace bwa_wrapper {
       const mem_opt_t *options_;
       const bwaidx_t *index_;
       size_t max_read_len_;
-      vector<vector<char>> two_bit_seqs_;
       
       void ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, format::AlignmentResult& result, string& cigar);
 

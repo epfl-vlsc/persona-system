@@ -200,26 +200,28 @@ namespace tensorflow {
         TF_RETURN_IF_ERROR(append(bases, current_record_length, conversion_scratch_, index_scratch_));
       }
 
+      LOG(INFO) << "calling two bit with unpack";
       if (twobit) {
-        for (int i = 0; i < conversion_scratch_.size(); ++i) // convert to 2-bit encoding 
+        for (int i = 0; i < conversion_scratch_.size(); ++i) {// convert to 2-bit encoding 
+          LOG(INFO) << "converting " << conversion_scratch_[i] << " to " << nst_nt4_table[(int)conversion_scratch_[i]];
           conversion_scratch_[i] = nst_nt4_table[(int)conversion_scratch_[i]];
+          LOG(INFO) << "is now: " << conversion_scratch_[i];
+        }
       }
       // append everything in converted_records to the index
       result_buffer->reserve(index_scratch_.size() + conversion_scratch_.size());
       TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(&index_scratch_[0], index_scratch_.size()));
       TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
-    } else if (twobit) {
+    } else if (twobit && static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
+      LOG(INFO) << "calling two bit without unpack";
       const char* start_ptr = &(*result_buffer)[index_size];
       conversion_scratch_.resize(payload_size - index_size);
       for (int i = 0; i < payload_size-index_size; ++i) // convert to 2-bit encoding 
-        conversion_scratch_[i] = nst_nt4_table[(int)conversion_scratch_[i]];
+        conversion_scratch_[i] = nst_nt4_table[(int)start_ptr[i]];
       
       TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(payload_start, index_size));
       TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
     }
-
-
-
 
     *first_ordinal = file_header->first_ordinal;
     *num_records = index_size;
