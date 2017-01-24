@@ -7,3 +7,6 @@
 [submodule "tensorflow/core/user_ops/bwa-align/bwa"]
 	path = tensorflow/core/user_ops/bwa-align/bwa
 	url = git@github.com:epfl-vlsc/bwa.git
+[submodule "tensorflow/core/user_ops/bam/bamtools"]
+	path = tensorflow/core/user_ops/bam/bamtools
+	url = https://github.com/pezmaster31/bamtools.git
