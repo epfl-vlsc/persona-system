@@ -117,6 +117,7 @@ class BWAAlignerOp : public OpKernel {
 
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, no_resource_releaser)), 
         Internal("Unable to push item onto work queue. Is it already closed?"));
+    //reads->wait_for_ready();
     t_last = std::chrono::high_resolution_clock::now();
   }
 

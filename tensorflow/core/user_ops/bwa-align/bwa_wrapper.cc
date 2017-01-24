@@ -40,23 +40,22 @@ namespace bwa_wrapper {
         return Internal("subchunk was missing a read mate!");
 
 
-      char* seq = strndup(bases, bases_len);
-      for (int i  =0; i < bases_len; i++)
+      //LOG(INFO) << "bases len is " << bases_len;
+      //memcpy(seq, bases, bases_len);
+      /*for (int i  =0; i < bases_len; i++)
         if (seq[i] > 4)
           printf("seq is fucked\n");
         else
-          printf("%u", (uint8_t)(seq[i] + '0'));
-      printf("\n");
-      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, seq, nullptr);
+          printf("%u", (uint8_t)(seq[i]));
+      printf("\n");*/
+      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), nullptr);
       regs[index++] = reg;
 
 
-      char* seqmate = strndup(bases_mate, mate_len);
-      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, seqmate, nullptr);
+     // memcpy(seqmate, bases_mate, mate_len);
+      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, const_cast<char*>(bases_mate), nullptr);
       regs[index++] = reg;
 
-      free(seq);
-      free(seqmate);
       s = subchunk->get_next_record(&bases, &bases_len, &quals);
     }
 
@@ -133,8 +132,8 @@ namespace bwa_wrapper {
         two_bit_seqs_[i].resize(max_read_len_);
       }
     }*/
-
-    int cur_seq = 0;
+      
+    bseq1_t reads[2];
     uint64_t id = 0; // num pairs
     while (s.ok()) {
       s = subchunk->get_next_record(&bases_mate, &mate_len, &quals_mate);
@@ -142,12 +141,13 @@ namespace bwa_wrapper {
         return Internal("subchunk was missing a read mate!");
 
       // BWA requires modifiable c-str buffers, so we have to copy :-(
-      bseq1_t reads[2];
+      //memcpy(seq, bases, bases_len);
+      //memcpy(seqmate, bases_mate, mate_len);
       reads[0].comment = 0; reads[1].comment = 0;
-      reads[0].qual = strndup(quals, bases_len); reads[1].qual = strndup(quals_mate, mate_len);
+      reads[0].qual = const_cast<char*>(quals); reads[1].qual = const_cast<char*>(quals_mate);
       // we use the remembered two bit seqs
-      reads[0].seq = strndup(bases, bases_len); reads[1].seq = strndup(bases_mate, mate_len);
-      reads[0].name = strdup(placeholder.c_str()); reads[1].name = strdup(placeholder.c_str());
+      reads[0].seq = const_cast<char*>(bases); reads[1].seq = const_cast<char*>(bases_mate);
+      reads[0].name = const_cast<char*>(placeholder.c_str()); reads[1].name = const_cast<char*>(placeholder.c_str());
       reads[0].l_seq = bases_len; reads[1].l_seq = mate_len;
 
       //LOG(INFO) << "regs index: " << regs_index;
@@ -159,6 +159,7 @@ namespace bwa_wrapper {
       int ret = mem_sam_pe_results(options_, index_->bns, index_->pac, pes, id, reads, &regs[regs_index], results, num_results);
 	
       // free data allocated by the align op
+      // BWA really needs to stop allocating memory like this ...
       free(regs[regs_index|0].a); free(regs[regs_index|1].a);
 
       id++;
