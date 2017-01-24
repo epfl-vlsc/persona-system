@@ -112,14 +112,17 @@ class BWAFinalizeOp : public OpKernel {
     OP_REQUIRES_OK(ctx, GetInput(ctx, "read", &reads_container));
 
     // dont want to delete yet
-    //core::ScopedUnref a(reads_container);
+    core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
 
     auto* bl = bufferlist_resource_container->get();
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, bl)); // no bufferlist
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, bl)); 
 
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, resource_releaser)), 
         Internal("Unable to push item onto work queue. Is it already closed?"));
+    //LOG(INFO) << "waiting for ready";
+    //bl->wait_for_ready();
+    //LOG(INFO) << "done";
     t_last = std::chrono::high_resolution_clock::now();
   }
 
@@ -204,6 +207,8 @@ private:
             compute_status_ = s;
             return;
           }
+
+          result_buf->set_ready();
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &interval);
         }

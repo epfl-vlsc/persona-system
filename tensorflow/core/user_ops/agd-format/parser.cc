@@ -203,9 +203,10 @@ namespace tensorflow {
       LOG(INFO) << "calling two bit with unpack";
       if (twobit) {
         for (int i = 0; i < conversion_scratch_.size(); ++i) {// convert to 2-bit encoding 
-          LOG(INFO) << "converting " << conversion_scratch_[i] << " to " << nst_nt4_table[(int)conversion_scratch_[i]];
+          //LOG(INFO) << "converting " << conversion_scratch_[i] << " to " << (int)nst_nt4_table[(int)conversion_scratch_[i]];
           conversion_scratch_[i] = nst_nt4_table[(int)conversion_scratch_[i]];
-          LOG(INFO) << "is now: " << conversion_scratch_[i];
+          //LOG(INFO) << "is now: " << (int)(conversion_scratch_[i]);
+          if (conversion_scratch_[i] > 4) return Internal("sequence is fucked");
         }
       }
       // append everything in converted_records to the index

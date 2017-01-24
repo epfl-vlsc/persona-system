@@ -21,10 +21,14 @@ namespace bwa_wrapper {
     public:
       BWAAligner(const mem_opt_t *options, const bwaidx_t *index_resource, size_t max_read_len) :
         index_(index_resource), options_(options), max_read_len_(max_read_len) {
-    
+   
+          seq = new char[max_read_len];
+          seqmate = new char[max_read_len];
       }
 
       ~BWAAligner() {
+        delete [] seq;
+        delete [] seqmate;
       }
 
       // align a whole subchunk since BWA infers insert distance from the data
@@ -38,6 +42,8 @@ namespace bwa_wrapper {
       const mem_opt_t *options_;
       const bwaidx_t *index_;
       size_t max_read_len_;
+      char * seq;
+      char * seqmate;
       
       void ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, format::AlignmentResult& result, string& cigar);
 
