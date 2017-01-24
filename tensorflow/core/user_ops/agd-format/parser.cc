@@ -12,21 +12,21 @@ namespace tensorflow {
 
   namespace {
     unsigned char nst_nt4_table[256] = {
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
       4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 5 /*'-'*/, 4, 4,
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+      4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
       4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
     };
   }
@@ -185,43 +185,45 @@ namespace tensorflow {
       }
     }
 
-    if (unpack && static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
-      conversion_scratch_.reset(); index_scratch_.reset();
+    if (static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
+      if (unpack) {
+        conversion_scratch_.reset(); index_scratch_.reset();
 
-      uint8_t current_record_length;
-      const char* start_ptr = &(*result_buffer)[index_size];
-      const BinaryBases *bases;
+        uint8_t current_record_length;
+        const char* start_ptr = &(*result_buffer)[index_size];
+        const BinaryBases *bases;
 
-      for (uint64_t i = 0; i < index_size; ++i) {
-        current_record_length = records[i];
-        bases = reinterpret_cast<const BinaryBases*>(start_ptr);
-        start_ptr += current_record_length;
+        for (uint64_t i = 0; i < index_size; ++i) {
+          current_record_length = records[i];
+          bases = reinterpret_cast<const BinaryBases*>(start_ptr);
+          start_ptr += current_record_length;
 
-        TF_RETURN_IF_ERROR(append(bases, current_record_length, conversion_scratch_, index_scratch_));
-      }
-
-      LOG(INFO) << "calling two bit with unpack";
-      if (twobit) {
-        for (int i = 0; i < conversion_scratch_.size(); ++i) {// convert to 2-bit encoding 
-          //LOG(INFO) << "converting " << conversion_scratch_[i] << " to " << (int)nst_nt4_table[(int)conversion_scratch_[i]];
-          conversion_scratch_[i] = nst_nt4_table[(int)conversion_scratch_[i]];
-          //LOG(INFO) << "is now: " << (int)(conversion_scratch_[i]);
-          if (conversion_scratch_[i] > 4) return Internal("sequence is fucked");
+          TF_RETURN_IF_ERROR(append(bases, current_record_length, conversion_scratch_, index_scratch_));
         }
+
+        if (twobit) {
+          LOG(INFO) << "calling two bit with unpack";
+          for (int i = 0; i < conversion_scratch_.size(); ++i) {// convert to 2-bit encoding 
+            //LOG(INFO) << "converting " << conversion_scratch_[i] << " to " << (int)nst_nt4_table[(int)conversion_scratch_[i]];
+            conversion_scratch_[i] = nst_nt4_table[(int)conversion_scratch_[i]];
+            //LOG(INFO) << "is now: " << (int)(conversion_scratch_[i]);
+            if (conversion_scratch_[i] > 4) return Internal("sequence is fucked");
+          }
+        }
+        // append everything in converted_records to the index
+        result_buffer->reserve(index_scratch_.size() + conversion_scratch_.size());
+        TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(&index_scratch_[0], index_scratch_.size()));
+        TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
+      } else if (twobit) {
+        LOG(INFO) << "calling two bit without unpack";
+        const char* start_ptr = &(*result_buffer)[index_size];
+        conversion_scratch_.resize(payload_size - index_size);
+        for (int i = 0; i < payload_size-index_size; ++i) // convert to 2-bit encoding
+          conversion_scratch_[i] = nst_nt4_table[(int)start_ptr[i]];
+
+        TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(payload_start, index_size));
+        TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
       }
-      // append everything in converted_records to the index
-      result_buffer->reserve(index_scratch_.size() + conversion_scratch_.size());
-      TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(&index_scratch_[0], index_scratch_.size()));
-      TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
-    } else if (twobit && static_cast<RecordType>(file_header->record_type) == RecordType::BASES) {
-      LOG(INFO) << "calling two bit without unpack";
-      const char* start_ptr = &(*result_buffer)[index_size];
-      conversion_scratch_.resize(payload_size - index_size);
-      for (int i = 0; i < payload_size-index_size; ++i) // convert to 2-bit encoding 
-        conversion_scratch_[i] = nst_nt4_table[(int)start_ptr[i]];
-      
-      TF_RETURN_IF_ERROR(result_buffer->WriteBuffer(payload_start, index_size));
-      TF_RETURN_IF_ERROR(result_buffer->AppendBuffer(&conversion_scratch_[0], conversion_scratch_.size()));
     }
 
     *first_ordinal = file_header->first_ordinal;

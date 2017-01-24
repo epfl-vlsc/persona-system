@@ -290,6 +290,7 @@ namespace snap_wrapper {
       }
     }
     result_column.AppendAlignmentResult(format_result, cigar);
+    return Status::OK();
   }
 
   Status PostProcess(
@@ -500,7 +501,7 @@ namespace snap_wrapper {
         read->getOriginalFrontHardClipping(), read->getOriginalBackHardClipping(), orig_location, direction, useM,
         &editDistance, addFrontClipping);
 
-      LOG(INFO) << "cigar output was : " << thecigar << " and frontclipping was " << *addFrontClipping;
+      //VLOG(DEBUG) << "cigar output was : " << thecigar << " and frontclipping was " << *addFrontClipping;
 
       if (*addFrontClipping != 0) {
         // higher up the call stack deals with this
