@@ -76,6 +76,7 @@ namespace tensorflow {
 
                 bwaidx_t* idx = bwa_idx_load_from_shm(index_location_.c_str());
                 if (idx == 0) {
+                  LOG(INFO) << "doing regular index load!";
                   if ((idx = bwa_idx_load(index_location_.c_str(), BWA_IDX_ALL)) == 0) 
                     return Internal("Failed to load BWA Index"); 
                 }                 

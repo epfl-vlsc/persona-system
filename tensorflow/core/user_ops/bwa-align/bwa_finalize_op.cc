@@ -118,6 +118,7 @@ class BWAFinalizeOp : public OpKernel {
     auto* bl = bufferlist_resource_container->get();
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, bl)); 
 
+    LOG(INFO) << "finalizer processing and filling buflist: " << bl;
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, resource_releaser)), 
         Internal("Unable to push item onto work queue. Is it already closed?"));
     //LOG(INFO) << "waiting for ready";
@@ -196,7 +197,7 @@ private:
         vector<mem_alnreg_v>& regs = reads->get_regs();
         mem_pestat_t* pes = reads->get_pes();
         while (io_chunk_status.ok()) {
-          LOG(INFO) << "finalizer thread " << my_id << " got  interval: " << interval;
+          //LOG(INFO) << "finalizer thread " << my_id << " got  interval: " << interval;
 
           result_builder.set_buffer_pair(result_buf);
 
@@ -210,7 +211,7 @@ private:
 
           result_buf->set_ready();
 
-          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &interval);
+          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf, &interval);
         }
         
         if (!IsResourceExhausted(io_chunk_status)) {

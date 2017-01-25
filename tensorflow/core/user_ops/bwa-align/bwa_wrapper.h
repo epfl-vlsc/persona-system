@@ -24,11 +24,13 @@ namespace bwa_wrapper {
    
           seq = new char[max_read_len];
           seqmate = new char[max_read_len];
+          aux_ = smem_aux_init();
       }
 
       ~BWAAligner() {
         delete [] seq;
         delete [] seqmate;
+        smem_aux_destroy(aux_);
       }
 
       // align a whole subchunk since BWA infers insert distance from the data
@@ -38,12 +40,38 @@ namespace bwa_wrapper {
           mem_pestat_t pes[4], AlignmentResultBuilder &result_builder);
 
     private:
+      typedef struct {
+        bwtintv_v mem, mem1, *tmpv[2];
+      } smem_aux_t;
+      
+      // duplicated from BWA to avoid modifying it more
+      // this isnt ideal but it should work ...
+
+      static smem_aux_t *smem_aux_init()
+      {
+        smem_aux_t *a;
+        a = (smem_aux_t*)calloc(1, sizeof(smem_aux_t));
+        a->tmpv[0] = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
+        a->tmpv[1] = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
+        return a;
+      }
+        
+      static void smem_aux_destroy(smem_aux_t *a)
+      {	
+        free(a->tmpv[0]->a); free(a->tmpv[0]);
+        free(a->tmpv[1]->a); free(a->tmpv[1]);
+        free(a->mem.a); free(a->mem1.a);
+        free(a);
+      }
+
       // we dont own these
       const mem_opt_t *options_;
       const bwaidx_t *index_;
       size_t max_read_len_;
       char * seq;
       char * seqmate;
+	
+      smem_aux_t *aux_;
       
       void ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, format::AlignmentResult& result, string& cigar);
 

@@ -48,12 +48,12 @@ namespace bwa_wrapper {
         else
           printf("%u", (uint8_t)(seq[i]));
       printf("\n");*/
-      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), nullptr);
+      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), (void*)aux_);
       regs[index++] = reg;
 
 
      // memcpy(seqmate, bases_mate, mate_len);
-      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, const_cast<char*>(bases_mate), nullptr);
+      reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, const_cast<char*>(bases_mate), (void*)aux_);
       regs[index++] = reg;
 
       s = subchunk->get_next_record(&bases, &bases_len, &quals);
