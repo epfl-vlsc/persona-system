@@ -35,8 +35,8 @@ namespace tensorflow {
         for (int i = 0; i < num_contigs; i++) {
           refs(i) = string(contigs[i].name);
           sizes(i) = static_cast<uint32>(contigs[i].len);
-          LOG(INFO) << "contig name is: " << contigs[i].name << " and len is: "
-            << contigs[i].len;
+          //LOG(INFO) << "contig name is: " << contigs[i].name << " and len is: "
+            //<< contigs[i].len;
         }
 
       }
