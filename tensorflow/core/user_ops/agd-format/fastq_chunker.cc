@@ -4,10 +4,11 @@ namespace tensorflow {
   using namespace std;
 
   // note: copies the shared ptr and any custom deleter (which we'll use)
-  FastqChunker::FastqChunker(shared_ptr<Data> &data, const size_t chunk_size) :
+  FastqChunker::FastqChunker(shared_ptr<FastqResource::FileResource> &data, const size_t chunk_size) :
     data_(data), chunk_size_(chunk_size) {
-    current_ptr_ = data->data();
-    end_ptr_ = current_ptr_ + data->size();
+    auto *file_data = data->get();
+    current_ptr_ = file_data->data();
+    end_ptr_ = current_ptr_ + file_data->size();
   }
 
   bool FastqChunker::next_chunk(FastqResource &resource) {

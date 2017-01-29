@@ -11,8 +11,9 @@ namespace tensorflow {
 
   class FastqResource : public ReadResource {
   public:
+    typedef ResourceContainer<Data> FileResource;
 
-    explicit FastqResource(std::shared_ptr<Data> &fastq_file, const char *start_ptr, const char *end_ptr, const std::size_t max_records);
+    explicit FastqResource(std::shared_ptr<FileResource> &fastq_file, const char *start_ptr, const char *end_ptr, const std::size_t max_records);
     FastqResource() = default;
     FastqResource& operator=(FastqResource &&other);
 
@@ -29,7 +30,7 @@ namespace tensorflow {
     void read_line(const char **line_start, std::size_t *line_length, std::size_t skip_length = 0);
     void skip_line();
 
-    std::shared_ptr<Data> fastq_file_; // default constructor = nullptr
+    std::shared_ptr<FileResource> fastq_file_; // default constructor = nullptr
 
     const char *start_ptr_ = nullptr, *end_ptr_ = nullptr, *current_record_ = nullptr;
     std::size_t max_records_ = 0, current_record_idx_ = 0;
