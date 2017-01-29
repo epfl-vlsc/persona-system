@@ -17,7 +17,7 @@ namespace tensorflow {
     return *this;
   }
 
-  FastqResource::FastqResource(std::shared_ptr<Data> &fastq_file, const char *start_ptr,
+  FastqResource::FastqResource(std::shared_ptr<FileResource> &fastq_file, const char *start_ptr,
                                const char *end_ptr, const std::size_t max_records) : fastq_file_(fastq_file),
                                                                                      start_ptr_(start_ptr), end_ptr_(end_ptr),
                                                                                      current_record_(start_ptr),

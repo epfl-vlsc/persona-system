@@ -5,7 +5,8 @@ namespace tensorflow {
 
   class FastqChunker {
   public:
-    FastqChunker(std::shared_ptr<Data> &data, const std::size_t chunk_size);
+
+    FastqChunker(std::shared_ptr<FastqResource::FileResource> &data, const std::size_t chunk_size);
 
     // Assigns a fastq resource to the parameter
     // bool indicates whether this operation was successful
@@ -20,7 +21,7 @@ namespace tensorflow {
 
     const char* skip_line();
 
-    std::shared_ptr<Data> data_;
+    std::shared_ptr<FastqResource::FileResource> data_;
     const char *current_ptr_, *end_ptr_;
     std::size_t chunk_size_;
   };
