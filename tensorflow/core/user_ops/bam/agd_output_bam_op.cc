@@ -83,7 +83,6 @@ namespace tensorflow {
           total += ref_sizes_[i];
           ref_vec.push_back(RefData(ref_seqs_[i], ref_sizes_[i]));
           ref_size_totals_.push_back(total);
-          LOG(INFO) << "ref size total " << i << " is " << total;
         }
 
         SamHeader header(header_ss.str());
@@ -104,9 +103,7 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, ctx->input("qualities_handle", &qualities_in));
         OP_REQUIRES_OK(ctx, ctx->input("metadata_handle", &metadata_in));
        
-        LOG(INFO) << "getting num recs";
         auto num_records = num_records_t->scalar<int32>()();
-        LOG(INFO) << "num recs is " << num_records;
 
         ResourceContainer<Data>* bases_data, *qual_data, *meta_data, *result_data;
         OP_REQUIRES_OK(ctx, LoadDataResource(ctx, bases_in, &bases_data));
@@ -145,11 +142,9 @@ namespace tensorflow {
           cigar_len = len - sizeof(format::AlignmentResult);
           alignment.AlignmentFlag = result->flag_;
 
-          LOG(INFO) << "location is " << result->location_;
           int pos = FindChromosome(result->location_, ref_index);
           alignment.RefID = ref_index;
           alignment.Position = pos;
-          LOG(INFO) << "ref index is: " << ref_index << " pos is " << pos;
           alignment.MapQuality = result->mapq_;
           OP_REQUIRES_OK(ctx, ParseCigar(cigar, cigar_len, cigar_vec));
           alignment.CigarData = cigar_vec;
@@ -157,7 +152,6 @@ namespace tensorflow {
           pos = FindChromosome(result->next_location_, ref_index);
           alignment.MateRefID = ref_index;
           alignment.MatePosition = pos;
-          LOG(INFO) << "mate ref index is: " << ref_index << " mate pos is " << pos;
           alignment.InsertSize = result->template_length_; // need to check if this is the same thing
           
           bam_writer_.SaveAlignment(alignment);
