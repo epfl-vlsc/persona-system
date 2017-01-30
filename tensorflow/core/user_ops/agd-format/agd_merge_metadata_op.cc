@@ -30,7 +30,10 @@ namespace tensorflow {
 
     void resource_releaser(ResourceContainer<Data> *data) {
       core::ScopedUnref a(data);
-      data->release();
+      {
+        ResourceReleaser<Data> a1(*data);
+        data->get()->release();
+      }
     }
 
     class ColumnCursor {
