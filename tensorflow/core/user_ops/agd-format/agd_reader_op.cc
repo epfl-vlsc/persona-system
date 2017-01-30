@@ -114,6 +114,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
 
         num_records(i) = num_recs;
         first_ordinals(i) = first_ord;
+        input_data->release();
       }
     }
 
