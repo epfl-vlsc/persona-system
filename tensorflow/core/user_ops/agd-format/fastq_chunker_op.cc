@@ -18,7 +18,7 @@ namespace tensorflow {
 
   namespace {
     const string op_name("FastqChunker"), pool_name("FastqReadPool");
-    const TensorShape enqueue_shape_{{2}};
+    const TensorShape enqueue_shape_{{2}}, first_ord_shape_{};
   }
 
   REGISTER_OP(op_name.c_str())
@@ -94,18 +94,27 @@ A pool to manage FastqReadResource objects
     }
 
   private:
+    int64_t first_ordinal_ = 0;
     int chunk_size_;
     QueueInterface *queue_ = nullptr;
     ReferencePool<FastqResource> *fastq_pool_ = nullptr;
 
     Status EnqueueFastqResource(OpKernelContext *ctx, ResourceContainer<FastqResource> *fastq_resource) {
       QueueInterface::Tuple tuple;
-      Tensor fastq_out;
+      auto *fr = fastq_resource->get();
+      auto num_recs = fr->num_records();
+
+      Tensor fastq_out, first_ord_out;
       TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_STRING, enqueue_shape_, &fastq_out));
+      TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_INT64, first_ord_shape_, &first_ord_out));
       auto f_o = fastq_out.vec<string>();
+      auto first_ord = first_ord_out.scalar<int64>();
       f_o(0) = fastq_resource->container();
       f_o(1) = fastq_resource->name();
+      first_ord() = first_ordinal_;
+      first_ordinal_ += num_recs;
       tuple.push_back(fastq_out);
+      tuple.push_back(first_ord_out);
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
       queue_->TryEnqueue(tuple, ctx, [](){});
       return Status::OK();
