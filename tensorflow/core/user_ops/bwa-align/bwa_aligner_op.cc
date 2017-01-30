@@ -69,17 +69,17 @@ class BWAAlignerOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
-      LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
-      LOG(INFO) << "request queue peek wait: " << request_queue_->num_peek_waits();
+      //LOG(INFO) << "request queue push wait: " << request_queue_->num_push_waits();
+      //LOG(INFO) << "request queue pop wait: " << request_queue_->num_pop_waits();
+      //LOG(INFO) << "request queue peek wait: " << request_queue_->num_peek_waits();
       uint64_t avg_inter_time = 0;
       if (total_usec > 0)
         avg_inter_time = total_usec / total_invoke_intervals;
 
-      LOG(INFO) << "average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
+      //LOG(INFO) << "average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
-      VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
+      //VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
   void Compute(OpKernelContext* ctx) override {
@@ -211,7 +211,7 @@ private:
 
       }
 
-      VLOG(INFO) << "base aligner thread ending.";
+      //VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_--;
     };
 

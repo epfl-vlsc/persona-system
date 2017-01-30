@@ -19,6 +19,46 @@ namespace bwa_wrapper {
     return l;
   }
 
+  Status BWAAligner::AlignSubchunkSingle(ReadResource* subchunk, AlignmentResultBuilder &result_builder) {
+
+    const char* bases, *bases_mate;
+    const char* quals, *quals_mate;
+    size_t bases_len, mate_len;
+
+    Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
+    int64_t i = 0;
+    bseq1_t read;
+    mem_aln_t alignments[2];
+    int num_alignments;
+    while (s.ok()) {
+
+      auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), (void*)aux_);
+		
+      mem_mark_primary_se(options_, reg.n, reg.a, i);
+      
+      read.comment = 0; 
+      read.qual = const_cast<char*>(quals); 
+      // we use the remembered two bit seqs
+      read.seq = const_cast<char*>(bases); 
+      read.name = const_cast<char*>(placeholder.c_str()); 
+      read.l_seq = bases_len;
+
+      mem_reg2result(options_, index_->bns, index_->pac, &read, &reg, 0, 0, alignments, &num_alignments);
+      
+      format::AlignmentResult result;
+      string cigar;
+      ProcessResult(&alignments[0], nullptr, result, cigar);
+      result_builder.AppendAlignmentResult(result, cigar);
+
+      i++;
+      s = subchunk->get_next_record(&bases, &bases_len, &quals);
+    }
+
+    if (!IsResourceExhausted(s))
+      return s;
+
+    return Status::OK();
+  }
   Status BWAAligner::AlignSubchunk(ReadResource* subchunk, size_t index, vector<mem_alnreg_v>& regs) {
 
     const char* bases, *bases_mate;
