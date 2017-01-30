@@ -69,17 +69,17 @@ class BWAFinalizeOp : public OpKernel {
       while (num_active_threads_.load() > 0) {
         this_thread::sleep_for(chrono::milliseconds(10));
       }
-      LOG(INFO) << "finalize request queue push wait: " << request_queue_->num_push_waits();
-      LOG(INFO) << "finalize request queue pop wait: " << request_queue_->num_pop_waits();
-      LOG(INFO) << "finalize request queue peek wait: " << request_queue_->num_peek_waits();
+      //LOG(INFO) << "finalize request queue push wait: " << request_queue_->num_push_waits();
+      //LOG(INFO) << "finalize request queue pop wait: " << request_queue_->num_pop_waits();
+      //LOG(INFO) << "finalize request queue peek wait: " << request_queue_->num_peek_waits();
       uint64_t avg_inter_time = 0;
       if (total_usec > 0)
         avg_inter_time = total_usec / total_invoke_intervals;
 
-      LOG(INFO) << "finalize average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
+      //LOG(INFO) << "finalize average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
-      VLOG(DEBUG) << "bwa finalize Destructor(" << this << ") finished\n";
+      //VLOG(DEBUG) << "bwa finalize Destructor(" << this << ") finished\n";
     }
 
   void Compute(OpKernelContext* ctx) override {
@@ -118,7 +118,7 @@ class BWAFinalizeOp : public OpKernel {
     auto* bl = bufferlist_resource_container->get();
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, bl)); 
 
-    LOG(INFO) << "finalizer processing and filling buflist: " << bl;
+    //LOG(INFO) << "finalizer processing and filling buflist: " << bl;
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, resource_releaser)), 
         Internal("Unable to push item onto work queue. Is it already closed?"));
     //LOG(INFO) << "waiting for ready";
@@ -224,7 +224,7 @@ private:
 
       }
 
-      VLOG(INFO) << "base aligner thread ending.";
+      //VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_--;
     };
 
