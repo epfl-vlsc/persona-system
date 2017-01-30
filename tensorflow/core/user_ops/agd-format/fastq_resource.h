@@ -25,6 +25,8 @@ namespace tensorflow {
 
     void release() override;
 
+    std::size_t num_records();
+
   private:
 
     void read_line(const char **line_start, std::size_t *line_length, std::size_t skip_length = 0);

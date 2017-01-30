@@ -83,6 +83,15 @@ namespace tensorflow {
 
   void FastqResource::release() {
     fastq_file_.reset();
+    start_ptr_ = nullptr;
+    end_ptr_ = nullptr;
+    current_record_ = nullptr;
+    max_records_ = 0;
+    current_record_idx_ = 0;
+  }
+
+  size_t FastqResource::num_records() {
+    return max_records_;
   }
 
 } // namespace tensorflow {
