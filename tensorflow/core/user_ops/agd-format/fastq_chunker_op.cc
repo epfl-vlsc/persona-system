@@ -19,6 +19,11 @@ namespace tensorflow {
   namespace {
     const string op_name("FastqChunker"), pool_name("FastqReadPool");
     const TensorShape enqueue_shape_{{2}}, first_ord_shape_{};
+
+    void custom_deleter(FastqResource::FileResource *f) {
+      ResourceReleaser<Data> a(*f);
+      f->get()->release();
+    }
   }
 
   REGISTER_OP(op_name.c_str())
@@ -79,7 +84,7 @@ A pool to manage FastqReadResource objects
       ResourceContainer<Data> *fastq_file;
       OP_REQUIRES_OK(ctx, rmgr->Lookup(fastq_file_data(0), fastq_file_data(1), &fastq_file));
       core::ScopedUnref fastq_unref(fastq_file);
-      shared_ptr<FastqResource::FileResource> file_data(fastq_file);
+      shared_ptr<FastqResource::FileResource> file_data(fastq_file, custom_deleter);
 
       FastqChunker chunker(file_data, chunk_size_);
 
