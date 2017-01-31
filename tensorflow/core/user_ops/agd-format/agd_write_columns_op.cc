@@ -109,6 +109,9 @@ and is thus passed as an Attr instead of an input (for efficiency);
         OP_REQUIRES(ctx, stat(outdir.c_str(), &outdir_info) == 0, Internal("Unable to stat path: ", outdir));
         OP_REQUIRES(ctx, S_ISDIR(outdir_info.st_mode), Internal("Path ", outdir, " is not a directory"));
       } // else it's just the current working directory
+      if (outdir.back() != '/') {
+        outdir.push_back('/');
+      }
       record_prefix_ = outdir;
     }
 
