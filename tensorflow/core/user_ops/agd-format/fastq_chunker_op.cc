@@ -102,19 +102,23 @@ A pool to manage FastqReadResource objects
     Status EnqueueFastqResource(OpKernelContext *ctx, ResourceContainer<FastqResource> *fastq_resource) {
       QueueInterface::Tuple tuple;
       auto *fr = fastq_resource->get();
-      auto num_recs = fr->num_records();
+      auto num_records = fr->num_records();
 
-      Tensor fastq_out, first_ord_out;
+      Tensor fastq_out, first_ord_out, num_recs_out;
       TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_STRING, enqueue_shape_, &fastq_out));
       TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_INT64, first_ord_shape_, &first_ord_out));
+      TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_INT64, first_ord_shape_, &num_recs_out));
       auto f_o = fastq_out.vec<string>();
       auto first_ord = first_ord_out.scalar<int64>();
+      auto num_recs = num_recs_out.scalar<int64>();
       f_o(0) = fastq_resource->container();
       f_o(1) = fastq_resource->name();
       first_ord() = first_ordinal_;
-      first_ordinal_ += num_recs;
+      num_recs() = num_records;
+      first_ordinal_ += num_records;
       tuple.push_back(fastq_out);
       tuple.push_back(first_ord_out);
+      tuple.push_back(num_recs_out);
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
       queue_->TryEnqueue(tuple, ctx, [](){});
       return Status::OK();
