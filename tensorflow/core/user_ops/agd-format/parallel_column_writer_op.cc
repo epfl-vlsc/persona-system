@@ -80,6 +80,11 @@ Thus we always need 3 of these for the full conversion pipeline
         OP_REQUIRES(ctx, stat(outdir.c_str(), &outdir_info) == 0, Internal("Unable to stat path: ", outdir));
         OP_REQUIRES(ctx, S_ISDIR(outdir_info.st_mode), Internal("Path ", outdir, " is not a directory"));
       } // else it's just the current working directory
+
+      if (outdir.back() != '/') {
+        outdir.push_back('/');
+      }
+
       record_prefix_ = outdir;
     }
 
@@ -103,7 +108,7 @@ Thus we always need 3 of these for the full conversion pipeline
 
       string full_path(record_prefix_ + filepath + record_suffix_);
 
-      LOG(INFO) << "writing file " << full_path;
+      VLOG(INFO) << "writing file " << full_path;
       FILE *file_out = fopen(full_path.c_str(), "w+");
       // TODO get errno out of file
       OP_REQUIRES(ctx, file_out != NULL,
@@ -160,7 +165,6 @@ Thus we always need 3 of these for the full conversion pipeline
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &key_out));
       key_out->scalar<string>()() = filepath;
 
-      LOG(INFO) << "writer OK!!!!";
       auto duration = TRACEPOINT_DURATION_CALC(start);
       tracepoint(bioflow, chunk_read, filepath.c_str(), duration);
     }
