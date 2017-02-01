@@ -235,8 +235,6 @@ Status compressGZIP(const char* segment,
     stream_.zfree = Z_NULL;
     stream_.opaque = Z_NULL;
     done_ = false;
-    output_.clear();
-    safe_reserve(output_, 1);
 
     int status = deflateInit2(&stream_, Z_DEFAULT_COMPRESSION,
                               Z_DEFLATED, window_bits | ENABLE_ZLIB_GZIP_COMPRESS,
@@ -249,7 +247,8 @@ Status compressGZIP(const char* segment,
 
   Status AppendingGZIPCompressor::appendGZIP(const char* segment,
                                              const size_t segment_size) {
-    if (done_) {
+#if 0
+  if (done_) {
       return Unavailable("appendGZIP is already finished. Must call init()");
     }
 
@@ -272,6 +271,7 @@ Status compressGZIP(const char* segment,
         break;
       }
     } while (stream_.avail_out == 0);
+#endif
 
     return Status::OK();
   }
@@ -290,7 +290,7 @@ Status compressGZIP(const char* segment,
     finish(); // TODO maybe log here?
   }
 
-  AppendingGZIPCompressor::AppendingGZIPCompressor(vector<char> &output) : output_(output)
+  AppendingGZIPCompressor::AppendingGZIPCompressor(Buffer *output) : output_(output)
   {
     
   }
