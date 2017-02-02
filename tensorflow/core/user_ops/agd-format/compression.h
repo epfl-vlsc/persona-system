@@ -23,7 +23,7 @@ namespace tensorflow {
   class AppendingGZIPCompressor
   {
   public:
-    AppendingGZIPCompressor(Buffer *output);
+    AppendingGZIPCompressor(Buffer &output);
 
     ~AppendingGZIPCompressor();
 
@@ -35,10 +35,13 @@ namespace tensorflow {
 
     // closes the stream
     Status finish(); // somehow flush
+
   private:
     z_stream stream_ = {0};
     bool done_ = false;
-    Buffer *output_;
+    Buffer &output_;
+
+    void ensure_extend_capacity(std::size_t capacity);
   };
 
 } // namespace tensorflow
