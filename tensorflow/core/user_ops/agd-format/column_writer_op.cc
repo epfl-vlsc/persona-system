@@ -66,6 +66,9 @@ Thus we always need 3 of these for the full conversion pipeline
 
       OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &s));
       if (!s.empty()) {
+        if (s.back() != '/') {
+          s.push_back('/');
+        }
         record_prefix_ = s;
       }
     }

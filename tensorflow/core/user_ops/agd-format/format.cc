@@ -112,6 +112,7 @@ BinaryBases::getBase(const size_t position, char* base) const
 Status
 IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases)
 {
+  bases.clear();
   size_t base_idx = 0;
   BinaryBases bb;
   for (size_t i = 0; i < fastq_base_size; i++) {
