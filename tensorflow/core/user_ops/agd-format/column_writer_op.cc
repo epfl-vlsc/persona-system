@@ -1,150 +1,194 @@
+#include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/framework/shape_inference.h"
+#include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
-#include "tensorflow/core/lib/core/errors.h"
 #include "data.h"
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
-#include "compression.h"
+#include <utility>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "format.h"
 
 namespace tensorflow {
   using namespace std;
   using namespace errors;
+  using namespace format;
+
   namespace {
     const string op_name("ColumnWriter");
   }
 
   REGISTER_OP(op_name.c_str())
-  .Attr("compress: bool")
   .Attr("record_id: string")
-  .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
+  .Attr("record_types: list({'base', 'qual', 'metadata', 'results'})")
   .Attr("output_dir: string = ''")
-  .Input("column_handle: string")
+  .Input("columns: string")
   .Input("file_path: string")
-  // TODO these can be collapsed into a vec(3) if that would help performance
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
-  .SetIsStateful()
+  .Output("file_path_out: string")
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+
+      vector<string> record_types;
+      TF_RETURN_IF_ERROR(c->GetAttr("record_types", &record_types));
+
+      ShapeHandle input_data;
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 2, &input_data));
+      auto dim_handle = c->Dim(input_data, 1);
+      auto dim_value = c->Value(dim_handle);
+      if (dim_value != 2) {
+        return Internal("columns must be an Nx2 matrix, but got ", dim_value, " for the 2nd dim");
+      }
+
+      dim_handle = c->Dim(input_data, 0);
+      dim_value = c->Value(dim_handle);
+      auto expected_size = record_types.size();
+      if (dim_value != expected_size) {
+        return Internal("columns must have ", expected_size, " in 0 dim, but got ", dim_value);
+      }
+
+      for (int i = 1; i < 4; i++) {
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 0, &input_data));
+      }
+
+      c->set_output(0, c->input(1));
+
+      return Status::OK();
+    })
   .Doc(R"doc(
-Writes out a column (just a character buffer) to the location specified by the input.
-
-This writes out to local disk only
-
-Assumes that the record_id for a given set does not change for the runtime of the graph
-and is thus passed as an Attr instead of an input (for efficiency);
-
-This also assumes that this writer only writes out a single record type.
-Thus we always need 3 of these for the full conversion pipeline
 )doc");
 
   class ColumnWriterOp : public OpKernel {
   public:
     ColumnWriterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
-      using namespace format;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
       string s;
+      FileHeader header;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &s));
-      auto max_size = sizeof(header_.string_id);
+      auto max_size = sizeof(header.string_id);
       OP_REQUIRES(ctx, s.length() < max_size,
                   Internal("record_id for column header '", s, "' greater than 32 characters"));
-      strncpy(header_.string_id, s.c_str(), max_size);
 
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &s));
+      vector<string> rec_types;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_types", &rec_types));
+
       RecordType t;
-      if (s.compare("base") == 0) {
-        t = RecordType::BASES;
-      } else if (s.compare("qual") == 0) {
-        t = RecordType::QUALITIES;
-      } else if (s.compare("meta") == 0) {
-        t = RecordType::COMMENTS;
-      } else { // no need to check. we're saved by string enum types if TF
-        t = RecordType::ALIGNMENT;
+      for (const auto &record_type : rec_types) {
+        if (s.compare("base") == 0) {
+          t = RecordType::BASES;
+        } else if (s.compare("qual") == 0) {
+          t = RecordType::QUALITIES;
+        } else if (s.compare("metadata") == 0) {
+          t = RecordType::COMMENTS;
+        } else { // no need to check. we're saved by string enum types if TF
+          t = RecordType::ALIGNMENT;
+        }
+        header.record_type = static_cast<uint8_t>(t);
+        strncpy(header.string_id, s.c_str(), max_size);
+        header_infos_.push_back(make_pair(header, "." + record_type));
       }
-      record_suffix_ = "." + s;
-      header_.record_type = static_cast<uint8_t>(t);
 
       OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &s));
       if (!s.empty()) {
         if (s.back() != '/') {
           s.push_back('/');
         }
-        record_prefix_ = s;
+        struct stat outdir_info;
+        OP_REQUIRES(ctx, stat(s.c_str(), &outdir_info) == 0, Internal("Unable to stat path: ", s));
+        OP_REQUIRES(ctx, S_ISDIR(outdir_info.st_mode), Internal("Path ", s, " is not a directory"));
+        record_prefix_path_ = s;
       }
     }
 
     void Compute(OpKernelContext* ctx) override {
-      using namespace errors;
-      const Tensor *path, *column_t;
-      OP_REQUIRES_OK(ctx, ctx->input("file_path", &path));
-      OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
-      auto filepath = path->scalar<string>()();
-      auto column_vec = column_t->vec<string>();
+      OP_REQUIRES_OK(ctx, InitHeaders(ctx));
 
-      ResourceContainer<Data> *column;
-      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
-      core::ScopedUnref column_releaser(column);
-      ResourceReleaser<Data> a(*column);
+      const Tensor *file_path_t;
+      OP_REQUIRES_OK(ctx, ctx->input("file_path", &file_path_t));
+      auto &file_path = file_path_t->scalar<string>()();
 
-      auto data = column->get();
+      string full_path(record_prefix_path_ + file_path);
 
-      string full_path(record_prefix_ + filepath + record_suffix_);
+      const Tensor *columns_t;
+      OP_REQUIRES_OK(ctx, ctx->input("columns", &columns_t));
+      auto columns = columns_t->matrix<string>();
 
-      FILE *file_out = fopen(full_path.c_str(), "w+");
-      // TODO get errno out of file
-      OP_REQUIRES(ctx, file_out != NULL,
-                  Internal("Unable to open file at path:", full_path));
+      ResourceContainer<Data> *column_data;
+      Data *data;
+      auto *rmgr = ctx->resource_manager();
+      for (size_t i = 0; i < header_infos_.size(); i++) {
+        auto &header_info = header_infos_[i];
+        OP_REQUIRES_OK(ctx, rmgr->Lookup(columns(i, 0), columns(i, 1), &column_data));
+        core::ScopedUnref column_releaser(column_data);
+        {
+          ResourceReleaser<Data> rr(*column_data);
+          data = column_data->get();
 
-      OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out));
+          OP_REQUIRES_OK(ctx, WriteFile(file_path, data, header_info));
 
-      int fwrite_ret;
-      auto s = Status::OK();
-      // TODO in the future, override with a separate op to avoid an if statement
-      if (compress_) {
-        // compressGZIP already calls buf_.clear()
-        s = compressGZIP(data->data(), data->size(), buf_);
-        if (s.ok()) {
-          fwrite_ret = fwrite(buf_.data(), buf_.size(), 1, file_out);
+          data->release();
         }
-      } else {
-        fwrite_ret = fwrite(data->data(), data->size(), 1, file_out);
       }
 
-      fclose(file_out);
-
-      if (s.ok() && fwrite_ret != 1) {
-        s = Internal("Received non-1 fwrite return value: ", fwrite_ret);
-      }
-
-      OP_REQUIRES_OK(ctx, s); // in case s screws up
+      Tensor *file_path_out;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_path_out", file_path_t->shape(), &file_path_out));
+      file_path_out->scalar<string>()() = file_path;
     }
 
   private:
 
-    Status WriteHeader(OpKernelContext *ctx, FILE *file_out) {
-      const Tensor *tensor;
-      uint64_t tmp64;
-      TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
-      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int64>()());
-      header_.first_ordinal = tmp64;
+    bool compress_;
+    string record_prefix_path_, path_scratch_;
+    vector<tuple<format::FileHeader, string>> header_infos_;
 
-      TF_RETURN_IF_ERROR(ctx->input("num_records", &tensor));
-      tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int32>()());
-      header_.last_ordinal = header_.first_ordinal + tmp64;
+    Status WriteFile(const string &file_path, Data *data, decltype(header_infos_)::value_type &header_info) {
+      auto &header = get<0>(header_info);
+      auto &file_suffix = get<1>(header_info);
 
-      int fwrite_ret = fwrite(&header_, sizeof(header_), 1, file_out);
-      if (fwrite_ret != 1) {
-        // TODO get errno out of the file
-        fclose(file_out);
-        return Internal("frwrite(header_) failed");
+      path_scratch_ = record_prefix_path_ + file_path + file_suffix;
+
+      FILE *file_out = fopen(path_scratch_.c_str(), "w+");
+      if (!file_out) {
+        return Internal("fopen(", path_scratch_, ") returned null");
       }
+
+      int ret = fwrite(&header, sizeof(header), 1, file_out);
+      if (ret != 1) {
+        fclose(file_out);
+        return Internal("fwrite of header to ", path_scratch_, " returned non-1 code ", ret);
+      }
+
+      ret = fwrite(data->data(), data->size(), 1, file_out);
+      if (ret != 1) {
+        fclose(file_out);
+        return Internal("fwrite of data to ", path_scratch_, " returned non-1 code ", ret);
+      }
+
+      fclose(file_out);
+
       return Status::OK();
     }
 
-    bool compress_;
-    string record_suffix_, record_prefix_;
-    vector<char> buf_; // used to compress into
-    format::FileHeader header_;
+    Status InitHeaders(OpKernelContext *ctx) {
+      const Tensor *first_ord_t, *num_recs_t;
+      TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &first_ord_t));
+      TF_RETURN_IF_ERROR(ctx->input("num_records", &num_recs_t));
+      uint64_t first_ord = static_cast<uint64_t>(first_ord_t->scalar<int64>()());
+      uint64_t num_recs = static_cast<uint64_t>(num_recs_t->scalar<int32>()());
+      uint64_t last_ord = first_ord + num_recs;
+
+      for (auto &header_info : header_infos_) {
+        auto &header = get<0>(header_info);
+        header.first_ordinal = first_ord;
+        header.last_ordinal = last_ord;
+      }
+
+      return Status::OK();
+    }
   };
 
   REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), ColumnWriterOp);
