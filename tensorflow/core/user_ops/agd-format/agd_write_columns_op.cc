@@ -22,7 +22,6 @@ namespace tensorflow {
   }
 
   REGISTER_OP(op_name.c_str())
-  .Attr("compress: bool")
   .Attr("record_id: string")
   .Attr("record_type: list({'base', 'qual', 'metadata', 'results'})")
   .Attr("output_dir: string = ''")
@@ -71,7 +70,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
   public:
     AGDWriteColumnsOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       using namespace format;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
       string rec_id;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &rec_id));
       auto max_size = sizeof(format::FileHeader::string_id);
@@ -97,7 +95,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
         }
         record_suffixes_.push_back("." + t_in);
         header.record_type = static_cast<uint8_t>(t);
-        header.compression_type = compress_ ? CompressionType::GZIP : CompressionType::UNCOMPRESSED;
+        header.compression_type = CompressionType::UNCOMPRESSED;
         headers_.push_back(header);
       }
 
@@ -136,7 +134,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
       //start = chrono::high_resolution_clock::now();
       auto s = Status::OK();
 
-      for (size_t i = 0; i < num_buffers; ++i) {
+      for (size_t i = 0; i < num_buffers && s.ok(); ++i) {
 
         string full_path(record_prefix_ + filepath + record_suffixes_[i]);
 
@@ -148,28 +146,24 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
         int fwrite_ret;
 
-        if (compress_) {
-          OP_REQUIRES(ctx, false, Internal("Compressed out writing for columns not yet supported"));
-        } else {
-          auto &index = (*buf_list)[i].index();
-          auto s1 = index.size();
-          if (s1 == 0) {
-            OP_REQUIRES(ctx, s1 != 0,
-                        Internal("Parallel column writer got an empty index entry (size 0)!"));
-          }
-          fwrite_ret = fwrite(&index[0], s1, 1, file_out);
-          if (fwrite_ret != 1) {
-            s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
-            break;
-          }
-          if (s.ok()) {
-            auto &data = (*buf_list)[i].data();
+        auto &index = (*buf_list)[i].index();
+        auto s1 = index.size();
+        if (s1 == 0) {
+          OP_REQUIRES(ctx, s1 != 0,
+                      Internal("Parallel column writer got an empty index entry (size 0)!"));
+        }
+        fwrite_ret = fwrite(&index[0], s1, 1, file_out);
+        if (fwrite_ret != 1) {
+          s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
+          break;
+        }
+        if (s.ok()) {
+          auto &data = (*buf_list)[i].data();
 
-            fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
-            if (fwrite_ret != 1) {
-              s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", data.size());
-              break;
-            }
+          fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
+          if (fwrite_ret != 1) {
+            s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", data.size());
+            break;
           }
         }
 
@@ -186,8 +180,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &key_out));
       key_out->scalar<string>()() = filepath;
 
-      //auto duration = TRACEPOINT_DURATION_CALC(start);
-      //tracepoint(bioflow, chunk_read, filepath.c_str(), duration);
     }
 
   private:
@@ -227,7 +219,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
     }
 
     chrono::high_resolution_clock::time_point start;
-    bool compress_;
     vector<string> record_suffixes_;
     string record_prefix_;
     vector<format::FileHeader> headers_;

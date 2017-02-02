@@ -24,6 +24,7 @@ namespace tensorflow {
 
   REGISTER_OP(op_name.c_str())
   .Attr("record_id: string")
+  .Attr("compressed: bool = false")
   .Attr("record_types: list({'base', 'qual', 'metadata', 'results'})")
   .Attr("output_dir: string = ''")
   .Input("columns: string")
@@ -73,6 +74,9 @@ namespace tensorflow {
       OP_REQUIRES(ctx, s.length() < max_size,
                   Internal("record_id for column header '", s, "' greater than 32 characters"));
 
+      bool compressed;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("compressed", &compressed));
+
       vector<string> rec_types;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_types", &rec_types));
 
@@ -88,6 +92,7 @@ namespace tensorflow {
           t = RecordType::ALIGNMENT;
         }
         header.record_type = static_cast<uint8_t>(t);
+        header.compression_type = compressed ? CompressionType::GZIP : CompressionType::UNCOMPRESSED;
         strncpy(header.string_id, s.c_str(), max_size);
         header_infos_.push_back(make_pair(header, "." + record_type));
       }
