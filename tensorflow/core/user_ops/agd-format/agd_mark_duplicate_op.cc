@@ -225,7 +225,7 @@ trading memory for faster execution.
             continue;
           }
 
-          LOG(INFO) << "processing mapped orphan at " << result->location_;
+          //LOG(INFO) << "processing mapped orphan at " << result->location_;
           OP_REQUIRES_OK(ctx, ProcessOrphan(result, result_cigar, result_cigar_len, results_builder));
 
         } else { // we have a pair, get the mate
@@ -235,7 +235,7 @@ trading memory for faster execution.
               Internal("Malformed pair or the data is not in metadata (QNAME) order. At index: ", results_reader.GetCurrentIndex()-1,
                 "result 1: ", result->ToString(), " result2: ", mate->ToString()));
 
-          LOG(INFO) << "processing mapped pair at " << result->location_ << ", " << mate->location_;
+          //LOG(INFO) << "processing mapped pair at " << result->location_ << ", " << mate->location_;
 
           if (IsUnmapped(result) && IsUnmapped(mate)) {
             s = results_reader.GetNextResult(&result, &result_cigar, &result_cigar_len);

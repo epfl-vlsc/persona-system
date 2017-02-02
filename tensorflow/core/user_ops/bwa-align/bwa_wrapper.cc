@@ -24,6 +24,8 @@ namespace bwa_wrapper {
     const char* bases, *bases_mate;
     const char* quals, *quals_mate;
     size_t bases_len, mate_len;
+    format::AlignmentResult result;
+    string cigar;
 
     Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
     int64_t i = 0;
@@ -35,6 +37,8 @@ namespace bwa_wrapper {
       auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), (void*)aux_);
 		
       mem_mark_primary_se(options_, reg.n, reg.a, i);
+		
+      if (options_->flag & MEM_F_PRIMARY5) mem_reorder_primary5(options_->T, &reg);
       
       read.comment = 0; 
       read.qual = const_cast<char*>(quals); 
@@ -45,10 +49,13 @@ namespace bwa_wrapper {
 
       mem_reg2result(options_, index_->bns, index_->pac, &read, &reg, 0, 0, alignments, &num_alignments);
       
-      format::AlignmentResult result;
-      string cigar;
+      // we only take the first result right now
       ProcessResult(&alignments[0], nullptr, result, cigar);
       result_builder.AppendAlignmentResult(result, cigar);
+      //LOG(INFO) << "location " << result.location_ << " cigar: " << cigar;
+
+      free(reg.a);
+      free(alignments[0].cigar);
 
       i++;
       s = subchunk->get_next_record(&bases, &bases_len, &quals);
