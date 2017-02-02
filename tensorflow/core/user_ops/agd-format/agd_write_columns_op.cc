@@ -33,7 +33,27 @@ namespace tensorflow {
   .Input("num_records: int32")
   .Output("key_out: string")
   .Output("first_ordinal_out: int64")
-  .SetIsStateful()
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+
+      ShapeHandle sh;
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
+      auto dim_handle = c->Dim(sh, 0);
+      auto dim_val = c->Value(dim_handle);
+      if (dim_val != 2) {
+        return Internal("column_handle must have dimensions {2}. Got ", dim_val);
+      }
+
+      for (int i = 1; i < 4; i++) {
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(i), 0, &sh));
+      }
+
+      for (int i = 0; i < 2; i++) {
+        c->set_output(i, c->input(1));
+      }
+
+      return Status::OK();
+    })
   .Doc(R"doc(
 Writes out columns from a specified BufferList. The list contains
 [data, index] BufferPairs. This Op constructs the header, unifies the buffers,
@@ -89,6 +109,9 @@ and is thus passed as an Attr instead of an input (for efficiency);
         OP_REQUIRES(ctx, stat(outdir.c_str(), &outdir_info) == 0, Internal("Unable to stat path: ", outdir));
         OP_REQUIRES(ctx, S_ISDIR(outdir_info.st_mode), Internal("Path ", outdir, " is not a directory"));
       } // else it's just the current working directory
+      if (outdir.back() != '/') {
+        outdir.push_back('/');
+      }
       record_prefix_ = outdir;
     }
 

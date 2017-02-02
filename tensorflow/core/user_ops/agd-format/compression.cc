@@ -235,8 +235,6 @@ Status compressGZIP(const char* segment,
     stream_.zfree = Z_NULL;
     stream_.opaque = Z_NULL;
     done_ = false;
-    output_.clear();
-    safe_reserve(output_, 1);
 
     int status = deflateInit2(&stream_, Z_DEFAULT_COMPRESSION,
                               Z_DEFLATED, window_bits | ENABLE_ZLIB_GZIP_COMPRESS,
@@ -245,6 +243,7 @@ Status compressGZIP(const char* segment,
     if (status != Z_OK) {
         return Internal("deflateInit() didn't return Z_OK. Return ", status, " with 2nd param ", Z_DEFAULT_COMPRESSION);
     }
+    return Status::OK();
   }
 
   Status AppendingGZIPCompressor::appendGZIP(const char* segment,
@@ -257,41 +256,70 @@ Status compressGZIP(const char* segment,
     stream_.avail_in = segment_size;
 
     int status;
-    auto init_size = output_.size();
-    output_.resize(output_.capacity());
-
-    stream_.avail_out = output_.size() - init_size;
-    stream_.next_out = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(&output_[init_size]));
     do {
-      status = deflate(&stream_, Z_NO_FLUSH); // TODO maybe this has to be flushed
+      ensure_extend_capacity((stream_.avail_in / 2) + 512); // in case of round off at the end
+      status = deflate(&stream_, Z_NO_FLUSH);
       switch (status) {
       default:
         return Internal("deflate(Z_NO_FLUSH) return status ", status);
-        break;
+      // in these cases, just call again with more memory
       case Z_OK:
+      case Z_BUF_ERROR:
         break;
       }
     } while (stream_.avail_out == 0);
+
+    // according to the documentation, this is the assumption when avail_out > 0 and all input has been consumed
+    if (stream_.avail_in != 0) {
+      return Internal("Compressor: stream.avail in > 0! Got ", stream_.avail_in);
+    }
+
+    output_.resize(output_.capacity() - stream_.avail_out);
 
     return Status::OK();
   }
 
   // closes the stream
   Status AppendingGZIPCompressor::finish() {
-    auto status = deflateEnd(&stream_);
-    if (status != Z_OK) {
-      return Internal("deflateEnd() didn't receive Z_OK. Got: ", status);
+    // deflatePending could be useful here
+    if (!done_) {
+
+      // TODO need to flush all pending output somehow
+      int status;
+      stream_.next_in = nullptr;
+      stream_.avail_in = 0;
+      do {
+        ensure_extend_capacity(32);
+        status = deflate(&stream_, Z_FINISH);
+        if (status != Z_STREAM_END) {
+          return Internal("deflate(Z_FINISH) return status ", status);
+        }
+      } while (status == Z_OK);
+
+      // flush all remaining output to the output buffer
+      status = deflateEnd(&stream_);
+      if (status != Z_OK) {
+        return Internal("deflateEnd() didn't receive Z_OK. Got: ", status);
+      }
     }
     return Status::OK();
   }
 
   AppendingGZIPCompressor::~AppendingGZIPCompressor()
   {
-    finish(); // TODO maybe log here?
+    finish();
   }
 
-  AppendingGZIPCompressor::AppendingGZIPCompressor(vector<char> &output) : output_(output)
-  {
-    
+  AppendingGZIPCompressor::AppendingGZIPCompressor(Buffer &output) : output_(output) {}
+
+  void AppendingGZIPCompressor::ensure_extend_capacity(size_t capacity) {
+    size_t avail_capacity = output_.capacity() - output_.size();
+    if (avail_capacity < capacity) {
+      output_.extend_allocation(capacity - avail_capacity);
+    }
+
+    size_t sz = output_.size();
+    stream_.avail_out = output_.capacity() - sz;
+    stream_.next_out = const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(&output_[sz]));
   }
 } // namespace tensorflow

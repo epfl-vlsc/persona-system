@@ -29,8 +29,11 @@ namespace tensorflow {
     const string op_name("AGDMerge");
 
     void resource_releaser(ResourceContainer<Data> *data) {
-      core::ScopedUnref a(data);
-      data->release();
+      core::ScopedUnref a1(data);
+      {
+        ResourceReleaser<Data> a2(*data);
+        data->get()->release();
+      }
     }
 
     class ColumnCursor {

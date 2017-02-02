@@ -25,6 +25,7 @@
 namespace tensorflow {
 namespace format {
   typedef uint8_t RelativeIndex;
+  const uint8_t MAX_INDEX_SIZE = UINT8_MAX;
 
   const uint8_t current_major = 0;
   const uint8_t current_minor = 1;

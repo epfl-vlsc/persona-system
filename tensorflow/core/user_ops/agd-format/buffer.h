@@ -42,5 +42,6 @@ namespace tensorflow {
         void reset();
         virtual const char* data() const override;
         virtual std::size_t size() const override;
+        std::size_t capacity() const;
     };
 } // namespace tensorflow {
