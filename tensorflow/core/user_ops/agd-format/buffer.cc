@@ -74,4 +74,8 @@ namespace tensorflow {
     return resize(size_ + extend_size);
   }
 
+  size_t Buffer::capacity() const {
+    return allocation_;
+  }
+
 } // namespace tensorflow {

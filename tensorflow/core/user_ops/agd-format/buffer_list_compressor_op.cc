@@ -82,7 +82,7 @@ Compresses the prepared buffer_list records and into individual buffers, and the
     vector<ResourceContainer<Buffer>*> output_buffers_;
 
     Status CompressBuffer(BufferPair &buf_pair, Buffer *buf) {
-      AppendingGZIPCompressor compressor(buf); // destructor releases GZIP resources
+      AppendingGZIPCompressor compressor(*buf); // destructor releases GZIP resources
       auto &index = buf_pair.index();
       TF_RETURN_IF_ERROR(compressor.appendGZIP(index.data(), index.size()));
       auto &data = buf_pair.data();
