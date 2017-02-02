@@ -230,7 +230,6 @@ and is thus passed as an Attr instead of an input (for efficiency);
     bool compress_;
     vector<string> record_suffixes_;
     string record_prefix_;
-    vector<char> buf_, outbuf_; // used to compress into
     vector<format::FileHeader> headers_;
   };
 
