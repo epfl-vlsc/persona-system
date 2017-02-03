@@ -9,6 +9,7 @@ namespace tensorflow {
     auto *file_data = data->get();
     current_ptr_ = file_data->data();
     end_ptr_ = current_ptr_ + file_data->size();
+    file_use_count_ = make_shared<atomic<unsigned int>>(0);
   }
 
   bool FastqChunker::next_chunk(FastqResource &resource) {
@@ -24,7 +25,7 @@ namespace tensorflow {
     }
 
     //create a fastq resource
-    resource = FastqResource(data_, record_base, current_ptr_, record_count);
+    resource = FastqResource(data_, file_use_count_, record_base, current_ptr_, record_count);
 
     return true;
   }
