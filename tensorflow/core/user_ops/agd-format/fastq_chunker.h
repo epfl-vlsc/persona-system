@@ -22,6 +22,7 @@ namespace tensorflow {
     const char* skip_line();
 
     std::shared_ptr<FastqResource::FileResource> data_;
+    std::shared_ptr<std::atomic<unsigned int>> file_use_count_;
     const char *current_ptr_, *end_ptr_;
     std::size_t chunk_size_;
   };
