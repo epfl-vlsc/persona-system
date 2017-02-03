@@ -22,7 +22,6 @@ namespace tensorflow {
 
     void custom_deleter(FastqResource::FileResource *f) {
       ResourceReleaser<Data> a(*f);
-      f->get()->release();
     }
   }
 

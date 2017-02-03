@@ -82,6 +82,9 @@ namespace tensorflow {
   }
 
   void FastqResource::release() {
+    if (fastq_file_.use_count() == 1) {
+      fastq_file_->get()->release();
+    }
     fastq_file_.reset();
     start_ptr_ = nullptr;
     end_ptr_ = nullptr;
