@@ -2,18 +2,16 @@
 #include "tensorflow/core/user_ops/object-pool/basic_container.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include <sstream>
-#include "tensorflow/core/user_ops/bam/bamtools/src/api/BamWriter.h"
-#include "tensorflow/core/user_ops/bam/bamtools/src/api/BamAlignment.h"
-#include "tensorflow/core/user_ops/bam/bamtools/src/api/SamHeader.h"
 #include "tensorflow/core/user_ops/object-pool/resource_container.h"
 #include "tensorflow/core/user_ops/object-pool/ref_pool.h"
 #include "tensorflow/core/user_ops/agd-format/agd_record_reader.h"
 #include "tensorflow/core/user_ops/agd-format/format.h"
+#include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Bam.h"
+#include "zlib.h"
 
 namespace tensorflow {
   using namespace std;
   using namespace errors;
-  using namespace BamTools;
   
   using shape_inference::InferenceContext;
    
@@ -46,6 +44,8 @@ namespace tensorflow {
     Not all tags for SAM/BAM are currently supported, but support
     is planned. Currently supported is only required tags.
 
+    RG and aux data is currently not supported but will be added soon.
+
     path: path for output .bam file
     pg_id: program id @PG for .bam
     ref_sequences: Reference sequences, @RG tags.
@@ -67,31 +67,76 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, ctx->GetAttr("ref_seq_sizes", &ref_sizes_));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("sort_order", &sort_order));
 
+        OP_REQUIRES(ctx, ref_seqs_.size() == ref_sizes_.size(), 
+            Internal("ref seqs was not same size as ref seq sizes lists"));
         stringstream header_ss;
         header_ss << "@HD VN:1.4 SO:";
-        header_ss << sort_order << endl;
-        header_ss << "@RG ID:" << read_group << endl;
-        header_ss << "@PG ID:" << pg_id << endl;
+        header_ss << sort_order;
         /*for (int i = 0; i < ref_seqs.size(); i++) {
           header_ss << "@SQ SN:" << ref_seqs[i] << " LN:" << to_string(ref_seq_sizes[i]) << endl;
         }*/
-        RefVector ref_vec;
-        ref_vec.reserve(ref_seqs_.size());
         ref_size_totals_.reserve(ref_seqs_.size());
         int64_t total = 0;
         for (int i = 0; i < ref_seqs_.size(); i++) {
           total += ref_sizes_[i];
-          ref_vec.push_back(RefData(ref_seqs_[i], ref_sizes_[i]));
+          //ref_vec.push_back(RefData(ref_seqs_[i], ref_sizes_[i]));
           ref_size_totals_.push_back(total);
         }
+        // open the file, we dont write yet
+        bam_fp_ = fopen(path.c_str(), "w");
+        string header = header_ss.str();
 
-        SamHeader header(header_ss.str());
-        OP_REQUIRES(ctx, bam_writer_.Open(path, header, ref_vec), Internal("AgdOutputBam: bamtools could not open file", path));
-        
+        scratch_.reset(new char[scratch_size_]); // 64K max size of BAM block
+        scratch_compress_.reset(new char[scratch_size_]); // 64K max size of BAM block
+        scratch_pos_ = 0;
+
+        BAMHeader* bamHeader = (BAMHeader*) scratch_.get();
+        bamHeader->magic = BAMHeader::BAM_MAGIC;
+        size_t samHeaderSize = header.length();
+        memcpy(bamHeader->text(), header.c_str(), samHeaderSize);
+        bamHeader->l_text = (int)samHeaderSize;
+        scratch_pos_ = BAMHeader::size((int)samHeaderSize);
+		
+        bamHeader->n_ref() = ref_seqs_.size();
+		    BAMHeaderRefSeq* refseq = bamHeader->firstRefSeq();
+        for (int i = 0; i < ref_seqs_.size(); i++) {
+          int len = ref_seqs_[i].length() + 1;
+          scratch_pos_ += BAMHeaderRefSeq::size(len);
+          refseq->l_name = len;
+          memcpy(refseq->name(), ref_seqs_[i].c_str(), len);
+          refseq->l_ref() = (int)(ref_sizes_[i]);
+          refseq = refseq->next();
+          _ASSERT((char*) refseq - header == scratch_pos_);
+        }
+
+        // header is set in buffer, ready to add data
+        zstream.zalloc = Z_NULL;
+        zstream.zfree = Z_NULL;
+
       }
 
       ~AgdOutputBamOp() override {
-        bam_writer_.Close();
+        // if scratch_pos_ not 0, compress and append last bit and close file
+        if (scratch_pos_ != 0) {
+          CompressAndWrite();
+        }
+        // EOF marker for bam BGZF format
+        static _uint8 eof[] = {
+          0x1f, 0x8b, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x06, 0x00, 0x42, 0x43,
+          0x02, 0x00, 0x1b, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+       
+        // append the final EOF marker
+        int status = fwrite(eof, sizeof(eof), 1, bam_fp_);
+        
+        if (status < 0) 
+          LOG(INFO) << "WARNING: Final write of BAM eof marker failed with " << status;
+
+        status = fclose(bam_fp_);
+        
+        if (status == EOF) 
+          LOG(INFO) << "WARNING: Failed to close BAM file pointer: " << status;
+
       }
 
       void Compute(OpKernelContext* ctx) override {
@@ -116,13 +161,12 @@ namespace tensorflow {
         AGDRecordReader meta_reader(meta_data, num_records);
         AGDRecordReader results_reader(result_data, num_records);
        
-        BamAlignment alignment;
         const format::AlignmentResult* result;
         const char* data, *meta, *base, *qual;
         const char* cigar;
         size_t len, meta_len, base_len, qual_len, cigar_len;
-        int ref_index;
-        vector<CigarOp> cigar_vec;
+        int ref_index, mate_ref_index;
+        vector<uint32_t> cigar_vec;
         cigar_vec.reserve(20); // should usually be enough
 
         Status s = results_reader.GetNextRecord(&data, &len);
@@ -133,28 +177,61 @@ namespace tensorflow {
           const char* occ = strchr(meta, ' ');
           if (occ) 
             meta_len = occ - meta;
-          alignment.Name = string(meta, meta_len);
-          alignment.QueryBases = string(base, base_len);
-          alignment.Qualities = string(qual, qual_len);
          
           result = reinterpret_cast<decltype(result)>(data);
           cigar = data + sizeof(format::AlignmentResult);
           cigar_len = len - sizeof(format::AlignmentResult);
-          alignment.AlignmentFlag = result->flag_;
-
-          int pos = FindChromosome(result->location_, ref_index);
-          alignment.RefID = ref_index;
-          alignment.Position = pos;
-          alignment.MapQuality = result->mapq_;
           OP_REQUIRES_OK(ctx, ParseCigar(cigar, cigar_len, cigar_vec));
-          alignment.CigarData = cigar_vec;
           
-          pos = FindChromosome(result->next_location_, ref_index);
-          alignment.MateRefID = ref_index;
-          alignment.MatePosition = pos;
-          alignment.InsertSize = result->template_length_; // need to check if this is the same thing
+          size_t bamSize = BAMAlignment::size((unsigned)meta_len + 1, cigar_vec.size(), base_len, /*auxLen*/0);
+          if ((scratch_size_ - scratch_pos_) < bamSize) {
+            // compress and flush
+            OP_REQUIRES_OK(ctx, CompressAndWrite());
+          }
           
-          bam_writer_.SaveAlignment(alignment);
+          BAMAlignment* bam = (BAMAlignment*) (scratch_.get() + scratch_pos_);
+          bam->block_size = (int)bamSize - 4;
+
+          int pos = FindChromosome(result->location_, mate_ref_index);
+          bam->refID = ref_index;
+          bam->pos = pos;
+          bam->l_read_name = (_uint8)meta_len + 1;
+          bam->MAPQ = result->mapq_;
+          
+          int mate_pos = FindChromosome(result->next_location_, ref_index);
+
+          int refLength = cigar_vec.size() > 0 ? 0 : base_len;
+          for (int i = 0; i < cigar_vec.size(); i++) {
+              refLength += BAMAlignment::CigarCodeToRefBase[cigar_vec[i] & 0xf] * (cigar_vec[i] >> 4);
+          }
+
+          if (format::IsUnmapped(result)) {
+            if (format::IsNextUnmapped(result)) {
+              bam->bin = BAMAlignment::reg2bin(-1, 0);
+            } else {
+              bam->bin = BAMAlignment::reg2bin((int)mate_pos, (int)mate_pos+1);
+            }
+          } else {
+            bam->bin = BAMAlignment::reg2bin((int)pos, (int)pos + refLength);
+          }
+            
+          bam->n_cigar_op = cigar_vec.size();
+          bam->FLAG = result->flag_;
+          bam->l_seq = base_len;
+          bam->next_refID = mate_ref_index;
+          bam->next_pos = mate_pos;
+          bam->tlen = (int)result->template_length_;
+          memcpy(bam->read_name(), meta, meta_len);
+          bam->read_name()[meta_len] = 0;
+          memcpy(bam->cigar(), &cigar_vec[0], cigar_vec.size() * 4);
+          BAMAlignment::encodeSeq(bam->seq(), base, base_len);
+          memcpy(bam->qual(), qual, qual_len);
+          for (unsigned i = 0; i < qual_len; i++) {
+            bam->qual()[i] -= '!';
+          }
+          bam->validate();
+         
+          scratch_pos_ += bamSize;
         
           s = results_reader.GetNextRecord(&data, &len);
         }
@@ -167,6 +244,84 @@ namespace tensorflow {
       }
 
     private:
+
+      Status CompressAndWrite() {
+        if (scratch_pos_ == 0)
+          return Internal("attempting to compress and write 0 bytes");
+        // set up BAM header structure
+        gz_header header;
+        _uint8 bamExtraData[6];
+        header.text = false;
+        header.time = 0;
+        header.xflags = 0;
+        header.os = 0;
+        header.extra = bamExtraData;
+        header.extra_len = 6;
+        header.extra_max = 6;
+        header.name = NULL;
+        header.name_max = 0;
+        header.comment = NULL;
+        header.comm_max = 0;
+        header.hcrc = false;
+        header.done = true;
+        bamExtraData[0] = 'B';
+        bamExtraData[1] = 'C';
+        bamExtraData[2] = 2;
+        bamExtraData[3] = 0;
+        bamExtraData[4] = 3; // will be filled in later
+        bamExtraData[5] = 7; // will be filled in later
+
+        const int windowBits = 15;
+        const int GZIP_ENCODING = 16;
+        zstream.next_in = (Bytef*) scratch_.get();
+        zstream.avail_in = (uInt)scratch_pos_;
+        zstream.next_out = (Bytef*) scratch_compress_.get();
+        zstream.avail_out = (uInt)scratch_size_;
+        uInt oldAvail;
+        int status;
+
+        status = deflateInit2(&zstream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, windowBits | GZIP_ENCODING, 8, Z_DEFAULT_STRATEGY);
+        if (status < 0) 
+          return Internal("libz deflate init failed with ", to_string(status));
+
+        status = deflateSetHeader(&zstream, &header);
+        if (status != Z_OK) {
+          return Internal("libz: defaultSetHeader failed with", status);
+        }
+
+        oldAvail = zstream.avail_out;
+        status = deflate(&zstream, Z_FINISH);
+
+        if (status < 0 && status != Z_BUF_ERROR) {
+          return Internal("libz: deflate failed with ", status);
+        }
+        if (zstream.avail_in != 0) {
+          return Internal("libz: default failed to read all input");
+        }
+        if (zstream.avail_out == oldAvail) {
+          return Internal("libz: default failed to write output");
+        }
+        status = deflateEnd(&zstream);
+        if (status < 0) {
+          return Internal("libz: deflateEnd failed with ", status);
+        }
+
+        size_t toUsed = scratch_size_ - zstream.avail_out;
+        // backpatch compressed block size into gzip header
+        if (toUsed >= BAM_BLOCK) {
+          return Internal("exceeded BAM chunk size");
+        }
+        * (_uint16*) (scratch_compress_.get() + 16) = (_uint16) (toUsed - 1);
+
+        status = fwrite(scratch_compress_.get(), toUsed, 1, bam_fp_);
+
+        if (status < 0)
+          return Internal("write compressed block to bam failed: ", status);
+
+        scratch_pos_ = 0;
+
+        return Status::OK();
+      }
 
       inline int parseNextOp(const char *ptr, char &op, int &num)
       {
@@ -182,7 +337,7 @@ namespace tensorflow {
         return ptr - begin;
       }
 
-      Status ParseCigar(const char* cigar, size_t cigar_len, vector<CigarOp>& cigar_vec) {
+      Status ParseCigar(const char* cigar, size_t cigar_len, vector<uint32_t>& cigar_vec) {
         // cigar parsing adapted from samblaster
         cigar_vec.clear();
         char op;
@@ -191,7 +346,8 @@ namespace tensorflow {
           size_t len = parseNextOp(cigar, op, op_len);
           cigar += len;
           cigar_len -= len;         
-          cigar_vec.push_back(CigarOp(op, op_len));
+          uint32_t val = (len << 4) | BAMAlignment::CigarToCode[op];
+          cigar_vec.push_back(val);
         }
         return Status::OK();
       }
@@ -212,10 +368,16 @@ namespace tensorflow {
         return Status::OK();
       }
 
-      BamWriter bam_writer_;
       vector<string> ref_seqs_;
       vector<int32> ref_sizes_;
       vector<int64> ref_size_totals_;
+      unique_ptr<char> scratch_, scratch_compress_;
+      uint64_t scratch_pos_ = 0;
+      static const uint64_t scratch_size_ = 64*1024; // 64Kb
+      FILE* bam_fp_ = nullptr;
+    
+      z_stream zstream;
+      
 
       TF_DISALLOW_COPY_AND_ASSIGN(AgdOutputBamOp);
   };
