@@ -22,7 +22,6 @@ namespace tensorflow {
 
     void custom_deleter(FastqResource::FileResource *f) {
       ResourceReleaser<Data> a(*f);
-      f->get()->release();
     }
   }
 
@@ -125,7 +124,9 @@ A pool to manage FastqReadResource objects
       tuple.push_back(first_ord_out);
       tuple.push_back(num_recs_out);
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
-      queue_->TryEnqueue(tuple, ctx, [](){});
+      Notification n;
+      queue_->TryEnqueue(tuple, ctx, [&n]() { n.Notify(); });
+      n.WaitForNotification();
       return Status::OK();
     }
 

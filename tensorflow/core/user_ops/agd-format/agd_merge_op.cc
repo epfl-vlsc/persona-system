@@ -254,12 +254,9 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
 
       // This is the synchronous version
-      /*
       Notification n;
       queue_->TryEnqueue(tuple, ctx, [&n]() { n.Notify(); });
       n.WaitForNotification();
-      */
-      queue_->TryEnqueue(tuple, ctx, [](){});
 
       return Status::OK();
     }
