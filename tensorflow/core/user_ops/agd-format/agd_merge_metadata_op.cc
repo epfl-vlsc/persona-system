@@ -263,13 +263,9 @@ chunk_size: the size, in number of records, of the output chunks
 
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
 
-      // This is the synchronous version
-      /*
       Notification n;
       queue_->TryEnqueue(tuple, ctx, [&n]() { n.Notify(); });
       n.WaitForNotification();
-      */
-      queue_->TryEnqueue(tuple, ctx, [](){});
 
       return Status::OK();
     }
