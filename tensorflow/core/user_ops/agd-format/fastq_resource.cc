@@ -10,6 +10,7 @@ namespace tensorflow {
   FastqResource& FastqResource::operator=(FastqResource &&other) {
     fastq_file_ = move(other.fastq_file_);
     file_use_count_ = move(other.file_use_count_);
+    done_ = move(other.done_);
     start_ptr_ = other.start_ptr_; other.start_ptr_ = nullptr;
     end_ptr_ = other.end_ptr_; other.end_ptr_ = nullptr;
     current_record_ = other.current_record_; other.current_record_ = nullptr;
@@ -18,9 +19,11 @@ namespace tensorflow {
     return *this;
   }
 
-  FastqResource::FastqResource(shared_ptr<FileResource> &fastq_file, shared_ptr<atomic<unsigned int>> &use_count,
+  FastqResource::FastqResource(shared_ptr<FileResource> &fastq_file,
+                               shared_ptr<atomic<unsigned int>> &use_count,
+                               shared_ptr<volatile bool> &done,
                                const char *start_ptr, const char *end_ptr, const size_t max_records) :
-    fastq_file_(fastq_file), file_use_count_(use_count),
+    fastq_file_(fastq_file), file_use_count_(use_count), done_(done),
     start_ptr_(start_ptr), end_ptr_(end_ptr),
     current_record_(start_ptr),
     max_records_(max_records) {
@@ -87,7 +90,7 @@ namespace tensorflow {
 
   void FastqResource::release() {
     auto count = file_use_count_->fetch_sub(1, memory_order::memory_order_acquire);
-    if (count == 1) {
+    if (count == 1 && *done_) {
       fastq_file_->get()->release();
     }
     file_use_count_.reset();
