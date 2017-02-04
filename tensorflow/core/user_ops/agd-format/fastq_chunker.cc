@@ -10,6 +10,8 @@ namespace tensorflow {
     current_ptr_ = file_data->data();
     end_ptr_ = current_ptr_ + file_data->size();
     file_use_count_ = make_shared<atomic<unsigned int>>(0);
+    done_flag_ = make_shared<volatile bool>(false);
+    *done_flag_ = false;
   }
 
   bool FastqChunker::next_chunk(FastqResource &resource) {
@@ -21,11 +23,12 @@ namespace tensorflow {
 
     // happens if the underlying pointer arithmetic detectse that this is already exhausted
     if (record_count == 0) {
+      *done_flag_ = true;
       return false;
     }
 
     //create a fastq resource
-    resource = FastqResource(data_, file_use_count_, record_base, current_ptr_, record_count);
+    resource = FastqResource(data_, file_use_count_, done_flag_, record_base, current_ptr_, record_count);
 
     return true;
   }
