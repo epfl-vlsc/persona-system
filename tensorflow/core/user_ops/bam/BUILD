@@ -10,6 +10,7 @@ cc_library(
             "//tensorflow/core:framework",
             "//tensorflow/core/user_ops/object-pool:object_pool",
             "//tensorflow/core/user_ops/agd-format:agd_format",
+            "//tensorflow/core/user_ops/concurrent_queue:concurrent_queue",
             "//tensorflow/core/user_ops/dna-align:snap_lib"
             ],
     #linkopts = ["-lz"],

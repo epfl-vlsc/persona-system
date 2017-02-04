@@ -11,9 +11,9 @@
 #include "tensorflow/core/user_ops/agd-format/agd_record_reader.h"
 #include "tensorflow/core/user_ops/agd-format/format.h"
 #include "tensorflow/core/user_ops/dna-align/snap/SNAPLib/Bam.h"
+#include "tensorflow/core/user_ops/concurrent_queue/work_queue.h"
+#include "tensorflow/core/user_ops/concurrent_queue/priority_work_queue.h"
 #include "zlib.h"
-#include "work_queue.h"
-#include "priority_work_queue.h"
 
 namespace tensorflow {
   using namespace std;

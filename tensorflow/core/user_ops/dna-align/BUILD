@@ -39,7 +39,8 @@ cc_library(
             ":snap_lib",
             "//tensorflow/core/user_ops/lttng:trace",
             "//tensorflow/core/user_ops/object-pool:object_pool",
-            "//tensorflow/core/user_ops/agd-format:agd_format"
+            "//tensorflow/core/user_ops/agd-format:agd_format",
+            "//tensorflow/core/user_ops/concurrent_queue:concurrent_queue"
             ],
     alwayslink=1,
     linkopts = [

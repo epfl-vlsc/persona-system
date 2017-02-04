@@ -12,12 +12,13 @@ namespace tensorflow {
 // to a full queue. 
 
 template <typename T>
-class WorkQueue {
+class PriorityWorkQueue {
   public:
 
-    WorkQueue(int capacity);
-    ~WorkQueue() { LOG(INFO) << "num pushed: " << num_push_; } // if you don't define the destructor, you get
-                     // a weird linker error
+    PriorityWorkQueue(int capacity);
+    ~PriorityWorkQueue() { 
+      //LOG(INFO) << "num pushed: " << num_push_; 
+    }
 
     // return true if pushed, false otherwise
     // will block until pushed if block_ is true
@@ -48,7 +49,7 @@ class WorkQueue {
     // cond vars for block/wait/notify on queue push/pop
     mutable std::condition_variable queue_pop_cv_;
     mutable std::condition_variable queue_push_cv_;
-    std::queue<T> queue_;
+    std::priority_queue<T> queue_;
     size_t capacity_;
     // block on calls to push, pop
     bool block_ = true;
@@ -60,7 +61,7 @@ class WorkQueue {
  };
 
 template <typename T>
-bool WorkQueue<T>::peek(T& item) {
+bool PriorityWorkQueue<T>::peek(T& item) {
   bool popped = false;
   {
     mutex_lock l(mu_);
@@ -73,7 +74,7 @@ bool WorkQueue<T>::peek(T& item) {
     }
 
     if (!queue_.empty()) {
-      item = queue_.front();
+      item = queue_.top();
       popped = true;
     }
   }
@@ -83,10 +84,10 @@ bool WorkQueue<T>::peek(T& item) {
 }
 
 template <typename T>
-void WorkQueue<T>::drop_if_equal(T& item) {
+void PriorityWorkQueue<T>::drop_if_equal(T& item) {
   {
     mutex_lock l(mu_);
-    if (!queue_.empty() && queue_.front() == item) {
+    if (!queue_.empty() && queue_.top() == item) {
       queue_.pop();
     }
   }
@@ -94,7 +95,7 @@ void WorkQueue<T>::drop_if_equal(T& item) {
 }
 
 template <typename T>
-bool WorkQueue<T>::pop(T& item) {
+bool PriorityWorkQueue<T>::pop(T& item) {
 
   bool popped = false;
   {
@@ -107,7 +108,7 @@ bool WorkQueue<T>::pop(T& item) {
     }
 
     if (!queue_.empty()) {
-      item = queue_.front();
+      item = queue_.top();
       queue_.pop();
       popped = true;
     }
@@ -121,7 +122,7 @@ bool WorkQueue<T>::pop(T& item) {
 }
 
 template <typename T>
-bool WorkQueue<T>::push(const T& item) {
+bool PriorityWorkQueue<T>::push(const T& item) {
 
   bool pushed = false;
   {
@@ -153,10 +154,10 @@ bool WorkQueue<T>::push(const T& item) {
 }
 
 template <typename T>
-void WorkQueue<T>::unblock() {
+void PriorityWorkQueue<T>::unblock() {
   {
     mutex_lock l(mu_);
-    VLOG(INFO) << "WorkQueue("<< this << ") unblock called!";
+    //VLOG(INFO) << "PriorityWorkQueue("<< this << ") unblock called!";
     block_ = false;
   }
 
@@ -165,13 +166,13 @@ void WorkQueue<T>::unblock() {
 }
 
 template <typename T>
-void WorkQueue<T>::set_block() {
+void PriorityWorkQueue<T>::set_block() {
   mutex_lock l(mu_);
   block_ = true;
 }
 
 template <typename T>
-WorkQueue<T>::WorkQueue(int capacity) {
+PriorityWorkQueue<T>::PriorityWorkQueue(int capacity) {
   // root cause of this joke is that tensorflow attributes 
   // do not have an unsigned type. `\_(o_o)_/`
   if (capacity < 0)
@@ -181,22 +182,22 @@ WorkQueue<T>::WorkQueue(int capacity) {
 }
 
 template <typename T>
-bool WorkQueue<T>::empty() const { return queue_.empty(); }
+bool PriorityWorkQueue<T>::empty() const { return queue_.empty(); }
 
 template <typename T>
-size_t WorkQueue<T>::capacity() const { return capacity_; }
+size_t PriorityWorkQueue<T>::capacity() const { return capacity_; }
 
 template <typename T>
-size_t WorkQueue<T>::size() const { return queue_.size(); }
+size_t PriorityWorkQueue<T>::size() const { return queue_.size(); }
 
 template <typename T>
-int64 WorkQueue<T>::num_pop_waits() { return num_pop_waits_; }
+int64 PriorityWorkQueue<T>::num_pop_waits() { return num_pop_waits_; }
 
 template <typename T>
-int64 WorkQueue<T>::num_push_waits() { return num_push_waits_; }
+int64 PriorityWorkQueue<T>::num_push_waits() { return num_push_waits_; }
 
 template <typename T>
-int64 WorkQueue<T>::num_peek_waits() { return num_peek_waits_; }
+int64 PriorityWorkQueue<T>::num_peek_waits() { return num_peek_waits_; }
 
 }  // namespace tensorflow
 
