@@ -16,6 +16,7 @@ namespace tensorflow {
 
     explicit FastqResource(std::shared_ptr<FileResource> &fastq_file,
                            std::shared_ptr<std::atomic<unsigned int>> &use_count,
+                           std::shared_ptr<volatile bool> &done,
                            const char *start_ptr, const char *end_ptr, const std::size_t max_records);
     FastqResource() = default;
     FastqResource& operator=(FastqResource &&other);
@@ -42,6 +43,7 @@ namespace tensorflow {
     // a shared resouce, and we can't rely on any ordering of resource deletion
     // when the session is destroyed
     std::shared_ptr<std::atomic<unsigned int>> file_use_count_;
+    std::shared_ptr<volatile bool> done_;
 
     const char *start_ptr_ = nullptr, *end_ptr_ = nullptr, *current_record_ = nullptr;
     std::size_t max_records_ = 0, current_record_idx_ = 0;
