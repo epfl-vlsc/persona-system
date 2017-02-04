@@ -23,6 +23,7 @@ namespace tensorflow {
 
     std::shared_ptr<FastqResource::FileResource> data_;
     std::shared_ptr<std::atomic<unsigned int>> file_use_count_;
+    std::shared_ptr<volatile bool> done_flag_;
     const char *current_ptr_, *end_ptr_;
     std::size_t chunk_size_;
   };
