@@ -3,7 +3,7 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 
 cc_library(
     name = "agdbam",
-    srcs = glob(["*.cc"]),
+    srcs = glob(["*.cc"] + ["*.h"] ),
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = [
