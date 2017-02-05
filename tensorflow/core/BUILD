@@ -446,14 +446,7 @@ cc_library(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     # TODO  do something about this hacky stuff
-    deps = [":framework", "//tensorflow/core/kernels:io",
-            #"//tensorflow/core/user_ops/dna-align:snap_align",
-            #"//tensorflow/core/user_ops/bwa-align:bwa_align",
-            #"//tensorflow/core/user_ops/bam:agdbam",
-            #"//tensorflow/core/user_ops/agd-format:agd_format",
-            #"//tensorflow/core/user_ops/agd-format:zmq_source",
-            #"//tensorflow/core/user_ops/agd-format:sam_writer",
-            #"//tensorflow/core/user_ops/object-pool:object_pool",
+    deps = [":framework", "//tensorflow/core/kernels:io"
            ],
     alwayslink = 1,
 )
