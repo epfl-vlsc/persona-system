@@ -224,6 +224,20 @@ Prints records to stdout from record indices `start` to `finish`.
   .Output("processed_buffers: string")
   .Output("num_records: int32")
   .Output("first_ordinal: int64")
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+
+      ShapeHandle sh;
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &sh));
+      auto dim_handle = c->Dim(sh, 0);
+      auto dim_val = c->Value(dim_handle);
+
+      c->set_output(0, c->input(1));
+      c->set_output(1, c->Vector(dim_val));
+      c->set_output(2, c->Vector(dim_val));
+
+      return Status::OK();
+    })
   .SetIsStateful()
   .Doc(R"doc(
 Read in the agd format from an upstream source (file reader or network reader).
@@ -501,6 +515,11 @@ A pool to manage FastqReadResource objects
   .Input("filename: string")
   .Output("file_handle: string")
   .Output("file_name: string")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->Vector(2));
+      c->set_output(1, c->Scalar());
+      return Status::OK();
+      })
   .SetIsStateful()
   .Doc(R"doc(
 Produces memory-mapped files, synchronously reads them, and produces a Tensor<2>
@@ -524,6 +543,26 @@ file_name: a Tensor() of string for the unique key for this file
   .Input("pool_handle: Ref(string)")
   .Output("file_handles: string")
   .Output("file_names: string")
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+
+     
+      ShapeHandle file_handles_shape;
+      DimensionHandle newdim;
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &file_handles_shape));
+      TF_RETURN_IF_ERROR(c->Add(c->Dim(file_handles_shape, 0), 1, &newdim));
+      TF_RETURN_IF_ERROR(c->ReplaceDim(file_handles_shape, 0, newdim, &file_handles_shape));
+      c->set_output(0, file_handles_shape);
+
+      ShapeHandle file_names_shape;
+      DimensionHandle namesdim;
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 1, &file_names_shape));
+      TF_RETURN_IF_ERROR(c->Add(c->Dim(file_names_shape, 0), 1, &namesdim));
+      TF_RETURN_IF_ERROR(c->ReplaceDim(file_names_shape, 0, namesdim, &file_names_shape));
+      c->set_output(1, file_names_shape);
+
+      return Status::OK();
+    })
   .SetIsStateful()
   .Doc(R"doc(
 Appends a agd reader handle tensor to an input list.
