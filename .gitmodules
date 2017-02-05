@@ -10,3 +10,9 @@
 [submodule "tensorflow/core/user_ops/bam/bamtools"]
 	path = tensorflow/core/user_ops/bam/bamtools
 	url = https://github.com/pezmaster31/bamtools.git
+[submodule "tensorflow/contrib/persona/kernels/bwa-align/bwa"]
+	path = tensorflow/contrib/persona/kernels/bwa-align/bwa
+	url = git@github.com:epfl-vlsc/bwa.git
+[submodule "tensorflow/contrib/persona/kernels/snap-align/snap"]
+	path = tensorflow/contrib/persona/kernels/snap-align/snap
+	url = git@github.com:epfl-vlsc/snap.git
