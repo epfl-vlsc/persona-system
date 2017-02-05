@@ -1,15 +1,129 @@
 
 # build input pipelines for AGD 
 
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops
+from tensorflow.python.framework import ops
+from tensorflow.python.framework import tensor_shape
+from tensorflow.python.framework import constant_op
+from tensorflow.python.ops import string_ops
+from tensorflow.python.ops import array_ops
+from tensorflow.python import training
+
+import json
+import os
+
+def _key_maker(file_keys):
+  num_file_keys = len(file_keys)
+
+  string_producer = tf.train.string_input_producer(file_keys, num_epochs=1, shuffle=False)
+  sp_output = string_producer.dequeue()
+
+  #keys = tf.train.batch_pdq([sp_output], batch_size=1, num_dq_ops=1, name="key_queue")
+
+  #return keys[0]  # just the one
+  return sp_output
+
 # columns: list of extensions, which columns to read in, must be in same group
-# names: optional scalar tensor with chunk keys (otherwise adds a string_input_producer)
-# returns: list of tensors of shape 2 (resources) to chunks in order of columns
-# def persona_in_pipe(metadata_path, columns, name=None, parse_parallel=2, read_parallel=1)
+# keys: optional scalar tensor with chunk keys (otherwise adds a string_input_producer)
+# returns: list of tensors in the form [ key, num_records, first_ordinal, col0, col1, ... , colN ]
+# where col0 - colN are Tensor([2]) and all else is scalar
+def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None, 
+    buffer_pool=None, parse_parallel=2, read_parallel=1, process_parallel=1, sync=True, capacity=32, name=None):
+  
+  with open(metadata_path, 'r') as j:
+    manifest = json.load(j)
+
+  records = manifest['records']
+  chunknames = []
+  for record in records:
+    chunknames.append(record['path'])
+
+  # verify that the desired columns exist
+  for extension in columns:
+    file_name = chunknames[0] + "." + extension
+    if not os.path.isfile(file_name):
+      raise Exception("Desired column {col} does not exist in AGD dataset {dataset}".format(col=extension, dataset=metadata_path))
+  
+  local_dir = os.path.dirname(metadata_path)
+
+  with ops.name_scope(name, "persona_in_pipe", [key, mmap_pool, buffer_pool]):
+
+    if mmap_pool is None:
+      mmap_pool = persona_ops.m_map_pool(size=10, bound=False, name=name)
+    if buffer_pool is None:
+      buffer_pool = persona_ops.buffer_pool(size=10, bound=False, name=name)
+
+    if key is None:
+      # construct input producer
+      key = _key_maker(chunknames)
+
+    suffix_sep = constant_op.constant(".")
+    chunk_filenames = []
+    for extension in columns:
+      extension_op = constant_op.constant(extension)
+      new_name = tf.string_join([key, suffix_sep, extension_op]) # e.g. key.results
+      chunk_filenames.append(new_name)
+
+    # cascading MMAP operations give better disk performance
+    chunks, names = persona_ops.file_m_map(filename=chunk_filenames[0], name=name, pool_handle=mmap_pool_handle,
+                                                  local_prefix=local_dir, synchronous=sync)
+    for chunk_filename in chunk_filenames[1:]:
+      chunks, names = persona_ops.staged_file_map(filename=qual_t, local_prefix=local_dir,
+                                                  upstream_refs=chunks, upstream_names=names,
+                                                  synchronous=sync, name=name, pool_handle=mmap_pool)
+    
+    all_chunks = array_ops.unstack(chunks);
+    all_chunks.append(key)
+    
+    mmap_queue = training.input.batch_pdq(all_chunks, batch_size=1,
+                                      enqueue_many=False,
+                                      num_dq_ops=parallel_parse,
+                                      name="mmap_to_parse"+name)
+
+    to_enqueue = []
+    
+    for chunks_and_key in mmap_queue:
+      mapped_chunks = chunks_and_key[:-1]
+      mapped_key = chunks_and_key[-1]
+      parsed_chunks = []
+      for mapped_chunk in mapped_chunks:
+        if mapped_chunk.get_shape() == TensorShape([2]):
+            m_chunk = tf.expand_dims(mapped_chunk, 0)
+        else:
+            m_chunk = mapped_chunk
+        
+        parsed_chunk, num_records, first_ordinal = persona_ops.agd_reader(verify=False, 
+                                buffer_pool=buffer_pool, file_handle=m_chunk, name=name)
+        parsed_chunk_u = array_ops.unstack(parsed_chunk)[0]
+
+        parsed_chunks.append(parsed_chunk_u)
+       
+      # we just grab the last num recs and first ord because they should be 
+      # all the same ... i.e. columns are from the same group and share indices
+      num_recs_u = array_ops.unstack(num_records)[0]
+      first_ord_u = array_ops.unstack(first_ordinal)[0]
+      parsed_chunks.insert(0, first_ord_u)
+      parsed_chunks.insert(0, num_recs_u)
+      parsed_chunks.insert(0, mapped_key)
+      to_enqueue.append(parsed_chunks)
+
+    parsed = tf.train.batch_join_pdq(tensor_list_list=[e for e in to_enqueue],
+                                          batch_size=1, capacity=capacity,
+                                          enqueue_many=False,
+                                          num_dq_ops=process_parallel,
+                                          name="parsed_chunks_out"+name)
+
+    return parsed
+
 
 # interpret pairs in buffer_list in order of columns and write them out to disk beside metadata
 # returns: tensor containing 
 # def persona_out_pipe(metadata_path, columns, buffer_list, write_parallel=1, compress_parallel=1) 
 
-from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops
-from tensorflow.python.framework import ops
-from tensorflow.python.framework import tensor_shape
+
+
