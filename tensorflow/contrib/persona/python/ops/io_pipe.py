@@ -75,16 +75,13 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
     # cascading MMAP operations give better disk performance
     chunks, names = _persona_ops.file_m_map(filename=chunk_filenames[0], name=name, pool_handle=mmap_pool,
                                                   local_prefix=local_dir, synchronous=sync)
+
     print("chunk shape after mmap is {}".format(chunks.get_shape()))
     for chunk_filename in chunk_filenames[1:]:
-      if chunks.get_shape() == tensor_shape.TensorShape([2]):
-        chunks = array_ops.expand_dims(chunks, 0)
-      if names.get_shape() == tensor_shape.TensorShape([]):
-        names = array_ops.expand_dims(names, 0)
       chunks, names = _persona_ops.staged_file_map(filename=chunk_filename, local_prefix=local_dir,
                                                   upstream_refs=chunks, upstream_names=names,
                                                   synchronous=sync, name=name, pool_handle=mmap_pool)
-      print("chunk shape after mmap is {}".format(chunks.get_shape()))
+      print("chunk shape after stage mmap is {}".format(chunks.get_shape()))
  
     if chunks.get_shape() == tensor_shape.TensorShape([2]):
       all_chunks = [chunks]
