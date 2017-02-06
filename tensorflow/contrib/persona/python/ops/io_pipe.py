@@ -30,10 +30,17 @@ def _key_maker(file_keys):
   #return keys[0]  # just the one
   return sp_output
 
-# columns: list of extensions, which columns to read in, must be in same group
-# keys: optional scalar tensor with chunk keys (otherwise adds a string_input_producer)
-# returns: list of tensors in the form [ key, num_records, first_ordinal, col0, col1, ... , colN ]
-# where col0 - colN are Tensor([2]) and all else is scalar
+"""
+Build an input pipeline to get columns from an AGD dataset.
+
+  ops = persona_in_pipe("dataset/metadata.json", ["base","qual"])
+  
+columns: list of extensions, which columns to read in, must be in same group
+key: optional scalar tensor with chunk key (otherwise adds a string_input_producer for all
+  chunks in `metadata_path`
+returns: list of tensors in the form [ key, num_records, first_ordinal, col0, col1, ... , colN ]
+where col0 - colN are Tensor([2]) and all else is scalar
+"""
 def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None, 
     buffer_pool=None, parse_parallel=2, read_parallel=1, process_parallel=1, sync=True, capacity=32, name=None):
   
@@ -76,12 +83,10 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
     chunks, names = _persona_ops.file_m_map(filename=chunk_filenames[0], name=name, pool_handle=mmap_pool,
                                                   local_prefix=local_dir, synchronous=sync)
 
-    print("chunk shape after mmap is {}".format(chunks.get_shape()))
     for chunk_filename in chunk_filenames[1:]:
       chunks, names = _persona_ops.staged_file_map(filename=chunk_filename, local_prefix=local_dir,
                                                   upstream_refs=chunks, upstream_names=names,
                                                   synchronous=sync, name=name, pool_handle=mmap_pool)
-      print("chunk shape after stage mmap is {}".format(chunks.get_shape()))
  
     if chunks.get_shape() == tensor_shape.TensorShape([2]):
       all_chunks = [chunks]
@@ -101,13 +106,10 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
       mapped_key = chunks_and_key[-1]
       parsed_chunks = []
       for mapped_chunk in mapped_chunks:
-        print("mapped chunk shape is {}".format(mapped_chunk.get_shape()))
         if mapped_chunk.get_shape() == tensor_shape.TensorShape([2]):
             m_chunk = array_ops.expand_dims(mapped_chunk, 0)
         else:
             m_chunk = mapped_chunk
-        
-        print("mapped chunk shape is {}".format(mapped_chunk.get_shape()))
         
         parsed_chunk, num_records, first_ordinal = _persona_ops.agd_reader(verify=False, 
                                 buffer_pool=buffer_pool, file_handle=m_chunk, name=name)
@@ -132,10 +134,97 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
 
     return parsed
 
+"""
+Interpret pairs in a buffer_list in order of `columns` and write them out to disk beside metadata.
+Uses a batch_join queue internally.
 
-# interpret pairs in buffer_list in order of columns and write them out to disk beside metadata
-# returns: tensor containing 
-# def persona_out_pipe(metadata_path, columns, buffer_list, write_parallel=1, compress_parallel=1) 
+path: the for the dataset. will overwrite existing files with same keys and extension
+columns: list of extensions of columns to write. must match in length to buffer_lists
+write_list_list: list containing tuples (buffer_list, key, num_records, first_ordinal)
+record_id: the ID to write into the column chunk headers
+name: the op name for the pipeline
+returns: list of tensor containing [key, num_records, first_ordinal]
+"""
+def persona_out_pipe(path, columns, write_list_list, record_id, compress=False, name=None):
+ 
+  if path[-1] != '/':
+    path.append('/')
+
+  for item in write_list_list:
+    if len(item) != 4:
+      raise Exception("Expected items in write_list_list to be lists of len 4, got len {}".format(len(item)))
+    if item[0].get_shape() != tensor_shape.TensorShape([2]):
+      raise Exception("Expected shape of buffer_list to be [2], got {}".format(item[0].get_shape()))
+    if item[1].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[1].get_shape()))
+    if item[2].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
+    if item[3].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
+  
+  with ops.name_scope(name, "persona_out_pipe", [write_list_list]):
+    final_write_out = []
+    for buff_list, key, num_records, first_ordinal in write_list_list:
+      file_key_passthru, first_o_passthru = _persona_ops.agd_write_columns(record_id=record_name,
+                                                                    record_type=columns,
+                                                                    column_handle=buff_list,
+                                                                    compress=compress,
+                                                                    output_dir=path,
+                                                                    file_path=key,
+                                                                    first_ordinal=first_ordinal,
+                                                                    num_records=num_records,
+                                                                    name=name)
+      final_write_out.append([file_key_passthru, num_records, first_o_passthru])
+      
+    sink_queue = training.input.batch_join_pdq(final_write_out, capacity=10, num_dq_ops=1, batch_size=1, name=name)
+
+    return sink_queue
+
+
+"""
+interpret pairs in a buffer_list as subchunks of a single column write it out to disk 
+in `path`.
+
+path: the for the dataset. will overwrite existing files with same keys and extension
+columns: extension to write e.g. "results"
+write_list_list: list containing tuples (buffer_list, key, num_records, first_ordinal)
+record_id: the ID to write into the column chunk headers
+name: the op name for the pipeline
+returns: tensor containing key
+"""
+def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress=False, name=None):
+  
+  if path[-1] != '/':
+    path.append('/')
+
+  for item in write_list_list:
+    if len(item) != 4:
+      raise Exception("Expected items in write_list_list to be lists of len 4, got len {}".format(len(item)))
+    if item[0].get_shape() != tensor_shape.TensorShape([2]):
+      raise Exception("Expected shape of buffer_list to be [2], got {}".format(item[0].get_shape()))
+    if item[1].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[1].get_shape()))
+    if item[2].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
+    if item[3].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
+  
+  with ops.name_scope(name, "persona_parallel_out_pipe", [write_list_list]):
+    write_ops = []
+    for buffer_list, key, num_records, first_ordinal in write_list_list:
+      writer_op = _persona_ops.parallel_column_writer(
+          column_handle=buffer_list,
+          record_type=column,
+          record_id=record_id,
+          num_records=num_records,
+          first_ordinal=first_ordinal,
+          file_path=key, name=name,
+          compress=compress, output_dir=path
+      )
+      write_ops.append([writer_op])
+
+    sink_queue = training.input.batch_join_pdq(write_ops, capacity=10, num_dq_ops=1, batch_size=1, name=name)
+    return sink_queue[0]
 
 
 
