@@ -516,8 +516,8 @@ A pool to manage FastqReadResource objects
   .Output("file_handle: string")
   .Output("file_name: string")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-      c->set_output(0, c->Vector(2));
-      c->set_output(1, c->Scalar());
+      c->set_output(0, c->Matrix(1, 2));
+      c->set_output(1, c->Vector(1));
       return Status::OK();
       })
   .SetIsStateful()
@@ -546,20 +546,16 @@ file_name: a Tensor() of string for the unique key for this file
   .SetShapeFn([](shape_inference::InferenceContext *c) {
       using namespace shape_inference;
 
-     
+       
       ShapeHandle file_handles_shape;
-      DimensionHandle newdim;
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &file_handles_shape));
-      TF_RETURN_IF_ERROR(c->Add(c->Dim(file_handles_shape, 0), 1, &newdim));
-      TF_RETURN_IF_ERROR(c->ReplaceDim(file_handles_shape, 0, newdim, &file_handles_shape));
-      c->set_output(0, file_handles_shape);
+      LOG(INFO) << "calling shape func";
+      TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(1), 2, &file_handles_shape));
+      auto dim_handle = c->Dim(file_handles_shape, 0);
+      auto dim_value = c->Value(dim_handle);
 
-      ShapeHandle file_names_shape;
-      DimensionHandle namesdim;
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 1, &file_names_shape));
-      TF_RETURN_IF_ERROR(c->Add(c->Dim(file_names_shape, 0), 1, &namesdim));
-      TF_RETURN_IF_ERROR(c->ReplaceDim(file_names_shape, 0, namesdim, &file_names_shape));
-      c->set_output(1, file_names_shape);
+      c->set_output(0, c->Matrix(dim_value+1, 2));
+
+      c->set_output(1, c->Vector(dim_value+1));
 
       return Status::OK();
     })
@@ -593,6 +589,10 @@ Creates pools of MemoryMappedFile objects
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
   .Output("key_out: string")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->Scalar());
+      return Status::OK();
+      })
   .SetIsStateful()
   .Doc(R"doc(
 Writes out a column (just a character buffer) to the location specified by the input.
