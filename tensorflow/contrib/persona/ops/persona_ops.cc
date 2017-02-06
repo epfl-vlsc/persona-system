@@ -259,6 +259,14 @@ reserve: the number of bytes to call 'reserve' on the vector.
   .Input("num_records: int32")
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+
+      c->set_output(0, c->Vector(2));
+      c->set_output(1, c->Scalar());
+
+      return Status::OK();
+    })
   .SetIsStateful()
   .Doc(R"doc(
 Takes N results buffers, and associated bases, qualities and metadata
@@ -289,6 +297,14 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   .Input("num_records: int32")
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+
+      c->set_output(0, c->Vector(2));
+      c->set_output(1, c->Scalar());
+
+      return Status::OK();
+    })
   .SetIsStateful()
   .Doc(R"doc(
 Takes N results buffers, and associated bases, qualities and metadata
@@ -548,7 +564,6 @@ file_name: a Tensor() of string for the unique key for this file
 
        
       ShapeHandle file_handles_shape;
-      LOG(INFO) << "calling shape func";
       TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(1), 2, &file_handles_shape));
       auto dim_handle = c->Dim(file_handles_shape, 0);
       auto dim_value = c->Value(dim_handle);
