@@ -445,7 +445,6 @@ cc_library(
     copts = tf_copts(),
     linkstatic = 1,
     visibility = ["//visibility:public"],
-    # TODO  do something about this hacky stuff
     deps = [":framework", "//tensorflow/core/kernels:io"
            ],
     alwayslink = 1,
