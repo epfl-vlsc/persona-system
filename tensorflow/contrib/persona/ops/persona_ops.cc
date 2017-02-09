@@ -548,8 +548,8 @@ A pool to manage FastqReadResource objects
   .Output("file_handle: string")
   .Output("file_name: string")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-      c->set_output(0, c->Matrix(1, 2));
-      c->set_output(1, c->Vector(1));
+      c->set_output(0, c->Vector(2));
+      c->set_output(1, c->Scalar());
       return Status::OK();
       })
   .SetIsStateful()
@@ -592,6 +592,10 @@ file_name: a Tensor() of string for the unique key for this file
     })
   .SetIsStateful()
   .Doc(R"doc(
+
+  DEPRECATED
+
+
 Appends a agd reader handle tensor to an input list.
 To be used for the staged pipeline
 
