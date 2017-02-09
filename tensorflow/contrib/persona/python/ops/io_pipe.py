@@ -88,7 +88,7 @@ returns: list of tensors in the form [ key, num_records, first_ordinal, col0, co
 where col0 - colN are Tensor([2]) and all else is scalar
 """
 def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None, 
-    buffer_pool=None, parse_parallel=2, read_parallel=1, process_parallel=1, sync=True, capacity=32, name=None):
+    buffer_pool=None, parse_parallel=2, process_parallel=1, sync=True, capacity=32, name=None):
   
   with open(metadata_path, 'r') as j:
     manifest = json.load(j)
@@ -178,7 +178,7 @@ def persona_ceph_in_pipe(metadata_path, columns, ceph_params, keys=None,
 
   cluster_name = ceph_params["cluster_name"]
   user_name = ceph_params["user_name"]
-  ceph_conf = os.path.join(os.path.dirname(args.ceph_params), ceph_params["ceph_conf_path"])
+  ceph_conf = ceph_params["ceph_conf_path"]
   pool = manifest["pool"]
 
   #TODO a way to check that chunk columns exist in the ceph store?
@@ -316,5 +316,54 @@ def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress
     sink_queue = training.input.batch_join_pdq(write_ops, capacity=10, num_dq_ops=1, batch_size=1, name=name)
     return sink_queue[0]
 
+"""
+Interpret pairs in a buffer_list in order of `columns` and write them out to ceph 
+Uses a batch_join queue internally.
 
+path: the for the dataset. will overwrite existing files with same keys and extension
+columns: list of extensions of columns to write. must match in length to buffer_lists
+write_list_list: list containing tuples (buffer_list, key, num_records, first_ordinal)
+record_id: the ID to write into the column chunk headers
+name: the op name for the pipeline
+returns: list of tensor containing [key, num_records, first_ordinal]
+"""
+def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, ceph_params, compress=False, name=None):
+  
+  with open(metadata_path, 'r') as j:
+    manifest = json.load(j)
+
+  cluster_name = ceph_params["cluster_name"]
+  user_name = ceph_params["user_name"]
+  ceph_conf = ceph_params["ceph_conf_path"]
+  pool = manifest["pool"]
+
+  for item in write_list_list:
+    if len(item) != 4:
+      raise Exception("Expected items in write_list_list to be lists of len 4, got len {}".format(len(item)))
+    if item[0].get_shape() != tensor_shape.TensorShape([2]):
+      raise Exception("Expected shape of buffer_list to be [2], got {}".format(item[0].get_shape()))
+    if item[1].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[1].get_shape()))
+    if item[2].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
+    if item[3].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
+  
+  final_write_out = []
+  for buff_list, key, num_records, first_ordinal in write_list_list:
+    # the passthru probably isnt required ....
+    file_key_passthru, first_o_passthru = persona_ops.agd_ceph_write_columns(cluster_name=cluster_name,
+                                                                     user_name=user_name,
+                                                                     pool_name=output_pool_name,
+                                                                     ceph_conf_path=ceph_conf_path,
+                                                                     record_id=record_id,
+                                                                     record_type=column,
+                                                                     column_handle=buff_list,
+                                                                     file_path=key,
+                                                                     first_ordinal=first_ordinal,
+                                                                     num_records=num_records,
+                                                                     name=name)
+    final_write_out.append([file_key_passthru, num_records, first_o_passthru])
+
+  sink_queue = train.input.batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name=name)
 
