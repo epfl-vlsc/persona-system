@@ -11,6 +11,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import constant_op
 from tensorflow.python.ops import string_ops
+from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python import training
 
@@ -19,10 +20,10 @@ import os
 
 _persona_ops = persona_ops()
 
-def _parse_pipe(data_in, capacity, process_parallel, name):
+def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
   
   to_enqueue = []
-  for chunks_and_key in mmap_queue:
+  for chunks_and_key in data_in:
     mapped_chunks = chunks_and_key[:-1]
     mapped_key = chunks_and_key[-1]
     parsed_chunks = []
@@ -129,15 +130,16 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
     chunks, names = _persona_ops.file_m_map(filename=chunk_filenames[0], name=name, pool_handle=mmap_pool,
                                                   local_prefix=local_dir, synchronous=sync)
 
+    all_chunks = []
+    all_chunks.append(chunks)
+    prev = chunks
     for chunk_filename in chunk_filenames[1:]:
-      chunks, names = _persona_ops.staged_file_map(filename=chunk_filename, local_prefix=local_dir,
-                                                  upstream_refs=chunks, upstream_names=names,
-                                                  synchronous=sync, name=name, pool_handle=mmap_pool)
+      with ops.control_dependencies([prev]):
+        chunks, names = _persona_ops.file_m_map(filename=chunk_filename, name=name, pool_handle=mmap_pool,
+                                                  local_prefix=local_dir, synchronous=sync)
+      all_chunks.append(chunks)
+      prev = chunks
  
-    if chunks.get_shape() == tensor_shape.TensorShape([2]):
-      all_chunks = [chunks]
-    else:
-      all_chunks = array_ops.unstack(chunks);
     all_chunks.append(key)
     
     mmap_queue = training.input.batch_pdq(all_chunks, batch_size=1,
@@ -147,7 +149,7 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
 
     to_enqueue = []
   
-    return _parse_pipe(mmap_queue, capacity, process_parallel, name)
+    return _parse_pipe(mmap_queue, capacity, process_parallel, buffer_pool, name)
   
 """
 Build an input pipeline to get columns from an AGD dataset in a Ceph object store.
@@ -222,7 +224,7 @@ def persona_ceph_in_pipe(metadata_path, columns, ceph_params, keys=None,
                                       name=name)
 
   
-    return _parse_pipe(chunk_queue, capacity, process_parallel, name)
+    return _parse_pipe(chunk_queue, capacity, process_parallel, buffer_pool, name)
 
 """
 Interpret pairs in a buffer_list in order of `columns` and write them out to disk beside metadata.

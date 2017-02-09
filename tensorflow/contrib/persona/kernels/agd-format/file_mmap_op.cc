@@ -137,15 +137,15 @@ namespace tensorflow {
       mmf->get()->own(move(rmr));
 
       Tensor *output_tensor;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({1, 2}), &output_tensor));
-      auto output_matrix = output_tensor->matrix<string>();
-      output_matrix(0, 0) = mmf->container();
-      output_matrix(0, 1) = mmf->name();
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_handle", TensorShape({2}), &output_tensor));
+      auto output_vector = output_tensor->vec<string>();
+      output_vector(0) = mmf->container();
+      output_vector(1) = mmf->name();
 
       Tensor *file_name;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
-      auto scalar = file_name->vec<string>();
-      scalar(0) = filename;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({}), &file_name));
+      auto scalar = file_name->scalar<string>();
+      scalar() = filename;
 
       auto duration = TRACEPOINT_DURATION_CALC(start);
       tracepoint(bioflow, chunk_read, filename.c_str(), duration);
