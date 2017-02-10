@@ -85,27 +85,27 @@ Build an input pipeline to get columns from an AGD dataset.
 columns: list of extensions, which columns to read in, must be in same group
 key: optional scalar tensor with chunk key (otherwise adds a string_input_producer for all
   chunks in `metadata_path`
-returns: list of tensors in the form [ key, num_records, first_ordinal, col0, col1, ... , colN ]
+returns: list of tensors in the form [ key, num_records, first_ordinal, col1, col1, ... , colN ]
 where col0 - colN are Tensor([2]) and all else is scalar
 """
-def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None, 
+def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_pool=None, 
     buffer_pool=None, parse_parallel=2, process_parallel=1, sync=True, capacity=32, name=None):
-  
-  with open(metadata_path, 'r') as j:
-    manifest = json.load(j)
+ 
+  if metadata_path is not None:
+    with open(metadata_path, 'r') as j:
+      manifest = json.load(j)
 
-  records = manifest['records']
-  chunknames = []
-  for record in records:
-    chunknames.append(record['path'])
+    records = manifest['records']
+    chunknames = []
+    for record in records:
+      chunknames.append(record['path'])
 
-  local_dir = os.path.dirname(metadata_path)
-  print(local_dir)
-  # verify that the desired columns exist
-  for extension in columns:
-    file_name = local_dir + "/" + chunknames[0] + "." + extension
-    if not os.path.isfile(file_name):
-      raise Exception("Desired column file {col} does not exist in AGD dataset {dataset}".format(col=file_name, dataset=metadata_path))
+    print(dataset_dir)
+    # verify that the desired columns exist
+    for extension in columns:
+      file_name = dataset_dir + "/" + chunknames[0] + "." + extension
+      if not os.path.isfile(file_name):
+        raise Exception("Desired column file {col} does not exist in AGD dataset {dataset}".format(col=file_name, dataset=metadata_path))
   
 
   with ops.name_scope(name, "persona_in_pipe", [key, mmap_pool, buffer_pool]):
@@ -117,6 +117,8 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
 
     if key is None:
       # construct input producer
+      if metadata_path is None:
+        raise Exception("If keys is None, must also pass a valid metadata file")
       key = _key_maker(chunknames)
 
     suffix_sep = constant_op.constant(".")
@@ -128,7 +130,7 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
 
     # cascading MMAP operations give better disk performance
     chunks, names = _persona_ops.file_m_map(filename=chunk_filenames[0], name=name, pool_handle=mmap_pool,
-                                                  local_prefix=local_dir, synchronous=sync)
+                                                  local_prefix=dataset_dir, synchronous=sync)
 
     all_chunks = []
     all_chunks.append(chunks)
@@ -136,7 +138,7 @@ def persona_in_pipe(metadata_path, columns, key=None, mmap_pool=None,
     for chunk_filename in chunk_filenames[1:]:
       with ops.control_dependencies([prev]):
         chunks, names = _persona_ops.file_m_map(filename=chunk_filename, name=name, pool_handle=mmap_pool,
-                                                  local_prefix=local_dir, synchronous=sync)
+                                                  local_prefix=dataset_dir, synchronous=sync)
       all_chunks.append(chunks)
       prev = chunks
  
@@ -167,21 +169,22 @@ process_parallel: how many sets of parsed `columns` to return
 returns: list of tensors in the form [ key, num_records, first_ordinal, col0, col1, ... , colN ]*`process_parallel`
 where col0 - colN are Tensor([2]) and all else is scalar
 """
-def persona_ceph_in_pipe(metadata_path, columns, ceph_params, keys=None, 
+def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None, 
     buffer_pool=None, parse_parallel=2, read_parallel=1, process_parallel=1, ceph_read_size=2**26, capacity=32, name=None):
-  
-  with open(metadata_path, 'r') as j:
-    manifest = json.load(j)
+ 
+  if metadata_path is not None:
+    with open(metadata_path, 'r') as j:
+      manifest = json.load(j)
 
-  records = manifest['records']
-  chunknames = []
-  for record in records:
-    chunknames.append(record['path'])
+    records = manifest['records']
+    chunknames = []
+    for record in records:
+      chunknames.append(record['path'])
 
   cluster_name = ceph_params["cluster_name"]
   user_name = ceph_params["user_name"]
   ceph_conf = ceph_params["ceph_conf_path"]
-  pool = manifest["pool"]
+  pool = ceph_params["pool_name"]
 
   #TODO a way to check that chunk columns exist in the ceph store?
 
@@ -191,6 +194,8 @@ def persona_ceph_in_pipe(metadata_path, columns, ceph_params, keys=None,
       buffer_pool = _persona_ops.buffer_pool(size=10, bound=False, name=name)
 
     if keys is None:
+      if metadata_path is None:
+        raise Exception("If keys is None, must also pass a valid metadata file")
       # construct input producer
       keys = _keys_maker(chunknames, read_parallel)
 
