@@ -11,8 +11,8 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/format.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/Bam.h"
-#include "tensorflow/contrib/persona/kernels/concurrent_queue/work_queue.h"
-#include "tensorflow/contrib/persona/kernels/concurrent_queue/priority_work_queue.h"
+#include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
+#include "tensorflow/contrib/persona/kernels/concurrent_queue/priority_concurrent_queue.h"
 #include "zlib.h"
 
 namespace tensorflow {
@@ -62,9 +62,9 @@ namespace tensorflow {
         header_ = header_ss.str();
 
         //LOG(INFO) << "num_threads is " << num_threads_;
-        buffer_queue_.reset(new WorkQueue<BufferRef>(num_threads_*2));
-        compress_queue_.reset(new WorkQueue<CompressItem>(num_threads_*2));
-        write_queue_.reset(new PriorityWorkQueue<WriteItem>(num_threads_*2));
+        buffer_queue_.reset(new ConcurrentQueue<BufferRef>(num_threads_*2));
+        compress_queue_.reset(new ConcurrentQueue<CompressItem>(num_threads_*2));
+        write_queue_.reset(new PriorityConcurrentQueue<WriteItem>(num_threads_*2));
 
         // *2 because we need an output buf for compress and write
         // for each input buf
@@ -543,10 +543,10 @@ namespace tensorflow {
       int num_threads_;
 
       typedef const unique_ptr<char[]>* BufferRef;
-      unique_ptr<WorkQueue<BufferRef>> buffer_queue_;
+      unique_ptr<ConcurrentQueue<BufferRef>> buffer_queue_;
 
       typedef tuple<BufferRef, uint32_t, BufferRef, uint32_t, uint32_t> CompressItem; // inbuffer, isize, outbuffer, osize, index (ordering)
-      unique_ptr<WorkQueue<CompressItem>> compress_queue_;
+      unique_ptr<ConcurrentQueue<CompressItem>> compress_queue_;
 
       struct WriteItem {
         BufferRef buf;
@@ -557,7 +557,7 @@ namespace tensorflow {
         }
       };
 
-      unique_ptr<PriorityWorkQueue<WriteItem>> write_queue_;
+      unique_ptr<PriorityConcurrentQueue<WriteItem>> write_queue_;
 
 
       vector<unique_ptr<char[]>> buffers_;

@@ -17,7 +17,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "bwa_wrapper.h"
 #include "bwa_reads.h"
-#include "tensorflow/contrib/persona/kernels/concurrent_queue/work_queue.h"
+#include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "bwa/bwamem.h"
 
 namespace tensorflow {

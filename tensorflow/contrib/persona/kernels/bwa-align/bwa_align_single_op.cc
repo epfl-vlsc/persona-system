@@ -22,7 +22,7 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/column_builder.h"
 #include "bwa_wrapper.h"
 #include "bwa_reads.h"
-#include "tensorflow/contrib/persona/kernels/concurrent_queue/work_queue.h"
+#include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 
@@ -53,7 +53,7 @@ class BWAAlignSingleOp : public OpKernel {
 
       int capacity;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("work_queue_size", &capacity));
-      request_queue_.reset(new WorkQueue<shared_ptr<ResourceContainer<BWAReadResource>>>(capacity));
+      request_queue_.reset(new ConcurrentQueue<shared_ptr<ResourceContainer<BWAReadResource>>>(capacity));
       compute_status_ = Status::OK();
     }
 
@@ -247,7 +247,7 @@ private:
 
   int num_threads_;
 
-  unique_ptr<WorkQueue<shared_ptr<ResourceContainer<BWAReadResource>>>> request_queue_;
+  unique_ptr<ConcurrentQueue<shared_ptr<ResourceContainer<BWAReadResource>>>> request_queue_;
 
   Status compute_status_;
   TF_DISALLOW_COPY_AND_ASSIGN(BWAAlignSingleOp);

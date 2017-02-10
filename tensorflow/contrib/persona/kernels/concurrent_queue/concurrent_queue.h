@@ -12,14 +12,14 @@ namespace tensorflow {
 // to a full queue. 
 
 template <typename T>
-class PriorityWorkQueue {
+class ConcurrentQueue {
   public:
 
-    PriorityWorkQueue(int capacity);
-    ~PriorityWorkQueue() { 
+    ConcurrentQueue(int capacity);
+    ~ConcurrentQueue() { 
       //LOG(INFO) << "num pushed: " << num_push_; 
-    }
-
+      } 
+    
     // return true if pushed, false otherwise
     // will block until pushed if block_ is true
     bool push(const T& item);
@@ -49,7 +49,7 @@ class PriorityWorkQueue {
     // cond vars for block/wait/notify on queue push/pop
     mutable std::condition_variable queue_pop_cv_;
     mutable std::condition_variable queue_push_cv_;
-    std::priority_queue<T> queue_;
+    std::queue<T> queue_;
     size_t capacity_;
     // block on calls to push, pop
     bool block_ = true;
@@ -61,7 +61,7 @@ class PriorityWorkQueue {
  };
 
 template <typename T>
-bool PriorityWorkQueue<T>::peek(T& item) {
+bool ConcurrentQueue<T>::peek(T& item) {
   bool popped = false;
   {
     mutex_lock l(mu_);
@@ -74,7 +74,7 @@ bool PriorityWorkQueue<T>::peek(T& item) {
     }
 
     if (!queue_.empty()) {
-      item = queue_.top();
+      item = queue_.front();
       popped = true;
     }
   }
@@ -84,10 +84,10 @@ bool PriorityWorkQueue<T>::peek(T& item) {
 }
 
 template <typename T>
-void PriorityWorkQueue<T>::drop_if_equal(T& item) {
+void ConcurrentQueue<T>::drop_if_equal(T& item) {
   {
     mutex_lock l(mu_);
-    if (!queue_.empty() && queue_.top() == item) {
+    if (!queue_.empty() && queue_.front() == item) {
       queue_.pop();
     }
   }
@@ -95,7 +95,7 @@ void PriorityWorkQueue<T>::drop_if_equal(T& item) {
 }
 
 template <typename T>
-bool PriorityWorkQueue<T>::pop(T& item) {
+bool ConcurrentQueue<T>::pop(T& item) {
 
   bool popped = false;
   {
@@ -108,7 +108,7 @@ bool PriorityWorkQueue<T>::pop(T& item) {
     }
 
     if (!queue_.empty()) {
-      item = queue_.top();
+      item = queue_.front();
       queue_.pop();
       popped = true;
     }
@@ -122,7 +122,7 @@ bool PriorityWorkQueue<T>::pop(T& item) {
 }
 
 template <typename T>
-bool PriorityWorkQueue<T>::push(const T& item) {
+bool ConcurrentQueue<T>::push(const T& item) {
 
   bool pushed = false;
   {
@@ -154,10 +154,10 @@ bool PriorityWorkQueue<T>::push(const T& item) {
 }
 
 template <typename T>
-void PriorityWorkQueue<T>::unblock() {
+void ConcurrentQueue<T>::unblock() {
   {
     mutex_lock l(mu_);
-    //VLOG(INFO) << "PriorityWorkQueue("<< this << ") unblock called!";
+    //VLOG(INFO) << "ConcurrentQueue("<< this << ") unblock called!";
     block_ = false;
   }
 
@@ -166,13 +166,13 @@ void PriorityWorkQueue<T>::unblock() {
 }
 
 template <typename T>
-void PriorityWorkQueue<T>::set_block() {
+void ConcurrentQueue<T>::set_block() {
   mutex_lock l(mu_);
   block_ = true;
 }
 
 template <typename T>
-PriorityWorkQueue<T>::PriorityWorkQueue(int capacity) {
+ConcurrentQueue<T>::ConcurrentQueue(int capacity) {
   // root cause of this joke is that tensorflow attributes 
   // do not have an unsigned type. `\_(o_o)_/`
   if (capacity < 0)
@@ -182,22 +182,22 @@ PriorityWorkQueue<T>::PriorityWorkQueue(int capacity) {
 }
 
 template <typename T>
-bool PriorityWorkQueue<T>::empty() const { return queue_.empty(); }
+bool ConcurrentQueue<T>::empty() const { return queue_.empty(); }
 
 template <typename T>
-size_t PriorityWorkQueue<T>::capacity() const { return capacity_; }
+size_t ConcurrentQueue<T>::capacity() const { return capacity_; }
 
 template <typename T>
-size_t PriorityWorkQueue<T>::size() const { return queue_.size(); }
+size_t ConcurrentQueue<T>::size() const { return queue_.size(); }
 
 template <typename T>
-int64 PriorityWorkQueue<T>::num_pop_waits() { return num_pop_waits_; }
+int64 ConcurrentQueue<T>::num_pop_waits() { return num_pop_waits_; }
 
 template <typename T>
-int64 PriorityWorkQueue<T>::num_push_waits() { return num_push_waits_; }
+int64 ConcurrentQueue<T>::num_push_waits() { return num_push_waits_; }
 
 template <typename T>
-int64 PriorityWorkQueue<T>::num_peek_waits() { return num_peek_waits_; }
+int64 ConcurrentQueue<T>::num_peek_waits() { return num_peek_waits_; }
 
 }  // namespace tensorflow
 

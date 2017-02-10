@@ -26,7 +26,7 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/column_builder.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/FileFormat.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/column_builder.h"
-#include "tensorflow/contrib/persona/kernels/concurrent_queue/work_queue.h"
+#include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "SnapAlignerWrapper.h"

@@ -23,7 +23,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer_list.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/FileFormat.h"
-#include "tensorflow/contrib/persona/kernels/concurrent_queue/work_queue.h"
+#include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "GenomeIndex.h"
 #include "Read.h"
 #include "SnapAlignerWrapper.h"
@@ -56,7 +56,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
       int capacity;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("work_queue_size", &capacity));
-      request_queue_.reset(new WorkQueue<shared_ptr<ResourceContainer<ReadResource>>>(capacity));
+      request_queue_.reset(new ConcurrentQueue<shared_ptr<ResourceContainer<ReadResource>>>(capacity));
       compute_status_ = Status::OK();
     }
 
@@ -425,7 +425,7 @@ private:
 
   int num_threads_;
 
-  unique_ptr<WorkQueue<shared_ptr<ResourceContainer<ReadResource>>>> request_queue_;
+  unique_ptr<ConcurrentQueue<shared_ptr<ResourceContainer<ReadResource>>>> request_queue_;
 
   Status compute_status_;
   TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignAGDParallelOp);
