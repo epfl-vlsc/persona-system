@@ -314,15 +314,16 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
 
   # TODO(phawkins): currently, this rule uses an unofficial LLVM mirror.
   # Switch to an official source of snapshots if/when possible.
-  native.new_http_archive(
+  temp_workaround_http_archive(
       name = "llvm",
       urls = [
-          "http://bazel-mirror.storage.googleapis.com/github.com/llvm-mirror/llvm/archive/4e9e4f277ad254e02a0cff33c61cd827e600da62.tar.gz",
-          "https://github.com/llvm-mirror/llvm/archive/4e9e4f277ad254e02a0cff33c61cd827e600da62.tar.gz",
+          "http://bazel-mirror.storage.googleapis.com/github.com/llvm-mirror/llvm/archive/2276fd31f36aa58f39397c435a8be6632d8c8505.tar.gz",
+          "https://github.com/llvm-mirror/llvm/archive/2276fd31f36aa58f39397c435a8be6632d8c8505.tar.gz",
       ],
-      sha256 = "ec67c57dfd85c2bb857fd13011c5c2aa3f1dc9f40c0a5bac13e78e76d6b61aa6",
-      strip_prefix = "llvm-4e9e4f277ad254e02a0cff33c61cd827e600da62",
+      sha256 = "0e08c91752732227280466d12f330a5854569deddf28ff4a6c3898334dbb0d16",
+      strip_prefix = "llvm-2276fd31f36aa58f39397c435a8be6632d8c8505",
       build_file = str(Label("//third_party/llvm:llvm.BUILD")),
+      repository = tf_repo_name,
   )
 
   native.new_http_archive(
@@ -383,6 +384,14 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
       actual = "@zlib_archive//:zlib",
   )
 
+  native.new_http_archive(
+      name = "nccl_archive",
+      url = "https://github.com/nvidia/nccl/archive/024d1e267845f2ed06f3e2e42476d50f04a00ee6.tar.gz",
+      sha256 = "6787f0eed88d52ee8e32956fa4947d92c139da469f1d8e311c307f27d641118e",
+      strip_prefix = "nccl-024d1e267845f2ed06f3e2e42476d50f04a00ee6",
+      build_file = str(Label("//third_party:nccl.BUILD")),
+  )
+
   # Make junit-4.12 available as //external:junit
   native.http_jar(
       name = "junit_jar",
@@ -395,7 +404,7 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
       actual = "@junit_jar//jar",
   )
 
-  native.new_http_archive(
+  temp_workaround_http_archive(
       name = "jemalloc",
       urls = [
           "http://bazel-mirror.storage.googleapis.com/github.com/jemalloc/jemalloc/archive/4.4.0.tar.gz",
@@ -404,4 +413,5 @@ def tf_workspace(path_prefix = "", tf_repo_name = ""):
       sha256 = "3c8f25c02e806c3ce0ab5fb7da1817f89fc9732709024e2a81b6b82f7cc792a8",
       strip_prefix = "jemalloc-4.4.0",
       build_file = str(Label("//third_party:jemalloc.BUILD")),
+      repository = tf_repo_name,
   )
