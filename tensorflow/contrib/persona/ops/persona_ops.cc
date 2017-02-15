@@ -1,15 +1,12 @@
-
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op.h"
 
 namespace tensorflow {
 
-using shape_inference::DimensionHandle;
-using shape_inference::InferenceContext;
-using shape_inference::ShapeHandle;
 using namespace errors;
 using namespace std;
-  
+using namespace shape_inference;
+
 // let the consumer write their own doc
 #define REGISTER_REFERENCE_POOL(_NAME) \
   REGISTER_OP(_NAME) \
@@ -17,12 +14,29 @@ using namespace std;
     .Attr("bound: bool = true") \
     .Attr("container: string = ''") \
     .Attr("shared_name: string = ''") \
-    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) { \
+    .SetShapeFn([](InferenceContext* c) { \
         c->set_output(0, c->Vector(2)); \
         return Status::OK(); \
         }) \
     .Output("pool_handle: Ref(string)") \
     .SetIsStateful()
+
+  Status check_vector(InferenceContext *c, size_t input_idx, size_t dim_size) {
+    ShapeHandle input_data;
+    TF_RETURN_IF_ERROR(c->WithRank(c->input(input_idx), 1, &input_data));
+    auto dim_handle = c->Dim(input_data, 0);
+    auto dim_value = c->Value(dim_handle);
+    if (dim_value != dim_size) {
+      return Internal("Op expected tensor of size ", dim_size, ", but got ", dim_value);
+    }
+    return Status::OK();
+  }
+
+  Status check_scalar(InferenceContext *c, size_t input_idx) {
+    ShapeHandle input_data;
+    TF_RETURN_IF_ERROR(c->WithRank(c->input(input_idx), 0, &input_data));
+    return Status::OK();
+  }
 
   REGISTER_OP("AGDAssembler")
   .Input("agd_read_pool: Ref(string)")
@@ -32,6 +46,14 @@ using namespace std;
   .Input("num_records: int32")
   .Output("agd_read_handle: string")
   .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      for (int i = 0; i < 4; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+      TF_RETURN_IF_ERROR(check_scalar(c, 4));
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+    })
   .Doc(R"doc(
 Assembles all 3 fields (bases, qualities, and metadata) into a generic reader object
 which is passed downstream for conversion / alignment.
@@ -47,6 +69,14 @@ If we need to only process a subset in the future, we must make a separate op.
   .Input("num_records: int32")
   .Output("agd_read_handle: string")
   .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      for (int i = 0; i < 3; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+      TF_RETURN_IF_ERROR(check_scalar(c, 3));
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+    })
   .Doc(R"doc(
 Assembles all 3 fields (bases, qualities, and metadata) into a generic reader object
 which is passed downstream for conversion / alignment.
@@ -83,7 +113,7 @@ Each buffer list dequeued will have the same number of elements as the NUM_COLUM
 
 chunk_size: the size, in number of records, of the output chunks
 num_records: vector of number of records
-file_buf_size: the buffer size used for each individual file, default 10MB. 
+file_buf_size: the buffer size used for each individual file, default 10MB.
 )doc");
 
   REGISTER_OP("AGDCephWriteColumns")
@@ -105,11 +135,11 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
   .Doc(R"doc(
 Writes out columns from a specified BufferList. The list contains
 [data, index] BufferPairs. This Op constructs the header, unifies the buffers,
-and writes to disk. Normally, this corresponds to a set of bases, qual, meta, 
-results columns. 
+and writes to disk. Normally, this corresponds to a set of bases, qual, meta,
+results columns.
 
-This writes out to a Ceph object store only, defined by `cluster_name, user_name, 
-pool_name, and ceph_conf_path`. 
+This writes out to a Ceph object store only, defined by `cluster_name, user_name,
+pool_name, and ceph_conf_path`.
 
 Assumes that the record_id for a given set does not change for the runtime of the graph
 and is thus passed as an Attr instead of an input (for efficiency);
@@ -120,34 +150,24 @@ and is thus passed as an Attr instead of an input (for efficiency);
   .Input("buffer_list_pool: Ref(string)")
   .Input("input_data: string")
   .Output("agd_columns: string")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
-      ShapeHandle input_data;
+  .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 2; i++) {
-        TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &input_data));
-        auto dim_handle = c->Dim(input_data, 0);
-        auto dim_value = c->Value(dim_handle);
-        if (dim_value != 2) {
-          return Internal("AGDConverter input ", i, " must be a vector(2)");
-        }
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
-      c->set_output(0, input_data);
+      c->set_output(0, c->Vector(2));
 
       return Status::OK();
     })
   .Doc(R"doc(
 Converts an input file into three files of bases, qualities, and metadata
 )doc");
-  
+
     REGISTER_OP("AGDMarkDuplicates")
   .Input("buffer_list_pool: Ref(string)")
   .Input("results_handle: string")
   .Input("num_records: int32")
   .Output("marked_results: string")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
+  .SetShapeFn([](InferenceContext *c) {
       ShapeHandle input_data;
       for (int i = 0; i < 2; i++) {
         TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &input_data));
@@ -163,10 +183,10 @@ Converts an input file into three files of bases, qualities, and metadata
     })
   .SetIsStateful()
   .Doc(R"doc(
-Mark duplicate reads/pairs that map to the same location. 
+Mark duplicate reads/pairs that map to the same location.
 
-This Op depends on data being sorted by metadata (QNAME), 
-i.e. A paired read is immediately followed by its mate. 
+This Op depends on data being sorted by metadata (QNAME),
+i.e. A paired read is immediately followed by its mate.
 
 Normally this step would be run on the aligner output before
 sorting by genome location.
@@ -174,9 +194,9 @@ sorting by genome location.
 The implementation follows the approach used by SamBlaster
 github.com/GregoryFaust/samblaster
 wherein read pair signatures are looked up in a hash table
-to determine if there are reads/pairs mapped to the exact 
+to determine if there are reads/pairs mapped to the exact
 same location. Our implementation uses google::dense_hash_table,
-trading memory for faster execution. 
+trading memory for faster execution.
   )doc");
 
   REGISTER_OP("AGDMergeMetadata")
@@ -185,8 +205,8 @@ trading memory for faster execution.
   .Input("output_buffer_queue_handle: resource")
   .Input("chunk_group_handles: string") // a record of NUM_SUPER_CHUNKS x NUM_COLUMNS x 2 (2 for reference)
   .Doc(R"doc(
-Merges multiple input chunks into chunks based on `chunk_size`, using the metadata field 
-as sort key. 
+Merges multiple input chunks into chunks based on `chunk_size`, using the metadata field
+as sort key.
 
 Op outputs a bufferlist with chunk columns in order: {meta, bases, quals, results}
 
@@ -240,9 +260,7 @@ Prints records to stdout from record indices `start` to `finish`.
   .Output("processed_buffers: string")
   .Output("num_records: int32")
   .Output("first_ordinal: int64")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
+  .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
       TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &sh));
       auto dim_handle = c->Dim(sh, 0);
@@ -275,9 +293,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
   .Input("num_records: int32")
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
+  .SetShapeFn([](InferenceContext *c) {
       c->set_output(0, c->Vector(2));
       c->set_output(1, c->Scalar());
 
@@ -313,9 +329,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   .Input("num_records: int32")
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
+  .SetShapeFn([](InferenceContext *c) {
       c->set_output(0, c->Vector(2));
       c->set_output(1, c->Scalar());
 
@@ -346,7 +360,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   .Input("chunk_size: int32")
   .SetIsStateful()
   .Doc(R"doc(
-Verifies that the dataset referred to by `chunk_names` is sorted. 
+Verifies that the dataset referred to by `chunk_names` is sorted.
 
 Chunk names must be in contiguous order.
   )doc");
@@ -362,9 +376,7 @@ Chunk names must be in contiguous order.
   .Input("num_records: int32")
   .Output("key_out: string")
   .Output("first_ordinal_out: int64")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
+  .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
       TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
       auto dim_handle = c->Dim(sh, 0);
@@ -386,7 +398,7 @@ Chunk names must be in contiguous order.
   .Doc(R"doc(
 Writes out columns from a specified BufferList. The list contains
 [data, index] BufferPairs. This Op constructs the header, unifies the buffers,
-and writes to disk. Normally, this corresponds to a set of bases, qual, meta, 
+and writes to disk. Normally, this corresponds to a set of bases, qual, meta,
 results columns. Thus the BufferList corresponds to an entire dataset chunk.
 
 This writes out to local disk only
@@ -472,9 +484,7 @@ compress: whether or not to compress the column
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
   .Output("file_path_out: string")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
+  .SetShapeFn([](InferenceContext *c) {
       vector<string> record_types;
       TF_RETURN_IF_ERROR(c->GetAttr("record_types", &record_types));
 
@@ -509,9 +519,7 @@ compress: whether or not to compress the column
   .Input("queue_handle: resource")
   .Input("fastq_file: string") // TODO change this to resource when you update the op
   .Input("fastq_pool: Ref(string)")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
+  .SetShapeFn([](InferenceContext *c) {
       ShapeHandle fastq_file;
       TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 1, &fastq_file));
       auto dim_handle = c->Dim(fastq_file, 0);
@@ -547,7 +555,7 @@ A pool to manage FastqReadResource objects
   .Input("filename: string")
   .Output("file_handle: string")
   .Output("file_name: string")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Vector(2));
       c->set_output(1, c->Scalar());
       return Status::OK();
@@ -575,10 +583,7 @@ file_name: a Tensor() of string for the unique key for this file
   .Input("pool_handle: Ref(string)")
   .Output("file_handles: string")
   .Output("file_names: string")
-  .SetShapeFn([](shape_inference::InferenceContext *c) {
-      using namespace shape_inference;
-
-       
+  .SetShapeFn([](InferenceContext *c) {
       ShapeHandle file_handles_shape;
       TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(1), 2, &file_handles_shape));
       auto dim_handle = c->Dim(file_handles_shape, 0);
@@ -624,7 +629,7 @@ Creates pools of MemoryMappedFile objects
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
   .Output("key_out: string")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Scalar());
       return Status::OK();
       })
@@ -646,7 +651,7 @@ Thus we always need 3 of these for the full conversion pipeline
   .Input("agd_results: string")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
-	.Input("read: string")
+  .Input("read: string")
   .Input("num_records: int32")
   .Output("num_records_out: int32")
   .SetIsStateful()
@@ -703,6 +708,10 @@ Creates a zmq writer that sends it's input to the specified URL
   .Attr("url: string")
   .Output("output: string")
   .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      c->set_output(0, c->Scalar());
+      return Status::OK();
+    })
   .Doc(R"doc(
   Creates a ZMQ reader that reads one line at a time from a ZMQ url of form tcp://blah:1234
 )doc");
@@ -731,7 +740,11 @@ Creates and initializes a pool containing char buffers of size `buffer_size` byt
   .Attr("cmd_line: string")                     \
   .Attr("container: string = ''")               \
   .Attr("shared_name: string = ''")             \
-  .SetIsStateful()
+  .SetIsStateful()                              \
+  .SetShapeFn([](InferenceContext *c) {         \
+      c->set_output(0, c->Vector(2));           \
+      return Status::OK();                      \
+    })
 
 MAKE_OP("AlignerOptions")
         .Doc(R"doc(
@@ -761,6 +774,10 @@ shared_name: If non-empty, this options will be shared under the given name
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+    })
   .Doc(R"doc(
     An op that creates or gives ref to a SNAP genome index.
     handle: The handle to the genomeindex resource.
@@ -819,6 +836,13 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
   .Input("read: string")
   .Output("result_buf_handle: string")
   .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      for (int i = 0; i < 4; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+    })
   .Doc(R"doc(
 Aligns input `read`, which contains multiple reads.
 Loads the SNAP-based hash table into memory on construction to perform
@@ -826,7 +850,7 @@ generation of alignment candidates.
 outputs a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
-  
+
   REGISTER_OP("SnapIndexReferenceSequences")
     .Input("genome_handle: Ref(string)")
     .SetShapeFn([](InferenceContext* c) {
@@ -851,15 +875,15 @@ containing the alignment candidates.
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
   .Output("result_buf_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
-  Using a number of threads, generates candidate alignments for 
-  the reads in `read`. Outputs the results in a BWACandidate 
+  Using a number of threads, generates candidate alignments for
+  the reads in `read`. Outputs the results in a BWACandidate
   object resource that should be passed to the BWAPairedEndStatOp node.
 )doc");
 
@@ -871,15 +895,15 @@ containing the alignment candidates.
   .Input("index_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("read: string")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
   .Output("read_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
-  Using a number of threads, generates candidate alignments for 
-  the reads in `read`. Outputs the results in a BWACandidate 
+  Using a number of threads, generates candidate alignments for
+  the reads in `read`. Outputs the results in a BWACandidate
   object resource that should be passed to the BWAPairedEndStatOp node.
 )doc");
 
@@ -889,7 +913,7 @@ containing the alignment candidates.
   .Input("qual_handle: string")
   .Input("meta_handle: string")
   .Input("num_records: int32")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
@@ -908,7 +932,7 @@ If we need to only process a subset in the future, we must make a separate op.
   .Input("base_handle: string")
   .Input("qual_handle: string")
   .Input("num_records: int32")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
@@ -938,21 +962,21 @@ Intended to be used for BWAAssembler
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
   .Output("result_buf_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
-  Using a number of threads, generates candidate alignments for 
-  the reads in `read`. Outputs the results in a BWACandidate 
+  Using a number of threads, generates candidate alignments for
+  the reads in `read`. Outputs the results in a BWACandidate
   object resource that should be passed to the BWAPairedEndStatOp node.
 )doc");
 
   REGISTER_OP("BWAIndex")
       .Output("handle: Ref(string)")
-      .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      .SetShapeFn([](InferenceContext* c) {
           c->set_output(0, c->Vector(2));
           return Status::OK();
           })
@@ -970,7 +994,7 @@ Intended to be used for BWAAssembler
   shared_name: If non-empty, this queue will be shared under the given name
   across multiple sessions.
   )doc");
-  
+
   REGISTER_OP("BwaIndexReferenceSequences")
     .Input("index_handle: Ref(string)")
     .SetShapeFn([](InferenceContext* c) {
@@ -1006,14 +1030,14 @@ Intended to be used for BWAAssembler
   .Input("index_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
   .Input("read: string")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+  .SetShapeFn([](InferenceContext* c) {
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
   .Output("read_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
-  Using the mem_alnreg_v data generated by BWAAlignerOp, 
+  Using the mem_alnreg_v data generated by BWAAlignerOp,
   this op generates the pestat data, that being the insert size
   inferred from the read data in the chunk.
 
@@ -1038,7 +1062,7 @@ Intended to be used for BWAAssembler
     })
   .SetIsStateful()
   .Doc(R"doc(
-  On execution, append reads/results chunks to output BAM file. 
+  On execution, append reads/results chunks to output BAM file.
 
   Not all tags for SAM/BAM are currently supported, but support
   is planned. Currently supported is only required tags.
@@ -1055,6 +1079,5 @@ Intended to be used for BWAAssembler
   num_threads: number of threads for compression >= 2 because one is
   used to coordinate writing to disk.
   )doc");
-
 
 }
