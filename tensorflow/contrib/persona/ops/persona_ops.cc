@@ -556,6 +556,8 @@ A pool to manage FastqReadResource objects
   .Output("file_handle: string")
   .Output("file_name: string")
   .SetShapeFn([](InferenceContext* c) {
+      TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
+      TF_RETURN_IF_ERROR(check_scalar(c, 1));
       c->set_output(0, c->Vector(2));
       c->set_output(1, c->Scalar());
       return Status::OK();
