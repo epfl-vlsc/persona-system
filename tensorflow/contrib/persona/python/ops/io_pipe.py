@@ -6,7 +6,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops
+from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops as persona_ops_proxy
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import constant_op
@@ -18,7 +18,7 @@ from tensorflow.python import training
 import json
 import os
 
-_persona_ops = persona_ops()
+persona_ops = persona_ops_proxy()
 
 def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
   
@@ -33,7 +33,7 @@ def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
       else:
           m_chunk = mapped_chunk
       
-      parsed_chunk, num_records, first_ordinal = _persona_ops.agd_reader(verify=False, 
+      parsed_chunk, num_records, first_ordinal = persona_ops.agd_reader(verify=False, 
                               buffer_pool=buffer_pool, file_handle=m_chunk, name=name)
       parsed_chunk_u = array_ops.unstack(parsed_chunk)[0]
 
@@ -111,9 +111,9 @@ def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_poo
   with ops.name_scope(name, "persona_in_pipe", [key, mmap_pool, buffer_pool]):
 
     if mmap_pool is None:
-      mmap_pool = _persona_ops.m_map_pool(size=10, bound=False, name=name)
+      mmap_pool = persona_ops.m_map_pool(size=10, bound=False, name=name)
     if buffer_pool is None:
-      buffer_pool = _persona_ops.buffer_pool(size=10, bound=False, name=name)
+      buffer_pool = persona_ops.buffer_pool(size=10, bound=False, name=name)
 
     if key is None:
       # construct input producer
@@ -129,7 +129,7 @@ def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_poo
       chunk_filenames.append(new_name)
 
     # cascading MMAP operations give better disk performance
-    chunks, names = _persona_ops.file_m_map(filename=chunk_filenames[0], name=name, pool_handle=mmap_pool,
+    chunks, names = persona_ops.file_m_map(filename=chunk_filenames[0], name=name, pool_handle=mmap_pool,
                                                   local_prefix=dataset_dir, synchronous=sync)
 
     all_chunks = []
@@ -137,7 +137,7 @@ def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_poo
     prev = chunks
     for chunk_filename in chunk_filenames[1:]:
       with ops.control_dependencies([prev]):
-        chunks, names = _persona_ops.file_m_map(filename=chunk_filename, name=name, pool_handle=mmap_pool,
+        chunks, names = persona_ops.file_m_map(filename=chunk_filename, name=name, pool_handle=mmap_pool,
                                                   local_prefix=dataset_dir, synchronous=sync)
       all_chunks.append(chunks)
       prev = chunks
@@ -170,7 +170,7 @@ returns: list of tensors in the form [ key, num_records, first_ordinal, col0, co
 where col0 - colN are Tensor([2]) and all else is scalar
 """
 def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None, 
-    buffer_pool=None, parse_parallel=2, read_parallel=1, process_parallel=1, ceph_read_size=2**26, capacity=32, name=None):
+                         buffer_pool=None, parse_parallel=2, read_parallel=1, process_parallel=1, ceph_read_size=2**26, capacity=32, name=None):
  
   if metadata_path is not None:
     with open(metadata_path, 'r') as j:
@@ -183,15 +183,15 @@ def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None,
 
   cluster_name = ceph_params["cluster_name"]
   user_name = ceph_params["user_name"]
-  ceph_conf = ceph_params["ceph_conf_path"]
-  pool = ceph_params["pool_name"]
+  ceph_conf_path = ceph_params["ceph_conf_path"]
+  pool_name = ceph_params["pool_name"]
 
   #TODO a way to check that chunk columns exist in the ceph store?
 
   with ops.name_scope(name, "persona_ceph_in_pipe", [keys, buffer_pool]):
 
     if buffer_pool is None:
-      buffer_pool = _persona_ops.buffer_pool(size=10, bound=False, name=name)
+      buffer_pool = persona_ops.buffer_pool(size=10, bound=False, name=name)
 
     if keys is None:
       if metadata_path is None:
@@ -216,13 +216,12 @@ def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None,
       for chunk_filename in chunk_filenames:
         # [0] because ceph_reader also outputs filename which we don't need
         bb = persona_ops.ceph_reader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name,
-                                ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_handle=buffer_pool_handle,
+                                ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_handle=buffer_pool,
                                 queue_key=chunk_filename, name=name)[0]
         chunk_buffers.append(bb)
       chunk_buffers.append(key)
       chunk_buffers_list.append(chunk_buffers)
 
-    
     chunk_queue = training.input.batch_join_pdq(chunk_buffers_list, batch_size=1,
                                       enqueue_many=False,
                                       num_dq_ops=parse_parallel,
@@ -262,7 +261,7 @@ def persona_out_pipe(path, columns, write_list_list, record_id, compress=False, 
   with ops.name_scope(name, "persona_out_pipe", [write_list_list]):
     final_write_out = []
     for buff_list, key, num_records, first_ordinal in write_list_list:
-      file_key_passthru, first_o_passthru = _persona_ops.agd_write_columns(record_id=record_name,
+      file_key_passthru, first_o_passthru = persona_ops.agd_write_columns(record_id=record_name,
                                                                     record_type=columns,
                                                                     column_handle=buff_list,
                                                                     compress=compress,
@@ -309,7 +308,7 @@ def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress
   with ops.name_scope(name, "persona_parallel_out_pipe", [write_list_list]):
     write_ops = []
     for buffer_list, key, num_records, first_ordinal in write_list_list:
-      writer_op = _persona_ops.parallel_column_writer(
+      writer_op = persona_ops.parallel_column_writer(
           column_handle=buffer_list,
           record_type=column,
           record_id=record_id,
