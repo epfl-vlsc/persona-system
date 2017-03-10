@@ -60,6 +60,7 @@ class AGDPairedAlignerOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
       subchunk_size_ *= 2;
 
       int capacity;
@@ -118,12 +119,9 @@ class AGDPairedAlignerOp : public OpKernel {
     core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
 
-    ResourceContainer<BufferList> *bufferlist_resource_container;
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
+    OP_REQUIRES_OK(ctx, GetResultBufferLists(ctx));
 
-    auto alignment_result_buffer_list = bufferlist_resource_container->get();
-
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
 
     if (sam_format_) {
       OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
@@ -192,11 +190,23 @@ private:
     return Status::OK();
   }
 
-  Status GetResultBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
+  Status GetResultBufferLists(OpKernelContext* ctx)
   {
-    TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
-    (*ctr)->get()->reset();
-    TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
+    ResourceContainer<BufferList> **ctr;
+    Tensor* out_t;
+    buffer_lists_.clear();
+    buffer_lists_.reserve(max_secondary_+1);
+    TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", TensorShape({max_secondary_+1, 2}), &out_t));
+    auto out_matrix = out_t->matrix<string>();
+    for (int i = 0; i < max_secondary_+1; i++) {
+      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
+      //core::ScopedUnref a(reads_container);
+      (*ctr)->get()->reset();
+      buffer_lists_.push_back((*ctr)->get());
+      out_matrix(i, 0) = (*ctr)->container();
+      out_matrix(i, 1) = (*ctr)->name();
+    }
+
     return Status::OK();
   }
 
@@ -222,12 +232,14 @@ private:
       //LOG(INFO) << "aligner thread spinning up";
       auto index = index_resource_->get();
 
-      snap_wrapper::PairedAligner aligner(options_, index);
+      snap_wrapper::PairedAligner aligner(options_, index, max_secondary_);
 
+      PairedAlignmentResult* secondary_results = new PairedAlignmentResult[aligner.MaxPairedSecondary()];
+      SingleAlignmentResult* secondary_single_results = new SingleAlignmentResult[aligner.MaxSingleSecondary()];
       bool first_is_primary = true; // we only ever generate one result
 
       PairedAlignmentResult primaryResult;
-      AlignmentResultBuilder result_builder;
+      vector<AlignmentResultBuilder> result_builders;
       string cigarString;
       int flag;
       //Read snap_read[2];
@@ -235,12 +247,14 @@ private:
 
       LandauVishkinWithCigar lvc;
 
-      BufferPair* result_buf = nullptr;
+      vector<BufferPair*> result_bufs;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
       //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
       bool useless[2], pass[2], pass_all;
+      int num_secondary_results, num_secondary_single_results_first, 
+          num_secondary_single_results_second;
 
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
@@ -252,10 +266,12 @@ private:
 
         auto *reads = reads_container->get();
 
-        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         while (io_chunk_status.ok()) {
 
-          result_builder.set_buffer_pair(result_buf);
+          for (int i = 0; i < result_builders.size(); i++)
+            result_builders[i].set_buffer_pair(result_bufs[i]);
+
           subchunk_status = Status::OK();
           while (subchunk_status.ok()) {
             for (size_t i = 0; i < 2; ++i) {
@@ -274,31 +290,56 @@ private:
             }
 
             if (useless[0] || useless[1]) {
-              pass[0] = options_->passFilter(&snap_read[0], AlignmentResult::NotFound, true, false);
-              pass[1] = options_->passFilter(&snap_read[1], AlignmentResult::NotFound, true, false);
-              pass_all = (options_->filterFlags & AlignerOptions::FilterBothMatesMatch) ? (pass[0] && pass[1]) : (pass[1] || pass[1]);
-              if (pass_all) {
-                VLOG(INFO) << "FILTERING READ";
-              } else {
                 // TODO change to the writePairs code for the new readWriter
-                for (size_t i = 0; i < 2; ++i) {
-                  primaryResult.status[i] = AlignmentResult::NotFound;
-                  primaryResult.location[i] = InvalidGenomeLocation;
-                  primaryResult.mapq[i] = 0;
-                  primaryResult.direction[i] = i; // TODO this is a hack! second direction = reverse. see directions.h in SNAP
-                  if (sam_format_) {
-                    //result_builder.AppendAlignmentResult(primaryResult, i);
-                    LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
-                  } else {
-                    subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builder);
-                  }
+              // we just filter these out for now
+              for (size_t i = 0; i < 2; ++i) {
+                primaryResult.status[i] = AlignmentResult::NotFound;
+                primaryResult.location[i] = InvalidGenomeLocation;
+                primaryResult.mapq[i] = 0;
+                primaryResult.direction[i] = FORWARD; 
+                subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builders[0], false);
+                // fill in blanks for secondaries
+                for (int i = 1; i < result_builders.size(); i++) {
+                  result_builders[i].AppendEmpty();
                 }
               }
               continue;
             }
 
-            aligner.align(snap_read, primaryResult);
-            subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builder);
+            aligner.align(snap_read, primaryResult, secondary_results, &num_secondary_results,
+                secondary_single_results, &num_secondary_single_results_first, &num_secondary_single_results_second);
+            subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builders[0], false);
+            int i = 0;
+            // we either have paired secondaries, or single ended results for each, but not both
+            if (num_secondary_results > 0) {
+              while (subchunk_status.ok() && i < num_secondary_results) {
+                subchunk_status = aligner.writeResult(snap_read, secondary_results[i], result_builders[i], true);
+                i++;
+              }
+            } else if (num_secondary_single_results_first > 0 || num_secondary_single_results_second > 0) {
+              while (subchunk_status.ok() && i < num_secondary_single_results_first) {
+                subchunk_status = snap_wrapper::WriteSingleResult(snap_read[0], secondary_single_results[i],
+                    result_builders[i+1], index->getGenome(), &lvc, true);
+                i++;
+              }
+              i = 0;
+              while (subchunk_status.ok() && i < num_secondary_single_results_second) {
+                subchunk_status = snap_wrapper::WriteSingleResult(snap_read[1], secondary_single_results[i+num_secondary_single_results_first],
+                    result_builders[i+1], index->getGenome(), &lvc, true);
+                i++;
+              }
+              // fill in the gaps
+              i = 0;
+              while (num_secondary_single_results_first + i < num_secondary_single_results_second) {
+                result_builders[num_secondary_single_results_first + i + 1].AppendEmpty();
+                i++;
+              }
+              i = 0;
+              while (num_secondary_single_results_second + i < num_secondary_single_results_first) {
+                result_builders[num_secondary_single_results_first + i + 1].AppendEmpty();
+                i++;
+              }
+            }
           }
 
           if (!IsResourceExhausted(subchunk_status)) {
@@ -307,9 +348,10 @@ private:
             return;
           }
 
-          result_buf->set_ready();
+          for (auto buf : result_bufs)
+            buf->set_ready();
 
-          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         }
 
         request_queue_->drop_if_equal(reads_container);
@@ -340,6 +382,8 @@ private:
   bool sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
+  int max_secondary_;
+  vector<BufferList*> buffer_lists_;
 
   atomic<uint32_t> num_active_threads_;
   mutex mu_;

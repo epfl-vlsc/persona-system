@@ -19,13 +19,13 @@ namespace bwa_wrapper {
     return l;
   }
 
-  Status BWAAligner::AlignSubchunkSingle(ReadResource* subchunk, AlignmentResultBuilder &result_builder) {
+  Status BWAAligner::AlignSubchunkSingle(ReadResource* subchunk, vector<AlignmentResultBuilder>& result_builders) {
 
     const char* bases, *bases_mate;
     const char* quals, *quals_mate;
     size_t bases_len, mate_len;
-    format::AlignmentResult result;
-    string cigar;
+    format::AlignmentResult result, result_sup;
+    string cigar, cigar_sup;
 
     Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
     int64_t i = 0;
@@ -51,9 +51,17 @@ namespace bwa_wrapper {
       
       // we only take the first result right now
       ProcessResult(&alignments[0], nullptr, result, cigar);
-      result_builder.AppendAlignmentResult(result, cigar);
+      result_builders[0].AppendAlignmentResult(result, cigar);
+      if (num_alignments > 1) {
+        LOG(INFO) << "result single has a supplemental";
+        ProcessResult(&alignments[1], nullptr, result_sup, cigar_sup);
+        result_builders[1].AppendAlignmentResult(result_sup, cigar_sup);
+      } else 
+        result_builders[1].AppendEmpty();
       //LOG(INFO) << "location " << result.location_ << " cigar: " << cigar;
 
+      //TODO process XA tags of primary and append to secondary results columns
+      
       free(reg.a);
       free(alignments[0].cigar);
 
@@ -66,6 +74,7 @@ namespace bwa_wrapper {
 
     return Status::OK();
   }
+
   Status BWAAligner::AlignSubchunk(ReadResource* subchunk, size_t index, vector<mem_alnreg_v>& regs) {
 
     const char* bases, *bases_mate;
@@ -163,7 +172,7 @@ namespace bwa_wrapper {
   }
 
   Status BWAAligner::FinalizeSubchunk(ReadResource *subchunk, size_t regs_index, vector<mem_alnreg_v>& regs, 
-      mem_pestat_t pes[4], AlignmentResultBuilder &result_builder) {
+      mem_pestat_t pes[4], vector<AlignmentResultBuilder>& result_builders) {
 
     // to get abs position: bns->anns[p->rid] where p is mem_aln_t
     const char* bases, *bases_mate;
@@ -212,14 +221,29 @@ namespace bwa_wrapper {
       id++;
       regs_index += 2;
 
-      format::AlignmentResult result, result_mate;
+      format::AlignmentResult result, result_mate, result_sup, result_sup_mate;
       string cigar, cigar_mate;
       ProcessResult(&results[0][0], &results[1][0], result, cigar);
       //LOG(INFO) << "cigar is: " << cigar;
       ProcessResult(&results[1][0], &results[0][0], result_mate, cigar_mate);
       //LOG(INFO) << "cigarmate is: " << cigar_mate;
-      result_builder.AppendAlignmentResult(result, cigar);
-      result_builder.AppendAlignmentResult(result_mate, cigar_mate);
+      result_builders[0].AppendAlignmentResult(result, cigar);
+      result_builders[0].AppendAlignmentResult(result_mate, cigar_mate);
+      if (num_results[0] > 1) {  // a supplemental for first 
+        LOG(INFO) << "first had a supplemental!";
+        ProcessResult(&results[0][1], nullptr, result_sup, cigar);
+        result_builders[1].AppendAlignmentResult(result_sup, cigar);
+      } else
+        result_builders[1].AppendEmpty();
+      if (num_results[1] > 1) {  // a supplemental for second 
+        LOG(INFO) << "second had a supplemental!";
+        ProcessResult(&results[1][1], nullptr, result_sup_mate, cigar);
+        result_builders[1].AppendAlignmentResult(result_sup_mate, cigar);
+      } else
+        result_builders[1].AppendEmpty();
+
+      //TODO parse and process the XA tag data from the mem_aln_t structs to get secondary
+      // alignments. 
 
       s = subchunk->get_next_record(&bases, &bases_len, &quals);
     }

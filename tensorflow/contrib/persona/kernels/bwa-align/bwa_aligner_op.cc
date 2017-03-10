@@ -112,8 +112,9 @@ class BWAAlignerOp : public OpKernel {
     // dont want to delete yet
     //core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
-
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, nullptr)); // no bufferlist
+    
+    vector<BufferList*> dummy;
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, dummy)); // no bufferlist
 
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, no_resource_releaser)), 
         Internal("Unable to push item onto work queue. Is it already closed?"));

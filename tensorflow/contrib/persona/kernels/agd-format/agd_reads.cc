@@ -137,16 +137,16 @@ namespace tensorflow {
       meta_->release();
     }
     sub_resources_.clear();
-    buffer_list_ = nullptr;
   }
 
-  Status AGDReadResource::get_next_subchunk(ReadResource **rr, BufferPair **b) {
+  Status AGDReadResource::get_next_subchunk(ReadResource **rr, vector<BufferPair*>& b) {
     //size_t idx = sub_resource_index_;
     auto a = sub_resource_index_.fetch_add(1, memory_order_relaxed);
     if (a >= sub_resources_.size()) {
       return ResourceExhausted("No more AGD subchunks");
     } else if (a == 0) {
-      buffer_list_->set_start_time();
+      for (auto bl : buffer_lists_)
+        bl->set_start_time();
     }
       //decltype(idx) next;
       //do {
@@ -155,11 +155,13 @@ namespace tensorflow {
       //  // weak has a few false positives, but is better for loops, according to the spec
       //} while (!sub_resource_index_.compare_exchange_weak(idx, next));
     *rr = &sub_resources_[a];
-    *b = &(*buffer_list_)[a];
+    for (auto bl : buffer_lists_)
+      b.push_back(&(*bl)[a]);
+
     return Status::OK();
   }
 
-  Status AGDReadResource::split(size_t chunk, BufferList *bl) {
+  Status AGDReadResource::split(size_t chunk, vector<BufferList*>& bl) {
     sub_resources_.clear();
 
     reset_iter(); // who cares doesn't die for now
@@ -184,9 +186,13 @@ namespace tensorflow {
       }
     }
     sub_resource_index_.store(0, memory_order_relaxed);
-    if (bl)
-      bl->resize(sub_resources_.size());
-    buffer_list_ = bl;
+    buffer_lists_.clear();
+    buffer_lists_.reserve(bl.size());
+    for (auto b : bl) {
+      // we have to copy the pointers to the BufferLists
+      b->resize(sub_resources_.size());
+      buffer_lists_.push_back(b);
+    }
     return Status::OK();
   }
 

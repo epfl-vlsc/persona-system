@@ -28,8 +28,8 @@ namespace snap_wrapper {
     return Status::OK();
   }
 
-  PairedAligner::PairedAligner(const PairedAlignerOptions *options_, GenomeIndex *index) :
-    options(options_), format(options_->useM), genome(index->getGenome()) {
+  PairedAligner::PairedAligner(const PairedAlignerOptions *options_, GenomeIndex *index, int max_secondary) :
+    options(options_), format(options_->useM), genome(index->getGenome()), max_secondary_(max_secondary) {
     size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(
                                 index,
                                 options->intersectingAlignerMaxHits,
@@ -54,15 +54,12 @@ namespace snap_wrapper {
                                 options->maxCandidatePoolSize,
                                 options->maxSecondaryAlignmentsPerContig);
 
-    unsigned maxPairedSecondaryHits, maxSingleSecondaryHits;
 
     if (options->maxSecondaryAlignmentAdditionalEditDistance < 0) {
-      maxPairedSecondaryHits = 0;
-      maxSingleSecondaryHits = 0;
+      maxPairedSecondaryHits_ = 0;
+      maxSingleSecondaryHits_ = 0;
     } else {
-      LOG(ERROR) << "Enabling secondary results. This feature is not yet supported!";
-      throw logic_error("Can't enable secondary results! Feature not yet supported!");
-      maxPairedSecondaryHits = IntersectingPairedEndAligner::getMaxSecondaryResults(
+      maxPairedSecondaryHits_ = IntersectingPairedEndAligner::getMaxSecondaryResults(
                                 options->numSeedsFromCommandLine,
                                 options->seedCoverage,
                                 maxReadSize,
@@ -70,7 +67,7 @@ namespace snap_wrapper {
                                 index->getSeedLength(),
                                 options->minSpacing,
                                 options->maxSpacing);
-      maxSingleSecondaryHits = ChimericPairedEndAligner::getMaxSingleEndSecondaryResults(
+      maxSingleSecondaryHits_ = ChimericPairedEndAligner::getMaxSingleEndSecondaryResults(
                                 options->numSeedsFromCommandLine,
                                 options->seedCoverage,
                                 maxReadSize,
@@ -78,7 +75,7 @@ namespace snap_wrapper {
                                 index->getSeedLength());
     }
 
-    memoryPoolSize += (1 + maxPairedSecondaryHits) * sizeof(PairedAlignmentResult) + maxSingleSecondaryHits * sizeof(SingleAlignmentResult);
+    memoryPoolSize += (1 + maxPairedSecondaryHits_) * sizeof(PairedAlignmentResult) + maxSingleSecondaryHits_ * sizeof(SingleAlignmentResult);
 
     allocator.reset(new BigAllocator(memoryPoolSize));
 
@@ -150,25 +147,27 @@ namespace snap_wrapper {
   }
 
   void
-  PairedAligner::align(array<Read, 2> &snap_reads, PairedAlignmentResult &result) {
-    int num_secondary_results, single_end_secondary_results_first_read,
-                               single_end_secondary_results_second_read;
+  PairedAligner::align(array<Read, 2> &snap_reads, PairedAlignmentResult &result,
+      PairedAlignmentResult* secondary_results, int* num_secondary_results, 
+      SingleAlignmentResult* secondary_single_results, int* num_secondary_single_results_first,
+      int* num_secondary_single_results_second) {
+
     aligner->align(&snap_reads[0], &snap_reads[1],
                    &result,
                    options->maxSecondaryAlignmentAdditionalEditDistance,
-                   0, // secondary results buffer size
-                   &num_secondary_results,
-                   nullptr, // secondary results buffer
-                   0, // single secondary buffer size
-                   0, // maxSecondaryAlignmentsToReturn
-                   // We don't use either of these, but we can't pass in nullptr
-                   &single_end_secondary_results_first_read,
-                   &single_end_secondary_results_second_read,
-                   nullptr); // more stuff related to secondary results
+                   maxPairedSecondaryHits_, // secondary results buffer size
+                   num_secondary_results,
+                   secondary_results, // secondary results buffer
+                   maxSingleSecondaryHits_, // single secondary buffer size
+                   max_secondary_, // maxSecondaryAlignmentsToReturn
+                   num_secondary_single_results_first,
+                   num_secondary_single_results_second,
+                   secondary_single_results); // more stuff related to secondary results
+
   }
 
   Status
-  PairedAligner::writeResult(array<Read, 2> &snap_reads, PairedAlignmentResult &result, AlignmentResultBuilder &result_column) {
+  PairedAligner::writeResult(array<Read, 2> &snap_reads, PairedAlignmentResult &result, AlignmentResultBuilder &result_column, bool is_secondary) {
     array<format::AlignmentResult, 2> results;
     array<string, 2> cigars;
     // always write pair 1 before pair 2
@@ -192,7 +191,7 @@ namespace snap_wrapper {
                                        result.mapq[i],
                                        finalLocations[i],
                                        result.direction[i],
-                                       false, 
+                                       is_secondary, 
                                        results[i],
                                        cigars[i],
                                        &addFrontClipping,
@@ -241,7 +240,7 @@ namespace snap_wrapper {
 
 
   Status WriteSingleResult(Read &snap_read, SingleAlignmentResult &result, AlignmentResultBuilder &result_column, 
-      const Genome* genome, LandauVishkinWithCigar* lvc) {
+      const Genome* genome, LandauVishkinWithCigar* lvc, bool is_secondary) {
     string cigar;
     format::AlignmentResult format_result;
     snap_read.setAdditionalFrontClipping(0);
@@ -259,7 +258,7 @@ namespace snap_wrapper {
                                        result.mapq,
                                        finalLocation,
                                        result.direction,
-                                       false, 
+                                       is_secondary, 
                                        format_result,
                                        cigar,
                                        &addFrontClipping,

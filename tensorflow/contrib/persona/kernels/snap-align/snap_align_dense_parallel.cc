@@ -53,6 +53,7 @@ class SnapAlignAGDParallelOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
 
       int capacity;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("work_queue_size", &capacity));
@@ -102,11 +103,23 @@ class SnapAlignAGDParallelOp : public OpKernel {
       return Status::OK();
     }
 
-    Status GetResultBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
+    Status GetResultBufferLists(OpKernelContext* ctx)
     {
-      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
-      (*ctr)->get()->reset();
-      TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
+      ResourceContainer<BufferList> **ctr;
+      Tensor* out_t;
+      buffer_lists_.clear();
+      buffer_lists_.reserve(max_secondary_+1);
+      TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", TensorShape({max_secondary_+1, 2}), &out_t));
+      auto out_matrix = out_t->matrix<string>();
+      for (int i = 0; i < max_secondary_+1; i++) {
+        TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
+        //core::ScopedUnref a(reads_container);
+        (*ctr)->get()->reset();
+        buffer_lists_.push_back((*ctr)->get());
+        out_matrix(i, 0) = (*ctr)->container();
+        out_matrix(i, 1) = (*ctr)->name();
+      }
+
       return Status::OK();
     }
 
@@ -141,11 +154,9 @@ class SnapAlignAGDParallelOp : public OpKernel {
     core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
 
-    ResourceContainer<BufferList> *bufferlist_resource_container;
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
-    auto alignment_result_buffer_list = bufferlist_resource_container->get();
+    OP_REQUIRES_OK(ctx, GetResultBufferLists(ctx));
 
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
 
     if (sam_format_) {
       OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)),
@@ -252,16 +263,18 @@ private:
       const char *bases, *qualities;
       size_t bases_len, qualities_len;
       SingleAlignmentResult primaryResult;
-      int num_secondary_alignments = 0;
+      vector<SingleAlignmentResult> secondaryResults;
+      secondaryResults.resize(max_secondary_);
+
       int num_secondary_results;
       SAMFormat format(options_->useM);
-      AlignmentResultBuilder result_builder;
+      vector<AlignmentResultBuilder> result_builders;
       string cigarString;
       int flag;
       Read snap_read;
       LandauVishkinWithCigar lvc;
 
-      BufferPair* result_buf = nullptr;
+      vector<BufferPair*> result_bufs;
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
@@ -283,7 +296,7 @@ private:
 
         auto *reads = reads_container->get();
 
-        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         while (io_chunk_status.ok()) {
 
           //timeLog.start_subchunk = std::chrono::high_resolution_clock::now();
@@ -293,7 +306,8 @@ private:
             //timeLog.print();
           //total += subchunk_time.count();
 
-          result_builder.set_buffer_pair(result_buf);
+          for (int i = 0; i < result_builders.size(); i++)
+            result_builders[i].set_buffer_pair(result_bufs[i]);
           //LOG(INFO) << "starting new subchunk";
           for (subchunk_status = subchunk_resource->get_next_record(snap_read); subchunk_status.ok();
                subchunk_status = subchunk_resource->get_next_record(snap_read)) {
@@ -311,10 +325,14 @@ private:
                   LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
                 } else {
                   //result_builder.AppendAlignmentResult(primaryResult, "*", 4);
-                  auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builder, genome_, &lvc);
+                  auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
 
                   if (!s.ok()) {
                     LOG(ERROR) << "adjustResults did not return OK!!!";
+                  }
+                  for (int i = 1; i < max_secondary_; i++) {
+                    // fill the columns with empties to maintain index equivalence
+                    result_builders[i].AppendEmpty();
                   }
                 }
               }
@@ -325,10 +343,10 @@ private:
                                     &snap_read,
                                     &primaryResult,
                                     options_->maxSecondaryAlignmentAdditionalEditDistance,
-                                    0, //num_secondary_alignments * sizeof(SingleAlignmentResult),
+                                    alignmentResultBufferSize,
                                     &num_secondary_results,
-                                    num_secondary_alignments,
-                                    nullptr //secondaryResults
+                                    max_secondary_,
+                                    &secondaryResults[0] //secondaryResults
                                     );
 
             flag = 0;
@@ -339,10 +357,22 @@ private:
               LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
             } else {
               
-              auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builder, genome_, &lvc);
+              auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
 
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
+              }
+              
+              for (int i = 0; i < num_secondary_results; i++) {
+              
+                auto s = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[i], result_builders[i+1], genome_, &lvc, true);
+                if (!s.ok()) {
+                  LOG(ERROR) << "adjustResults did not return OK!!!";
+                }
+              }
+              for (int i = num_secondary_results; i < max_secondary_; i++) {
+                // fill the columns with empties to maintain index equivalence
+                result_builders[i].AppendEmpty();
               }
 
               //auto t1 = std::chrono::high_resolution_clock::now();
@@ -364,13 +394,13 @@ private:
             return;
           }
 
-          //result_builder.WriteResult(result_buf);
-          result_buf->set_ready();
+          for (auto buf : result_bufs)
+            buf->set_ready();
           //timeLog.ready = std::chrono::high_resolution_clock::now();
           //if (oldcapacity != newcapacity)
             //LOG(INFO) << "buffer reallocated";
 
-          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
          // timeLog.getnext = std::chrono::high_resolution_clock::now();
         }
 
@@ -418,6 +448,8 @@ private:
   bool sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
+  int max_secondary_;
+  vector<BufferList*> buffer_lists_;
 
   atomic<uint32_t> num_active_threads_;
   mutex mu_;
