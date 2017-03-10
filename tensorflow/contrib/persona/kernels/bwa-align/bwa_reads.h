@@ -22,7 +22,7 @@ namespace tensorflow {
         regs_.resize(num_records);
       }
 
-      Status split(std::size_t chunk, BufferList* bl) override {
+      Status split(std::size_t chunk, std::vector<BufferList*>& bl) override {
         TF_RETURN_IF_ERROR(AGDReadResource::split(chunk, bl));
         auto total = num_records();
         intervals_.clear();
@@ -48,16 +48,19 @@ namespace tensorflow {
         return Status::OK();
       }
     
-      Status get_next_subchunk(ReadResource **rr, BufferPair **b, size_t* interval) {
+      Status get_next_subchunk(ReadResource **rr, std::vector<BufferPair*>& b, size_t* interval) {
         auto a = sub_resource_index_.fetch_add(1, std::memory_order_relaxed);
         if (a >= sub_resources_.size()) {
-          return errors::ResourceExhausted("No more AGD subchunks");
+          return errors::ResourceExhausted("No more BWA/AGD subchunks");
         } else if (a == 0) {
-          buffer_list_->set_start_time();
+          for (auto bl : buffer_lists_)
+            bl->set_start_time();
         }
         
         *rr = &sub_resources_[a];
-        *b = &(*buffer_list_)[a];
+        for (auto bl : buffer_lists_) {
+          b.push_back(&(*bl)[a]);
+        }
         *interval = intervals_[a];
         return Status::OK();
       }

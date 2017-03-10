@@ -30,6 +30,11 @@ namespace tensorflow {
     index_ = &data->index();
   }
 
+  void AlignmentResultBuilder::AppendEmpty() {
+    char val = 0;
+    index_->AppendBuffer(&val, 1);
+  }
+
   void AlignmentResultBuilder::AppendAlignmentResult(const format::AlignmentResult &result, const string &var_string)
   {
     //LOG(INFO) << "appending alignment result location: " << result.location_ << " mapq: " << result.mapq_ << " flags: "

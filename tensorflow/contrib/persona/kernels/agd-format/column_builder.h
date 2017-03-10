@@ -30,6 +30,10 @@ public:
   // This is the only one we should use now
   void AppendAlignmentResult(const format::AlignmentResult &result, const string &var_string);
 
+  // sometimes we want to append an empty result 
+  // e.g. not all reads will generate X secondary alignments (so some columns will have gaps)
+  void AppendEmpty();
+
   //void AppendAlignmentResult(const PairedAlignmentResult &result, const std::size_t result_idx);
 
   private:

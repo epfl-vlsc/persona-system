@@ -49,6 +49,7 @@ class BWAFinalizeOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("max_read_size", &max_read_size_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
       subchunk_size_ *= 2;
 
       int capacity;
@@ -105,8 +106,8 @@ class BWAFinalizeOp : public OpKernel {
 
     OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
 
-    ResourceContainer<BufferList> *bufferlist_resource_container;
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
+    //ResourceContainer<BufferList> *bufferlist_resource_container;
+    OP_REQUIRES_OK(ctx, GetResultBufferLists(ctx));
 
     ResourceContainer<BWAReadResource> *reads_container;
     OP_REQUIRES_OK(ctx, GetInput(ctx, "read", &reads_container));
@@ -115,8 +116,8 @@ class BWAFinalizeOp : public OpKernel {
     core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
 
-    auto* bl = bufferlist_resource_container->get();
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, bl)); 
+    //auto* bl = bufferlist_resource_container->get();
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_)); 
 
     //LOG(INFO) << "finalizer processing and filling buflist: " << bl;
     OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, resource_releaser)), 
@@ -156,11 +157,23 @@ private:
     return Status::OK();
   }
   
-  Status GetResultBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
+  Status GetResultBufferLists(OpKernelContext* ctx)
   {
-    TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
-    (*ctr)->get()->reset();
-    TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
+    ResourceContainer<BufferList> **ctr;
+    Tensor* out_t;
+    buffer_lists_.clear();
+    buffer_lists_.reserve(max_secondary_+1);
+    TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", TensorShape({max_secondary_+1, 2}), &out_t));
+    auto out_matrix = out_t->matrix<string>();
+    for (int i = 0; i < max_secondary_+1; i++) {
+      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
+      //core::ScopedUnref a(reads_container);
+      (*ctr)->get()->reset();
+      buffer_lists_.push_back((*ctr)->get());
+      out_matrix(i, 0) = (*ctr)->container();
+      out_matrix(i, 1) = (*ctr)->name();
+    }
+
     return Status::OK();
   }
 
@@ -174,9 +187,11 @@ private:
       }
 
       bwa_wrapper::BWAAligner aligner(bwa_options_, bwa_index_, max_read_size_);
-      AlignmentResultBuilder result_builder;
+      vector<AlignmentResultBuilder> result_builders;
+      result_builders.reserve(max_secondary_);
 
-      BufferPair* result_buf = nullptr;
+      vector<BufferPair*> result_bufs;
+      result_bufs.reserve(max_secondary_);
       ReadResource* subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
       //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
@@ -193,25 +208,28 @@ private:
         auto *reads = reads_container->get();
 
         size_t interval;
-        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf, &interval);
+        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs, &interval);
         vector<mem_alnreg_v>& regs = reads->get_regs();
         mem_pestat_t* pes = reads->get_pes();
         while (io_chunk_status.ok()) {
           //LOG(INFO) << "finalizer thread " << my_id << " got  interval: " << interval;
 
-          result_builder.set_buffer_pair(result_buf);
+
+          for (int i = 0; i < result_builders.size(); i++)
+            result_builders[i].set_buffer_pair(result_bufs[i]);
 
           Status s = aligner.FinalizeSubchunk(subchunk_resource, interval, regs, pes,
-              result_builder);
+              result_builders);
 
           if (!s.ok()){
             compute_status_ = s;
             return;
           }
 
-          result_buf->set_ready();
+          for (auto buf : result_bufs)
+            buf->set_ready();
 
-          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf, &interval);
+          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs, &interval);
         }
         
         if (!IsResourceExhausted(io_chunk_status)) {
@@ -247,8 +265,10 @@ private:
   mutex mu_;
   int thread_id_ = 0;
   int max_read_size_;
+  int max_secondary_;
 
   int num_threads_;
+  vector<BufferList*> buffer_lists_;
 
   unique_ptr<ConcurrentQueue<shared_ptr<ResourceContainer<BWAReadResource>>>> request_queue_;
 

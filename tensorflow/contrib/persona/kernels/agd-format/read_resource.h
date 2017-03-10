@@ -33,9 +33,9 @@ namespace tensorflow {
     virtual void release();
 
     // Only valid if the subclass implements subchunks
-    virtual Status split(std::size_t chunk, BufferList *bl);
+    virtual Status split(std::size_t chunk, std::vector<BufferList*>& bl);
 
-    virtual Status get_next_subchunk(ReadResource **rr, BufferPair **b);
+    virtual Status get_next_subchunk(ReadResource **rr, std::vector<BufferPair*>& b);
    
     // sometimes we don't need a buffer
     //virtual Status get_next_subchunk(ReadResource **rr);

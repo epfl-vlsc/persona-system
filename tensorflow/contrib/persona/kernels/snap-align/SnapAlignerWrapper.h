@@ -24,13 +24,20 @@ namespace snap_wrapper {
     class PairedAligner
     {
     public:
-      PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index_resource);
+      PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index_resource, int max_secondary);
       ~PairedAligner();
 
       // void for speed, as this is called per-read!
-      void align(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result);
+      void align(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result,
+          PairedAlignmentResult* secondary_results, int* num_secondary_results, 
+          SingleAlignmentResult* secondary_single_results, int* num_secondary_single_results_first,
+          int* num_secondary_single_results_second);
+
       Status writeResult(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result,
-                         AlignmentResultBuilder &result_column);
+                         AlignmentResultBuilder &result_column, bool is_secondary);
+
+      int MaxPairedSecondary() { return maxPairedSecondaryHits_; }
+      int MaxSingleSecondary() { return maxSingleSecondaryHits_; }
 
     private:
       std::unique_ptr<BigAllocator> allocator;
@@ -38,6 +45,8 @@ namespace snap_wrapper {
       ChimericPairedEndAligner *aligner;
       const PairedAlignerOptions *options;
       const Genome *genome;
+      unsigned maxPairedSecondaryHits_, maxSingleSecondaryHits_;
+      int max_secondary_;
 
       // members for writing out the cigar string
       SAMFormat format;
@@ -47,7 +56,7 @@ namespace snap_wrapper {
     };
   
     Status WriteSingleResult(Read &snap_read, SingleAlignmentResult &result, AlignmentResultBuilder &result_column, 
-      const Genome* genome, LandauVishkinWithCigar* lvc);
+      const Genome* genome, LandauVishkinWithCigar* lvc, bool is_secondary);
   
     Status PostProcess(
       const Genome* genome,

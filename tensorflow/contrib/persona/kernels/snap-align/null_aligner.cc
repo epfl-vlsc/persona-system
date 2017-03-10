@@ -72,11 +72,23 @@ class NullAlignerOp : public OpKernel {
       return Status::OK();
     }
 
-    Status GetResultBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
+    Status GetResultBufferLists(OpKernelContext* ctx)
     {
-      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
-      (*ctr)->get()->reset();
-      TF_RETURN_IF_ERROR((*ctr)->allocate_output("result_buf_handle", ctx));
+      ResourceContainer<BufferList> **ctr;
+      Tensor* out_t;
+      buffer_lists_.clear();
+      buffer_lists_.reserve(1);
+      TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", TensorShape({1, 2}), &out_t));
+      auto out_matrix = out_t->matrix<string>();
+      for (int i = 0; i < 1; i++) {
+        TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
+        //core::ScopedUnref a(reads_container);
+        (*ctr)->get()->reset();
+        buffer_lists_.push_back((*ctr)->get());
+        out_matrix(i, 0) = (*ctr)->container();
+        out_matrix(i, 1) = (*ctr)->name();
+      }
+
       return Status::OK();
     }
 
@@ -95,29 +107,27 @@ class NullAlignerOp : public OpKernel {
     core::ScopedUnref a(reads_container);
     auto reads = reads_container->get();
 
-    ResourceContainer<BufferList> *bufferlist_resource_container;
-    OP_REQUIRES_OK(ctx, GetResultBufferList(ctx, &bufferlist_resource_container));
-    auto alignment_result_buffer_list = bufferlist_resource_container->get();
+    OP_REQUIRES_OK(ctx, GetResultBufferLists(ctx));
 
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, alignment_result_buffer_list));
-    BufferPair* result_buf = nullptr;
+    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
+    vector<BufferPair*> result_buf;
     ReadResource* subchunk_resource = nullptr;
     Read snap_read;
     const char *bases, *qualities;
     size_t bases_len, qualities_len;
     Status io_chunk_status, subchunk_status;
     io_chunk_status = Status::OK();
-    io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+    io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_buf);
     while (io_chunk_status.ok()) {
         for (subchunk_status = subchunk_resource->get_next_record(snap_read); subchunk_status.ok();
               subchunk_status = subchunk_resource->get_next_record(snap_read)) {
           char size = static_cast<char>(bases_len);
-          result_buf->index().AppendBuffer(&size, 1);
-          result_buf->data().AppendBuffer(bases, 28);
+          result_buf[0]->index().AppendBuffer(&size, 1);
+          result_buf[0]->data().AppendBuffer(bases, 28);
         }
 
-        result_buf->set_ready();
-        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &result_buf);
+        result_buf[0]->set_ready();
+        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_buf);
     }
     resource_releaser(reads_container);
     auto end = chrono::high_resolution_clock::now();
@@ -137,6 +147,7 @@ private:
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   int subchunk_size_;
   int64_t wait_time_;
+  vector<BufferList*> buffer_lists_;
 
 
   Status compute_status_;

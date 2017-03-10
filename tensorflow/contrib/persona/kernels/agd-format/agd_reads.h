@@ -40,13 +40,14 @@ namespace tensorflow {
 
     std::size_t num_records() override;
 
-    Status split(std::size_t chunk, BufferList *bl) override;
-    Status get_next_subchunk(ReadResource **rr, BufferPair **b) override;
+    // vector of bufferlist/pair to support multiple result columns
+    Status split(std::size_t chunk, std::vector<BufferList*>& bl) override;
+    Status get_next_subchunk(ReadResource **rr, std::vector<BufferPair*>& b) override;
 
   protected:
     std::vector<AGDReadSubResource> sub_resources_;
     std::atomic_size_t sub_resource_index_;
-    BufferList *buffer_list_ = nullptr;
+    std::vector<BufferList*> buffer_lists_;
 
   private:
     DataContainer *bases_ = nullptr, *quals_ = nullptr, *meta_ = nullptr;

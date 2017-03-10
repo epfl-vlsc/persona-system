@@ -33,12 +33,12 @@ namespace bwa_wrapper {
         smem_aux_destroy(aux_);
       }
 
-      Status AlignSubchunkSingle(ReadResource* subchunk, AlignmentResultBuilder &result_builder);
+      Status AlignSubchunkSingle(ReadResource* subchunk, vector<AlignmentResultBuilder>& result_builder);
       // align a whole subchunk since BWA infers insert distance from the data
       Status AlignSubchunk(ReadResource *subchunk, size_t index, vector<mem_alnreg_v>& regs);
       
       Status FinalizeSubchunk(ReadResource *subchunk, size_t regs_index, vector<mem_alnreg_v>& regs, 
-          mem_pestat_t pes[4], AlignmentResultBuilder &result_builder);
+          mem_pestat_t pes[4], vector<AlignmentResultBuilder>& result_builders);
 
     private:
       typedef struct {
