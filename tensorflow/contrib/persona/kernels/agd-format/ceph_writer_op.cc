@@ -79,7 +79,7 @@ namespace tensorflow {
     }
 
     ~CephWriterOp() {
-      VLOG(DEBUG) << "Ceph writer " << this << " finishing\n";
+      VLOG(INFO) << "Ceph writer " << this << " finishing\n";
       //io_ctx.watch_flush();
       io_ctx.close();
       cluster.shutdown();
