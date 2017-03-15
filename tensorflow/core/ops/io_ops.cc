@@ -543,72 +543,6 @@ shared_name: If non-empty, this reader is named in the given bucket
              with this shared_name. Otherwise, the node name is used instead.
 )doc");
 
-// Ops that operate on Writers  ------------------------------------------------
-
-REGISTER_OP("WriterWrite")
-    .Attr("N: int")
-    .Attr("T: list(type)")
-    .Input("writer_handle: Ref(string)")
-    .Input("values: T")
-    .Input("key: string")
-    .Input("meta_handles: Ref(N * string)")
-    .Doc(R"doc(
-Write value to file.
-
-writer_handle: Handle to a Writer.
-meta_handles: handles to shared resources that the writer
-interface may need to access.
-values: A list of tensors that will be handed to the
-user-level writer interface.
-N: number of metadata handles.
-)doc");
-
-REGISTER_OP("WriterDone")
-    .Input("writer_handle: Ref(string)")
-    .Doc(R"doc(
-Instruct writer_handle writer to finish.
-
-writer_handle: Handle to a Writer.
-)doc");
-
-REGISTER_OP("WriterNumRecordsProduced")
-    .Input("writer_handle: Ref(string)")
-    .Output("records_produced: int64")
-    .Doc(R"doc(
-Returns the number of records this writer has produced.
-
-This is the same as the number of WriterWrite executions that have
-succeeded.
-
-writer_handle: Handle to a Writer.
-)doc");
-
-REGISTER_OP("WriterSerializeState")
-    .Input("writer_handle: Ref(string)")
-    .Output("state: string")
-    .Doc(R"doc(
-Produce a string tensor that encodes the state of a Writer.
-
-Not all Writers support being serialized, so this can produce an
-Unimplemented error.
-
-writer_handle: Handle to a Writers.
-)doc");
-
-REGISTER_OP("WriterRestoreState")
-    .Input("writer_handle: Ref(string)")
-    .Input("state: string")
-    .Doc(R"doc(
-Restore a writer to a previously saved state.
-
-Not all writers support being restored, so this can produce an
-Unimplemented error.
-
-writer_handle: Handle to a writer.
-state: Result of a WriterSerializeState of a Writer with type
-  matching writer_handle.
-)doc");
-
 // Ops that operate on Readers ------------------------------------------------
 
 REGISTER_OP("ReaderRead")
@@ -647,24 +581,6 @@ reader_handle: Handle to a Reader.
 queue_handle: Handle to a Queue, with string work items.
 key: A scalar.
 value: A scalar.
-)doc");
-
-REGISTER_OP("ReaderReadBatch")
-    .Input("reader_handle: Ref(string)")
-    .Input("queue_handle: Ref(string)")
-    .Output("key: string")
-    .Output("value: string")
-    .Doc(R"doc(
-Returns the next record (key, value pair) produced by a Reader.
-
-Will dequeue from the input queue if necessary (e.g. when the
-Reader needs to start reading from a new file since it has finished
-with the previous file).
-
-reader_handle: Handle to a Reader.
-queue_handle: Handle to a Queue, with string work items.
-key: A scalar.
-value: A vector.
 )doc");
 
 REGISTER_OP("ReaderReadUpTo")

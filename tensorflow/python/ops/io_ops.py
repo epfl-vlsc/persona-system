@@ -53,8 +53,6 @@
 @@slice_input_producer
 @@string_input_producer
 @@batch
-@@batch_pdq
-@@batch_join_pdq
 @@maybe_batch
 @@batch_join
 @@maybe_batch_join

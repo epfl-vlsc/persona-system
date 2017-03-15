@@ -212,8 +212,7 @@ def _DefaultGradYs(grad_ys, ys, colocate_gradients_with_ops):
     A list of gradients to use, without None.
 
   Raises:
-    ValueError: If sizes of gradients and inputs don't match
-    TypeError: If type of any gradient is not valid for its input.
+    ValueError: If one of the grad_ys is invalid.
   """
   if len(grad_ys) != len(ys):
     raise ValueError("Passed %d grad_ys for %d ys" % (len(grad_ys), len(ys)))
@@ -226,24 +225,12 @@ def _DefaultGradYs(grad_ys, ys, colocate_gradients_with_ops):
         grad_ys[i] = array_ops.fill(
             array_ops.shape(y), constant_op.constant(
                 1, dtype=y.dtype))
-      continue
-    if y.dtype.is_real or y.dtype.is_integer:
-      if not grad_y.dtype.is_real and not grad_y.dtype.is_integer:
-        raise TypeError("Gradient type %s generated for real or "
-                         "integer-valued tensor %s with type %s must be "
-                         "real or integer" %
-                         (dtypes.as_dtype(grad_y.dtype).name, y,
-                          dtypes.as_dtype(y.dtype).name))
-    elif y.dtype.is_complex:
-      if not grad_y.dtype.is_complex:
-        raise TypeError("Gradient type %s generated for complex-valued "
-                         "tensor %s with type %s must be real" %
-                         (dtypes.as_dtype(grad_y.dtype).name, y,
-                          dtypes.as_dtype(y.dtype).name))
     else:
-      raise TypeError("Tensor %s with type %s must be numeric "
-                      "to obtain a default gradient" %
-                      (y, dtypes.as_dtype(y.dtype).name))
+      if grad_y.dtype != y.dtype:
+        raise ValueError("Y and ys_grad must be of the same type, "
+                         "not y: %s, ys_grad: %s " %
+                         (dtypes.as_dtype(y.dtype).name,
+                          dtypes.as_dtype(grad_y.dtype).name))
   return grad_ys
 
 
@@ -261,32 +248,18 @@ def _VerifyGeneratedGradients(grads, op):
     op: Operation for which the gradients where generated.
 
   Raises:
-    ValueError: if sizes of gradients and inputs don't match.
-    TypeError: if type of any gradient is not valid for its input.
+    ValueError: if the gradients are invalid.
   """
   if len(grads) != len(op.inputs):
     raise ValueError("Num gradients %d generated for op %s do not match num "
                      "inputs %d" % (len(grads), op.node_def, len(op.inputs)))
-    for i in xrange(len(grads)):
-      grad = grads[i]
-      inp = op.inputs[i]
-      if grad is None:
-        continue
-      if grad.dtype.is_real:
-        if not inp.dtype.is_real:
-          raise TypeError("Gradient type %s generated for real-valued op %s "
-                           "with type %s must be real" %
-                           (dtypes.as_dtype(grad.dtype).name, op.node_def,
-                            dtypes.as_dtype(inp.dtype).name))
-      elif grad.dtype.is_complex:
-        if not inp.dtype.is_complex:
-          raise TypeError("Gradient type %s generated for complex-valued op %s"
-                           " with type %s must be complex" %
-                           (dtypes.as_dtype(grad.dtype).name, op.node_def,
-                            dtypes.as_dtype(inp.dtype).name))
-      else:
-        raise TypeError("Gradient type %s generated for op %s "
-                         "with type %s must be either real or complex" %
+  for i in xrange(len(grads)):
+    grad = grads[i]
+    inp = op.inputs[i]
+    if grad is not None:
+      if not grad.dtype.is_compatible_with(inp.dtype):
+        raise ValueError("Gradient type %s generated for op %s does "
+                         "not match input type %s" %
                          (dtypes.as_dtype(grad.dtype).name, op.node_def,
                           dtypes.as_dtype(inp.dtype).name))
 

@@ -141,8 +141,6 @@ filegroup(
         "//tensorflow/contrib/image:all_files",
         "//tensorflow/contrib/input_pipeline:all_files",
         "//tensorflow/contrib/input_pipeline/kernels:all_files",
-        "//tensorflow/contrib/persona:all_files",
-        "//tensorflow/contrib/persona/kernels:all_files",
         "//tensorflow/contrib/integrate:all_files",
         "//tensorflow/contrib/labeled_tensor:all_files",
         "//tensorflow/contrib/layers:all_files",

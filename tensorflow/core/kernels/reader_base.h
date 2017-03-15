@@ -56,23 +56,6 @@ class ReaderBase : public ReaderInterface {
 
   // Descendants may optionally implement these -------------------------------
 
-  // Method will fill batch tensor with values. Batch tensor is made
-  // using GetRequiredShape() and GetRequiredType(), so these must also 
-  // be overridden if something other than shape {0} and type String is 
-  // needed.
-  // Set at_end if the end of the current file has been reached.
-  // A key for this batch is created by ReaderBase::ReadBatch(), 
-  // which calls this method. 
-  virtual Status ReadBatchLocked(Tensor* batch_tensor, int* num_produced, 
-      bool* at_end) {
-    return errors::Internal("Not implemented!!");
-  }
-  virtual TensorShape GetUserRequiredShape() {
-    return TensorShape({0});
-  }
-  virtual DataType GetUserRequiredType() {
-    return DT_STRING;
-  }
   // Produce up to num_records next key/value pairs from the current
   // work item, in the same manner of ReadLocked.
   virtual Status ReadUpToLocked(int64 num_records, std::vector<string>* keys,
@@ -122,11 +105,6 @@ class ReaderBase : public ReaderInterface {
   // and call the methods above to do the work.
   void Read(QueueInterface* queue, string* key, string* value,
             OpKernelContext* context) override;
-  void ReadBatch(QueueInterface* queue, 
-    Tensor* batch_tensor, string* key, OpKernelContext* context,
-    int* produced) override;
-  TensorShape GetRequiredShape() override { return GetUserRequiredShape(); }
-  DataType GetRequiredType() override  { return GetUserRequiredType(); }
 
   // Produces up to num_records.
   // In this implementation all the records come from the same work unit.
