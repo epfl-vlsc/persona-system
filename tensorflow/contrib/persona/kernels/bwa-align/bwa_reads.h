@@ -58,6 +58,7 @@ namespace tensorflow {
         }
         
         *rr = &sub_resources_[a];
+        b.clear();
         for (auto bl : buffer_lists_) {
           b.push_back(&(*bl)[a]);
         }

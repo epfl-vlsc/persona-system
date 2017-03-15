@@ -653,8 +653,9 @@ Creates pools of MemoryMappedFile objects
   REGISTER_OP("ParallelColumnWriter")
   .Attr("compress: bool")
   .Attr("record_id: string")
-  .Attr("record_type: {'base', 'qual', 'metadata', 'results'}")
+  .Attr("record_type: string")
   .Attr("output_dir: string = ''")
+  .Attr("extension: string = ''")
   .Input("column_handle: string")
   .Input("file_path: string")
   // TODO these can be collapsed into a vec(3) if that would help performance
