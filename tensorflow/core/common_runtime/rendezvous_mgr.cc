@@ -65,12 +65,10 @@ void IntraProcessRendezvous::SameWorkerRecvDone(
     StatusCallback done) {
   // Do a quick copy (sharing the underlying buffer) if both tensors
   // are on host memory.
-  // An FPGA-accelerated node will always have its results pulled into host
-  // memory by the op_kernel compute.
   const bool src_host =
-      (send_args.alloc_attrs.on_host() || parsed.src.type == "CPU" || parsed.src.type == "FPGA");
+      (send_args.alloc_attrs.on_host() || parsed.src.type == "CPU");
   const bool dst_host =
-      (recv_args.alloc_attrs.on_host() || parsed.dst.type == "CPU" || parsed.dst.type == "FPGA");
+      (recv_args.alloc_attrs.on_host() || parsed.dst.type == "CPU");
   if (src_host && dst_host) {
     *out = in;
     done(Status::OK());
