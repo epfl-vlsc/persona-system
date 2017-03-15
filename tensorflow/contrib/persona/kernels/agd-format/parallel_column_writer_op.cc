@@ -28,6 +28,8 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
       string s;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &s));
+      string extension;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("extension", &extension));
       auto max_size = sizeof(header_.string_id);
       OP_REQUIRES(ctx, s.length() < max_size,
                   Internal("record_id for column header '", s, "' greater than 32 characters"));
@@ -44,7 +46,8 @@ namespace tensorflow {
       } else { // no need to check. we're saved by string enum types if TF
         t = RecordType::ALIGNMENT;
       }
-      record_suffix_ = "." + s;
+      record_suffix_ = "." + (extension == "" ? s : extension);
+      LOG(INFO) << "will write file with suffix " << record_suffix_;
       header_.record_type = static_cast<uint8_t>(t);
       header_.compression_type = format::CompressionType::UNCOMPRESSED;
 
@@ -118,11 +121,14 @@ namespace tensorflow {
         if (s.ok()) {
           for (i = 0; i < num_buffers; ++i) {
             auto &data = (*buf_list)[i].data();
-
-            fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
-            if (fwrite_ret != 1) {
-              s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", data.size());
-              break;
+            
+            if (data.size() > 0) {
+              // it can happen that data is 0 (subchunk full of empty records)
+              fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
+              if (fwrite_ret != 1) {
+                s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", data.size());
+                break;
+              }
             }
           }
         }
