@@ -856,7 +856,7 @@ def get_checkpoint_state(checkpoint_dir, latest_filename=None):
 class Saver(object):
   """Saves and restores variables.
 
-  See [Variables](../../how_tos/variables/index.md)
+  See @{$variables$Variables}
   for an overview of variables, saving and restoring.
 
   The `Saver` class adds ops to save and restore variables to and from
@@ -925,17 +925,6 @@ class Saver(object):
 
   If you create several savers, you can specify a different filename for the
   protocol buffer file in the call to `save()`.
-
-  @@__init__
-  @@save
-  @@restore
-
-  Other utility methods.
-
-  @@last_checkpoints
-  @@set_last_checkpoints_with_time
-  @@recover_last_checkpoints
-  @@as_saver_def
   """
 
   def __init__(self,
