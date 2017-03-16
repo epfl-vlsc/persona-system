@@ -74,53 +74,6 @@ Status ReaderBase::RestoreStateLocked(const string& state) {
   return errors::Unimplemented("Reader RestoreState");
 }
 
-void ReaderBase::ReadBatch(QueueInterface* queue, 
-    Tensor* batch_tensor, string* key, OpKernelContext* context,
-    int* produced) {
-  mutex_lock lock(mu_);
-
-  *key = strings::StrCat(work_, ":", num_records_produced_);
-
-  while (true) {
-    if (!work_in_progress()) {
-      GetNextWorkLocked(queue, context);
-      if (!context->status().ok()) {
-        return;
-      }
-    }
-
-    int num_produced = 0;
-    bool at_end = false;
-    Status status = ReadBatchLocked(batch_tensor, &num_produced, &at_end);
-
-    if (!at_end && status.ok() && num_produced==0) {
-      status = errors::Internal(
-          "ReadBatchLocked() for ", name(),
-          " must set *at_end=true, *num_produced > 0, or return an error.");
-    }
-    if (!status.ok() && num_produced != 0) {
-      status = errors::Internal("ReadBatchLocked() for ", name(),
-                                " set *num_produced!=0 *and* returned an error: ",
-                                status.ToString());
-    }
-    if (status.ok() && at_end) {
-      LOG(INFO) << "work finished";
-      status = OnWorkFinishedLocked();
-      work_finished_ = work_started_;
-    }
-    if (!status.ok()) {
-      LOG(INFO) << " something fucked up";
-      context->SetStatus(status);
-      return;
-    }
-    if (num_produced > 0) {
-      num_records_produced_ += num_produced;
-      *produced = num_produced;
-      return;
-    }
-  }
-}
-
 int64 ReaderBase::ReadUpTo(const int64 num_records, QueueInterface* queue,
                            std::vector<string>* keys,
                            std::vector<string>* values,

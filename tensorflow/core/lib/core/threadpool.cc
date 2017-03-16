@@ -23,8 +23,6 @@ limitations under the License.
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/setround.h"
 #include "tensorflow/core/platform/tracing.h"
-#include "tensorflow/core/platform/host_info.h"
-#include "tensorflow/core/platform/cpu_info.h"
 #include "tensorflow/core/platform/types.h"
 
 
@@ -45,38 +43,19 @@ struct EigenEnvironment {
   Env* const env_;
   const ThreadOptions thread_options_;
   const string name_;
-  int current_cpu_;
-  bool pin_threads_;
 
   EigenEnvironment(Env* env, const ThreadOptions& thread_options,
-                   const string& name, bool pin_threads, int affinity_start)
-      : env_(env), thread_options_(thread_options), name_(name),
-        current_cpu_(affinity_start), pin_threads_(pin_threads) {}
+                   const string& name)
+      : env_(env), thread_options_(thread_options), name_(name) {}
 
   EnvThread* CreateThread(std::function<void()> f) {
-    Thread* t = env_->StartThread(thread_options_, name_, [=]() {
+    return env_->StartThread(thread_options_, name_, [=]() {
       // Set the processor flag to flush denormals to zero
       port::ScopedFlushDenormal flush;
       // Set the C++ rounding mode to ROUND TO NEAREST
       port::ScopedSetRound round;
       f();
     });
-    if (pin_threads_) {
-      if (current_cpu_ >= port::NumSchedulableCPUs()) {
-        current_cpu_ = 0;
-        LOG(WARNING) << "uh oh, trying to set affinity on core " <<
-          current_cpu_ << ", which is greater than " << port::NumSchedulableCPUs();
-      }
-      VLOG(INFO) << "Setting thread affinity to core: " << current_cpu_;
-      Status status = Status::OK();
-      if (current_cpu_ != -1) {
-        status = t->SetAffinity(current_cpu_++);
-      }
-      if (!status.ok()) {
-        LOG(ERROR) << "Set affinity failed in impl create thread";
-      }
-    }
-    return t;
   }
 
   Task CreateTask(std::function<void()> f) {
@@ -107,10 +86,9 @@ struct EigenEnvironment {
 
 struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
   Impl(Env* env, const ThreadOptions& thread_options, const string& name,
-       int num_threads, bool pin_threads, int affinity_start)
-      : Eigen::ThreadPoolTempl<EigenEnvironment>(num_threads,
-                                                 EigenEnvironment(env, thread_options,
-                                                                  name, pin_threads, affinity_start)) {}
+       int num_threads)
+      : Eigen::ThreadPoolTempl<EigenEnvironment>(
+            num_threads, EigenEnvironment(env, thread_options, name)) {}
 
   void ParallelFor(int64 total, int64 cost_per_unit,
                    std::function<void(int64, int64)> fn) {
@@ -123,14 +101,14 @@ struct ThreadPool::Impl : Eigen::ThreadPoolTempl<EigenEnvironment> {
   }
 };
 
-  ThreadPool::ThreadPool(Env* env, const string& name, int num_threads, bool pin_threads, int affinity_start)
-    : ThreadPool(env, ThreadOptions(), name, num_threads, pin_threads, affinity_start) {}
+ThreadPool::ThreadPool(Env* env, const string& name, int num_threads)
+    : ThreadPool(env, ThreadOptions(), name, num_threads) {}
 
 ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
-                       const string& name, int num_threads, bool pin_threads, int affinity_start) {
+                       const string& name, int num_threads) {
   CHECK_GE(num_threads, 1);
-  impl_.reset(new ThreadPool::Impl(env, thread_options, "tf_" + name,
-                                   num_threads, pin_threads, affinity_start));
+  impl_.reset(
+      new ThreadPool::Impl(env, thread_options, "tf_" + name, num_threads));
 }
 
 ThreadPool::~ThreadPool() {}

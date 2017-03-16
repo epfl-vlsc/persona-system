@@ -80,7 +80,7 @@ class BWAAlignSingleOp : public OpKernel {
       //LOG(INFO) << "finalize average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
-      //VLOG(DEBUG) << "bwa finalize Destructor(" << this << ") finished\n";
+      //VLOG(INFO) << "bwa finalize Destructor(" << this << ") finished\n";
     }
 
   void Compute(OpKernelContext* ctx) override {

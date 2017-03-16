@@ -129,11 +129,8 @@ class Env {
   /// The ownership of the returned ReadOnlyMemoryRegion is passed to the caller
   /// and the object should be deleted when is not used. The memory region
   /// object shouldn't live longer than the Env object.
-  /// Synchronous flag will cause the read only region to be populated during the call.
-  /// All the data will be in memory upon return.
-  /// See the documentation in the corresponding call in file_system.h
   Status NewReadOnlyMemoryRegionFromFile(
-                                         const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result, bool synchronous = false);
+      const string& fname, std::unique_ptr<ReadOnlyMemoryRegion>* result);
 
   /// Returns OK if the named path exists and NOT_FOUND otherwise.
   Status FileExists(const string& fname);
@@ -346,8 +343,6 @@ class Thread {
 
   /// Blocks until the thread of control stops running.
   virtual ~Thread();
-  
-  virtual Status SetAffinity(int cpu_index) { return Status::OK(); }
 
  private:
   TF_DISALLOW_COPY_AND_ASSIGN(Thread);

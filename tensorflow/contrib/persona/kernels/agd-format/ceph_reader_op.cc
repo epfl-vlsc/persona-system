@@ -102,7 +102,7 @@ namespace tensorflow {
         LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
         exit(EXIT_FAILURE);
       } else {
-        VLOG(DEBUG) << "Created an ioctx for the pool.";
+        VLOG(INFO) << "Created an ioctx for the pool.";
       }
       auto buf = ((ResourceContainer<Buffer> *) ref_buffer)->get();
 
