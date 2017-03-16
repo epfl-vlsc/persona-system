@@ -841,11 +841,10 @@ outputs a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
 
-  REGISTER_OP("AGDPairedAligner")
+  REGISTER_OP("SnapAlignPaired")
   .Attr("num_threads: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 3")
-  .Attr("sam_format: bool = false")
   .Attr("max_secondary: int >= 0")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
@@ -872,11 +871,10 @@ containing the alignment candidates.
 Subchunk Size is the size in paired records. The actual chunk size will be 2x because of the pairing.
 )doc");
 
-  REGISTER_OP("SnapAlignAGDParallel")
+  REGISTER_OP("SnapAlignSingle")
   .Attr("num_threads: int")
   .Attr("subchunk_size: int")
   .Attr("work_queue_size: int = 3")
-  .Attr("sam_format: bool = false")
   .Attr("max_secondary: int >= 0")
   .Input("genome_handle: Ref(string)")
   .Input("options_handle: Ref(string)")
