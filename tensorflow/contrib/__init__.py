@@ -46,6 +46,7 @@ from tensorflow.contrib import nn
 from tensorflow.contrib import opt
 from tensorflow.contrib import quantization
 from tensorflow.contrib import rnn
+from tensorflow.contrib import persona
 from tensorflow.contrib import seq2seq
 from tensorflow.contrib import slim
 from tensorflow.contrib import solvers
