@@ -47,11 +47,10 @@ using namespace errors;
     }
   }
 
-class SnapAlignAGDParallelOp : public OpKernel {
+class SnapAlignSingleOp : public OpKernel {
   public:
-    explicit SnapAlignAGDParallelOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    explicit SnapAlignSingleOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
 
@@ -61,9 +60,9 @@ class SnapAlignAGDParallelOp : public OpKernel {
       compute_status_ = Status::OK();
     }
 
-    ~SnapAlignAGDParallelOp() override {
+    ~SnapAlignSingleOp() override {
       if (!run_) {
-        LOG(ERROR) << "Unable to safely wait in ~SnapAlignAGDParallelOp for all threads. run_ was toggled to false\n";
+        LOG(ERROR) << "Unable to safely wait in ~SnapAlignSingleOp for all threads. run_ was toggled to false\n";
       }
       run_ = false;
       request_queue_->unblock();
@@ -158,13 +157,8 @@ class SnapAlignAGDParallelOp : public OpKernel {
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
 
-    if (sam_format_) {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)),
-                Internal("Unable to push item onto work queue. Is it already closed?"));
-    } else {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
-                Internal("Unable to push item onto work queue. Is it already closed?"));
-    }
+    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)),
+              Internal("Unable to push item onto work queue. Is it already closed?"));
     t_last = std::chrono::high_resolution_clock::now();
   }
 
@@ -321,19 +315,15 @@ private:
                 primaryResult.location = InvalidGenomeLocation;
                 primaryResult.mapq = 0;
                 primaryResult.direction = FORWARD;
-                if (sam_format_) {
-                  LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
-                } else {
-                  //result_builder.AppendAlignmentResult(primaryResult, "*", 4);
-                  auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
+                //result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+                auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
 
-                  if (!s.ok()) {
-                    LOG(ERROR) << "adjustResults did not return OK!!!";
-                  }
-                  for (int i = 1; i < max_secondary_; i++) {
-                    // fill the columns with empties to maintain index equivalence
-                    result_builders[i].AppendEmpty();
-                  }
+                if (!s.ok()) {
+                  LOG(ERROR) << "adjustResults did not return OK!!!";
+                }
+                for (int i = 1; i < max_secondary_; i++) {
+                  // fill the columns with empties to maintain index equivalence
+                  result_builders[i].AppendEmpty();
                 }
               }
               continue;
@@ -351,39 +341,24 @@ private:
 
             flag = 0;
 
-            // TODO: rename it to sam_writer or smth
-            if (sam_format_){
-              //result_builder.AppendAlignmentResult(primaryResult);
-              LOG(ERROR) << "No SAM support for aligner at the moment. Stop using SAM :-P";
-            } else {
-              
-              auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
+            auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
 
+            if (!s.ok()) {
+              LOG(ERROR) << "adjustResults did not return OK!!!";
+            }
+            
+            for (int i = 0; i < num_secondary_results; i++) {
+            
+              auto s = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[i], result_builders[i+1], genome_, &lvc, true);
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
               }
-              
-              for (int i = 0; i < num_secondary_results; i++) {
-              
-                auto s = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[i], result_builders[i+1], genome_, &lvc, true);
-                if (!s.ok()) {
-                  LOG(ERROR) << "adjustResults did not return OK!!!";
-                }
-              }
-              for (int i = num_secondary_results; i < max_secondary_; i++) {
-                // fill the columns with empties to maintain index equivalence
-                result_builders[i].AppendEmpty();
-              }
-
-              //auto t1 = std::chrono::high_resolution_clock::now();
-
-
-              //result_builder.AppendAlignmentResult(primaryResult, cigarString, flag);
-
-              //auto t2 = std::chrono::high_resolution_clock::now();
-              //auto time = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-              //LOG(INFO) << "append time " << time.count();
             }
+            for (int i = num_secondary_results; i < max_secondary_; i++) {
+              // fill the columns with empties to maintain index equivalence
+              result_builders[i].AppendEmpty();
+            }
+
 
           }
           //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
@@ -445,7 +420,6 @@ private:
   const Genome *genome_ = nullptr;
   AlignerOptions* options_ = nullptr;
   int subchunk_size_;
-  bool sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
   int max_secondary_;
@@ -460,9 +434,9 @@ private:
   unique_ptr<ConcurrentQueue<shared_ptr<ResourceContainer<ReadResource>>>> request_queue_;
 
   Status compute_status_;
-  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignAGDParallelOp);
+  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignSingleOp);
 };
 
-  REGISTER_KERNEL_BUILDER(Name("SnapAlignAGDParallel").Device(DEVICE_CPU), SnapAlignAGDParallelOp);
+  REGISTER_KERNEL_BUILDER(Name("SnapAlignSingle").Device(DEVICE_CPU), SnapAlignSingleOp);
 
 }  // namespace tensorflow

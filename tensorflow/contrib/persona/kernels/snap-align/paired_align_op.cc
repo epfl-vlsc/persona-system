@@ -54,11 +54,10 @@ using namespace errors;
     }
   }
 
-class AGDPairedAlignerOp : public OpKernel {
+class SnapAlignPairedOp : public OpKernel {
   public:
-    explicit AGDPairedAlignerOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+    explicit SnapAlignPairedOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("sam_format", &sam_format_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
       subchunk_size_ *= 2;
@@ -69,9 +68,9 @@ class AGDPairedAlignerOp : public OpKernel {
       compute_status_ = Status::OK();
     }
 
-    ~AGDPairedAlignerOp() override {
+    ~SnapAlignPairedOp() override {
       if (!run_) {
-        LOG(ERROR) << "Unable to safely wait in ~AGDPairedAlignerOp for all threads. run_ was toggled to false\n";
+        LOG(ERROR) << "Unable to safely wait in ~SnapAlignPairedOp for all threads. run_ was toggled to false\n";
       }
       run_ = false;
       request_queue_->unblock();
@@ -123,11 +122,7 @@ class AGDPairedAlignerOp : public OpKernel {
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
 
-    if (sam_format_) {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, no_resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
-    } else {
-      OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
-    }
+    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, resource_releaser)), Internal("Unable to push item onto work queue. Is it already closed?"));
     t_last = std::chrono::high_resolution_clock::now();
   }
 
@@ -379,7 +374,6 @@ private:
   const Genome *genome_ = nullptr;
   PairedAlignerOptions *options_ = nullptr;
   int subchunk_size_;
-  bool sam_format_;
   volatile bool run_ = true;
   uint64_t id_ = 0;
   int max_secondary_;
@@ -394,9 +388,9 @@ private:
   unique_ptr<ConcurrentQueue<shared_ptr<ResourceContainer<ReadResource>>>> request_queue_;
 
   Status compute_status_;
-  TF_DISALLOW_COPY_AND_ASSIGN(AGDPairedAlignerOp);
+  TF_DISALLOW_COPY_AND_ASSIGN(SnapAlignPairedOp);
 };
 
-  REGISTER_KERNEL_BUILDER(Name("AGDPairedAligner").Device(DEVICE_CPU), AGDPairedAlignerOp);
+  REGISTER_KERNEL_BUILDER(Name("SnapAlignPaired").Device(DEVICE_CPU), SnapAlignPairedOp);
 
 }  // namespace tensorflow
