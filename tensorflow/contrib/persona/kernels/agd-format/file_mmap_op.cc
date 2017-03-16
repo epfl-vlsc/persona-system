@@ -133,7 +133,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
       unique_ptr<ReadOnlyMemoryRegion> rmr;
-      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr, synchronous_));
+      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr)); //, synchronous_));
       mmf->get()->own(move(rmr));
 
       Tensor *output_tensor;
