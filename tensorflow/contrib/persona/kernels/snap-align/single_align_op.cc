@@ -79,7 +79,7 @@ class SnapAlignSingleOp : public OpKernel {
       LOG(INFO) << "average inter kernel time: " << avg_inter_time;
       //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
       //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
-      VLOG(DEBUG) << "AGD Align Destructor(" << this << ") finished\n";
+      VLOG(INFO) << "AGD Align Destructor(" << this << ") finished\n";
     }
 
     Status InitHandles(OpKernelContext* ctx)

@@ -225,7 +225,7 @@ message ConfigProto {
 
   // Options that apply to all graphs.
   GraphOptions graph_options = 10;
-  
+
   // Global timeout for all blocking operations in this session.  If non-zero,
   // and not overridden on a per-operation basis, this value will be used as the
   // deadline for all blocking operations.

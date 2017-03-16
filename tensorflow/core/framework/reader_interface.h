@@ -43,18 +43,6 @@ class ReaderInterface;
 // All descendants of this class must be thread-safe.
 class ReaderInterface : public ResourceBase {
  public:
-  // Read `batch_size` records. `batch_loader` returns a pointer
-  // to string for a given batch index. 
-  // Set status on *context with OutOfRange if the current work
-  // is complete and the queue is done. In this case, a full
-  // batch may not be processed, but partial batches are still valid.
-  virtual void ReadBatch(QueueInterface* queue, 
-    Tensor* batch_tensor, string* key, OpKernelContext* context,
-    int* produced) = 0;
-
-  virtual TensorShape GetRequiredShape() = 0;
-  virtual DataType GetRequiredType() = 0;
-
   // Read a single record into *key / *value.  May get more work from
   // *queue if the current work is complete.  Sets the status on
   // *context with an OutOfRange Status if the current work is
@@ -90,15 +78,8 @@ class ReaderInterface : public ResourceBase {
 
   string DebugString() override { return "a reader"; }
 
-  // Initialization, primarily used for the Async Reader initialization
-  Status Initialize(QueueInterface *queue, OpKernelContext *context);
-
  protected:
   virtual ~ReaderInterface() {}
-
-  virtual Status InitializeOnce(QueueInterface *queue, OpKernelContext *context);
- private:
-  bool needs_init_ = true;
 };
 
 }  // namespace tensorflow

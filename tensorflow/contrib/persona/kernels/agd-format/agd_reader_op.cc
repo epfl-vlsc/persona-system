@@ -27,7 +27,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
       OP_REQUIRES_OK(context, context->GetAttr("twobit", &twobit_));
       if (verify_) {
-        LOG(DEBUG) << name() << " enabled verification\n";
+        LOG(INFO) << name() << " enabled verification\n";
       }
 
       int32_t i;

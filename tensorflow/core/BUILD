@@ -208,7 +208,6 @@ cc_library(
         "lib/core/bitmap.h",
         "lib/core/bits.h",
         "lib/core/casts.h",
-        "lib/core/object_pool.h",
         "lib/core/coding.h",
         "lib/core/errors.h",
         "lib/core/notification.h",
@@ -459,12 +458,11 @@ tf_gen_op_libs(
 # And one for all user ops
 cc_library(
     name = "user_ops_op_lib",
-    srcs = glob(["user_ops/*.cc"]),
+    srcs = glob(["user_ops/**/*.cc"]),
     copts = tf_copts(),
     linkstatic = 1,
     visibility = ["//visibility:public"],
-    deps = [":framework", "//tensorflow/core/kernels:io"
-           ],
+    deps = [":framework"],
     alwayslink = 1,
 )
 

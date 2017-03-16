@@ -299,36 +299,6 @@ cc_library(
 )
 
 tf_proto_library(
-    name = "writer_base_proto",
-    srcs = ["writer_base.proto"],
-    cc_api_version = 2,
-    go_api_version = 2,
-    java_api_version = 2,
-)
-
-cc_library(
-    name = "writer_base",
-    srcs = ["writer_base.cc"],
-    hdrs = ["writer_base.h"],
-    deps = [
-        ":writer_base_proto_cc",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-    ],
-)
-
-cc_library(
-    name = "writer_async_base",
-    srcs = ["writer_async_base.cc"],
-    hdrs = ["writer_async_base.h"],
-    deps = [
-        ":writer_base_proto_cc",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-    ],
-)
-
-tf_proto_library(
     name = "reader_base_proto",
     srcs = ["reader_base.proto"],
     cc_api_version = 2,
@@ -828,21 +798,11 @@ tf_cc_test(
 tf_cc_test(
     name = "xsmm_conv2d_test",
     size = "small",
-    srcs = select({
-        ":xsmm": ["xsmm_conv2d_test.cc"],
-        "//conditions:default": [],
-    }),
+    srcs = ["xsmm_conv2d_test.cc"],
     deps = [
         ":conv_ops",
-        ":ops_testutil",
-        ":ops_util",
-        "//tensorflow/core:core_cpu",
-        "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
-        "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
-        "//tensorflow/core:testlib",
     ],
 )
 
@@ -2158,17 +2118,8 @@ tf_kernel_library(
 
 tf_kernel_library(
     name = "matmul_op",
-    defines = select({
-        ":xsmm": ["TENSORFLOW_USE_LIBXSMM"],
-        "//conditions:default": [],
-    }),
     prefix = "matmul_op",
-    deps = MATH_DEPS + select({
-        ":xsmm": [
-            "@libxsmm_archive//:xsmm_avx",
-        ],
-        "//conditions:default": [],
-    }),
+    deps = MATH_DEPS,
 )
 
 tf_kernel_library(
@@ -2437,6 +2388,7 @@ tf_kernel_library(
         "//tensorflow/core:nn_ops_op_lib",
     ] + select({
         ":xsmm": [
+            "@libxsmm_archive//:libxsmm_headers",
             "@libxsmm_archive//:xsmm_avx",
         ],
         "//conditions:default": [],

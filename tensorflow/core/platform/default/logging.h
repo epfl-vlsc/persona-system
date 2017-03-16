@@ -28,7 +28,6 @@ limitations under the License.
 #undef ERROR
 
 namespace tensorflow {
-const int DEBUG = -1;
 const int INFO = 0;            // base_logging::INFO;
 const int WARNING = 1;         // base_logging::WARNING;
 const int ERROR = 2;           // base_logging::ERROR;
@@ -64,8 +63,6 @@ class LogMessageFatal : public LogMessage {
   TF_ATTRIBUTE_NORETURN ~LogMessageFatal();
 };
 
-#define _TF_LOG_DEBUG                                                    \
-  ::tensorflow::internal::LogMessage(__FILE__, __LINE__, tensorflow::DEBUG)
 #define _TF_LOG_INFO \
   ::tensorflow::internal::LogMessage(__FILE__, __LINE__, tensorflow::INFO)
 #define _TF_LOG_WARNING \

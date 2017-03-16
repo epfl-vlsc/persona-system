@@ -21,6 +21,7 @@ from __future__ import print_function
 from tensorflow.core.framework import tensor_shape_pb2
 from tensorflow.python.util import compat
 
+
 class Dimension(object):
   """Represents the value of one dimension in a TensorShape."""
 
@@ -392,31 +393,10 @@ class TensorShape(object):
 
   If a tensor is produced by an operation of type `"Foo"`, its shape
   may be inferred if there is a registered shape function for
-  `"Foo"`. See [`Shape functions in
-  C++`](../../how_tos/adding_an_op/index.md#shape-functions-in-c) for
+  `"Foo"`. See @{$adding_an_op#shape-functions-in-c$`Shape functions in   C++`} for
   details of shape functions and how to register them. Alternatively,
   the shape may be set explicitly using
-  [`Tensor.set_shape()`](../../api_docs/python/framework.md#Tensor.set_shape).
-
-  @@merge_with
-  @@concatenate
-
-  @@ndims
-  @@dims
-  @@as_list
-  @@as_proto
-  @@is_compatible_with
-  @@is_fully_defined
-
-  @@with_rank
-  @@with_rank_at_least
-  @@with_rank_at_most
-
-  @@assert_has_rank
-  @@assert_same_rank
-  @@assert_is_compatible_with
-  @@assert_is_fully_defined
-
+  @{tf.Tensor.set_shape}.
   """
 
   def __init__(self, dims):
