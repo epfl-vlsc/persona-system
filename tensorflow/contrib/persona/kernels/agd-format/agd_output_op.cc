@@ -26,6 +26,12 @@ namespace tensorflow {
   public:
     AGDOutputOp(OpKernelConstruction *context) : OpKernel(context) {
       OP_REQUIRES_OK(context, context->GetAttr("unpack", &unpack_));
+      OP_REQUIRES_OK(context, context->GetAttr("columns", &columns_));
+      buffers_.resize(columns_.size());
+      mmaps_.resize(columns_.size());
+      ordinals_.resize(columns_.size());
+      num_records_.resize(columns_.size());
+      readers_.resize(columns_.size());
     }
 
     ~AGDOutputOp() {
@@ -35,25 +41,14 @@ namespace tensorflow {
     Status LoadChunk(OpKernelContext* ctx, string chunk_path) {
 
       LOG(INFO) << "chunk path is " << chunk_path;
-      TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".base", &mmap_bases_));
-      bases_buf_.reset();
-      TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_bases_->data(), mmap_bases_->length(),
-            false, &bases_buf_, &bases_ord_, &num_bases_, unpack_));
-      TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".qual", &mmap_qual_));
-      qual_buf_.reset();
-      TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_qual_->data(), mmap_qual_->length(),
-            false, &qual_buf_, &qual_ord_, &num_qual_));
-      TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".metadata", &mmap_meta_));
-      meta_buf_.reset();
-      TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_meta_->data(), mmap_meta_->length(),
-            false, &meta_buf_, &meta_ord_, &num_meta_));
-      Status s = ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".results", &mmap_results_);
-      results_buf_.reset();
-      if (!s.ok())
-        LOG(INFO) << "Results file not found, assuming there are no results for this dataset yet.";
-      else {
-        TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_results_->data(), mmap_results_->length(),
-              false, &results_buf_, &results_ord_, &num_results_));
+      for (int i = 0; i < columns_.size(); i++) {
+
+        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + 
+              chunk_path + "." + columns_[i], &mmaps_[i]));
+        buffers_[i].reset();
+        TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmaps_[i]->data(), mmaps_[i]->length(),
+            false, &buffers_[i], &ordinals_[i], &num_records_[i], unpack_));
+        readers_[i].reset(new AGDRecordReader(buffers_[i].data(), num_records_[i]));
       }
       return Status::OK();
     }
@@ -79,12 +74,6 @@ namespace tensorflow {
       int which_chunk = current / chunksize;
 
       OP_REQUIRES_OK(ctx, LoadChunk(ctx, chunk_names(which_chunk)));
-      AGDRecordReader bases_reader(bases_buf_.data(), chunksize);
-      AGDRecordReader qualities_reader(qual_buf_.data(), chunksize);
-      AGDRecordReader metadata_reader(meta_buf_.data(), chunksize);
-      AGDRecordReader* results_reader = nullptr;
-      if (mmap_results_)
-        results_reader = new AGDRecordReader(results_buf_.data(), chunksize);
 
       const format::AlignmentResult* agd_result;
 
@@ -93,53 +82,66 @@ namespace tensorflow {
         if (chunk_offset >= chunksize) { // out of range, load next chunk
           which_chunk++;
           OP_REQUIRES_OK(ctx, LoadChunk(ctx, chunk_names(which_chunk)));
-          bases_reader = AGDRecordReader(bases_buf_.data(), chunksize);
-          qualities_reader = AGDRecordReader(qual_buf_.data(), chunksize);
-          metadata_reader = AGDRecordReader(meta_buf_.data(), chunksize);
-          if (results_reader)
-            *results_reader = AGDRecordReader(results_buf_.data(), chunksize);
           continue;
         }
-        OP_REQUIRES_OK(ctx, metadata_reader.GetRecordAt(chunk_offset, &data, &length));
-        fwrite(data, length, 1, stdout);
-        printf("\n");
-        OP_REQUIRES_OK(ctx, bases_reader.GetRecordAt(chunk_offset, &data, &length));
-        fwrite(data, length, 1, stdout);
-        printf("\n");
-        OP_REQUIRES_OK(ctx, qualities_reader.GetRecordAt(chunk_offset, &data, &length));
-        fwrite(data, length, 1, stdout);
-        printf("\n");
-        if (results_reader) {
-          OP_REQUIRES_OK(ctx, results_reader->GetRecordAt(chunk_offset, &data, &length));
-          agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-          printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result->location_, agd_result->flag_, agd_result->mapq_, agd_result->next_location_);
-          const char* cigardata = data + sizeof(format::AlignmentResult);
-          decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
-          fwrite(cigardata, cigarlen, 1, stdout);
-          printf("\n\n");
-        } else 
-          printf("\n");
+
+        for (int i = 0; i < columns_.size(); i++) {
+          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual") {
+            OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
+            fwrite(data, length, 1, stdout);
+            printf("\n");
+          } else if (columns_[i] == "results" ) {
+            OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
+            agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
+            printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result->location_, agd_result->flag_, agd_result->mapq_, agd_result->next_location_);
+            const char* cigardata = data + sizeof(format::AlignmentResult);
+            decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
+            fwrite(cigardata, cigarlen, 1, stdout);
+            printf("\n\n");
+          } else if (columns_[i].find("secondary") != std::string::npos) {
+            OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
+            printf("Secondary result %d:\n", int(columns_[i].back() - '0'));
+            if (length > 0) {
+              agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
+              printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result->location_, agd_result->flag_, agd_result->mapq_, agd_result->next_location_);
+              const char* cigardata = data + sizeof(format::AlignmentResult);
+              decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
+              fwrite(cigardata, cigarlen, 1, stdout);
+              printf("\n\n");
+            } else {
+              printf("had an empty secondary result\n");
+            }
+          } else {
+            LOG(INFO) << "Whoops, I don't know what to do for a column named: " << columns_[i];
+          }
+        }
 
         current++;
       }
-      mmap_bases_.reset(nullptr);
-      mmap_qual_.reset(nullptr);
-      mmap_meta_.reset(nullptr);
-      mmap_results_.reset(nullptr);
+      for (int i = 0; i < columns_.size(); i++) 
+        mmaps_[i].reset(nullptr);
 
     }
 
   private:
-    std::unique_ptr<ReadOnlyMemoryRegion> mmap_bases_;
-    std::unique_ptr<ReadOnlyMemoryRegion> mmap_qual_;
-    std::unique_ptr<ReadOnlyMemoryRegion> mmap_meta_;
-    std::unique_ptr<ReadOnlyMemoryRegion> mmap_results_;
-    Buffer bases_buf_, qual_buf_, meta_buf_, results_buf_;
-    uint64_t bases_ord_, qual_ord_, meta_ord_, results_ord_;
-    uint32_t num_bases_, num_qual_, num_meta_, num_results_;
+    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_bases_;
+    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_qual_;
+    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_meta_;
+    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_results_;
+    vector<std::unique_ptr<ReadOnlyMemoryRegion>> mmaps_;
+
+    //Buffer bases_buf_, qual_buf_, meta_buf_, results_buf_;
+    vector<Buffer> buffers_;
+    //uint64_t bases_ord_, qual_ord_, meta_ord_, results_ord_;
+    vector<uint64_t> ordinals_;
+    //uint32_t num_bases_, num_qual_, num_meta_, num_results_;
+    vector<uint32_t> num_records_;
+    vector<unique_ptr<AGDRecordReader>> readers_;
+
     RecordParser rec_parser_;
     string path_;
     bool unpack_;
+    vector<string> columns_;
 
   };
 
