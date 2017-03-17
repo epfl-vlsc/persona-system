@@ -160,9 +160,9 @@ namespace tensorflow {
     const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
     TF_RETURN_IF_ERROR(status);
 
-    if (result_buffer->size() < index_size * 2) {
+    /*if (result_buffer->size() < index_size * 2) {
       return Internal("FillBuffer: expected at least ", index_size*2, " bytes, but only have ", result_buffer->size());
-    }
+    }*/ // stuart: removing because we can have 0-length records
 
     records = reinterpret_cast<const RelativeIndex*>(result_buffer->data());
 

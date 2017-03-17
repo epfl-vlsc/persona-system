@@ -235,6 +235,7 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
 
   REGISTER_OP("AGDOutput")
   .Attr("unpack: bool = true")
+  .Attr("columns: list(string)")
   .Input("path: string")
   .Input("chunk_names: string")
   .Input("chunk_size: int32")
