@@ -308,23 +308,19 @@ private:
             cigarString.clear();
             snap_read.clip(options_->clipping);
             if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
-              if (!options_->passFilter(&snap_read, AlignmentResult::NotFound, true, false)) {
-                LOG(INFO) << "FILTERING READ";
-              } else {
-                primaryResult.status = AlignmentResult::NotFound;
-                primaryResult.location = InvalidGenomeLocation;
-                primaryResult.mapq = 0;
-                primaryResult.direction = FORWARD;
-                //result_builder.AppendAlignmentResult(primaryResult, "*", 4);
-                auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
+              primaryResult.status = AlignmentResult::NotFound;
+              primaryResult.location = InvalidGenomeLocation;
+              primaryResult.mapq = 0;
+              primaryResult.direction = FORWARD;
+              //result_builder.AppendAlignmentResult(primaryResult, "*", 4);
+              auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
 
-                if (!s.ok()) {
-                  LOG(ERROR) << "adjustResults did not return OK!!!";
-                }
-                for (int i = 1; i < max_secondary_; i++) {
-                  // fill the columns with empties to maintain index equivalence
-                  result_builders[i].AppendEmpty();
-                }
+              if (!s.ok()) {
+                LOG(ERROR) << "adjustResults did not return OK!!!";
+              }
+              for (int i = 1; i < max_secondary_; i++) {
+                // fill the columns with empties to maintain index equivalence
+                result_builders[i].AppendEmpty();
               }
               continue;
             }
