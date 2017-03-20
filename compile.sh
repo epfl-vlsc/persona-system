@@ -35,6 +35,9 @@ elif [ $build_type == "vtune" ]; then
     extra_opts="--copt -g --copt -O3"
 fi
 
+# this is the option to build with the old ABI
+# don't use because it'll cause linking issues with old libraries :/
+# extra_opts="${extra_opts} --cxxopt -D_GLIBCXX_USE_CXX11_ABI=0"
 
 echo "Building configuration $build_type"
 #max_build_threads=$(bc <<< "scale=0; ($(nproc) * 1.1) / 1" )
