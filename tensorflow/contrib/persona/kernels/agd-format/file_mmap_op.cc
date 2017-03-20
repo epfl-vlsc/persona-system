@@ -1,6 +1,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "shared_mmap_file_resource.h"
+#include "memory_region.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/core/platform/file_system.h"
@@ -57,7 +58,9 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
       unique_ptr<ReadOnlyMemoryRegion> rmr;
-      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr/*, synchronous_*/));
+      FileSystem *fs;
+      OP_REQUIRES_OK(ctx, ctx->env()->GetFileSystemForFile(filename, &fs));
+      OP_REQUIRES_OK(ctx, PosixMappedRegion::fromFile(filename, *fs, rmr, synchronous_));
       mmf->get()->own(move(rmr));
 
       Tensor *file_handles, *file_names;
@@ -133,7 +136,9 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
       unique_ptr<ReadOnlyMemoryRegion> rmr;
-      OP_REQUIRES_OK(ctx, ctx->env()->NewReadOnlyMemoryRegionFromFile(filename, &rmr)); //, synchronous_));
+      FileSystem *fs;
+      OP_REQUIRES_OK(ctx, ctx->env()->GetFileSystemForFile(filename, &fs));
+      OP_REQUIRES_OK(ctx, PosixMappedRegion::fromFile(filename, *fs, rmr, synchronous_));
       mmf->get()->own(move(rmr));
 
       Tensor *output_tensor;
