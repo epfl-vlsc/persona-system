@@ -7,6 +7,8 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops as persona_ops_proxy
+from tensorflow.contrib.persona.python.ops.queues import batch_pdq
+from tensorflow.contrib.persona.python.ops.queues import batch_join_pdq
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.framework import constant_op
@@ -48,7 +50,7 @@ def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
     parsed_chunks.insert(0, mapped_key)
     to_enqueue.append(parsed_chunks)
 
-  parsed = training.input.batch_join_pdq(tensor_list_list=[e for e in to_enqueue],
+  parsed = batch_join_pdq(tensor_list_list=[e for e in to_enqueue],
                                         batch_size=1, capacity=capacity,
                                         enqueue_many=False,
                                         num_dq_ops=process_parallel,
@@ -73,7 +75,7 @@ def _keys_maker(file_keys, read_parallel):
   string_producer = training.input.string_input_producer(file_keys, num_epochs=1, shuffle=False)
   sp_output = string_producer.dequeue()
 
-  keys = tf.train.batch_pdq([sp_output], batch_size=1, num_dq_ops=read_parallel, name="keys_queue")
+  keys = batch_pdq([sp_output], batch_size=1, num_dq_ops=read_parallel, name="keys_queue")
 
   return keys 
 
@@ -144,7 +146,7 @@ def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_poo
  
     all_chunks.append(key)
     
-    mmap_queue = training.input.batch_pdq(all_chunks, batch_size=1,
+    mmap_queue = batch_pdq(all_chunks, batch_size=1,
                                       enqueue_many=False,
                                       num_dq_ops=parse_parallel,
                                       name=name)
@@ -222,7 +224,7 @@ def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None,
       chunk_buffers.append(key)
       chunk_buffers_list.append(chunk_buffers)
 
-    chunk_queue = training.input.batch_join_pdq(chunk_buffers_list, batch_size=1,
+    chunk_queue = batch_join_pdq(chunk_buffers_list, batch_size=1,
                                       enqueue_many=False,
                                       num_dq_ops=parse_parallel,
                                       name=name)
@@ -272,7 +274,7 @@ def persona_out_pipe(path, columns, write_list_list, record_id, compress=False, 
                                                                     name=name)
       final_write_out.append([file_key_passthru, num_records, first_o_passthru])
       
-    sink_queue = training.input.batch_join_pdq(final_write_out, capacity=10, num_dq_ops=1, batch_size=1, name=name)
+    sink_queue = batch_join_pdq(final_write_out, capacity=10, num_dq_ops=1, batch_size=1, name=name)
 
     return sink_queue
 
@@ -291,7 +293,7 @@ returns: tensor containing key
 def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress=False, name=None):
   
   if path[-1] != '/':
-    path.append('/')
+    path += '/' 
 
   if not isinstance(column, (list, tuple)):
     column = [column]
@@ -335,7 +337,7 @@ def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress
           )
           write_ops.append(writer_op)
 
-    sink_queue = training.input.batch_join_pdq([write_ops], capacity=10, num_dq_ops=1, batch_size=1, name=name)
+    sink_queue = batch_join_pdq([write_ops], capacity=10, num_dq_ops=1, batch_size=1, name=name)
     return sink_queue[0]
 
 """
@@ -387,5 +389,5 @@ def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, cep
                                                                      name=name)
     final_write_out.append([file_key_passthru, num_records, first_o_passthru])
 
-  sink_queue = train.input.batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name=name)
+  sink_queue = batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name=name)
 

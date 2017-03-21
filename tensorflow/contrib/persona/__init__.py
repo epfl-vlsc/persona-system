@@ -25,4 +25,6 @@ from tensorflow.contrib.persona.python.ops.io_pipe import persona_in_pipe
 from tensorflow.contrib.persona.python.ops.io_pipe import persona_ceph_in_pipe 
 from tensorflow.contrib.persona.python.ops.io_pipe import persona_out_pipe 
 from tensorflow.contrib.persona.python.ops.io_pipe import persona_parallel_out_pipe 
+from tensorflow.contrib.persona.python.ops.queues import batch_pdq 
+from tensorflow.contrib.persona.python.ops.queues import batch_join_pdq 
 from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops 
