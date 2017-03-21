@@ -1,0 +1,33 @@
+# this builds the image we need with all installed dependencies
+# this should be uploaded to a docker registry
+# by default it exists at https://hub.docker.com/r/epflpersona/persona_build/
+
+FROM ubuntu:16.04
+
+MAINTAINER Sam Whitlock <sam.whitlock@epfl.ch>
+
+# Install make build dependencies for TensorFlow.
+RUN apt-get update
+RUN apt-get install -y \
+    curl \
+    g++ \
+    git \
+    python \
+    python3 \
+    python3-pip \
+    unzip \
+    zlib1g-dev \
+    libzmq-dev \
+    libboost-system-dev \
+    librados-dev \
+    libs3-dev \
+    liblttng-ust-dev
+
+# Install bazel to build bazel
+RUN echo "deb [arch=amd64] http://storage.googleapis.com/bazel-apt stable jdk1.8" | tee /etc/apt/sources.list.d/bazel.list
+RUN curl https://bazel.build/bazel-release.pub.gpg | apt-key add - 
+RUN apt-get update
+RUN apt-get install -y bazel
+
+RUN pip3 install --upgrade pip setuptools wheel
+RUN pip3 install numpy
