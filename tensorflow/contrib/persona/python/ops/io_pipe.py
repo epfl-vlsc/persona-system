@@ -391,3 +391,73 @@ def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, cep
 
   sink_queue = batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name=name)
 
+"""
+interpret pairs in a buffer_list as subchunks of a single column write it out to ceph 
+in `path`.
+
+path: the for the dataset. will overwrite existing files with same keys and extension
+columns: extension to write e.g. "results". If multiple buffer_lists, must be a list
+write_list_list: list containing tuples (buffer_list(s), key, num_records, first_ordinal)
+record_id: the ID to write into the column chunk headers
+name: the op name for the pipeline
+returns: tensor containing key
+"""
+def persona_parallel_ceph_out_pipe(metadata_path, column, write_list_list, record_id, ceph_params, compress=False, name=None):
+  
+  with open(metadata_path, 'r') as j:
+    manifest = json.load(j)
+
+  cluster_name = ceph_params["cluster_name"]
+  user_name = ceph_params["user_name"]
+  ceph_conf = ceph_params["ceph_conf_path"]
+  pool = manifest["pool"]
+
+  if not isinstance(column, (list, tuple)):
+    column = [column]
+
+  for item in write_list_list:
+    if len(item) != 4:
+      raise Exception("Expected items in write_list_list to be lists of len 4, got len {}".format(len(item)))
+    # item 0, the buffer_list, could be multiple buffer lists if there are secondary results
+    if item[0].get_shape() != tensor_shape.TensorShape([2]):
+      if item[0].get_shape().ndims == 2:
+        
+        if len(column) != item[0].get_shape().dims[0]:
+          raise Exception("Expected number of columns supplied to be equal to number of buffer lists")
+      else:
+        raise Exception("Expected shape of buffer_list to be [2] or [N, 2], got {}".format(item[0].get_shape()))
+        
+    if item[1].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[1].get_shape()))
+    if item[2].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
+    if item[3].get_shape() != tensor_shape.TensorShape([]):
+      raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
+  
+  with ops.name_scope(name, "persona_parallel_ceph_out_pipe", [write_list_list]):
+    write_ops = []
+    for buffer_list, key, num_records, first_ordinal in write_list_list:
+      if buffer_list.get_shape().ndims == 2:
+        bufs = array_ops.unstack(buffer_list)
+      else: 
+        bufs = [buffer_list]
+      for i, buf in enumerate(bufs):
+          print("buf shape is: {}".format(buf.get_shape()))
+          writer_op = persona_ops.ceph_writer(
+              cluster_name=cluster_name,
+              user_name=user_name,
+              pool_name=pool,
+              cepn_conf_path=ceph_conf,
+              column_handle=buf,
+              record_type=column[i],
+              record_id=record_id,
+              num_records=num_records,
+              first_ordinal=first_ordinal,
+              file_name=key, name=name,
+              compress=compress,
+          )
+          write_ops.append(writer_op)
+
+    sink_queue = batch_join_pdq([write_ops], capacity=10, num_dq_ops=1, batch_size=1, name=name)
+    return sink_queue[0]
+
