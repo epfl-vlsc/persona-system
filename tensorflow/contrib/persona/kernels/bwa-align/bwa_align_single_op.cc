@@ -187,7 +187,6 @@ private:
 
       bwa_wrapper::BWAAligner aligner(bwa_options_, bwa_index_, max_read_size_);
       vector<AlignmentResultBuilder> result_builders;
-      LOG(INFO) << "max secondary is " << max_secondary_;
       result_builders.resize(max_secondary_+1);
 
       vector<BufferPair*> result_bufs;
