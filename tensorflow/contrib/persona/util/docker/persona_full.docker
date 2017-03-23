@@ -7,4 +7,4 @@ label maintainer "sam.whitlock@epfl.ch"
 
 ARG pip_source
 ADD $pip_source /
-RUN pip3 install --upgrade /$pip_source
+RUN pip3 install --upgrade /tensorflow*.whl
