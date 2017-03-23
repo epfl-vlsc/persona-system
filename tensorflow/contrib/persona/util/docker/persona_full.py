@@ -29,24 +29,25 @@ def build_pip_package(pip_dir, docker_image):
         )
     subprocess.run(shlex.split(run_script), check=True, stdout=sys.stdout, stderr=sys.stderr)
 
-def install_pip_package(pip_dir):
+def install_pip_package(pip_dir, docker_org, name, docker_file):
     wheel_file = [f for f in os.listdir(pip_dir) if f.endswith(".whl")]
     assert len(wheel_file) == 1
     wheel_file = os.path.join(pip_dir, wheel_file[0])
-    if args.docker_org is None:
-        name = args.name
+    if docker_org is None:
+        name = name
     else:
-        name = "/".join((args.org, args.name))
+        name = "/".join((docker_org, name))
     subprocess.run(shlex.split(
         "docker build --build-arg pip_source={wheel_file} -t {name} -f {docker_file} {run_dir}".format(
-            wheel_file=wheel_file, name=name, docker_file=args.file, run_dir=script_dir
+            wheel_file=wheel_file, name=name, docker_file=docker_file, run_dir=script_dir
         )
     ), check=True, stdout=sys.stdout, stderr=sys.stderr)
 
 def run(args):
-    with tempfile.TemporaryDirectory(dir=script_dir) as pip_dir:
+    with tempfile.TemporaryDirectory(dir="" if script_dir == "." else script_dir) as pip_dir:
         build_pip_package(pip_dir=pip_dir, docker_image=args.image)
-        install_pip_package(pip_dir=pip_dir)
+        install_pip_package(pip_dir=pip_dir, docker_org=args.docker_org,
+                            name=args.name, docker_file=args.file)
 
 if __name__ == "__main__":
     run(get_args())
