@@ -31,10 +31,16 @@ build_tensorflow() {
 
 prep_dirs() {
     if [[ $OSTYPE == darwin* ]]; then
+        echo "Just....don't install on Mac. You're gonna have a bad time :/"
+        exit 2
         sudo easy_install pip
     else
         # assume Ubuntu
-        sudo apt-get -y install python3-pip python3-dev bc python-virtualenv
+        # have to do this in case of ceph-common complaining
+        set +e
+        sudo apt-get -y install python3-pip python3-dev python-virtualenv
+        set -e
+        sudo pip3 install --upgrade pip setuptools wheel
     fi
     [ ! -e $build_virtualenv_dir ] || rm -rf $build_virtualenv_dir
     [ ! -e $dev_dir ] || rm -rf $dev_dir
