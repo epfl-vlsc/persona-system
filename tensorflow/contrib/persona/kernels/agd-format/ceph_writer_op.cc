@@ -34,11 +34,6 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("compress", &compress_));
       OP_REQUIRES(ctx, !compress_, Internal("op doesn't support compression yet"));
       string s;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &s));
-      auto max_size = sizeof(header_.string_id);
-      OP_REQUIRES(ctx, s.length() < max_size,
-                  Internal("record_id for column header '", s, "' greater than 32 characters"));
-      strncpy(header_.string_id, s.c_str(), max_size);
 
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &s));
       RecordType t;
