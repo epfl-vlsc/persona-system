@@ -40,13 +40,11 @@ namespace tensorflow {
       /* Connect to the cluster */
       ret = cluster.connect();
       OP_REQUIRES(ctx, ret == 0, Internal("Cluster connect returned: ", ret));
-
-      /* Set up IO context */
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
     }
 
     ~CephReaderOp() {
       core::ScopedUnref unref_pool(ref_pool_);
+      io_ctx.close();
       cluster.shutdown();
     }
 
@@ -55,9 +53,11 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_handle", &ref_pool_));
       }
 
-      const Tensor *key_t;
+      const Tensor *key_t, *pool_name_t;
       OP_REQUIRES_OK(ctx, ctx->input("queue_key", &key_t));
-      string file_key = key_t->scalar<string>()();
+      OP_REQUIRES_OK(ctx, ctx->input("pool_name", &pool_name_t));
+      auto file_key = key_t->scalar<string>()();
+      auto pool_name = pool_name_t->scalar<string>()();
       tracepoint(bioflow, process_key, file_key.c_str());
 
       auto start = chrono::high_resolution_clock::now();
@@ -67,7 +67,7 @@ namespace tensorflow {
       rec_buffer->get()->reset();
 
       auto read_only_start = chrono::high_resolution_clock::now();
-      OP_REQUIRES_OK(ctx, CephReadObject(file_key.c_str(), rec_buffer));
+      OP_REQUIRES_OK(ctx, CephReadObject(file_key, pool_name, rec_buffer));
       auto duration = TRACEPOINT_DURATION_CALC(read_only_start);
       tracepoint(bioflow, ceph_read, duration);
 
@@ -84,27 +84,27 @@ namespace tensorflow {
     }
 
   private:
+    librados::IoCtx io_ctx;
     string cluster_name;
     string user_name;
-    string pool_name;
     string ceph_conf;
     long long read_size;
     librados::Rados cluster;
     ReferencePool<Buffer> *ref_pool_ = nullptr;
 
     /* Read an object from Ceph synchronously */
-    Status CephReadObject(const char* file_key, void *ref_buffer)
-    {
-      librados::IoCtx io_ctx;
+    Status CephReadObject(const string &file_key, const string &pool_name, ResourceContainer<Buffer> *ref_buffer) {
       int ret = 0;
-      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
-      if (ret < 0) {
-        LOG(ERROR) << "Couldn't set up ioctx! error " << ret;
-        exit(EXIT_FAILURE);
-      } else {
-        VLOG(INFO) << "Created an ioctx for the pool.";
+      if (pool_name != io_ctx.get_pool_name()) {
+        // TODO need to close before creating a new one?
+        ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
+        if (ret != 0) {
+          return Internal("CephReader: Unable to create new io ctx for new pool ", pool_name, ". Got return code ", ret);
+        } else {
+          VLOG(INFO) << "Creating a new context because pool name changed to " << pool_name;
+        }
       }
-      auto buf = ((ResourceContainer<Buffer> *) ref_buffer)->get();
+      auto buf = ref_buffer->get();
 
       size_t file_size;
       time_t pmtime;
@@ -131,8 +131,7 @@ namespace tensorflow {
         librados::AioCompletion *read_completion = librados::Rados::aio_create_completion();
         ret = io_ctx.aio_read(file_key, read_completion, &read_buf, read_len, data_read);
         if (ret < 0) {
-          LOG(INFO) << "Couldn't start read object! error " << ret;
-          exit(EXIT_FAILURE);
+          return Internal("Ceph Reader: unable to start read object. Received error ", ret);
         }
         data_read = data_read + read_len;
 
@@ -140,8 +139,7 @@ namespace tensorflow {
         read_completion->wait_for_complete();
         ret = read_completion->get_return_value();
         if (ret < 0) {
-          LOG(INFO) << "Couldn't read object! error " << ret;
-          exit(EXIT_FAILURE);
+          return Internal("Ceph Reader: unable to read object. Got error ", ret);
         }
         read_buf.clear();
         read_completion->release();
@@ -155,8 +153,8 @@ namespace tensorflow {
         read_buf.clear();*/
 
       }
+
       VLOG(INFO) << "reader read " << data_read << " bytes from ceph object " << file_key;
-      io_ctx.close();
       return Status::OK();
     }
   };
