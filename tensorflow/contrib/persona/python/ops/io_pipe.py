@@ -7,20 +7,118 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops as persona_ops_proxy
-from tensorflow.contrib.persona.python.ops.queues import batch_pdq
-from tensorflow.contrib.persona.python.ops.queues import batch_join_pdq
-from tensorflow.python.framework import ops
-from tensorflow.python.framework import tensor_shape
-from tensorflow.python.framework import constant_op
-from tensorflow.python.ops import string_ops
+from tensorflow.contrib.persona.python.ops.queues import batch_pdq, batch_join_pdq
+from tensorflow.python.framework import ops, dtypes, tensor_shape, constant_op
+from tensorflow.python.ops import string_ops, array_ops
 from tensorflow.python.ops import control_flow_ops
-from tensorflow.python.ops import array_ops
 from tensorflow.python import training
 
 import json
 import os
 
 persona_ops = persona_ops_proxy()
+
+def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
+    tensor_shape = tensor.get_shape()
+    if tensor_shape != expected_shape:
+        raise Exception("Tensor {t} doesn't meet expected shape {s}. Has {a}".format(t=tensor, s=expected_shape, a=tensor_shape))
+    tensor_dtype = tensor.dtype
+    if tensor_dtype != expected_dtype:
+        raise Exception("Tensor {t} doesn't have expected dtype {d}. Has {a}".format(t=tensor, d=expected_dtype, a=tensor_dtype))
+
+valid_columns = {"base", "qual", "metadata", "results"} # TODO add for other columns
+def validate_columns(columns):
+    """
+    Validates the columns based on their validity, returning a set
+    :param columns: 
+    :return: a set of columns, constructed from the iterable passed in as the param
+    """
+    if len(columns) == 0:
+        raise Exception("Ceph Read Pipeline must read >0 columns")
+    columns = set(columns)
+
+    invalid_columns = columns - valid_columns
+    if len(invalid_columns) != 0:
+        raise Exception("Can't instantiate Ceph Read Pipeline with invalid columns: {}".format(invalid_columns))
+
+    return columns
+
+def expand_column_extensions(key, columns):
+    """
+    Expands a given AGD key into the full extensions, based on the columns
+    :param keys: an iterator of scalar strings, representing the keys for a given parallelism level
+    :param columns: assumed to have been validated previously be the caller
+    :yield: a generator for keys
+    """
+    for c in columns:
+        yield string_ops.string_join(inputs=[key, c], separator=".", name="AGD_column_expansion")
+
+def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, columns, downstream_parallel,
+                       ceph_read_size=2**26, buffer_pool=None, name="ceph_read_pipeline"):
+    """
+    Create a ceph input pipeline.
+    
+    FIXME doesn't return the generic column name that was read. Must be assumed to be in order based on the columns
+    :param upstream_tensors: a tuple of tensors (key, pool_name, record_id), which are typically found in the metadata file. This controls the parallelism
+    :param user_name: 
+    :param cluster_name: 
+    :param ceph_conf_path: 
+    :param columns: 
+    :param downstream_parallel: the level of parallelism to create for the downstream nodes
+    :param ceph_read_size: 
+    :param buffer_pool: 
+    :param name: 
+    :return: a list of (key, pool_name, record_id, tuple(chunk_buffers)) for every tensor in upstream tensors
+    """
+    def make_ceph_reader(key, pool_name):
+        return persona_ops.ceph_reader(cluster_name=cluster_name,
+                                       user_name=user_name,
+                                       pool_name=pool_name,
+                                       ceph_conf_path=ceph_conf_path,
+                                       read_size=ceph_read_size,
+                                       queue_key=key,
+                                       buffer_pool=buffer_pool) # buffer_pool is in scope. hooray python!
+
+    def make_reader_groups():
+        scalar_shape = tensor_shape.scalar()
+        for key, pool_name, record_id in upstream_tensors:
+            validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
+            validate_shape_and_dtype(tensor=pool_name, expected_shape=scalar_shape, expected_dtype=dtypes.string)
+            chunk_buffers = tuple(make_ceph_reader(key=column_key, pool_name=pool_name) for column_key in expand_column_extensions(key=key, columns=columns))
+            yield key, pool_name, record_id, chunk_buffers
+
+    columns = validate_columns(columns=columns)
+
+    if buffer_pool is None:
+        buffer_pool = persona_ops.buffer_pool(size=10, bound=False)
+
+    ceph_read_results = batch_join_pdq(tuple((key, pool_name, record_id, chunk_buffers) for key, pool_name, record_id, chunk_buffers in make_reader_groups()),
+                                       batch_size=1,
+                                       enqueue_many=False,
+                                       num_dq_ops=downstream_parallel)
+    return ceph_read_results
+
+# note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
+def ceph_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, name="ceph_write_pipeline"):
+    def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
+        return persona_ops.ceph_writer(cluster_name=cluster_name,
+                                       user_name=user_name,
+                                       ceph_conf_path=ceph_conf_path,
+                                       pool_name=pool_name,
+                                       record_id=record_id,
+                                       num_records=num_records,
+                                       first_ordinal=first_ordinal,
+                                       file_path=key,
+                                       column_handle=column_handle)
+
+def local_read_pipeline(upstream_tensors, columns, name="local_read_pipeline"):
+    columns = validate_columns(columns=columns)
+
+def local_write_pipeline(upstream_tensors, name="local_write_pipeline"):
+    pass
+
+def chunk_processing_pipeline(upstream_tensors, name="chunk_processing_pipeline"):
+    pass
 
 def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
   
@@ -377,16 +475,16 @@ def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, cep
   for buff_list, key, num_records, first_ordinal in write_list_list:
     # the passthru probably isnt required ....
     file_key_passthru, first_o_passthru = persona_ops.agd_ceph_write_columns(cluster_name=cluster_name,
-                                                                     user_name=user_name,
-                                                                     pool_name=output_pool_name,
-                                                                     ceph_conf_path=ceph_conf_path,
-                                                                     record_id=record_id,
-                                                                     record_type=column,
-                                                                     column_handle=buff_list,
-                                                                     file_path=key,
-                                                                     first_ordinal=first_ordinal,
-                                                                     num_records=num_records,
-                                                                     name=name)
+                                                                             user_name=user_name,
+                                                                             pool_name=output_pool_name,
+                                                                             ceph_conf_path=ceph_conf_path,
+                                                                             record_id=record_id,
+                                                                             record_type=column,
+                                                                             column_handle=buff_list,
+                                                                             file_path=key,
+                                                                             first_ordinal=first_ordinal,
+                                                                             num_records=num_records,
+                                                                             name=name)
     final_write_out.append([file_key_passthru, num_records, first_o_passthru])
 
   sink_queue = batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name=name)
