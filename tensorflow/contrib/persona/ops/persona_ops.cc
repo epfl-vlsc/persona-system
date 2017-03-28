@@ -443,7 +443,6 @@ we can use it in other pipelines where writers are used
   .Input("queue_key: string")
   .Input("pool_name: string")
   .Output("file_handle: string")
-  .Output("file_name: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
       TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
@@ -454,9 +453,7 @@ we can use it in other pipelines where writers are used
       }
       TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 0, &sh));
       TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 0, &sh));
-      for (int i = 0; i < 2; i++) {
-        c->set_output(i, c->input(i));
-      }
+      c->set_output(0, c->input(0));
       return Status::OK();
     })
   .Doc(R"doc(
