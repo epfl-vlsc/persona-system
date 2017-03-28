@@ -74,11 +74,6 @@ namespace tensorflow {
       // Output tensors
       OP_REQUIRES_OK(ctx, rec_buffer->allocate_output("file_handle", ctx));
 
-      Tensor *file_name;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("file_name", TensorShape({1}), &file_name));
-      auto scalar = file_name->vec<string>();
-      scalar(0) = file_key;
-
       duration = TRACEPOINT_DURATION_CALC(start);
       tracepoint(bioflow, chunk_read, file_key.c_str(), duration);
     }
