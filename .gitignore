@@ -22,3 +22,4 @@ node_modules
 __pycache__
 python_dev/
 bazel-tensorflow-fpga
+.idea/
