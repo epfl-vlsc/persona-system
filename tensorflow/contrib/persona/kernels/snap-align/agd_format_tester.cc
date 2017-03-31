@@ -42,7 +42,6 @@ namespace tensorflow {
       core::ScopedUnref column_releaser(records);
       auto rec_data_list_p = records->get();
       auto& rec_data_list = *rec_data_list_p;
-      rec_data_list.wait_for_ready();
       auto num_buffers = rec_data_list.size();
       LOG(INFO) << "num buffers " << num_buffers;
 

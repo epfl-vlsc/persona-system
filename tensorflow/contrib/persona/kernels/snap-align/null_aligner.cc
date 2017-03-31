@@ -126,7 +126,6 @@ class NullAlignerOp : public OpKernel {
           result_buf[0]->data().AppendBuffer(bases, 28);
         }
 
-        result_buf[0]->set_ready();
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_buf);
     }
     resource_releaser(reads_container);

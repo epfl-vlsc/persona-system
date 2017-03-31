@@ -221,9 +221,6 @@ private:
             return;
           }
 
-          for (auto buf : result_bufs)
-            buf->set_ready();
-
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs, &interval);
         }
         

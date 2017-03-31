@@ -20,7 +20,6 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->input("data", &input));
       auto data = input->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(data(0), data(1), &buf));
-      buf->get()->wait_for_ready();
       core::ScopedUnref a(buf);
       {
         ResourceReleaser<BufferList> b(*buf); // make sure destructs first
