@@ -105,7 +105,6 @@ namespace tensorflow {
       ResourceReleaser<BufferList> a(*column);
 
       auto *buf_list = column->get();
-      buf_list->wait_for_ready();
 
       string full_path(filepath + record_suffix_);
       OP_REQUIRES_OK(ctx, PrepHeader(ctx));

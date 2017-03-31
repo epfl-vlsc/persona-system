@@ -52,11 +52,8 @@ namespace tensorflow {
         auto a = sub_resource_index_.fetch_add(1, std::memory_order_relaxed);
         if (a >= sub_resources_.size()) {
           return errors::ResourceExhausted("No more BWA/AGD subchunks");
-        } else if (a == 0) {
-          for (auto bl : buffer_lists_)
-            bl->set_start_time();
         }
-        
+
         *rr = &sub_resources_[a];
         b.clear();
         for (auto bl : buffer_lists_) {

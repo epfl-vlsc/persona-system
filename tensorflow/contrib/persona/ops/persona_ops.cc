@@ -119,19 +119,18 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
   REGISTER_OP("AGDCephWriteColumns")
   .Attr("cluster_name: string")
   .Attr("user_name: string")
-  .Attr("pool_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("compress: bool")
-  .Attr("record_id: string")
   .Attr("record_type: list({'base', 'qual', 'metadata', 'results'})")
+  .Input("output_queue_handle: resource")
+  .Input("pool_name: string")
+  .Input("record_id: string")
   .Input("column_handle: string")
   .Input("file_path: string")
   // TODO these can be collapsed into a vec(3) if that would help performance
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
-  .Output("key_out: string")
-  .Output("first_ordinal_out: int64")
-  .SetIsStateful()
+  .SetIsStateful() // TODO not sure if we need this
   .Doc(R"doc(
 Writes out columns from a specified BufferList. The list contains
 [data, index] BufferPairs. This Op constructs the header, unifies the buffers,
@@ -162,7 +161,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 Converts an input file into three files of bases, qualities, and metadata
 )doc");
 
-    REGISTER_OP("AGDMarkDuplicates")
+  REGISTER_OP("AGDMarkDuplicates")
   .Input("buffer_list_pool: Ref(string)")
   .Input("results_handle: string")
   .Input("num_records: int32")
@@ -879,15 +878,13 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
-  .Output("result_buf_handle: string")
-  .SetIsStateful()
+  .Input("output_buffer_queue_handle: resource")
+  .SetIsStateful() // TODO not sure if needed
   .SetShapeFn([](InferenceContext *c) {
-      for (int i = 0; i < 4; i++) {
+      int i;
+      for (i = 0; i < 5; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
-      int max_secondary = 0;
-      TF_RETURN_IF_ERROR(c->GetAttr("max_secondary", &max_secondary));
-      c->set_output(0, c->Matrix(1+max_secondary, 2));
       return Status::OK();
     })
   .Doc(R"doc(

@@ -80,7 +80,6 @@ namespace tensorflow {
       ResourceReleaser<BufferList> a(*column);
 
       auto *buf_list = column->get();
-      buf_list->wait_for_ready();
 
       // do this after the wait, so we are only timing the write, and NOT part of the alignment
       start = chrono::high_resolution_clock::now();

@@ -144,9 +144,6 @@ namespace tensorflow {
     auto a = sub_resource_index_.fetch_add(1, memory_order_relaxed);
     if (a >= sub_resources_.size()) {
       return ResourceExhausted("No more AGD subchunks");
-    } else if (a == 0) {
-      for (auto bl : buffer_lists_)
-        bl->set_start_time();
     }
       //decltype(idx) next;
       //do {
@@ -166,7 +163,6 @@ namespace tensorflow {
 
     reset_iter(); // who cares doesn't die for now
 
-    // TODO we don't support dealing with meta for now. too difficult for the deadline!
     decltype(base_data_) base_start = base_data_, qual_start = qual_data_, meta_start = nullptr;
     decltype(chunk) max_range;
     for (decltype(num_records_) i = 0; i < num_records_; i += chunk) {
@@ -186,12 +182,9 @@ namespace tensorflow {
       }
     }
     sub_resource_index_.store(0, memory_order_relaxed);
-    buffer_lists_.clear();
-    buffer_lists_.reserve(bl.size());
-    for (auto b : bl) {
-      // we have to copy the pointers to the BufferLists
+    buffer_lists_ = bl;
+    for (auto b : buffer_lists_) {
       b->resize(sub_resources_.size());
-      buffer_lists_.push_back(b);
     }
     return Status::OK();
   }
