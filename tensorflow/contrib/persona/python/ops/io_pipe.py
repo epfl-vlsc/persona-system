@@ -135,8 +135,30 @@ def local_read_pipeline(upstream_tensors, columns, name="local_read_pipeline"):
 def local_write_pipeline(upstream_tensors, name="local_write_pipeline"):
     pass
 
-def chunk_processing_pipeline(upstream_tensors, name="chunk_processing_pipeline"):
-    pass
+def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_default_args={'size':10, 'bound': False}, name="chunk_processing_pipeline"):
+    """
+    Yield a pipeline of input buffers processed by AGDReader
+    :param upstream_tensors: a tensor of handles to resources of type Data (in C++ persona code)
+    :param verify: if True, enable format verification by AGDReader. Will fail if shape doesn't conform, but causes performance impact
+    :param buffer_pool: if not None, use this as the buffer_pool, else create buffer_pool
+    :param buffer_pool_default_args: the arguments to make the buffer_pool, if it is None
+    :param name: 
+    :return: yields a tuple of output_buffer, num_records, first_ordinal
+    """
+    if buffer_pool is None:
+        buffer_pool = persona_ops.buffer_pool(**buffer_pool_default_args, name="agd_reader_buffer_pool")
+    for upstream_tensor in upstream_tensors:
+        ut_shape = upstream_tensor.get_shape()
+        if ut_shape != scalar_shape:
+            raise Exception("AGD_Reader pipeline encounter Tensor with shape {actual}, but expected {expected}".format(
+                actual=ut_shape, expected=scalar_shape
+            ))
+        output_buffers, num_records, first_ordinals = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
+                                                                             verify=verify, name="agd_reader")
+        output_buffer = array_ops.unstack(output_buffers, name="output_buffer_unstack")[0]
+        num_record = array_ops.unstack(num_records, name="num_record_unstack")[0]
+        first_ordinal = array_ops.unstack(first_ordinals, name="first_ordinal_unstack")[0]
+        yield output_buffer, num_record, first_ordinal
 
 def aligner_pass_around(aligner_kernel, aligner_kwargs, queue_size, *tensors):
     """
