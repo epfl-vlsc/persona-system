@@ -605,35 +605,6 @@ file_name: a Tensor() of string for the unique key for this file
 Creates pools of MemoryMappedFile objects
 )doc");
 
-  REGISTER_OP("ParallelColumnWriter")
-  .Attr("compress: bool")
-  .Attr("record_id: string")
-  .Attr("record_type: string")
-  .Attr("output_dir: string = ''")
-  .Attr("extension: string = ''")
-  .Input("column_handle: string")
-  .Input("file_path: string")
-  // TODO these can be collapsed into a vec(3) if that would help performance
-  .Input("first_ordinal: int64")
-  .Input("num_records: int32")
-  .Output("key_out: string")
-  .SetShapeFn([](InferenceContext* c) {
-      c->set_output(0, c->Scalar());
-      return Status::OK();
-      })
-  .SetIsStateful()
-  .Doc(R"doc(
-Writes out a column (just a character buffer) to the location specified by the input.
-
-This writes out to local disk only
-
-Assumes that the record_id for a given set does not change for the runtime of the graph
-and is thus passed as an Attr instead of an input (for efficiency);
-
-This also assumes that this writer only writes out a single record type.
-Thus we always need 3 of these for the full conversion pipeline
-)doc");
-
   REGISTER_OP("ParallelSamWriter")
   .Attr("sam_file_path: string = ''")
   .Input("agd_results: string")
