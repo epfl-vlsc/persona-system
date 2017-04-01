@@ -20,7 +20,7 @@ import itertools
 
 persona_ops = persona_ops_proxy()
 scalar_shape = tensor_shape.scalar()
-buffer_pool_default_args = {'size':10, "bound": False}
+pool_default_args = {'size':10, "bound": False}
 
 def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     tensor_shape = tensor.get_shape()
@@ -131,13 +131,26 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
                                pool_name=pool_name,
                                column_handle=column_handle)
 
-def local_read_pipeline(upstream_tensors, columns, name="local_read_pipeline"):
+def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mmap_pool_args=pool_default_args, name="local_read_pipeline"):
+    def make_reader(input_file_basename):
+        prev = []
+        for full_filename in expand_column_extensions(key=input_file_basename, columns=columns):
+            with ops.control_dependencies(prev):
+                yield persona_ops.file_m_map(filename=full_filename, pool_handle=mmap_pool, synchronous=sync)
+
     columns = validate_columns(columns=columns)
+
+    if mmap_pool is None:
+        mmap_pool = persona_ops.m_map_pool(name=name, **mmap_pool_args)
+
+    assert len(upstream_tensors) > 0
+    for file_path in upstream_tensors:
+        yield file_path, make_reader(input_file_basename=file_path)
 
 def local_write_pipeline(upstream_tensors, name="local_write_pipeline"):
     pass
 
-def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_args=buffer_pool_default_args, name="agd_reader_pipeline"):
+def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_args=pool_default_args, name="agd_reader_pipeline"):
     """
     Yield a pipeline of input buffers processed by AGDReader.
     
@@ -166,7 +179,7 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer
         first_ordinal = array_ops.unstack(first_ordinalz, name="first_ordinal_unstack")[0]
         yield output_buffer, num_records, first_ordinal
 
-def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, share_buffer_pool=True, buffer_pool_args=buffer_pool_default_args, name="agd_reader_multi_column_pipeline"):
+def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, share_buffer_pool=True, buffer_pool_args=pool_default_args, name="agd_reader_multi_column_pipeline"):
     """
     Create an AGDReader pipeline for an iterable of columns. Each column group is assumed to have the same first ordinal and number of records
     :param upstream_tensorz: a list of list of tensors, each item being a column group
@@ -185,7 +198,6 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     for processed_tensors in process_tensorz:
         output_buffers, num_recordss, first_ordinalss = itertools.chain.from_iterable(processed_tensors)
         yield output_buffers, num_recordss[0], first_ordinalss[0]
-
 
 def aligner_pass_around(aligner_kernel, aligner_kwargs, queue_size, *tensors):
     """
