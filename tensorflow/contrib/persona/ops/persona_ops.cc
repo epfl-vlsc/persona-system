@@ -575,19 +575,16 @@ A pool to manage FastqReadResource objects
 )doc");
 
   REGISTER_OP("FileMMap")
-  .Attr("local_prefix: string = ''")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
   .Attr("synchronous: bool = false")
   .Input("pool_handle: Ref(string)")
   .Input("filename: string")
   .Output("file_handle: string")
-  .Output("file_name: string")
   .SetShapeFn([](InferenceContext* c) {
       TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
       TF_RETURN_IF_ERROR(check_scalar(c, 1));
       c->set_output(0, c->Vector(2));
-      c->set_output(1, c->Scalar());
       return Status::OK();
       })
   .SetIsStateful()
@@ -602,46 +599,6 @@ file_handle: a Tensor(2) of strings to access the shared mmaped file resource to
 file_name: a Tensor() of string for the unique key for this file
   )doc");
 
-  REGISTER_OP("StagedFileMap")
-  .Attr("local_prefix: string = ''")
-  .Attr("container: string = ''")
-  .Attr("shared_name: string = ''")
-  .Attr("synchronous: bool = false")
-  .Input("filename: string")
-  .Input("upstream_refs: string")
-  .Input("upstream_names: string")
-  .Input("pool_handle: Ref(string)")
-  .Output("file_handles: string")
-  .Output("file_names: string")
-  .SetShapeFn([](InferenceContext *c) {
-      ShapeHandle file_handles_shape;
-      TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(1), 2, &file_handles_shape));
-      auto dim_handle = c->Dim(file_handles_shape, 0);
-      auto dim_value = c->Value(dim_handle);
-
-      c->set_output(0, c->Matrix(dim_value+1, 2));
-
-      c->set_output(1, c->Vector(dim_value+1));
-
-      return Status::OK();
-    })
-  .SetIsStateful()
-  .Doc(R"doc(
-
-  DEPRECATED
-
-
-Appends a agd reader handle tensor to an input list.
-To be used for the staged pipeline
-
-local_prefix: a directory on the local machine on which to find the keys
-This is used in the case of a remote reader giving only the filenames to this reader
-pool_handle: handle to the filename queue
-upstream_refs: the handles from previous stages in the pipeline, if any
-upstream_names: the names from the previous stages of the pipeline, if any
-file_handles: [{this file map op}] + upstream
-file_names: [{this map op's name}] + upstream_name
-)doc");
 
   REGISTER_REFERENCE_POOL("MMapPool")
   .Doc(R"doc(
