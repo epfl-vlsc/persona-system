@@ -96,7 +96,6 @@ namespace tensorflow {
     }
 
   private:
-    size_t round_ = 0;
     bool verify_ = false;
     bool twobit_ = false;
     RecordParser rec_parser_;
