@@ -1,5 +1,5 @@
 
-# build input pipelines for AGD 
+# build input pipelines for AGD
 
 
 from __future__ import absolute_import
@@ -16,9 +16,11 @@ from tensorflow.python.training.input import batch
 
 import json
 import os
+import itertools
 
 persona_ops = persona_ops_proxy()
 scalar_shape = tensor_shape.scalar()
+buffer_pool_default_args = {'size':10, "bound": False}
 
 def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     tensor_shape = tensor.get_shape()
@@ -135,9 +137,12 @@ def local_read_pipeline(upstream_tensors, columns, name="local_read_pipeline"):
 def local_write_pipeline(upstream_tensors, name="local_write_pipeline"):
     pass
 
-def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_default_args={'size':10, 'bound': False}, name="chunk_processing_pipeline"):
+def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_args=buffer_pool_default_args, name="agd_reader_pipeline"):
     """
-    Yield a pipeline of input buffers processed by AGDReader
+    Yield a pipeline of input buffers processed by AGDReader.
+    
+    This processes ONLY A SINGLE COLUMN. Use agd_reader_multi_column_pipeline to do multiple columns in parallel.
+    
     :param upstream_tensors: a tensor of handles to resources of type Data (in C++ persona code)
     :param verify: if True, enable format verification by AGDReader. Will fail if shape doesn't conform, but causes performance impact
     :param buffer_pool: if not None, use this as the buffer_pool, else create buffer_pool
@@ -146,19 +151,41 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer
     :return: yields a tuple of output_buffer, num_records, first_ordinal
     """
     if buffer_pool is None:
-        buffer_pool = persona_ops.buffer_pool(**buffer_pool_default_args, name="agd_reader_buffer_pool")
+        buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
+    assert len(upstream_tensors) > 0
     for upstream_tensor in upstream_tensors:
         ut_shape = upstream_tensor.get_shape()
         if ut_shape != scalar_shape:
             raise Exception("AGD_Reader pipeline encounter Tensor with shape {actual}, but expected {expected}".format(
                 actual=ut_shape, expected=scalar_shape
             ))
-        output_buffers, num_records, first_ordinals = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
+        output_bufferz, num_recordz, first_ordinalz = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
                                                                              verify=verify, name="agd_reader")
-        output_buffer = array_ops.unstack(output_buffers, name="output_buffer_unstack")[0]
-        num_record = array_ops.unstack(num_records, name="num_record_unstack")[0]
-        first_ordinal = array_ops.unstack(first_ordinals, name="first_ordinal_unstack")[0]
-        yield output_buffer, num_record, first_ordinal
+        output_buffer = array_ops.unstack(output_bufferz, name="output_buffer_unstack")[0]
+        num_records = array_ops.unstack(num_recordz, name="num_record_unstack")[0]
+        first_ordinal = array_ops.unstack(first_ordinalz, name="first_ordinal_unstack")[0]
+        yield output_buffer, num_records, first_ordinal
+
+def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, share_buffer_pool=True, buffer_pool_args=buffer_pool_default_args, name="agd_reader_multi_column_pipeline"):
+    """
+    Create an AGDReader pipeline for an iterable of columns. Each column group is assumed to have the same first ordinal and number of records
+    :param upstream_tensorz: a list of list of tensors, each item being a column group
+    :param verify: whether or not to invoke the verification for AGD columns
+    :param buffer_pool: pass in a buffer_pool to reuse
+    :param share_buffer_pool: if buffer_pool is not passed in, create one to share among all the AGDReader instances
+    :param buffer_pool_args: special buffer pool args, if it's created
+    :param name: 
+    :return: yield [output_buffer_handles], num_records, first_ordinal, in order, for each column group in upstream_tensorz
+    """
+    if buffer_pool is None and share_buffer_pool:
+        buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
+    assert len(upstream_tensorz) > 0
+    process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
+                       for upstream_tensors in upstream_tensorz)
+    for processed_tensors in process_tensorz:
+        output_buffers, num_recordss, first_ordinalss = itertools.chain.from_iterable(processed_tensors)
+        yield output_buffers, num_recordss[0], first_ordinalss[0]
+
 
 def aligner_pass_around(aligner_kernel, aligner_kwargs, queue_size, *tensors):
     """
@@ -175,10 +202,18 @@ def aligner_pass_around(aligner_kernel, aligner_kwargs, queue_size, *tensors):
     other_args = batch(tensors=tensors, batch_size=1, capacity=queue_size)
     return (aligner_output,) + tuple(other_args)
 
+def join(upstream_tensors, parallel, capacity, multi=False):
+    if multi:
+        return batch_join_pdq(tensor_list_list=upstream_tensors, batch_size=1,
+                              num_dq_ops=parallel, capacity=capacity)
+    else:
+        return batch_pdq(tensor_list=upstream_tensors, batch_size=1,
+                         capacity=capacity, num_dq_ops=parallel)
+
 #### old stuff ####
 
 def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
-  
+
   to_enqueue = []
   for chunks_and_key in data_in:
     mapped_chunks = chunks_and_key[:-1]
@@ -189,14 +224,14 @@ def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
           m_chunk = array_ops.expand_dims(mapped_chunk, 0)
       else:
           m_chunk = mapped_chunk
-      
-      parsed_chunk, num_records, first_ordinal = persona_ops.agd_reader(verify=False, 
+
+      parsed_chunk, num_records, first_ordinal = persona_ops.agd_reader(verify=False,
                               buffer_pool=buffer_pool, file_handle=m_chunk, name=name)
       parsed_chunk_u = array_ops.unstack(parsed_chunk)[0]
 
       parsed_chunks.append(parsed_chunk_u)
-     
-    # we just grab the last num recs and first ord because they should be 
+
+    # we just grab the last num recs and first ord because they should be
     # all the same ... i.e. columns are from the same group and share indices
     num_recs_u = array_ops.unstack(num_records)[0]
     first_ord_u = array_ops.unstack(first_ordinal)[0]
@@ -232,7 +267,7 @@ def _keys_maker(file_keys, read_parallel):
 
   keys = batch_pdq([sp_output], batch_size=1, num_dq_ops=read_parallel, name="keys_queue")
 
-  return keys 
+  return keys
 
 """
 Build an input pipeline to get columns from an AGD dataset.
@@ -245,9 +280,9 @@ key: optional scalar tensor with chunk key (otherwise adds a string_input_produc
 returns: list of tensors in the form [ key, num_records, first_ordinal, col1, col1, ... , colN ]
 where col0 - colN are Tensor([2]) and all else is scalar
 """
-def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_pool=None, 
+def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_pool=None,
     buffer_pool=None, parse_parallel=2, process_parallel=1, sync=True, capacity=32, name=None):
- 
+
   if metadata_path is not None:
     with open(metadata_path, 'r') as j:
       manifest = json.load(j)
@@ -263,7 +298,7 @@ def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_poo
       file_name = dataset_dir + "/" + chunknames[0] + "." + extension
       if not os.path.isfile(file_name):
         raise Exception("Desired column file {col} does not exist in AGD dataset {dataset}".format(col=file_name, dataset=metadata_path))
-  
+
 
   with ops.name_scope(name, "persona_in_pipe", [key, mmap_pool, buffer_pool]):
 
@@ -298,18 +333,18 @@ def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_poo
                                                   local_prefix=dataset_dir, synchronous=sync)
       all_chunks.append(chunks)
       prev = chunks
- 
+
     all_chunks.append(key)
-    
+
     mmap_queue = batch_pdq(all_chunks, batch_size=1,
                                       enqueue_many=False,
                                       num_dq_ops=parse_parallel,
                                       name=name)
 
     to_enqueue = []
-  
+
     return _parse_pipe(mmap_queue, capacity, process_parallel, buffer_pool, name)
-  
+
 """
 Build an input pipeline to get columns from an AGD dataset in a Ceph object store.
 Expects Ceph keyring and config files to be in PWD.
@@ -326,9 +361,9 @@ process_parallel: how many sets of parsed `columns` to return
 returns: list of tensors in the form [ key, num_records, first_ordinal, col0, col1, ... , colN ]*`process_parallel`
 where col0 - colN are Tensor([2]) and all else is scalar
 """
-def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None, 
+def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None,
                          buffer_pool=None, parse_parallel=2, read_parallel=1, process_parallel=1, ceph_read_size=2**26, capacity=32, name=None):
- 
+
   if metadata_path is not None:
     with open(metadata_path, 'r') as j:
       manifest = json.load(j)
@@ -384,7 +419,7 @@ def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None,
                                       num_dq_ops=parse_parallel,
                                       name=name)
 
-  
+
     return _parse_pipe(chunk_queue, capacity, process_parallel, buffer_pool, name)
 
 """
@@ -399,7 +434,7 @@ name: the op name for the pipeline
 returns: list of tensor containing [key, num_records, first_ordinal]
 """
 def persona_out_pipe(path, columns, write_list_list, record_id, compress=False, name=None):
- 
+
   if path[-1] != '/':
     path.append('/')
 
@@ -414,7 +449,7 @@ def persona_out_pipe(path, columns, write_list_list, record_id, compress=False, 
       raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
     if item[3].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
-  
+
   with ops.name_scope(name, "persona_out_pipe", [write_list_list]):
     final_write_out = []
     for buff_list, key, num_records, first_ordinal in write_list_list:
@@ -428,7 +463,7 @@ def persona_out_pipe(path, columns, write_list_list, record_id, compress=False, 
                                                                     num_records=num_records,
                                                                     name=name)
       final_write_out.append([file_key_passthru, num_records, first_o_passthru])
-      
+
     sink_queue = batch_join_pdq(final_write_out, capacity=10, num_dq_ops=1, batch_size=1, name=name)
 
     return sink_queue
@@ -446,9 +481,9 @@ name: the op name for the pipeline
 returns: tensor containing key
 """
 def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress=False, name=None):
-  
+
   if path[-1] != '/':
-    path += '/' 
+    path += '/'
 
   if not isinstance(column, (list, tuple)):
     column = [column]
@@ -459,25 +494,25 @@ def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress
     # item 0, the buffer_list, could be multiple buffer lists if there are secondary results
     if item[0].get_shape() != tensor_shape.TensorShape([2]):
       if item[0].get_shape().ndims == 2:
-        
+
         if len(column) != item[0].get_shape().dims[0]:
           raise Exception("Expected number of columns supplied to be equal to number of buffer lists")
       else:
         raise Exception("Expected shape of buffer_list to be [2] or [N, 2], got {}".format(item[0].get_shape()))
-        
+
     if item[1].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[1].get_shape()))
     if item[2].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
     if item[3].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
-  
+
   with ops.name_scope(name, "persona_parallel_out_pipe", [write_list_list]):
     write_ops = []
     for buffer_list, key, num_records, first_ordinal in write_list_list:
       if buffer_list.get_shape().ndims == 2:
         bufs = array_ops.unstack(buffer_list)
-      else: 
+      else:
         bufs = [buffer_list]
       for i, buf in enumerate(bufs):
           print("buf shape is: {}".format(buf.get_shape()))
@@ -507,7 +542,7 @@ name: the op name for the pipeline
 returns: list of tensor containing [key, num_records, first_ordinal]
 """
 def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, ceph_params, compress=False, name=None):
-  
+
   with open(metadata_path, 'r') as j:
     manifest = json.load(j)
 
@@ -527,7 +562,7 @@ def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, cep
       raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
     if item[3].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
-  
+
   final_write_out = []
   for buff_list, key, num_records, first_ordinal in write_list_list:
     # the passthru probably isnt required ....
@@ -558,7 +593,7 @@ name: the op name for the pipeline
 returns: tensor containing key
 """
 def persona_parallel_ceph_out_pipe(metadata_path, column, write_list_list, record_id, ceph_params, compress=False, name=None):
-  
+
   with open(metadata_path, 'r') as j:
     manifest = json.load(j)
 
@@ -576,25 +611,25 @@ def persona_parallel_ceph_out_pipe(metadata_path, column, write_list_list, recor
     # item 0, the buffer_list, could be multiple buffer lists if there are secondary results
     if item[0].get_shape() != tensor_shape.TensorShape([2]):
       if item[0].get_shape().ndims == 2:
-        
+
         if len(column) != item[0].get_shape().dims[0]:
           raise Exception("Expected number of columns supplied to be equal to number of buffer lists")
       else:
         raise Exception("Expected shape of buffer_list to be [2] or [N, 2], got {}".format(item[0].get_shape()))
-        
+
     if item[1].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[1].get_shape()))
     if item[2].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[2].get_shape()))
     if item[3].get_shape() != tensor_shape.TensorShape([]):
       raise Exception("Expected shape of key to be [], got {}".format(item[3].get_shape()))
-  
+
   with ops.name_scope(name, "persona_parallel_ceph_out_pipe", [write_list_list]):
     write_ops = []
     for buffer_list, key, num_records, first_ordinal in write_list_list:
       if buffer_list.get_shape().ndims == 2:
         bufs = array_ops.unstack(buffer_list)
-      else: 
+      else:
         bufs = [buffer_list]
       for i, buf in enumerate(bufs):
           print("buf shape is: {}".format(buf.get_shape()))
