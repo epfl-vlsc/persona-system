@@ -12,11 +12,13 @@ from tensorflow.python.framework import ops, dtypes, tensor_shape, constant_op
 from tensorflow.python.ops import string_ops, array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python import training
+from tensorflow.python.training.input import batch
 
 import json
 import os
 
 persona_ops = persona_ops_proxy()
+scalar_shape = tensor_shape.scalar()
 
 def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     tensor_shape = tensor.get_shape()
@@ -80,7 +82,6 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
                                        buffer_pool=buffer_pool) # buffer_pool is in scope. hooray python!
 
     def make_reader_groups():
-        scalar_shape = tensor_shape.scalar()
         for key, pool_name, record_id in upstream_tensors:
             validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
             validate_shape_and_dtype(tensor=pool_name, expected_shape=scalar_shape, expected_dtype=dtypes.string)
@@ -99,17 +100,34 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
     return ceph_read_results
 
 # note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
-def ceph_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, name="ceph_write_pipeline"):
+def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, name="ceph_write_pipeline"):
+    """
+    Create a ceph write pipeline for aligner results (that outputs a BufferList, which we must wait on for completion
+    :param upstream_tensors: a list of aligner output tensors of type (key, first ordinal, number of records, pool name, record id, column handle)
+    :param user_name: 
+    :param cluster_name: 
+    :param ceph_conf_path: 
+    :param name: 
+    :return: yields the output of ceph write columns
+    """
     def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
-        return persona_ops.ceph_writer(cluster_name=cluster_name,
-                                       user_name=user_name,
-                                       ceph_conf_path=ceph_conf_path,
-                                       pool_name=pool_name,
-                                       record_id=record_id,
-                                       num_records=num_records,
-                                       first_ordinal=first_ordinal,
-                                       file_path=key,
-                                       column_handle=column_handle)
+        return persona_ops.agd_ceph_write_columns(cluster_name=cluster_name,
+                                                  user_name=user_name,
+                                                  ceph_conf_path=ceph_conf_path,
+                                                  pool_name=pool_name,
+                                                  record_id=record_id,
+                                                  num_records=num_records,
+                                                  first_ordinal=first_ordinal,
+                                                  file_path=key,
+                                                  column_handle=column_handle)
+
+    for key, first_ordinal, num_records, pool_name, record_id, column_handle in upstream_tensors:
+        yield make_ceph_writer(key=key,
+                               first_ordinal=first_ordinal,
+                               num_records=num_records,
+                               record_id=record_id,
+                               pool_name=pool_name,
+                               column_handle=column_handle)
 
 def local_read_pipeline(upstream_tensors, columns, name="local_read_pipeline"):
     columns = validate_columns(columns=columns)
