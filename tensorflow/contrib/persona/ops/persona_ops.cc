@@ -366,16 +366,13 @@ Chunk names must be in contiguous order.
   )doc");
 
   REGISTER_OP("AGDWriteColumns")
-  .Attr("record_id: string")
   .Attr("record_type: list({'base', 'qual', 'metadata', 'results'})")
-  .Attr("output_dir: string = ''")
   .Input("column_handle: string")
   .Input("file_path: string")
-  // TODO these can be collapsed into a vec(3) if that would help performance
+  .Input("record_id: string")
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
   .Output("key_out: string")
-  .Output("first_ordinal_out: int64")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
       TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
@@ -385,13 +382,10 @@ Chunk names must be in contiguous order.
         return Internal("column_handle must have dimensions {2}. Got ", dim_val);
       }
 
-      for (int i = 1; i < 4; i++) {
+      for (int i = 1; i < 5; i++) {
         TF_RETURN_IF_ERROR(c->WithRank(c->input(i), 0, &sh));
       }
-
-      for (int i = 0; i < 2; i++) {
-        c->set_output(i, c->input(1));
-      }
+      c->set_output(0, c->input(1)); // it will be copied from this param
 
       return Status::OK();
     })

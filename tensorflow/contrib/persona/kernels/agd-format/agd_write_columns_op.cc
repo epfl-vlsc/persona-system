@@ -26,18 +26,11 @@ namespace tensorflow {
   public:
     AGDWriteColumnsOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       using namespace format;
-      string rec_id;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("record_id", &rec_id));
-      auto max_size = sizeof(format::FileHeader::string_id);
-      OP_REQUIRES(ctx, rec_id.length() < max_size,
-                  Internal("record_id for column header '", rec_id, "' greater than 32 characters"));
-
       vector<string> rec_types;
       OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &rec_types));
       for (size_t i = 0; i < rec_types.size(); ++i) {
         auto& t_in = rec_types[i];
         format::FileHeader header;
-        strncpy(header.string_id, rec_id.c_str(), max_size);
 
         RecordType t;
         if (t_in.compare("base") == 0) {
@@ -54,29 +47,18 @@ namespace tensorflow {
         header.compression_type = CompressionType::UNCOMPRESSED;
         headers_.push_back(header);
       }
-
-      string outdir;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("output_dir", &outdir));
-
-      if (!outdir.empty()) {
-        struct stat outdir_info;
-        OP_REQUIRES(ctx, stat(outdir.c_str(), &outdir_info) == 0, Internal("Unable to stat path: ", outdir));
-        OP_REQUIRES(ctx, S_ISDIR(outdir_info.st_mode), Internal("Path ", outdir, " is not a directory"));
-      } // else it's just the current working directory
-      if (outdir.back() != '/') {
-        outdir.push_back('/');
-      }
-      record_prefix_ = outdir;
     }
 
     void Compute(OpKernelContext* ctx) override {
-      const Tensor *path, *column_t;
-      OP_REQUIRES_OK(ctx, ctx->input("file_path", &path));
+      const Tensor *path_t, *column_t, *record_id_t;
+      OP_REQUIRES_OK(ctx, ctx->input("file_path", &path_t));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
-      auto filepath = path->scalar<string>()();
+      OP_REQUIRES_OK(ctx, ctx->input("record_id", &record_id_t));
+      auto filepath = path_t->scalar<string>()();
       auto column_vec = column_t->vec<string>();
+      auto record_id = record_id_t->scalar<string>()();
 
-      OP_REQUIRES_OK(ctx, InitHeaders(ctx));
+      OP_REQUIRES_OK(ctx, InitHeaders(ctx, record_id));
 
       ResourceContainer<BufferList> *columns;
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &columns));
@@ -90,9 +72,9 @@ namespace tensorflow {
       //start = chrono::high_resolution_clock::now();
       auto s = Status::OK();
 
-      for (size_t i = 0; i < num_buffers && s.ok(); ++i) {
+      for (int i = 0; i < num_buffers && s.ok(); ++i) {
 
-        string full_path(record_prefix_ + filepath + record_suffixes_[i]);
+        string full_path(filepath + record_suffixes_[i]);
 
         FILE *file_out = fopen(full_path.c_str(), "w+");
         // TODO get errno out of file
@@ -100,34 +82,27 @@ namespace tensorflow {
 
         OP_REQUIRES_OK(ctx, WriteHeader(ctx, file_out, i));
 
-        int fwrite_ret;
+        size_t fwrite_ret;
 
         auto &index = (*buf_list)[i].index();
         auto s1 = index.size();
         if (s1 == 0) {
-          OP_REQUIRES(ctx, s1 != 0,
-                      Internal("Parallel column writer got an empty index entry (size 0)!"));
-        }
-        fwrite_ret = fwrite(&index[0], s1, 1, file_out);
-        if (fwrite_ret != 1) {
-          s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
-          break;
-        }
-        if (s.ok()) {
-          auto &data = (*buf_list)[i].data();
-
-          fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
+          s = Internal("Parallel column writer got an empty index entry (size 0)!");
+        } else {
+          fwrite_ret = fwrite(&index[0], s1, 1, file_out);
           if (fwrite_ret != 1) {
-            s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", data.size());
-            break;
+            s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret);
+          } else if (s.ok()) {
+            auto &data = (*buf_list)[i].data();
+
+            fwrite_ret = fwrite(&data[0], data.size(), 1, file_out);
+            if (fwrite_ret != 1) {
+              s = Internal("fwrite (uncompressed) gave non-1 return value: ", fwrite_ret, " when trying to write item of size ", data.size());
+            }
           }
         }
 
         fclose(file_out);
-
-        if (s.ok() && fwrite_ret != 1) {
-          s = Internal("Received non-1 fwrite return value: ", fwrite_ret);
-        }
       }
 
       OP_REQUIRES_OK(ctx, s); // in case s screws up
@@ -135,12 +110,12 @@ namespace tensorflow {
       Tensor *key_out;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &key_out));
       key_out->scalar<string>()() = filepath;
-
     }
 
   private:
 
-    Status InitHeaders(OpKernelContext *ctx) {
+    inline
+    Status InitHeaders(OpKernelContext *ctx, const string &record_id) {
       uint64_t first_ord, last_ord;
       const Tensor *tensor;
       TF_RETURN_IF_ERROR(ctx->input("first_ordinal", &tensor));
@@ -155,13 +130,18 @@ namespace tensorflow {
         header.last_ordinal = last_ord;
       }
 
-      Tensor *first_ord_out;
-      TF_RETURN_IF_ERROR(ctx->allocate_output("first_ordinal_out", TensorShape({}), &first_ord_out));
-      first_ord_out->scalar<int64>()() = first_ord;
+      if (record_id_ != record_id) {
+        auto copy_size = min(sizeof(record_id.size()), sizeof(format::FileHeader::string_id));
+        for (auto &header : headers_) {
+          strncpy(&header.string_id[0], record_id.c_str(), copy_size);
+        }
+        record_id_ = record_id;
+      }
 
       return Status::OK();
     }
 
+    inline
     Status WriteHeader(OpKernelContext *ctx, FILE *file_out, int index) {
       auto& header = headers_[index];
 
@@ -176,7 +156,7 @@ namespace tensorflow {
 
     chrono::high_resolution_clock::time_point start;
     vector<string> record_suffixes_;
-    string record_prefix_;
+    string record_id_;
     vector<format::FileHeader> headers_;
   };
 
