@@ -120,6 +120,23 @@ def local_write_pipeline(upstream_tensors, name="local_write_pipeline"):
 def chunk_processing_pipeline(upstream_tensors, name="chunk_processing_pipeline"):
     pass
 
+def aligner_pass_around(aligner_kernel, aligner_kwargs, queue_size, *tensors):
+    """
+    Create a tuple of aligner results with tensors that are passed around the outside of aligner
+    e.g. things that are needed for the writers. Tensors are passed around in-order acccording to the list
+    in *tensors
+    :param aligner_kernel: the aligner kernel instantiation type
+    :param aligner_kwargs: args to the passed aligner_kernel
+    :param queue_size: size of the queue for the `args` to be passed around
+    :param tensors: the other arguments (list of tensors) to be passed around
+    :return: 
+    """
+    aligner_output = aligner_kernel(**aligner_kwargs)
+    other_args = batch(tensors=tensors, batch_size=1, capacity=queue_size)
+    return (aligner_output,) + tuple(other_args)
+
+#### old stuff ####
+
 def _parse_pipe(data_in, capacity, process_parallel, buffer_pool, name=None):
   
   to_enqueue = []
