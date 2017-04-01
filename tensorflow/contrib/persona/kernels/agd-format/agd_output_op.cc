@@ -34,10 +34,6 @@ namespace tensorflow {
       readers_.resize(columns_.size());
     }
 
-    ~AGDOutputOp() {
-    }
-  
-   
     Status LoadChunk(OpKernelContext* ctx, string chunk_path) {
 
       LOG(INFO) << "chunk path is " << chunk_path;
@@ -124,10 +120,6 @@ namespace tensorflow {
     }
 
   private:
-    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_bases_;
-    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_qual_;
-    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_meta_;
-    //std::unique_ptr<ReadOnlyMemoryRegion> mmap_results_;
     vector<std::unique_ptr<ReadOnlyMemoryRegion>> mmaps_;
 
     //Buffer bases_buf_, qual_buf_, meta_buf_, results_buf_;
