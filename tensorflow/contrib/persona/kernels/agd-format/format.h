@@ -41,12 +41,8 @@ namespace format {
     uint64_t last_ordinal;
     char string_id[32]; // FIXME: just make it static for now
 
-    FileHeader() {
-      // At least assign these basic fields
-      version_major = current_major;
-      version_minor = current_minor;
-      segment_start = sizeof(FileHeader);
-    }
+    FileHeader() : version_major(current_major), version_minor(current_minor),
+                   segment_start(sizeof(FileHeader)) {}
   };
 
   enum CompressionType {
