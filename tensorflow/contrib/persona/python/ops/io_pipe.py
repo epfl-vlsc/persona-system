@@ -82,25 +82,17 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
                                        read_size=ceph_read_size,
                                        queue_key=key,
                                        buffer_pool=buffer_pool) # buffer_pool is in scope. hooray python!
-
-    def make_reader_groups():
-        for key, pool_name, record_id in upstream_tensors:
-            validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
-            validate_shape_and_dtype(tensor=pool_name, expected_shape=scalar_shape, expected_dtype=dtypes.string)
-            chunk_buffers = tuple(make_ceph_reader(key=column_key, pool_name=pool_name) for column_key in expand_column_extensions(key=key, columns=columns))
-            yield key, pool_name, record_id, chunk_buffers
-
     columns = validate_columns(columns=columns)
 
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(size=10, bound=False)
     assert isinstance(buffer_pool, persona_ops.buffer_pool)
 
-    ceph_read_results = batch_join_pdq(tuple((key, pool_name, record_id, chunk_buffers) for key, pool_name, record_id, chunk_buffers in make_reader_groups()),
-                                       batch_size=1,
-                                       enqueue_many=False,
-                                       num_dq_ops=downstream_parallel)
-    return ceph_read_results
+    for key, pool_name, record_id in upstream_tensors:
+        validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
+        validate_shape_and_dtype(tensor=pool_name, expected_shape=scalar_shape, expected_dtype=dtypes.string)
+        chunk_buffers = tuple(make_ceph_reader(key=column_key, pool_name=pool_name) for column_key in expand_column_extensions(key=key, columns=columns))
+        yield key, pool_name, record_id, chunk_buffers
 
 # note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
 def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, name="ceph_write_pipeline"):
