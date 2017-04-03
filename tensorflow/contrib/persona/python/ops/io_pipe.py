@@ -132,6 +132,16 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
                                column_handle=column_handle)
 
 def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mmap_pool_args=pool_default_args, name="local_read_pipeline"):
+    """
+    Create a read pipeline to read from the filesystem
+    :param upstream_tensors: a list of file keys, as extracted from the metadata file
+    :param columns: a list of columns to extract. See `valid_columns` for the set of valid columns
+    :param sync: whether or not to synchronously map the files
+    :param mmap_pool: if not None, provide a persona_ops.file_m_map pool to this method
+    :param mmap_pool_args:
+    :param name: 
+    :return: yield a tuple of 'file_path, persona_ops.file_m_map' for every tensor in upstream_tensors
+    """
     def make_reader(input_file_basename):
         prev = []
         for full_filename in expand_column_extensions(key=input_file_basename, columns=columns):
@@ -142,13 +152,35 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
 
     if mmap_pool is None:
         mmap_pool = persona_ops.m_map_pool(name=name, **mmap_pool_args)
+    assert isinstance(mmap_pool, persona_ops.m_map_pool)
 
     assert len(upstream_tensors) > 0
     for file_path in upstream_tensors:
         yield file_path, make_reader(input_file_basename=file_path)
 
-def local_write_pipeline(upstream_tensors, name="local_write_pipeline"):
-    pass
+def local_write_pipeline(upstream_tensors, record_type="results", name="local_write_pipeline"):
+    """
+    Create a local write pipeline, based on the number of upstream tensors received.
+    :param upstream_tensors: a list of tensor tuples of type: buffer_list_handle, record_id, first_ordinal, num_records, file_path
+    :param record_type: the type of results to write. See persona_ops.cc for valid types
+    :param name: 
+    :return: yield a writer for each record to be written in upstream tensors
+    """
+    def make_writer(record_id, file_path, first_ordinal, num_records, bl_handle):
+        return persona_ops.agd_write_columns(record_id=record_id,
+                                             record_type=record_type,
+                                             column_handle=bl_handle,
+                                             first_ordinal=first_ordinal,
+                                             num_records=num_records,
+                                             file_path=file_path)
+
+    assert len(upstream_tensors) > 0
+    for buffer_list_handle, record_id, first_ordinal, num_records, file_path in upstream_tensors: # TODO check the order! assume pass-around thingy will be used
+        yield make_writer(record_id=record_id,
+                          file_path=file_path,
+                          num_records=num_records,
+                          first_ordinal=first_ordinal,
+                          bl_handle=buffer_list_handle)
 
 def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_args=pool_default_args, name="agd_reader_pipeline"):
     """
