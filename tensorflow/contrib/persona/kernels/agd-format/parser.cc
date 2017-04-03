@@ -119,7 +119,7 @@ namespace tensorflow {
     return &a;
   }
 
-  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records, bool unpack, bool twobit)
+  Status RecordParser::ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, uint64_t *first_ordinal, uint32_t *num_records, string &record_id, bool unpack, bool twobit)
   {
     using namespace errors;
     using namespace format;
@@ -228,6 +228,7 @@ namespace tensorflow {
 
     *first_ordinal = file_header->first_ordinal;
     *num_records = index_size;
+    record_id.assign(&file_header->string_id[0], strnlen(&file_header->string_id[0], sizeof(file_header->string_id)));
     return Status::OK();
   }
 

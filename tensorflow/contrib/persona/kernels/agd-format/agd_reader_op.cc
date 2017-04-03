@@ -50,11 +50,13 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->input("file_handle", &file_handle_t));
       auto fileset = file_handle_t->vec<string>();
 
-      Tensor *num_records_t, *first_ordinals_t;
+      Tensor *num_records_t, *first_ordinals_t, *record_id_t;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records", scalar_shape_, &num_records_t));
       OP_REQUIRES_OK(ctx, ctx->allocate_output("first_ordinal", scalar_shape_, &first_ordinals_t));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("record_id", scalar_shape_, &record_id_t));
       auto num_records = num_records_t->scalar<int32>();
       auto first_ordinals = first_ordinals_t->scalar<int64>();
+      auto record_id = record_id_t->scalar<string>();
 
       // ALl output is set up at this point
 
@@ -72,7 +74,7 @@ namespace tensorflow {
           output_ptr->reserve(250*1024*1024); // make sure its big enough if its fresh.
 
           OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
-                                                   verify_, output_ptr, &first_ord_, &num_recs_, unpack_, twobit_));
+                                                   verify_, output_ptr, &first_ord_, &num_recs_, record_id_, unpack_, twobit_));
           OP_REQUIRES_OK(ctx, output_buffer_rc->allocate_output("processed_buffers", ctx));
           num_records() = num_recs_;
           first_ordinals() = first_ord_;
@@ -91,6 +93,7 @@ namespace tensorflow {
 
     uint32_t num_recs_;
     uint64_t first_ord_;
+    string record_id_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("AGDReader").Device(DEVICE_CPU), AGDReaderOp);
