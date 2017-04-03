@@ -104,19 +104,19 @@ class SnapAlignSingleOp : public OpKernel {
 
     Status GetResultBufferLists(OpKernelContext* ctx)
     {
-      ResourceContainer<BufferList> **ctr;
+      ResourceContainer<BufferList> *ctr;
       Tensor* out_t;
       buffer_lists_.clear();
       buffer_lists_.reserve(max_secondary_+1);
       TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", TensorShape({max_secondary_+1, 2}), &out_t));
       auto out_matrix = out_t->matrix<string>();
       for (int i = 0; i < max_secondary_+1; i++) {
-        TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
+        TF_RETURN_IF_ERROR(buflist_pool_->GetResource(&ctr));
         //core::ScopedUnref a(reads_container);
-        (*ctr)->get()->reset();
-        buffer_lists_.push_back((*ctr)->get());
-        out_matrix(i, 0) = (*ctr)->container();
-        out_matrix(i, 1) = (*ctr)->name();
+        ctr->get()->reset();
+        buffer_lists_.push_back(ctr->get());
+        out_matrix(i, 0) = ctr->container();
+        out_matrix(i, 1) = ctr->name();
       }
 
       return Status::OK();
@@ -263,6 +263,7 @@ private:
       int num_secondary_results;
       SAMFormat format(options_->useM);
       vector<AlignmentResultBuilder> result_builders;
+      result_builders.resize(1+max_secondary_);
       string cigarString;
       int flag;
       Read snap_read;
