@@ -627,6 +627,7 @@ def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, cep
     final_write_out.append([file_key_passthru, num_records, first_o_passthru])
 
   sink_queue = batch_join_pdq(final_write_out, capacity=1, num_dq_ops=1, batch_size=1, name=name)
+  return sink_queue[0]
 
 """
 interpret pairs in a buffer_list as subchunks of a single column write it out to ceph 
