@@ -12,6 +12,7 @@
 #include "util.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
 #include <list>
+#include <cstring>
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -54,44 +55,54 @@ namespace tensorflow {
       header_.record_type = static_cast<uint8_t>(t);
       header_.compression_type = format::CompressionType::UNCOMPRESSED;
 
-      // ceph cluster init
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_name", &cluster_name));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("user_name", &user_name));
+      // ceph cluster_ init
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("cluster_name_", &cluster_name_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("user_name_", &user_name_));
 
       int ret = 0;
-      /* Initialize the cluster handle with the "ceph" cluster name and "client.admin" user */
-      ret = cluster.init2(user_name.c_str(), cluster_name.c_str(), 0);
-      OP_REQUIRES(ctx, ret == 0, Internal("Ceph cluster init2\nUsername: ", user_name, "\nCluster Name: ", cluster_name, "\nReturn code: ", ret));
+      /* Initialize the cluster_ handle with the "ceph" cluster_ name and "client.admin" user */
+      ret = cluster_.init2(user_name_.c_str(), cluster_name_.c_str(), 0);
+      OP_REQUIRES(ctx, ret == 0, Internal("Ceph cluster_ init2\nUsername: ", user_name_, "\nCluster Name: ", cluster_name_, "\nReturn code: ", ret));
 
-      /* Read a Ceph configuration file to configure the cluster handle. */
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("ceph_conf_path", &ceph_conf));
-      ret = cluster.conf_read_file(ceph_conf.c_str());
-      OP_REQUIRES(ctx, ret == 0, Internal("Ceph conf file at '", ceph_conf, "' returned ", ret, " when attempting to open"));
+      /* Read a Ceph configuration file to configure the cluster_ handle. */
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("ceph_conf_path", &ceph_conf_));
+      ret = cluster_.conf_read_file(ceph_conf_.c_str());
+      OP_REQUIRES(ctx, ret == 0, Internal("Ceph conf file at '", ceph_conf_, "' returned ", ret, " when attempting to open"));
 
-      /* Connect to the cluster */
-      ret = cluster.connect();
+      /* Connect to the cluster_ */
+      ret = cluster_.connect();
       OP_REQUIRES(ctx, ret == 0, Internal("Cluster connect returned: ", ret));
-
-      /* Set up IO context */
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("pool_name", &pool_name));
-      ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
-      OP_REQUIRES(ctx, ret == 0, Internal("ceph writer couldn't set up ioctx! error code: ", ret));
     }
 
     ~CephWriterOp() {
       VLOG(INFO) << "Ceph writer " << this << " finishing\n";
       //io_ctx.watch_flush();
       io_ctx.close();
-      cluster.shutdown();
+      cluster_.shutdown();
     }
 
     void Compute(OpKernelContext* ctx) override {
       auto start = chrono::high_resolution_clock::now();
-      const Tensor *path, *column_t;
+      const Tensor *path, *column_t, *pool_name_t, *record_id_t;
+      int ret;
+
       OP_REQUIRES_OK(ctx, ctx->input("file_name", &path));
       OP_REQUIRES_OK(ctx, ctx->input("column_handle", &column_t));
+      OP_REQUIRES_OK(ctx, ctx->input("pool_name", &pool_name_t));
+      OP_REQUIRES_OK(ctx, ctx->input("record_id", &record_id_t));
       auto filepath = path->scalar<string>()();
       auto column_vec = column_t->vec<string>();
+      auto pool_name = pool_name_t->scalar<string>()();
+      auto record_id = record_id_t->scalar<string>()();
+
+      if (pool_name != io_ctx.get_pool_name()) {
+        ret = cluster_.ioctx_create(pool_name.c_str(), io_ctx);
+        OP_REQUIRES(ctx, ret == 0, Internal("ceph writer couldn't set up ioctx! error code: ", ret));
+      }
+
+      if (strncmp(record_id.c_str(), &header_.string_id[0], sizeof(header_.string_id)) != 0) {
+        strncpy(&header_.string_id[0], record_id.c_str(), sizeof(header_.string_id));
+      }
 
       ResourceContainer<BufferList> *column;
       OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(column_vec(0), column_vec(1), &column));
@@ -102,7 +113,7 @@ namespace tensorflow {
       buf_list->wait_for_ready();
 
       string full_path(filepath + record_suffix_);
-      PrepHeader(ctx);
+      OP_REQUIRES_OK(ctx, PrepHeader(ctx));
 
       auto num_buffers = buf_list->size();
       size_t i;
@@ -127,7 +138,7 @@ namespace tensorflow {
       write_buf.push_back(ceph::buffer::create_static(index_.size(), const_cast<char*>(index_.data())));
       write_buf.push_back(ceph::buffer::create_static(payload_.size(), const_cast<char*>(payload_.data())));
 
-      auto ret = io_ctx.write_full(full_path, write_buf);
+      ret = io_ctx.write_full(full_path, write_buf);
       OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
       auto duration = TRACEPOINT_DURATION_CALC(write_only_start);
       tracepoint(bioflow, ceph_write, duration);
@@ -141,16 +152,13 @@ namespace tensorflow {
     }
 
   private:
-    string cluster_name;
-    string user_name;
-    string pool_name;
-    string ceph_conf;
+    librados::bufferlist write_buf;
+    string cluster_name_, user_name_, ceph_conf_, record_suffix_;
     Buffer index_, payload_;
-    librados::Rados cluster;
+    librados::Rados cluster_;
     librados::IoCtx io_ctx;
     format::FileHeader header_;
     bool compress_ = false;
-    string record_suffix_;
 
     Status PrepHeader(OpKernelContext *ctx) {
       const Tensor *tensor;
@@ -163,35 +171,6 @@ namespace tensorflow {
       tmp64 = static_cast<decltype(tmp64)>(tensor->scalar<int32>()());
       header_.last_ordinal = header_.first_ordinal + tmp64;
 
-      return Status::OK();
-    }
-
-    /* Write an object to Ceph synchronously */
-    librados::bufferlist write_buf;
-    Status CephWriteColumn(string& file_key, char* buf, size_t len)
-    {
-      int ret = 0;
-      write_buf.push_back(ceph::buffer::create_static(len, buf));
-
-      // Create I/O Completion.
-      librados::AioCompletion *write_completion = librados::Rados::aio_create_completion();
-      ret = io_ctx.aio_write_full(file_key, write_completion, write_buf);
-      if (ret < 0) {
-        return Internal("Couldn't start read object! error: ", ret);
-      }
-
-      // Wait for the request to complete, and check that it succeeded.
-      write_completion->wait_for_complete();
-      ret = write_completion->get_return_value();
-      if (ret < 0) {
-        return Internal("Couldn't write object! error: ", ret);
-      }
-      /*ret = io_ctx.write_full(file_key, write_buf);
-      if (ret < 0) {
-        return Internal("Couldn't write object! error: ", ret);
-      }*/
-      write_buf.clear();
-      write_completion->release();
       return Status::OK();
     }
   };

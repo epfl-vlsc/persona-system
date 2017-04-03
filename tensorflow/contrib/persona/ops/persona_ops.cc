@@ -437,13 +437,12 @@ we can use it in other pipelines where writers are used
   REGISTER_OP("CephReader")
   .Attr("cluster_name: string")
   .Attr("user_name: string")
-  .Attr("pool_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("read_size: int")
   .Input("buffer_handle: Ref(string)")
   .Input("queue_key: string")
+  .Input("pool_name: string")
   .Output("file_handle: string")
-  .Output("file_name: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
       TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
@@ -453,9 +452,8 @@ we can use it in other pipelines where writers are used
         return Internal("buffer_handle must have dimensions {2}. Got ", dim_val);
       }
       TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 0, &sh));
-      for (int i = 0; i < 2; i++) {
-        c->set_output(i, c->input(i));
-      }
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 0, &sh));
+      c->set_output(0, c->input(0));
       return Status::OK();
     })
   .Doc(R"doc(
@@ -471,15 +469,15 @@ file_name: a Tensor() of string for the unique key for this file
   REGISTER_OP("CephWriter")
   .Attr("cluster_name: string")
   .Attr("user_name: string")
-  .Attr("pool_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("compress: bool")
-  .Attr("record_id: string")
   .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
   .Input("column_handle: string")
   .Input("file_name: string")
   .Input("first_ordinal: int64")
   .Input("num_records: int32")
+  .Input("pool_name: string")
+  .Input("record_id: string")
   .Output("key_out: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
@@ -489,7 +487,7 @@ file_name: a Tensor() of string for the unique key for this file
       if (dim_val != 2) {
         return Internal("buffer_handle must have dimensions {2}. Got ", dim_val);
       }
-      for (int i = 1; i < 4; i++) {
+      for (int i = 1; i < 6; i++) {
         TF_RETURN_IF_ERROR(c->WithRank(c->input(i), 0, &sh));
       }
 
