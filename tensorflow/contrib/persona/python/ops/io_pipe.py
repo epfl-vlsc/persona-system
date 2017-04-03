@@ -223,7 +223,7 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
                        for upstream_tensors in upstream_tensorz)
     for processed_tensors in process_tensorz:
-        output_buffers, num_recordss, first_ordinalss = itertools.chain.from_iterable(processed_tensors)
+        output_buffers, num_recordss, first_ordinalss = itertools.chain.from_iterable(*processed_tensors)
         yield output_buffers, num_recordss[0], first_ordinalss[0]
 
 def aligner_pass_around(aligner_kernel, aligner_kwargs, queue_size, *tensors):
