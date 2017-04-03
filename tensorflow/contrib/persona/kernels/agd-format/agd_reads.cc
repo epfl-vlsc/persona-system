@@ -155,6 +155,7 @@ namespace tensorflow {
       //  // weak has a few false positives, but is better for loops, according to the spec
       //} while (!sub_resource_index_.compare_exchange_weak(idx, next));
     *rr = &sub_resources_[a];
+    b.clear();
     for (auto bl : buffer_lists_)
       b.push_back(&(*bl)[a]);
 
