@@ -1,0 +1,10 @@
+# This just simply installs the latest package on top of the persona build
+# This should be called from a script
+
+FROM epflpersona/run:latest
+
+label maintainer "sam.whitlock@epfl.ch"
+
+ARG pip_source
+ADD $pip_source /
+RUN pip3 install --upgrade /tensorflow*.whl

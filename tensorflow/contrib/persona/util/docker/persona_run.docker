@@ -1,0 +1,23 @@
+# this image builds all the dependencies to run the Persona code
+# Note that this is used as a dependency for the image that is used to build the
+# pip package
+
+FROM ubuntu:16.04
+
+label maintainer "sam.whitlock@epfl.ch"
+
+RUN apt-get update
+
+RUN apt-get install -y \
+    python3-pip \
+    zlib1g-dev \
+    libzmq-dev \
+    libboost-system-dev \
+    libboost-timer-dev \
+    librados-dev \
+    libs3-dev \
+    liblttng-ust-dev \
+    libsparsehash-dev
+
+RUN pip3 install --upgrade pip setuptools wheel
+RUN pip3 install numpy
