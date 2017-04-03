@@ -57,7 +57,7 @@ def expand_column_extensions(key, columns):
     for c in columns:
         yield string_ops.string_join(inputs=[key, c], separator=".", name="AGD_column_expansion")
 
-def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, columns, downstream_parallel,
+def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, columns,
                        ceph_read_size=2**26, buffer_pool=None, name="ceph_read_pipeline"):
     """
     Create a ceph input pipeline.
@@ -88,11 +88,11 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
         buffer_pool = persona_ops.buffer_pool(size=10, bound=False)
     assert isinstance(buffer_pool, persona_ops.buffer_pool)
 
-    for key, pool_name, record_id in upstream_tensors:
+    for key, pool_name in upstream_tensors:
         validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
         validate_shape_and_dtype(tensor=pool_name, expected_shape=scalar_shape, expected_dtype=dtypes.string)
         chunk_buffers = tuple(make_ceph_reader(key=column_key, pool_name=pool_name) for column_key in expand_column_extensions(key=key, columns=columns))
-        yield key, pool_name, record_id, chunk_buffers
+        yield key, pool_name, chunk_buffers
 
 # note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
 def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, name="ceph_write_pipeline"):
