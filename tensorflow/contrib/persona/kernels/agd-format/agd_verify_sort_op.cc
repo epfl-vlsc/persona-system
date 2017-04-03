@@ -36,7 +36,7 @@ namespace tensorflow {
       TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + chunk_path + ".results", &mmap_results_));
       results_buf_.reset();
       TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmap_results_->data(), mmap_results_->length(),
-            false, &results_buf_, &results_ord_, &num_results_));
+            false, &results_buf_, &results_ord_, &num_results_, record_id_));
       return Status::OK();
     }
 
@@ -91,9 +91,7 @@ namespace tensorflow {
     uint64_t results_ord_;
     uint32_t num_results_;
     RecordParser rec_parser_;
-    string path_;
-    bool unpack_;
-
+    string path_, record_id_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("AGDVerifySort").Device(DEVICE_CPU), AGDVerifySortOp);
