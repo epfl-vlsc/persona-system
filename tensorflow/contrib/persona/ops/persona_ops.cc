@@ -245,7 +245,6 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
 Takes a vector of string keys for AGD chunks, prefixed by `path`.
 
 Prints records to stdout from record indices `start` to `finish`.
-
   )doc");
 
   REGISTER_OP("AGDReader")
@@ -260,15 +259,15 @@ Prints records to stdout from record indices `start` to `finish`.
   .Output("processed_buffers: string")
   .Output("num_records: int32")
   .Output("first_ordinal: int64")
+  .Output("record_id: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 2, &sh));
-      auto dim_handle = c->Dim(sh, 0);
-      auto dim_val = c->Value(dim_handle);
+      TF_RETURN_IF_ERROR(check_vector(c, 1, 2));
 
-      c->set_output(0, c->input(1));
-      c->set_output(1, c->Vector(dim_val));
-      c->set_output(2, c->Vector(dim_val));
+      c->set_output(0, c->Vector(2));
+      for (int i = 1; i < 4; i++) {
+        c->set_output(i, c->Scalar());
+      }
 
       return Status::OK();
     })

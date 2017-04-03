@@ -91,10 +91,10 @@ namespace tensorflow {
         {
           ResourceReleaser<Data> rr(*column_data);
           data = column_data->get();
-
-          OP_REQUIRES_OK(ctx, WriteFile(file_path, data, header_info));
-
-          data->release();
+          {
+            DataReleaser dr(*data);
+            OP_REQUIRES_OK(ctx, WriteFile(file_path, data, header_info));
+          }
         }
       }
 
