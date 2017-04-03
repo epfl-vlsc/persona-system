@@ -28,14 +28,6 @@ namespace tensorflow {
   namespace {
     const string op_name("AGDMergeMetadata");
 
-    void resource_releaser(ResourceContainer<Data> *data) {
-      core::ScopedUnref a(data);
-      {
-        ResourceReleaser<Data> a1(*data);
-        data->get()->release();
-      }
-    }
-
     class ColumnCursor {
     public:
       ColumnCursor(AGDRecordReader &&metadata, vector<AGDRecordReader> &&other_columns) :
@@ -105,7 +97,6 @@ namespace tensorflow {
 
   }
 
-
   class AGDMergeMetadataOp : public OpKernel {
   public:
     AGDMergeMetadataOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
@@ -131,7 +122,7 @@ namespace tensorflow {
       auto rsrc_mgr = ctx->resource_manager();
 
       vector<ColumnCursor> columns;
-      vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>> releasers;
+      vector<unique_ptr<ResourceContainer<Data>, decltype(DataResourceReleaser)&>> releasers;
 
       // Note: we don't keep the actual ColumnCursors in here. all the move and copy ops would get expensive!
       priority_queue<MetadataScore, vector<MetadataScore>, ScoreComparator> score_heap;
@@ -151,7 +142,7 @@ namespace tensorflow {
                                              chunk_group_handles(super_chunk, column, 1), &data));
         AGDRecordReader metadata_column{ AGDRecordReader::fromUncompressed(data, &success) };
         OP_REQUIRES(ctx, success, Internal("Unable to parse Metadata fromUncompressed for Metadata Merge"));
-        releasers.push_back(move(decltype(releasers)::value_type(data, resource_releaser)));
+        releasers.push_back(move(decltype(releasers)::value_type(data, DataResourceReleaser)));
 
         // Then we look up the rest of the columns
         vector<AGDRecordReader> other_columns;
@@ -162,7 +153,7 @@ namespace tensorflow {
           AGDRecordReader other_column{ AGDRecordReader::fromUncompressed(data, &success) };
           OP_REQUIRES(ctx, success, Internal("Unable to parse other column fromUncompressed for Metadata Merge"));
           other_columns.push_back(move(other_column));
-          releasers.push_back(move(decltype(releasers)::value_type(data, resource_releaser)));
+          releasers.push_back(move(decltype(releasers)::value_type(data, DataResourceReleaser)));
         }
 
         ColumnCursor a(move(metadata_column), move(other_columns));

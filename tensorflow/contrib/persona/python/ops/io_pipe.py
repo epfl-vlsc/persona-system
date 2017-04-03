@@ -94,6 +94,7 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
 
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(size=10, bound=False)
+    assert isinstance(buffer_pool, persona_ops.buffer_pool)
 
     ceph_read_results = batch_join_pdq(tuple((key, pool_name, record_id, chunk_buffers) for key, pool_name, record_id, chunk_buffers in make_reader_groups()),
                                        batch_size=1,
@@ -197,6 +198,7 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer
     """
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
+    assert isinstance(buffer_pool, persona_ops.buffer_pool)
     assert len(upstream_tensors) > 0
     for upstream_tensor in upstream_tensors:
         ut_shape = upstream_tensor.get_shape()
@@ -224,6 +226,7 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     """
     if buffer_pool is None and share_buffer_pool:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
+    assert isinstance(buffer_pool, persona_ops.buffer_pool)
     assert len(upstream_tensorz) > 0
     process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
                        for upstream_tensors in upstream_tensorz)
