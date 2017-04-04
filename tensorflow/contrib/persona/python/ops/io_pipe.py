@@ -116,7 +116,7 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
                                                   file_path=key,
                                                   column_handle=column_handle)
 
-    for key, first_ordinal, num_records, pool_name, record_id, column_handle in upstream_tensors:
+    for key, pool_name, num_records, first_ordinal, record_id, column_handle in upstream_tensors:
         yield make_ceph_writer(key=key,
                                first_ordinal=first_ordinal,
                                num_records=num_records,
@@ -186,7 +186,7 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer
     :param buffer_pool: if not None, use this as the buffer_pool, else create buffer_pool
     :param buffer_pool_default_args: the arguments to make the buffer_pool, if it is None
     :param name: 
-    :return: yields a tuple of output_buffer, num_records, first_ordinal
+    :return: yields a tuple of output_buffer, num_records, first_ordinal, record_id
     """
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
@@ -198,48 +198,64 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer
             raise Exception("AGD_Reader pipeline encounter Tensor with shape {actual}, but expected {expected}".format(
                 actual=ut_shape, expected=scalar_shape
             ))
-        output_bufferz, num_recordz, first_ordinalz = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
+        output_buffer, num_records, first_ordinal, record_id = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
                                                                              verify=verify, name="agd_reader")
-        output_buffer = array_ops.unstack(output_bufferz, name="output_buffer_unstack")[0]
-        num_records = array_ops.unstack(num_recordz, name="num_record_unstack")[0]
-        first_ordinal = array_ops.unstack(first_ordinalz, name="first_ordinal_unstack")[0]
-        yield output_buffer, num_records, first_ordinal
+        yield output_buffer, num_records, first_ordinal, record_id
 
 def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, share_buffer_pool=True, buffer_pool_args=pool_default_args, name="agd_reader_multi_column_pipeline"):
     """
-    Create an AGDReader pipeline for an iterable of columns. Each column group is assumed to have the same first ordinal and number of records
+    Create an AGDReader pipeline for an iterable of columns. Each column group is assumed to have the same first ordinal, number of records, and record id.
     :param upstream_tensorz: a list of list of tensors, each item being a column group
     :param verify: whether or not to invoke the verification for AGD columns
     :param buffer_pool: pass in a buffer_pool to reuse
     :param share_buffer_pool: if buffer_pool is not passed in, create one to share among all the AGDReader instances
     :param buffer_pool_args: special buffer pool args, if it's created
     :param name: 
-    :return: yield [output_buffer_handles], num_records, first_ordinal, in order, for each column group in upstream_tensorz
+    :return: yield [output_buffer_handles], num_records, first_ordinal, record_id; in order, for each column group in upstream_tensorz
     """
     if buffer_pool is None and share_buffer_pool:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
-    assert isinstance(buffer_pool, persona_ops.buffer_pool)
+    assert isinstance(buffer_pool, persona_ops.buffer_pool) or buffer_pool is None
     assert len(upstream_tensorz) > 0
     process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
                        for upstream_tensors in upstream_tensorz)
     for processed_tensors in process_tensorz:
-        output_buffers, num_recordss, first_ordinalss = itertools.chain.from_iterable(*processed_tensors)
-        yield output_buffers, num_recordss[0], first_ordinalss[0]
+        output_buffers, num_recordss, first_ordinalss, record_ids = itertools.chain.from_iterable(*processed_tensors)
+        yield output_buffers, num_recordss[0], first_ordinalss[0], record_ids[0]
 
-def aligner_pass_around(aligner_kernel, aligner_kwargs, queue_size, *tensors):
+def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=pool_default_args, include_meta=False, name="agd_read_assembler"):
     """
-    Create a tuple of aligner results with tensors that are passed around the outside of aligner
-    e.g. things that are needed for the writers. Tensors are passed around in-order acccording to the list
-    in *tensors
-    :param aligner_kernel: the aligner kernel instantiation type
-    :param aligner_kwargs: args to the passed aligner_kernel
-    :param queue_size: size of the queue for the `args` to be passed around
-    :param tensors: the other arguments (list of tensors) to be passed around
-    :return: 
+    Generate agd_read datatypes from the upstream tensors
+    :param upstream_tensors: a list of tuples of tensors with type: (column_buffers, num_reads)
+    :param agd_read_pool: if not None, pass in an instance of persona_ops.agd_read_pool to share
+    :param agd_read_pool_args: args for deafult construction of agd_read_pool if it's None
+    :param include_meta: create a meta read assembler if passed. The shape of upstream_tensors must be compatible
+    :param name: 
+    :return: yield instances of a tensor with AGDRead instance as the result
     """
-    aligner_output = aligner_kernel(**aligner_kwargs)
-    other_args = batch(tensors=tensors, batch_size=1, capacity=queue_size)
-    return (aligner_output,) + tuple(other_args)
+    def make_agd_read(column_buffers, num_reads):
+        # order on column_buffers: bases, quals, metadata (if exists)
+        if include_meta:
+            assert len(column_buffers) == 3
+            return persona_ops.agd_assembler(agd_read_pool=agd_read_pool,
+                                             base_handle=column_buffers[0],
+                                             qual_handle=column_buffers[1],
+                                             meta_handle=column_buffers[2],
+                                             num_records=num_reads)
+        else:
+            assert len(column_buffers) == 2
+            return persona_ops.no_meta_agd_assembler(agd_read_pool=agd_read_pool,
+                                                     base_handle=column_buffers[0],
+                                                     qual_handle=column_buffers[1],
+                                                     num_records=num_reads)
+
+    if agd_read_pool is None:
+        agd_read_pool = persona_ops.agd_read_pool(**agd_read_pool_args, name="agd_reader_agd_read_pool")
+    assert isinstance(agd_read_pool, persona_ops.agd_read_pool)
+
+    assert len(upstream_tensors) > 0
+    for output_buffers, num_reads in upstream_tensors:
+        yield make_agd_read(column_buffers=output_buffers, num_reads=num_reads)
 
 def join(upstream_tensors, parallel, capacity, multi=False):
     if multi:

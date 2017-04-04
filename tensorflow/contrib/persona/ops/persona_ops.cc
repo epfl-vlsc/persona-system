@@ -799,7 +799,7 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
   .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
-  .Input("output_buffer_queue_handle: resource")
+  .Input("output_buffer_list_queue_handle: resource")
   .SetIsStateful() // TODO not sure if needed
   .SetShapeFn([](InferenceContext *c) {
       int i;
