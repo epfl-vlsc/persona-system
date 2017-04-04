@@ -463,7 +463,6 @@ and writes them to a buffer from a pool of buffers.
 buffer_handle: a handle to the buffer pool
 queue_key: key reference to the filename queue
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
-file_name: a Tensor() of string for the unique key for this file
   )doc");
 
   REGISTER_OP("CephWriter")
@@ -1119,8 +1118,9 @@ Intended to be used for BWAAssembler
   Not all tags for SAM/BAM are currently supported, but support
   is planned. Currently supported is only required tags.
 
-  RG and aux data is currently not supported but will be added soon.
+  RG and aux data is currently not supported. 
 
+  results_handle: matrix of all results columns
   path: path for output .bam file
   pg_id: program id @PG for .bam
   ref_sequences: Reference sequences, @RG tags.

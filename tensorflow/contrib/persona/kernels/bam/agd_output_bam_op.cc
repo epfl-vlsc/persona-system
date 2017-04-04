@@ -184,26 +184,34 @@ namespace tensorflow {
        
         auto num_records = num_records_t->scalar<int32>()();
 
-        ResourceContainer<Data>* bases_data, *qual_data, *meta_data, *result_data;
+        ResourceContainer<Data>* bases_data, *qual_data, *meta_data;
         OP_REQUIRES_OK(ctx, LoadDataResource(ctx, bases_in, &bases_data));
         OP_REQUIRES_OK(ctx, LoadDataResource(ctx, qualities_in, &qual_data));
         OP_REQUIRES_OK(ctx, LoadDataResource(ctx, metadata_in, &meta_data));
-        OP_REQUIRES_OK(ctx, LoadDataResource(ctx, results_in, &result_data));
 
         AGDRecordReader base_reader(bases_data, num_records);
         AGDRecordReader qual_reader(qual_data, num_records);
         AGDRecordReader meta_reader(meta_data, num_records);
-        AGDRecordReader results_reader(result_data, num_records);
-       
+        vector<unique_ptr<AGDRecordReader>> result_readers;
+        vector<ResourceContainer<Data>*> results_data;
+
+        results_data.resize(results_in->dim_size(0));
+        for (size_t i = 0; i < results_in->dim_size(0); i++) {
+
+          OP_REQUIRES_OK(ctx, LoadDataResource(ctx, i, results_in, &results_data[i]));
+          result_readers.push_back(
+                  unique_ptr<AGDRecordReader>(new AGDRecordReader(results_data[i], num_records)));
+        }
+
         const format::AlignmentResult* result;
         const char* data, *meta, *base, *qual;
         const char* cigar;
         size_t len, meta_len, base_len, qual_len, cigar_len;
         int ref_index, mate_ref_index;
-        vector<uint32_t> cigar_vec;
+        vector<uint32> cigar_vec;
         cigar_vec.reserve(20); // should usually be enough
 
-        Status s = results_reader.GetNextRecord(&data, &len);
+        Status s = Status::OK();
         while (s.ok()) {
           OP_REQUIRES_OK(ctx, meta_reader.GetNextRecord(&meta, &meta_len));
           OP_REQUIRES_OK(ctx, base_reader.GetNextRecord(&base, &base_len));
@@ -211,79 +219,87 @@ namespace tensorflow {
           const char* occ = strchr(meta, ' ');
           if (occ) 
             meta_len = occ - meta;
-         
-          result = reinterpret_cast<decltype(result)>(data);
-          cigar = data + sizeof(format::AlignmentResult);
-          cigar_len = len - sizeof(format::AlignmentResult);
-          OP_REQUIRES_OK(ctx, ParseCigar(cigar, cigar_len, cigar_vec));
-          
-          size_t bamSize = BAMAlignment::size((unsigned)meta_len + 1, cigar_vec.size(), base_len, /*auxLen*/0);
-          if ((buffer_size_ - scratch_pos_) < bamSize) {
-            // full buffer, push to compress queue and get a new buffer
-            //LOG(INFO) << "main is getting buf for compress";
-            BufferRef compress_ref;
-            buffer_queue_->pop(compress_ref);
-            //LOG(INFO) << "main is pushing to compress";
-            compress_queue_->push(make_tuple(current_buf_ref_, scratch_pos_, compress_ref, buffer_size_, current_index_));
 
-            //LOG(INFO) << "main is getting fresh buf";
-            current_index_++;
-            buffer_queue_->pop(current_buf_ref_);
-            scratch_ = current_buf_ref_->get();
-            scratch_pos_ = 0;
-          }
-          
-          BAMAlignment* bam = (BAMAlignment*) (scratch_ + scratch_pos_);
-          bam->block_size = (int)bamSize - 4;
+          // write an entry for each result, skip emtpy secondaries
+          for (uint32 i = 0; i < result_readers.size(); i++) {
+            OP_REQUIRES_OK(ctx, result_readers[i]->GetNextRecord(&data, &len));
+            OP_REQUIRES(ctx, i == 0 && len > 0 || i > 0, Internal("BAM output received 0 length primary result."));
 
-          int pos = FindChromosome(result->location_, ref_index);
-          bam->refID = ref_index;
-          bam->pos = pos;
-          bam->l_read_name = (_uint8)meta_len + 1;
-          bam->MAPQ = result->mapq_;
-          
-          int mate_pos = FindChromosome(result->next_location_, mate_ref_index);
+            result = reinterpret_cast<decltype(result)>(data);
+            cigar = data + sizeof(format::AlignmentResult);
+            cigar_len = len - sizeof(format::AlignmentResult);
+            OP_REQUIRES_OK(ctx, ParseCigar(cigar, cigar_len, cigar_vec));
 
-          int refLength = cigar_vec.size() > 0 ? 0 : base_len;
-          for (int i = 0; i < cigar_vec.size(); i++) {
-              refLength += BAMAlignment::CigarCodeToRefBase[cigar_vec[i] & 0xf] * (cigar_vec[i] >> 4);
-          }
+            size_t bamSize = BAMAlignment::size((unsigned) meta_len + 1, cigar_vec.size(), base_len, /*auxLen*/0);
+            if ((buffer_size_ - scratch_pos_) < bamSize) {
+              // full buffer, push to compress queue and get a new buffer
+              //LOG(INFO) << "main is getting buf for compress";
+              BufferRef compress_ref;
+              buffer_queue_->pop(compress_ref);
+              //LOG(INFO) << "main is pushing to compress";
+              compress_queue_->push(
+                      make_tuple(current_buf_ref_, scratch_pos_, compress_ref, buffer_size_, current_index_));
 
-          if (format::IsUnmapped(result)) {
-            if (format::IsNextUnmapped(result)) {
-              bam->bin = BAMAlignment::reg2bin(-1, 0);
-            } else {
-              bam->bin = BAMAlignment::reg2bin((int)mate_pos, (int)mate_pos+1);
+              //LOG(INFO) << "main is getting fresh buf";
+              current_index_++;
+              buffer_queue_->pop(current_buf_ref_);
+              scratch_ = current_buf_ref_->get();
+              scratch_pos_ = 0;
             }
-          } else {
-            bam->bin = BAMAlignment::reg2bin((int)pos, (int)pos + refLength);
+
+            BAMAlignment *bam = (BAMAlignment *) (scratch_ + scratch_pos_);
+            bam->block_size = (int) bamSize - 4;
+
+            int pos = FindChromosome(result->location_, ref_index);
+            bam->refID = ref_index;
+            bam->pos = pos;
+            bam->l_read_name = (_uint8) meta_len + 1;
+            bam->MAPQ = result->mapq_;
+
+            int mate_pos = FindChromosome(result->next_location_, mate_ref_index);
+
+            int refLength = cigar_vec.size() > 0 ? 0 : base_len;
+            for (int i = 0; i < cigar_vec.size(); i++) {
+              refLength += BAMAlignment::CigarCodeToRefBase[cigar_vec[i] & 0xf] * (cigar_vec[i] >> 4);
+            }
+
+            if (format::IsUnmapped(result)) {
+              if (format::IsNextUnmapped(result)) {
+                bam->bin = BAMAlignment::reg2bin(-1, 0);
+              } else {
+                bam->bin = BAMAlignment::reg2bin(mate_pos, mate_pos + 1);
+              }
+            } else {
+              bam->bin = BAMAlignment::reg2bin(pos, pos + refLength);
+            }
+
+            bam->n_cigar_op = cigar_vec.size();
+            bam->FLAG = result->flag_;
+            bam->l_seq = base_len;
+            bam->next_refID = mate_ref_index;
+            bam->next_pos = mate_pos;
+            bam->tlen = (int) result->template_length_;
+            memcpy(bam->read_name(), meta, meta_len);
+            bam->read_name()[meta_len] = 0;
+            memcpy(bam->cigar(), &cigar_vec[0], cigar_vec.size() * 4);
+            BAMAlignment::encodeSeq(bam->seq(), base, base_len);
+            memcpy(bam->qual(), qual, qual_len);
+            for (unsigned i = 0; i < qual_len; i++) {
+              bam->qual()[i] -= '!';
+            }
+            bam->validate();
+
+            scratch_pos_ += bamSize;
+
+           // s = result_readers.GetNextRecord(&data, &len);
           }
-            
-          bam->n_cigar_op = cigar_vec.size();
-          bam->FLAG = result->flag_;
-          bam->l_seq = base_len;
-          bam->next_refID = mate_ref_index;
-          bam->next_pos = mate_pos;
-          bam->tlen = (int)result->template_length_;
-          memcpy(bam->read_name(), meta, meta_len);
-          bam->read_name()[meta_len] = 0;
-          memcpy(bam->cigar(), &cigar_vec[0], cigar_vec.size() * 4);
-          BAMAlignment::encodeSeq(bam->seq(), base, base_len);
-          memcpy(bam->qual(), qual, qual_len);
-          for (unsigned i = 0; i < qual_len; i++) {
-            bam->qual()[i] -= '!';
-          }
-          bam->validate();
-         
-          scratch_pos_ += bamSize;
-        
-          s = results_reader.GetNextRecord(&data, &len);
         }
 
         resource_releaser(bases_data);
         resource_releaser(qual_data);
         resource_releaser(meta_data);
-        resource_releaser(result_data);
+        for (auto d : results_data)
+          resource_releaser(d);
 
       }
 
@@ -388,7 +404,7 @@ namespace tensorflow {
         return ptr - begin;
       }
 
-      Status ParseCigar(const char* cigar, size_t cigar_len, vector<uint32_t>& cigar_vec) {
+      Status ParseCigar(const char* cigar, size_t cigar_len, vector<uint32>& cigar_vec) {
         // cigar parsing adapted from samblaster
         cigar_vec.clear();
         char op;
@@ -397,7 +413,7 @@ namespace tensorflow {
           size_t len = parseNextOp(cigar, op, op_len);
           cigar += len;
           cigar_len -= len;
-          uint32_t val = (op_len << 4) | BAMAlignment::CigarToCode[op];
+          uint32 val = (op_len << 4) | BAMAlignment::CigarToCode[op];
           cigar_vec.push_back(val);
         }
         return Status::OK();
@@ -419,15 +435,24 @@ namespace tensorflow {
         return Status::OK();
       }
 
+      Status LoadDataResource(OpKernelContext* ctx, uint32 index, const Tensor* handle_t,
+                              ResourceContainer<Data>** container) {
+        auto rmgr = ctx->resource_manager();
+        auto handles_mat = handle_t->matrix<string>();
+
+        TF_RETURN_IF_ERROR(rmgr->Lookup(handles_mat(index, 0), handles_mat(index, 1), container));
+        return Status::OK();
+      }
+
       void Init(OpKernelContext* ctx) {
 
         auto compress_func = [this] () {
           
-          int my_id = 0;
+          /*int my_id = 0;
           {
             mutex_lock l(mu_);
             my_id = thread_id_++;
-          }
+          }*/
         
           size_t compressed_size;
           CompressItem item;
@@ -466,11 +491,11 @@ namespace tensorflow {
         };
 
         auto writer_func = [this] () {
-          int my_id = 0;
+          /*int my_id = 0;
           {
             mutex_lock l(mu_);
             my_id = thread_id_++;
-          }
+          }*/
      
           uint32_t index = 0;
           WriteItem item;
@@ -481,6 +506,7 @@ namespace tensorflow {
             }
             // its possible the next index is not in the queue yet
             // wait for it
+            // only works if there is one thread doing this
             if (item.index != index)
               continue;
 
@@ -496,7 +522,7 @@ namespace tensorflow {
 
             //LOG(INFO) << my_id << " writer writing index " << idx;
             if (idx != index) {
-              LOG(INFO) << my_id << " got " << idx << " for index " << index;
+              //LOG(INFO) << my_id << " got " << idx << " for index " << index;
               compute_status_ = Internal("Did not get block index in order!");
               return;
             }
