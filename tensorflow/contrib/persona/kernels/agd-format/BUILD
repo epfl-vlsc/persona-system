@@ -6,15 +6,10 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 cc_library(
     name = "agd_format",
     srcs = glob(["*.cc"]),
-    hdrs = glob([
-        "*.h",
-        "json/src/json.hpp",
-    ]),
+    hdrs = glob(["*.h"]),
     copts = tf_copts() + ["-fexceptions"],
-    # TODO: this needs to be built better, like this: https://github.com/mzhaom/trunk/blob/master/third_party/boost/BUILD
     linkopts = [
         "-lz",
-        "-ls3",
         "-lrados",
         "-lboost_system",
     ],

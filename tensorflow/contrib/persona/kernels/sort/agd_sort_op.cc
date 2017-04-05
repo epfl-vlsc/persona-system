@@ -1,20 +1,13 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/platform/file_system.h"
-#include "tensorflow/core/platform/logging.h"
-#include "format.h"
-#include "column_builder.h"
-#include "agd_record_reader.h"
-#include "compression.h"
-#include "parser.h"
-#include "util.h"
-#include "buffer.h"
-#include <vector>
-#include <cstdint>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-#include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/parser.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/util.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/column_builder.h"
 
 namespace tensorflow {
 

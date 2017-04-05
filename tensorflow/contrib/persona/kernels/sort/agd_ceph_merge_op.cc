@@ -12,12 +12,12 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 
-#include "format.h"
-#include "compression.h"
-#include "parser.h"
-#include "util.h"
-#include "buffer.h"
-#include "agd_record_reader.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/parser.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/util.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
 
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 
