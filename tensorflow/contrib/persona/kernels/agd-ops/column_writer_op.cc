@@ -2,7 +2,6 @@
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-#include "data.h"
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
@@ -11,7 +10,8 @@
 #include <utility>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/data.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/format.h"
 
 namespace tensorflow {
   using namespace std;

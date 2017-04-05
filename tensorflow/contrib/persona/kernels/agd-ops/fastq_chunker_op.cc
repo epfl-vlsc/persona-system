@@ -9,8 +9,8 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool_op.h"
 #include "tensorflow/core/framework/queue_interface.h"
-#include "fastq_resource.h"
-#include "fastq_chunker.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/fastq_resource.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/fastq_chunker.h"
 
 namespace tensorflow {
   using namespace std;

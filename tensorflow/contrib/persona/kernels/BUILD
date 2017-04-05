@@ -12,6 +12,7 @@ cc_library(
     deps = [
         "@protobuf//:protobuf",
         "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
+        "//tensorflow/contrib/persona/kernels/agd-ops:agd_ops",
         "//tensorflow/contrib/persona/kernels/bam:agdbam",
         "//tensorflow/contrib/persona/kernels/bwa-align:bwa_align",
         "//tensorflow/contrib/persona/kernels/object-pool:object_pool",

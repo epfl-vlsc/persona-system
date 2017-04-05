@@ -1,18 +1,11 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
-#include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/platform/logging.h"
-#include "data.h"
-#include <cstdio>
-#include <cstring>
-#include <string>
-#include <vector>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include "compression.h"
-#include "buffer_list.h"
-#include "format.h"
-#include "util.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/data.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/buffer_list.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/util.h"
 
 namespace tensorflow {
   using namespace std;

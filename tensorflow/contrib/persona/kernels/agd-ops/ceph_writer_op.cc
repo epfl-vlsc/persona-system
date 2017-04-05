@@ -5,11 +5,11 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
-#include "compression.h"
-#include "buffer_list.h"
-#include "format.h"
-#include "data.h"
-#include "util.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/buffer_list.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/data.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/util.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
 #include <list>
 #include <cstring>

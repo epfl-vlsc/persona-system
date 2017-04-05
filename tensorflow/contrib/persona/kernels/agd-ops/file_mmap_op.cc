@@ -1,14 +1,8 @@
 #include <sys/types.h>
-#include <sys/stat.h>
-#include "shared_mmap_file_resource.h"
-#include "memory_region.h"
-#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/shared_mmap_file_resource.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/memory_region.h"
 #include "tensorflow/core/framework/queue_interface.h"
-#include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
-#include "tensorflow/core/platform/logging.h"
-#include <string>
 
 namespace tensorflow {
 
