@@ -1,6 +1,5 @@
 #include <vector>
 #include <memory>
-#include <utility>
 #include <queue>
 
 #include "tensorflow/core/lib/core/errors.h"
@@ -9,16 +8,12 @@
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/framework/queue_interface.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-#include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 
-#include "format.h"
-#include "compression.h"
-#include "parser.h"
-#include "util.h"
-#include "buffer.h"
-#include "agd_record_reader.h"
-
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/parser.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/util.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
 
 namespace tensorflow {
   using namespace std;
@@ -26,28 +21,26 @@ namespace tensorflow {
   using namespace format;
 
   namespace {
-    const string op_name("AGDMergeMetadata");
+    const string op_name("AGDMerge");
 
     class ColumnCursor {
     public:
-      ColumnCursor(AGDRecordReader &&metadata, vector<AGDRecordReader> &&other_columns) :
-        metadata_(move(metadata)), other_columns_(move(other_columns)) {}
+      ColumnCursor(AGDRecordReader &&results, vector<AGDRecordReader> &&other_columns) :
+        results_(move(results)), other_columns_(move(other_columns)) {}
 
-      Status set_current_string() {
+      Status set_current_location() {
         const char* data;
         size_t data_sz;
-        TF_RETURN_IF_ERROR(metadata_.PeekNextRecord(&data, &data_sz));
-        current_meta_ = data;
-        current_size_ = data_sz;
+        TF_RETURN_IF_ERROR(results_.PeekNextRecord(&data, &data_sz));
+        current_result_ = reinterpret_cast<decltype(current_result_)>(data);
+        current_location_ = current_result_->location_;
         return Status::OK();
       }
 
       Status append_to_buffer_list(BufferList *bl) {
-        const char* data;
-
         // first, dump the alignment result in the first column
-        auto &bp_metadata = (*bl)[0];
-        TF_RETURN_IF_ERROR(copy_record(bp_metadata, metadata_));
+        auto &bp_results = (*bl)[0];
+        TF_RETURN_IF_ERROR(copy_record(bp_results, results_));
 
         size_t bl_idx = 1;
         for (auto &r : other_columns_) {
@@ -58,18 +51,15 @@ namespace tensorflow {
         return Status::OK();
       }
 
-      inline const char* get_string(size_t &size) {
-        size = current_size_;
-        return current_meta_;
+      inline int64_t get_location() {
+        return current_location_;
       }
 
     private:
       vector<AGDRecordReader> other_columns_;
-      AGDRecordReader metadata_;
-      //const AlignmentResult *current_result_ = nullptr;
-      const char * current_meta_ = nullptr;
-      size_t current_size_;
-      //int64_t current_location_ = -2048;
+      AGDRecordReader results_;
+      const AlignmentResult *current_result_ = nullptr;
+      int64_t current_location_ = -2048;
 
       static inline
       Status
@@ -88,22 +78,23 @@ namespace tensorflow {
       }
     };
 
-    typedef tuple<const char*, size_t, ColumnCursor*> MetadataScore;
+    typedef pair<int64_t, ColumnCursor*> GenomeScore;
     struct ScoreComparator {
-      bool operator()(const MetadataScore &a, const MetadataScore &b) {
-        return strncmp(get<0>(a), get<0>(b), min(get<1>(a), get<1>(b))) > 0;
+      bool operator()(const GenomeScore &a, const GenomeScore &b) {
+        return a.first > b.first;
       }
     };
 
   }
 
-  class AGDMergeMetadataOp : public OpKernel {
+
+  class AGDMergeOp : public OpKernel {
   public:
-    AGDMergeMetadataOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
+    AGDMergeOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
     }
 
-    ~AGDMergeMetadataOp() {
+    ~AGDMergeOp() {
       core::ScopedUnref queue_unref(queue_);
     }
 
@@ -125,23 +116,21 @@ namespace tensorflow {
       vector<unique_ptr<ResourceContainer<Data>, decltype(DataResourceReleaser)&>> releasers;
 
       // Note: we don't keep the actual ColumnCursors in here. all the move and copy ops would get expensive!
-      priority_queue<MetadataScore, vector<MetadataScore>, ScoreComparator> score_heap;
+      priority_queue<GenomeScore, vector<GenomeScore>, ScoreComparator> score_heap;
 
       releasers.reserve(num_super_chunks * num_columns);
       columns.reserve(num_super_chunks);
-      ResourceContainer<Data> *data;
       bool success = false;
-      const char *meta;
-      size_t size;
+      ResourceContainer<Data> *data;
 
       decltype(num_columns) column;
       for (decltype(num_super_chunks) super_chunk = 0; super_chunk < num_super_chunks; ++super_chunk) {
         column = 0;
-        // First, we look up the metadata column
+        // First, we look up the results column
         OP_REQUIRES_OK(ctx, rsrc_mgr->Lookup(chunk_group_handles(super_chunk, column, 0),
                                              chunk_group_handles(super_chunk, column, 1), &data));
-        AGDRecordReader metadata_column{ AGDRecordReader::fromUncompressed(data, &success) };
-        OP_REQUIRES(ctx, success, Internal("Unable to parse Metadata fromUncompressed for Metadata Merge"));
+        AGDRecordReader results_column { AGDRecordReader::fromUncompressed(data, &success) };
+        OP_REQUIRES(ctx, success, Internal("Unable to parse results column fromUncompressed for Merge"));
         releasers.push_back(move(decltype(releasers)::value_type(data, DataResourceReleaser)));
 
         // Then we look up the rest of the columns
@@ -150,21 +139,20 @@ namespace tensorflow {
         for (column = 1; column < num_columns; ++column) {
           OP_REQUIRES_OK(ctx, rsrc_mgr->Lookup(chunk_group_handles(super_chunk, column, 0),
                                                chunk_group_handles(super_chunk, column, 1), &data));
-          AGDRecordReader other_column{ AGDRecordReader::fromUncompressed(data, &success) };
-          OP_REQUIRES(ctx, success, Internal("Unable to parse other column fromUncompressed for Metadata Merge"));
+          AGDRecordReader other_column { AGDRecordReader::fromUncompressed(data, &success) };
+          OP_REQUIRES(ctx, success, Internal("Unable to parse other column fromUncompressed for Merge"));
           other_columns.push_back(move(other_column));
           releasers.push_back(move(decltype(releasers)::value_type(data, DataResourceReleaser)));
         }
 
-        ColumnCursor a(move(metadata_column), move(other_columns));
-        OP_REQUIRES_OK(ctx, a.set_current_string());
+        ColumnCursor a(move(results_column), move(other_columns));
+        OP_REQUIRES_OK(ctx, a.set_current_location());
         columns.push_back(move(a));
       }
 
       // Now that everything is initialized, add the scores to the heap
       for (auto &cc : columns) {
-        meta = cc.get_string(size);
-        score_heap.push(MetadataScore(meta, size, &cc));
+        score_heap.push(GenomeScore(cc.get_location(), &cc));
       }
 
       int current_chunk_size = 0;
@@ -176,17 +164,16 @@ namespace tensorflow {
       Status s;
       while (!score_heap.empty()) {
         auto &top = score_heap.top();
-        cc = get<2>(top);
+        cc = top.second;
 
         cc->append_to_buffer_list(bl);
 
         score_heap.pop();
 
-        s = cc->set_current_string();
+        s = cc->set_current_location();
         if (s.ok()) {
           // get_location will have the location advanced by the append_to_buffer_list call above
-          meta = cc->get_string(size);
-          score_heap.push(MetadataScore(meta, size, cc));
+          score_heap.push(GenomeScore(cc->get_location(), cc));
         } else if (!IsResourceExhausted(s)) {
           OP_REQUIRES_OK(ctx, s);
         } 
@@ -218,6 +205,7 @@ namespace tensorflow {
     int chunk_size_;
 
     Status Init(OpKernelContext *ctx) {
+      LOG(INFO) << "getting resource!";
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 1), &queue_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
       return Status::OK();
@@ -237,14 +225,14 @@ namespace tensorflow {
 
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
 
+      // This is the synchronous version
       Notification n;
       queue_->TryEnqueue(tuple, ctx, [&n]() { n.Notify(); });
       n.WaitForNotification();
 
       return Status::OK();
     }
-
   };
 
-  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), AGDMergeMetadataOp);
+  REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), AGDMergeOp);
 } // namespace tensorflow {
