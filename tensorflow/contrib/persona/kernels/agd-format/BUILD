@@ -4,8 +4,7 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 # copy this
 cc_library(
     name = "agd_format",
-    srcs = glob(["*.cc"],
-                exclude = ["parallel_sam_writer_op.cc", "zmq_source.cc"]),
+    srcs = glob(["*.cc"]),
     hdrs = glob(["*.h", "json/src/json.hpp"]),
     copts = tf_copts() + ["-fexceptions"],
     nocopts = "-fno-exceptions",
