@@ -68,8 +68,6 @@ namespace tensorflow {
       auto *buf_list = columns->get();
       auto num_buffers = buf_list->size();
 
-      // do this after the wait, so we are only timing the write, and NOT part of the alignment
-      //start = chrono::high_resolution_clock::now();
       auto s = Status::OK();
 
       for (int i = 0; i < num_buffers && s.ok(); ++i) {

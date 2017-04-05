@@ -105,7 +105,6 @@ namespace tensorflow {
 
   private:
 
-    bool compress_;
     string record_prefix_path_, path_scratch_;
     vector<tuple<format::FileHeader, string>> header_infos_;
 

@@ -77,7 +77,6 @@ namespace tensorflow {
     }
 
     void Compute(OpKernelContext* ctx) override {
-      auto start = chrono::high_resolution_clock::now();
       const Tensor *path, *column_t, *pool_name_t, *record_id_t;
       int ret;
 
@@ -134,11 +133,6 @@ namespace tensorflow {
 
       ret = io_ctx.write_full(full_path, write_buf);
       OP_REQUIRES(ctx, ret >= 0, Internal("Couldn't write object! error: ", ret));
-      auto duration = TRACEPOINT_DURATION_CALC(write_only_start);
-      tracepoint(bioflow, ceph_write, duration);
-
-      duration = TRACEPOINT_DURATION_CALC(start);
-      tracepoint(bioflow, chunk_write, filepath.c_str(), duration);
 
       Tensor *num_recs;
       OP_REQUIRES_OK(ctx, ctx->allocate_output("key_out", TensorShape({}), &num_recs));
