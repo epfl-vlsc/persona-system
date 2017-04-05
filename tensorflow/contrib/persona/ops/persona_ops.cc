@@ -598,6 +598,7 @@ file_name: a Tensor() of string for the unique key for this file
 Creates pools of MemoryMappedFile objects
 )doc");
 
+#if 0
   REGISTER_OP("ParallelSamWriter")
   .Attr("sam_file_path: string = ''")
   .Input("agd_results: string")
@@ -615,6 +616,7 @@ This writes out to local disk only
 Assumes that the record_id for a given set does not change for the runtime of the graph
 and is thus passed as an Attr instead of an input (for efficiency);
 )doc");
+#endif
 
   REGISTER_OP("S3Reader")
   .Attr("access_key: string")
