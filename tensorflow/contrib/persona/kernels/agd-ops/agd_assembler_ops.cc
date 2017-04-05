@@ -1,12 +1,8 @@
 #include <utility>
 #include "tensorflow/core/framework/op_kernel.h"
-//#include "tensorflow/core/platform/logging.h"
-//#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-#include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool_op.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
-#include "agd_reads.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/agd_reads.h"
 
 namespace tensorflow {
   using namespace std;

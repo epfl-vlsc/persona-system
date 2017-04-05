@@ -1,8 +1,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-#include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "read_resource.h"
-#include "format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/format.h"
 
 namespace tensorflow {
   using namespace std;

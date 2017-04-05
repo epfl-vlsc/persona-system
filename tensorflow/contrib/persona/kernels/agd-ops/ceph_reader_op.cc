@@ -1,20 +1,13 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-#include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "data.h"
-#include "util.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/data.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/util.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include <list>
-#include <stdio.h>
-#include <stdlib.h>
-#include <iostream>
-#include <string>
 #include <rados/librados.hpp>
-#include <rados/buffer.h>
 
 namespace tensorflow {
   using namespace std;

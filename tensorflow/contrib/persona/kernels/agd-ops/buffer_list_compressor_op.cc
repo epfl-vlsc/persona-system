@@ -1,14 +1,12 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/tensor_shape.h"
 
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-#include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 
-#include "buffer.h"
-#include "buffer_list.h"
-#include "compression.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/buffer_list.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
 
 namespace tensorflow {
   using namespace std;
