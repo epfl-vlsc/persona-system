@@ -1,28 +1,8 @@
 #pragma once
-#include <cstddef>
-#include <string.h>
-#include <vector>
-#include <memory>
-#include <atomic>
-#include <chrono>
-#include "buffer.h"
-#include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/platform/mutex.h"
+
+#include "buffer_pair.h"
 
 namespace tensorflow {
-  class BufferList;
-
-  class BufferPair {
-  private:
-    Buffer index_, data_;
-
-  public:
-    decltype(index_) &index();
-    decltype(data_) &data();
-
-    void reset();
-  };
-
     class BufferList {
     private:
       std::vector<BufferPair> buf_list_;
