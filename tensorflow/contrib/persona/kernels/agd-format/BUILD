@@ -42,19 +42,3 @@ cc_library(
            "-lzmq"
     ]
 )
-
-#cc_library(
-#    name = "sam_writer",
-#    srcs = ["parallel_sam_writer_op.cc"],
-#    #hdrs = ["read_resource.h"],
-#    includes=["."],
-#    copts = tf_copts() + ["-fexceptions"],
-#    nocopts = "-fno-exceptions",
-#    linkstatic = 1,
-#    alwayslink = 1,
-#    visibility = ["//visibility:public"],
-#    deps = [
-#    "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
-#    "//tensorflow/contrib/persona/kernels/dna-align:snap_align",
-#    ],
-#    )
