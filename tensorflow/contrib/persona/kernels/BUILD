@@ -10,14 +10,13 @@ package(default_visibility = ["//tensorflow:__subpackages__"])
 cc_library(
     name = "persona_kernels",
     deps = [
-        "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
-        "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
-        "//tensorflow/contrib/persona/kernels/agd-format:zmq_source",
-        "//tensorflow/contrib/persona/kernels/snap-align:snap_align",
-        "//tensorflow/contrib/persona/kernels/bwa-align:bwa_align",
-        "//tensorflow/contrib/persona/kernels/bam:agdbam",
-        "//third_party/eigen3",
         "@protobuf//:protobuf",
+        "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
+        "//tensorflow/contrib/persona/kernels/bam:agdbam",
+        "//tensorflow/contrib/persona/kernels/bwa-align:bwa_align",
+        "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
+        "//tensorflow/contrib/persona/kernels/snap-align:snap_align",
+        "//third_party/eigen3",
     ],
     alwayslink = 1,
 )
