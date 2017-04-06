@@ -14,6 +14,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 #include <boost/functional/hash.hpp>
 #include <google/dense_hash_map>
 
@@ -74,7 +75,7 @@ namespace tensorflow {
       return ptr - begin;
     }
    
-    Status CalculatePosition(const AlignmentResult *result, const char* cigar, size_t cigar_len,
+    Status CalculatePosition(const Alignment *result, const char* cigar, size_t cigar_len,
         uint32_t &position) {
       // figure out the 5' position
       // the result->location is already genome relative, we shouldn't have to worry 
@@ -128,10 +129,9 @@ namespace tensorflow {
       return Status::OK();
     }
 
-    Status MarkDuplicate(const AlignmentResult* result, const char* cigar,
-        size_t cigar_len, AlignmentResultBuilder &builder) {
-      AlignmentResult result_out = *result; // simple copy suffices
-      result_out.flag_ = result_out.flag_ | ResultFlag::PCR_DUPLICATE;
+    Status MarkDuplicate(const Alignment* result, AlignmentResultBuilder &builder) {
+      Alignment result_out = *result; // simple copy suffices
+      result_out.set_flag(result_out.flag()| ResultFlag::PCR_DUPLICATE);
       // yes we are copying and rebuilding the entire structure
       // modifying in place is a huge pain in the ass, and the results aren't that
       // big anyway
@@ -165,6 +165,7 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       }
 
+      Alignment* alignment_msg_test;
       const Tensor* results_t, *num_results_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_results_t));
       OP_REQUIRES_OK(ctx, ctx->input("results_handle", &results_t));
@@ -182,11 +183,11 @@ namespace tensorflow {
       auto output_bufferlist = output_bufferlist_container->get();
       output_bufferlist->resize(1);
       AlignmentResultBuilder results_builder;
-      results_builder.set_buffer_pair(&(*output_bufferlist)[0]);
+      results_builder.SetBufferPair(&(*output_bufferlist)[0]);
 
 
-      const AlignmentResult* result;
-      const AlignmentResult* mate;
+      const Alignment* result;
+      const Alignment* mate;
       const char* result_cigar, *mate_cigar;
       size_t result_cigar_len, mate_cigar_len;
       Status s = results_reader.GetNextResult(&result, &result_cigar, &result_cigar_len);

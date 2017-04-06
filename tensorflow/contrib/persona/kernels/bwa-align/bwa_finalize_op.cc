@@ -216,7 +216,7 @@ private:
 
 
           for (int i = 0; i < result_builders.size(); i++)
-            result_builders[i].set_buffer_pair(result_bufs[i]);
+            result_builders[i].SetBufferPair(result_bufs[i]);
 
           Status s = aligner.FinalizeSubchunk(subchunk_resource, interval, regs, pes,
               result_builders);
