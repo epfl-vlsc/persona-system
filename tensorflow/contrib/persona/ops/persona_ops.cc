@@ -1076,4 +1076,86 @@ Intended to be used for BWAAssembler
   used to coordinate writing to disk.
   )doc");
 
+  // All the new prototypes of the write ops go here
+
+#define AGD_COMMON_HEADER_ATTRIBUTES \
+  .Attr("record_type: string") \
+  .Input("path: string") \
+  .Input("record_id: string") \
+  .Input("first_ordinal: int64") \
+  .Input("num_records: int32") \
+  .Input("resource_handle: string") \
+  .Output("path: string")
+
+#define COMMON_AGD_DOC \
+  "record_type: one of base, qual, meta, or results* " \
+  "path: the string of the path / key to be written" \
+  "record_id: the string to write into the header for this given record" \
+  "first_ordinal: the first ordinal to write into the header" \
+  "num_records: the number of records in this chunk" \
+  "resource_handle: a Vec(2) to look up the resource containing the data to be written" \
+  "path: the output path of the key / file that was written"
+
+#define CHECK_RECORD_TYPE \
+    string record_type; \
+    TF_RETURN_IF_ERROR(c->GetAttr("record_type", &record_type)); \
+    if (!(record_type == "base" || record_type == "qual" || record_type == "metadata")) { \
+      string res = "results"; \
+      if (record_type.size() < res.size() || record_type.find(res) != 0) { \
+        return Internal("Attribute not one of 'base', 'qual', 'meta', or 'results.*': ", record_type); \
+      } \
+    }
+
+#define CEPH_WRITER_OP(WRITER_TYPE) \
+  REGISTER_OP("AGDCeph" #WRITER_TYPE "Writer") \
+  .Attr("cluster_name: string") \
+  .Attr("user_name: string") \
+  .Attr("ceph_conf_path: string") \
+  .Input("pool_name: string") \
+  AGD_COMMON_HEADER_ATTRIBUTES \
+  .SetShapeFn([](InferenceContext *c) { \
+    for (int i = 0; i < 5; i++) { \
+      TF_RETURN_IF_ERROR(check_scalar(c, i)); \
+    } \
+    TF_RETURN_IF_ERROR(check_vector(c, 5, 2)); \
+    c->set_output(0, c->Scalar()); \
+    CHECK_RECORD_TYPE \
+    return Status::OK(); \
+  }) \
+  .Doc(R"doc( \
+  Write a record of type " #WRITER_TYPE " to Ceph \
+   \
+  cluster_name: Ceph cluster name \
+  user_name: Ceph user name \
+  ceph_conf_path: path to Ceph configuration file \
+  pool_name: pool name to look up a given record)doc" \
+  COMMON_AGD_DOC \
+)
+
+
+#define FS_WRITER_OP(WRITER_TYPE) \
+  REGISTER_OP("AGDFileSystem" #WRITER_TYPE "Writer") \
+  AGD_COMMON_HEADER_ATTRIBUTES \
+  .SetShapeFn([](InferenceContext *c) { \
+    for (int i = 0; i < 4; i++) { \
+      TF_RETURN_IF_ERROR(check_scalar(c, i)); \
+    } \
+    TF_RETURN_IF_ERROR(check_vector(c, 4, 2)); \
+    CHECK_RECORD_TYPE \
+    c->set_output(0, c->Scalar()); \
+    return Status::OK(); \
+  })
+
+#define DUAL_WRITER_OP(WRITER_TYPE) \
+  CEPH_WRITER_OP(WRITER_TYPE); \
+  FS_WRITER_OP(WRITER_TYPE)
+
+  DUAL_WRITER_OP("BufferPair");
+  DUAL_WRITER_OP("BufferList");
+
+  CEPH_WRITER_OP("Buffer")
+  .Attr("compressed: bool");
+
+  FS_WRITER_OP("Buffer")
+  .Attr("compressed: bool");
 }
