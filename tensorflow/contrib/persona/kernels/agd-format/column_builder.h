@@ -41,7 +41,6 @@ public:
   //void AppendAlignmentResult(const SingleAlignmentResult &result);
 
   // This is the only one we should use now
-  void AppendAlignmentResult(const format::AlignmentResult &result, const string &var_string);
 
 
   void AppendAlignmentResult(const Alignment &result);
@@ -52,7 +51,6 @@ public:
   //void AppendAlignmentResult(const PairedAlignmentResult &result, const std::size_t result_idx);
 
   private:
-    format::AlignmentResult converted_result;
     std::vector<char> scratch_;
   };
 

@@ -5,7 +5,7 @@
 #include "tensorflow/core/platform/logging.h"
 #include "format.h"
 #include "column_builder.h"
-#include "agd_record_reader.h"
+#include "agd_result_reader.h"
 #include "compression.h"
 #include "parser.h"
 #include "util.h"
@@ -51,32 +51,31 @@ namespace tensorflow {
       auto chunksize = chunk_size_t->scalar<int>()();
 
       Status status;
-      const char* data;
-      size_t length;
       int64_t prev_location = 0;
       int index = 0;
-      const format::AlignmentResult* agd_result;
+      Alignment agd_result;
 
       for (int i = 0; i < chunk_names.size(); i++) {
 
         OP_REQUIRES_OK(ctx, LoadChunk(ctx, chunk_names(i)));
-        AGDRecordReader results_reader(results_buf_.data(), chunksize);
+        AGDResultReader results_reader(results_buf_.data(), (size_t)chunksize);
         index = 0;
 
-        status = results_reader.GetNextRecord(&data, &length);
+
+        status = results_reader.GetNextResult(agd_result);
         while (status.ok()) {
-          agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
+          //agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
           //LOG(INFO) << "AGD location is: " << agd_result->location_;
-          if (agd_result->location_ < prev_location) {
+          if (agd_result.location() < prev_location) {
             LOG(INFO) << "AGD SET IS NOT SORTED. Offending entry in chunk " << i 
               << " at index " << index << ". Prev: " << prev_location << " Curr: "
-              << agd_result->location_;
+              << agd_result.location();
 
             return;
-          } 
+          }
           index++;
-          prev_location = agd_result->location_;
-          status = results_reader.GetNextRecord(&data, &length);
+          prev_location = agd_result.location();
+          status = results_reader.GetNextResult(agd_result);
         }
       }
 

@@ -19,7 +19,6 @@
 #include <vector>
 #include <array>
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/AlignmentResult.h"
 #include "buffer.h"
 
 namespace tensorflow {
@@ -71,22 +70,8 @@ namespace format {
     END = 7
   };
 
-  enum ResultFlag {                     // if the field is set, then ...
-    MULTI = 0x1,                        // there are multiple segments (usually, this is part of a read pair)
-    ALL_MAPPED = 0x2,                   // all segments (reads) mapped properly 
-    UNMAPPED = 0x4,                     // this segment (read) unmapped
-    NEXT_UNMAPPED = 0x8,                // the next read is unmapped
-    REVERSE_COMPLEMENTED = 0x10,        // this read is mapped as a reverse complemente
-    NEXT_REVERSE_COMPLEMENTED = 0x20,   // the next read is mapped as a reverse complemented
-    FIRST = 0x40,                       // this is the first read 
-    LAST = 0x80,                        // this is the last read
-    SECONDARY = 0x100,                  // this is a secondary alignment
-    FILTERED = 0x200,                   // this read was filtered for some reason
-    PCR_DUPLICATE = 0x400,              // this read is a duplicate
-    SUPPLEMENTAL = 0x800                // this is a supplemental alignment
-  };
 
-  struct __attribute__((packed)) AlignmentResult {
+  /*struct __attribute__((packed)) AlignmentResult {
     uint16_t flag_ = 0; // ResultFlag
     int mapq_ = 0;
     int64_t location_ = 0; // POS field in SAM format
@@ -99,54 +84,7 @@ namespace format {
         " location: " + std::to_string(location_) + " nextLocation: " + std::to_string(next_location_) +
         "templateLen: " + std::to_string(template_length_);
     }
-   };
- 
-  // a bunch of helper functions for flags (currently equivalent to the SAM format)
-  inline bool IsPrimary(const AlignmentResult *r) { 
-    return !(r->flag_ & ResultFlag::SECONDARY || r->flag_ & ResultFlag::SUPPLEMENTAL);
-  }
-  inline bool IsPaired(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::MULTI) != 0;
-  }
-  inline bool IsDiscordant(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::ALL_MAPPED) == 0;
-  }
-  inline bool IsMapped(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::UNMAPPED) == 0;
-  }
-  inline bool IsUnmapped(const AlignmentResult *r) {
-    return !IsMapped(r);
-  }
-  inline bool IsNextUnmapped(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::NEXT_UNMAPPED) != 0;
-  }
-  inline bool IsNextMapped(const AlignmentResult *r) {
-    return !IsNextUnmapped(r);
-  }
-  inline bool IsReverseStrand(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::REVERSE_COMPLEMENTED) != 0;
-  }
-  inline bool IsForwardStrand(const AlignmentResult *r) {
-    return !IsReverseStrand(r);
-  }
-  inline bool IsFirstRead(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::FIRST) != 0;
-  }
-  inline bool IsLastRead(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::LAST) != 0;
-  }
-  inline bool IsSecondary(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::SECONDARY) != 0;
-  }
-  inline bool IsSupplemental(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::SUPPLEMENTAL) != 0;
-  }
-  inline bool IsDuplicate(const AlignmentResult *r) {
-    return (r->flag_ & ResultFlag::PCR_DUPLICATE) != 0;
-  }
-
-
-
+   };*/
 
   struct __attribute__((packed)) BinaryBases {
     BinaryBases() : bases(0) {};

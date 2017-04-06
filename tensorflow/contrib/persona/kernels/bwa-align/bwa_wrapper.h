@@ -3,6 +3,7 @@
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/column_builder.h"
 #include <vector>
 #include <memory>
@@ -74,7 +75,7 @@ namespace bwa_wrapper {
 	
       smem_aux_t *aux_;
       
-      void ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, format::AlignmentResult& result, string& cigar);
+      void ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, Alignment& result, string& cigar);
 
       const string placeholder = "i'm mr meeseeks look at me!";
 

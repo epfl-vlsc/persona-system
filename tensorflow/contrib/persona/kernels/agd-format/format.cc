@@ -177,15 +177,5 @@ Status BinaryBases::setBaseAtPosition(const BaseAlphabet base, const size_t posi
   }
 }
 
-  void AlignmentResult::convertFromSNAP(const SingleAlignmentResult &result, const int flag)
-  {
-    flag_ = flag;
-    mapq_ = result.mapq;
-    location_ = result.location;
-    next_location_ = 0; // single result
-    template_length_ = 0; // single result
-  }
-
-
 } // namespace format
 } // namespace tensorflow

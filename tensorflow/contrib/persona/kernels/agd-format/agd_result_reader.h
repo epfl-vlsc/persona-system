@@ -28,7 +28,7 @@ namespace tensorflow {
     // the index position the read was found at.
     // NB cigar is not a proper c-string
     Status GetResultAtLocation(int64_t location, const char* metadata, 
-        size_t metadata_len, AlignmentResult& result, size_t* index=nullptr);
+        size_t metadata_len, Alignment& result, size_t* index=nullptr);
 
     // Get or peek next alignment result in the index. 
     // NB again cigar is not a proper c-string
