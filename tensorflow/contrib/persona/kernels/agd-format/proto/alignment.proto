@@ -1,0 +1,15 @@
+syntax = "proto3";
+option cc_enable_arenas = true;
+
+// this aims to be somewhat compatible with ga4gh
+// protobuf schemas -- experimental
+
+message Alignment {
+  uint32 flag = 1;
+  int32 mapping_quality = 2;
+  int64 location = 3;
+  int64 next_location = 4;
+  int64 template_length = 5;
+  string cigar = 6;
+}
+

@@ -15,6 +15,7 @@
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/ChimericPairedEndAligner.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/IntersectingPairedEndAligner.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/PairedAligner.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/column_builder.h"
 
 namespace snap_wrapper {
@@ -67,7 +68,7 @@ namespace snap_wrapper {
       GenomeLocation genomeLocation,
       Direction direction,
       bool secondaryAlignment,
-      format::AlignmentResult &finalResult,
+      Alignment &finalResult,
       string &cigar,
       int * addFrontClipping,
       bool useM,
