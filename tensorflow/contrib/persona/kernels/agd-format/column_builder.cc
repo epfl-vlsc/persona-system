@@ -12,26 +12,16 @@ namespace tensorflow {
     index_->AppendBuffer(&val, 1);
   }
 
-  void AlignmentResultBuilder::AppendAlignmentResult(const format::AlignmentResult &result, const string &var_string)
+
+  void AlignmentResultBuilder::AppendAlignmentResult(const Alignment &result)
   {
     //LOG(INFO) << "appending alignment result location: " << result.location_ << " mapq: " << result.mapq_ << " flags: "
-      //<< result.flag_ << " next: " << result.next_location_ << " template_len: " << result.template_length_ << " cigar: " << var_string;
-    data_->AppendBuffer(reinterpret_cast<const char*>(&result), sizeof(format::AlignmentResult));
-    data_->AppendBuffer(var_string.data(), var_string.size());
-    size_t index_entry = sizeof(format::AlignmentResult) + var_string.size();
-    char size = static_cast<char>(index_entry);
-    index_->AppendBuffer(&size, 1);
+    //<< result.flag_ << " next: " << result.next_location_ << " template_len: " << result.template_length_ << " cigar: " << var_string;
+    size_t size = result.ByteSize();
+    scratch_.resize(size);
+    result.SerializeToArray(&scratch_[0], size);
+    ColumnBuilder::AppendRecord(&scratch_[0], size);
   }
-
-    void AlignmentResultBuilder::AppendAlignmentResult(const Alignment &result)
-    {
-      //LOG(INFO) << "appending alignment result location: " << result.location_ << " mapq: " << result.mapq_ << " flags: "
-      //<< result.flag_ << " next: " << result.next_location_ << " template_len: " << result.template_length_ << " cigar: " << var_string;
-      size_t size = result.ByteSize();
-      scratch_.resize(size);
-      result.SerializeToArray(&scratch_[0], size);
-      ColumnBuilder::AppendRecord(&scratch_[0], size);
-    }
 
   /*void AlignmentResultBuilder::AppendAlignmentResult(const PairedAlignmentResult &result, const size_t result_idx) {
     converted_result.convertFromSNAP(result, result_idx, 0); // TODO is 0 the correct flag to write in this case?

@@ -15,6 +15,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 
 namespace tensorflow {
 
@@ -92,7 +93,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, LoadDataResources(ctx, results_in, results_vec, num_records_t, releasers));
 
       // phase 1: parse results sequentially, build up vector of (genome_location, index)
-      const format::AlignmentResult* agd_result;
+      Alignment agd_result;
       auto num_results = results_in->shape().dim_size(0);
       const char* data;
       size_t size;
@@ -107,8 +108,9 @@ namespace tensorflow {
         // go thru the results, build up vector of location, index, chunk
         int j = 0;
         while(status.ok()) {
-          agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-          entry.location = agd_result->location_;
+          //agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
+          agd_result.ParseFromArray(data, size);
+          entry.location = agd_result.location();
           entry.chunk = i;
           entry.index = j;
           sort_index_.push_back(entry);

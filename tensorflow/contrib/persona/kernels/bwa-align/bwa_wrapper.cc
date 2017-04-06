@@ -2,6 +2,7 @@
 #include "bwa_wrapper.h"
 #include "bwa/bwamem.h"
 #include "bwa/bntseq.h"
+#include "tensorflow/contrib/persona/kernels/bwa-align/bwa/bwamem.h"
 
 namespace bwa_wrapper {
   using namespace tensorflow;
@@ -24,7 +25,7 @@ namespace bwa_wrapper {
     const char* bases, *bases_mate;
     const char* quals, *quals_mate;
     size_t bases_len, mate_len;
-    format::AlignmentResult result, result_sup;
+    Alignment result, result_sup;
     string cigar, cigar_sup;
 
     Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
@@ -51,11 +52,13 @@ namespace bwa_wrapper {
       
       // we only take the first result right now
       ProcessResult(&alignments[0], nullptr, result, cigar);
-      result_builders[0].AppendAlignmentResult(result, cigar);
+      result.set_cigar(cigar);
+      result_builders[0].AppendAlignmentResult(result);
       if (num_alignments > 1) {
         LOG(INFO) << "result single has a supplemental";
         ProcessResult(&alignments[1], nullptr, result_sup, cigar_sup);
-        result_builders[1].AppendAlignmentResult(result_sup, cigar_sup);
+        result_sup.set_cigar(cigar_sup);
+        result_builders[1].AppendAlignmentResult(result_sup);
       } else 
         result_builders[1].AppendEmpty();
       //LOG(INFO) << "location " << result.location_ << " cigar: " << cigar;
@@ -121,23 +124,24 @@ namespace bwa_wrapper {
     return Status::OK();
   }
 
-  void BWAAligner::ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, format::AlignmentResult& result, string& cigar) {
+  void BWAAligner::ProcessResult(mem_aln_t* bwaresult, mem_aln_t* bwamate, Alignment& result, string& cigar) {
 
-    result.flag_ = bwaresult->flag;
-    result.flag_ |= bwamate ? 0x1 : 0; // is paired in sequencing
-    result.flag_ |= bwaresult->rid < 0? 0x4 : 0; // is mapped
-    result.flag_ |= bwamate && bwamate->rid < 0? 0x8 : 0; // is mate mapped
+    uint32 flag = bwaresult->flag;
+    flag |= bwamate ? 0x1 : 0; // is paired in sequencing
+    flag |= bwaresult->rid < 0? 0x4 : 0; // is mapped
+    flag |= bwamate && bwamate->rid < 0? 0x8 : 0; // is mate mapped
     if (bwaresult->rid < 0 && bwamate && bwamate->rid >= 0) { // copy mate to alignment
-      result.location_ = bwamate->pos + index_->bns->anns[bwamate->rid].offset;
+      result.set_location(bwamate->pos + index_->bns->anns[bwamate->rid].offset);
     } else
-      result.location_ = bwaresult->pos + index_->bns->anns[bwaresult->rid].offset;
+      result.set_location(bwaresult->pos + index_->bns->anns[bwaresult->rid].offset);
 
     //LOG(INFO) << "location is: " << result.location_ - index_->bns->anns[bwaresult->rid].offset;
-    result.flag_ |= bwaresult->is_rev? 0x10 : 0; // is on the reverse strand
-    result.flag_ |= bwamate && bwamate->is_rev? 0x20 : 0; // is mate on the reverse strand
-    result.next_location_ = 0;
-    result.template_length_ = 0;
-    result.mapq_ = bwaresult->mapq;
+    flag |= bwaresult->is_rev? 0x10 : 0; // is on the reverse strand
+    flag |= bwamate && bwamate->is_rev? 0x20 : 0; // is mate on the reverse strand
+    result.set_flag(flag);
+    result.set_next_location(0);
+    result.set_template_length(0);
+    result.set_mapping_quality(bwaresult->mapq);
     cigar = "";
 
     int which = 0;
@@ -154,20 +158,20 @@ namespace bwa_wrapper {
     } 
 
     if (bwamate && bwamate->rid >= 0)
-      result.next_location_ = bwamate->pos + index_->bns->anns[bwamate->rid].offset;
+      result.set_next_location(bwamate->pos + index_->bns->anns[bwamate->rid].offset);
     else if (bwamate)
-      result.next_location_ = result.location_; // mate unmapped, set next to this ones location
+      result.set_next_location(result.location()); // mate unmapped, set next to this ones location
     else
-      result.next_location_ = 0; // there is no mate
+      result.set_next_location(0); // there is no mate
 
     if (bwamate && bwamate->rid >= 0) {
 
       if (bwaresult->rid == bwamate->rid) {
         int64_t p0 = bwaresult->pos + (bwaresult->is_rev? get_rlen(bwaresult->n_cigar, bwaresult->cigar) - 1 : 0);
         int64_t p1 = bwamate->pos + (bwamate->is_rev? get_rlen(bwamate->n_cigar, bwamate->cigar) - 1 : 0);
-        if (bwamate->n_cigar == 0 || bwaresult->n_cigar == 0) result.template_length_ = 0;
-        else result.template_length_ = -(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0));
-      } else result.template_length_ = 0;
+        if (bwamate->n_cigar == 0 || bwaresult->n_cigar == 0) result.set_template_length(0);
+        else result.set_template_length(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)));
+      } else result.set_template_length(0);
     } 
   }
 
@@ -221,24 +225,28 @@ namespace bwa_wrapper {
       id++;
       regs_index += 2;
 
-      format::AlignmentResult result, result_mate, result_sup, result_sup_mate;
+      Alignment result, result_mate, result_sup, result_sup_mate;
       string cigar, cigar_mate;
       ProcessResult(&results[0][0], &results[1][0], result, cigar);
       //LOG(INFO) << "cigar is: " << cigar;
       ProcessResult(&results[1][0], &results[0][0], result_mate, cigar_mate);
       //LOG(INFO) << "cigarmate is: " << cigar_mate;
-      result_builders[0].AppendAlignmentResult(result, cigar);
-      result_builders[0].AppendAlignmentResult(result_mate, cigar_mate);
+      result.set_cigar(cigar);
+      result_mate.set_cigar(cigar_mate);
+      result_builders[0].AppendAlignmentResult(result);
+      result_builders[0].AppendAlignmentResult(result_mate);
       if (num_results[0] > 1) {  // a supplemental for first 
         LOG(INFO) << "first had a supplemental!";
         ProcessResult(&results[0][1], nullptr, result_sup, cigar);
-        result_builders[1].AppendAlignmentResult(result_sup, cigar);
+        result_sup.set_cigar(cigar);
+        result_builders[1].AppendAlignmentResult(result_sup);
       } else
         result_builders[1].AppendEmpty();
       if (num_results[1] > 1) {  // a supplemental for second 
         LOG(INFO) << "second had a supplemental!";
         ProcessResult(&results[1][1], nullptr, result_sup_mate, cigar);
-        result_builders[1].AppendAlignmentResult(result_sup_mate, cigar);
+        result_sup_mate.set_cigar(cigar);
+        result_builders[1].AppendAlignmentResult(result_sup_mate);
       } else
         result_builders[1].AppendEmpty();
 

@@ -15,6 +15,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/sam_flags.h"
 #include <boost/functional/hash.hpp>
 #include <google/dense_hash_map>
 
@@ -75,12 +76,16 @@ namespace tensorflow {
       return ptr - begin;
     }
    
-    Status CalculatePosition(const Alignment *result, const char* cigar, size_t cigar_len,
+    Status CalculatePosition(const Alignment *result,
         uint32_t &position) {
       // figure out the 5' position
       // the result->location is already genome relative, we shouldn't have to worry 
       // about negative index after clipping, but double check anyway
       // cigar parsing adapted from samblaster
+      const char* cigar;
+      size_t cigar_len;
+      cigar = result->cigar().c_str();
+      cigar_len = result->cigar().length();
       int ralen = 0, qalen = 0, sclip = 0, eclip = 0;
       bool first = true;
       char op;
@@ -116,12 +121,12 @@ namespace tensorflow {
         }
       }
       //LOG(INFO) << "the location is: " << result->location_;
-      if (IsForwardStrand(result)) {
-        position = static_cast<uint32_t>(result->location_ - sclip);
+      if (IsForwardStrand(result->flag())) {
+        position = static_cast<uint32_t>(result->location() - sclip);
       } else {
         // im not 100% sure this is correct ...
         // but if it goes for every signature then it shouldn't matter
-        position = static_cast<uint32_t>(result->location_ + ralen + eclip - 1);
+        position = static_cast<uint32_t>(result->location() + ralen + eclip - 1);
       }
       //LOG(INFO) << "position is now: " << position;
       if (position < 0)
@@ -130,20 +135,20 @@ namespace tensorflow {
     }
 
     Status MarkDuplicate(const Alignment* result, AlignmentResultBuilder &builder) {
-      Alignment result_out = *result; // simple copy suffices
+      Alignment result_out;
+      result_out.CopyFrom(*result); // simple copy suffices
       result_out.set_flag(result_out.flag()| ResultFlag::PCR_DUPLICATE);
       // yes we are copying and rebuilding the entire structure
       // modifying in place is a huge pain in the ass, and the results aren't that
       // big anyway
-      builder.AppendAlignmentResult(result_out, string(cigar, cigar_len));
+      builder.AppendAlignmentResult(result_out);
       return Status::OK();
     }
 
-    Status ProcessOrphan(const AlignmentResult* result, const char* cigar,
-        size_t cigar_len, AlignmentResultBuilder &builder) {
+    Status ProcessOrphan(const Alignment* result, AlignmentResultBuilder &builder) {
       Signature sig;
-      sig.is_forward = IsForwardStrand(result);
-      TF_RETURN_IF_ERROR(CalculatePosition(result, cigar, cigar_len, sig.position));
+      sig.is_forward = IsForwardStrand(result->flag());
+      TF_RETURN_IF_ERROR(CalculatePosition(result, sig.position));
 
       //LOG(INFO) << "sig is: " << sig.ToString();
       // attempt to find the signature
@@ -151,12 +156,12 @@ namespace tensorflow {
       if (sig_map_iter == signature_map_->end()) { // not found, insert it
         signature_map_->insert(make_pair(sig, 1));
         // its the first here, others will be marked dup
-        builder.AppendAlignmentResult(*result, string(cigar, cigar_len));
+        builder.AppendAlignmentResult(*result);
         return Status::OK();
       } else { 
         // found, mark a dup
         num_dups_found_++;
-        return MarkDuplicate(result, cigar, cigar_len, builder);
+        return MarkDuplicate(result, builder);
       }
     }
 
@@ -165,7 +170,6 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       }
 
-      Alignment* alignment_msg_test;
       const Tensor* results_t, *num_results_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_results_t));
       OP_REQUIRES_OK(ctx, ctx->input("results_handle", &results_t));
@@ -186,68 +190,66 @@ namespace tensorflow {
       results_builder.SetBufferPair(&(*output_bufferlist)[0]);
 
 
-      const Alignment* result;
-      const Alignment* mate;
-      const char* result_cigar, *mate_cigar;
-      size_t result_cigar_len, mate_cigar_len;
-      Status s = results_reader.GetNextResult(&result, &result_cigar, &result_cigar_len);
+      Alignment result;
+      Alignment mate;
+      Status s = results_reader.GetNextResult(result);
 
       // this detection logic adapted from SamBlaster
       while (s.ok()) {
-        if (!IsPrimary(result))
+        if (!IsPrimary(result.flag()))
           OP_REQUIRES_OK(ctx, Internal("Non-primary result detected in primary result column at location ",
-                result->location_));
-        if (!IsPaired(result)) {
+                result.location()));
+        if (!IsPaired(result.flag())) {
           // we have a single alignment
-          if (IsUnmapped(result)) {
-            s = results_reader.GetNextResult(&result, &result_cigar, &result_cigar_len);
+          if (IsUnmapped(result.flag())) {
+            s = results_reader.GetNextResult(result);
             continue;
           }
 
           //LOG(INFO) << "processing mapped orphan at " << result->location_;
-          OP_REQUIRES_OK(ctx, ProcessOrphan(result, result_cigar, result_cigar_len, results_builder));
+          OP_REQUIRES_OK(ctx, ProcessOrphan(&result, results_builder));
 
         } else { // we have a pair, get the mate
-          OP_REQUIRES_OK(ctx, results_reader.GetNextResult(&mate, &mate_cigar, &mate_cigar_len));
+          OP_REQUIRES_OK(ctx, results_reader.GetNextResult(mate));
 
-          OP_REQUIRES(ctx, (result->next_location_ == mate->location_) && (mate->next_location_ == result->location_),
+          OP_REQUIRES(ctx, (result.next_location() == mate.location()) && (mate.next_location() == result.location()),
               Internal("Malformed pair or the data is not in metadata (QNAME) order. At index: ", results_reader.GetCurrentIndex()-1,
-                "result 1: ", result->ToString(), " result2: ", mate->ToString()));
+                "result 1: ", result.DebugString(), " result2: ", mate.DebugString()));
 
           //LOG(INFO) << "processing mapped pair at " << result->location_ << ", " << mate->location_;
 
-          if (IsUnmapped(result) && IsUnmapped(mate)) {
-            s = results_reader.GetNextResult(&result, &result_cigar, &result_cigar_len);
+          if (IsUnmapped(result.flag()) && IsUnmapped(mate.flag())) {
+            s = results_reader.GetNextResult(result);
             continue;
           }
           
-          if (IsUnmapped(result) && IsMapped(mate)) { // treat as single 
-            OP_REQUIRES_OK(ctx, ProcessOrphan(mate, mate_cigar, mate_cigar_len, results_builder));
-          } else if (IsUnmapped(mate) && IsMapped(result)) {
-            OP_REQUIRES_OK(ctx, ProcessOrphan(result, result_cigar, result_cigar_len, results_builder));
+          if (IsUnmapped(result.flag()) && IsMapped(mate.flag())) { // treat as single
+            OP_REQUIRES_OK(ctx, ProcessOrphan(&mate, results_builder));
+          } else if (IsUnmapped(mate.flag()) && IsMapped(result.flag())) {
+            OP_REQUIRES_OK(ctx, ProcessOrphan(&result, results_builder));
           } else {
             Signature sig;
-            sig.is_forward = IsForwardStrand(result);
-            sig.is_mate_forward = IsForwardStrand(mate);
-            OP_REQUIRES_OK(ctx, CalculatePosition(result, result_cigar, result_cigar_len, sig.position));
-            OP_REQUIRES_OK(ctx, CalculatePosition(mate, mate_cigar, mate_cigar_len, sig.position_mate));
+            sig.is_forward = IsForwardStrand(result.flag());
+            sig.is_mate_forward = IsForwardStrand(mate.flag());
+            OP_REQUIRES_OK(ctx, CalculatePosition(&result, sig.position));
+            OP_REQUIRES_OK(ctx, CalculatePosition(&mate, sig.position_mate));
 
             // attempt to find the signature
             auto sig_map_iter = signature_map_->find(sig);
             if (sig_map_iter == signature_map_->end()) { // not found, insert it
               signature_map_->insert(make_pair(sig, 1));
-              results_builder.AppendAlignmentResult(*result, string(result_cigar, result_cigar_len));
-              results_builder.AppendAlignmentResult(*mate, string(mate_cigar, mate_cigar_len));
+              results_builder.AppendAlignmentResult(result);
+              results_builder.AppendAlignmentResult(mate);
             } else { 
               // found, mark a dup
               LOG(INFO) << "omg we found a duplicate";
-              OP_REQUIRES_OK(ctx, MarkDuplicate(result, result_cigar, result_cigar_len, results_builder));
-              OP_REQUIRES_OK(ctx, MarkDuplicate(mate, mate_cigar, mate_cigar_len, results_builder));
+              OP_REQUIRES_OK(ctx, MarkDuplicate(&result, results_builder));
+              OP_REQUIRES_OK(ctx, MarkDuplicate(&mate, results_builder));
               num_dups_found_++;
             }
           }
         }
-        s = results_reader.GetNextResult(&result, &result_cigar, &result_cigar_len);
+        s = results_reader.GetNextResult(result);
       } // while s is ok()
 
       // done

@@ -8,8 +8,10 @@
 #include <vector>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/agd_result_reader.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/format.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/sam_flags.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/Bam.h"
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/priority_concurrent_queue.h"
@@ -192,7 +194,7 @@ namespace tensorflow {
         AGDRecordReader base_reader(bases_data, num_records);
         AGDRecordReader qual_reader(qual_data, num_records);
         AGDRecordReader meta_reader(meta_data, num_records);
-        vector<unique_ptr<AGDRecordReader>> result_readers;
+        vector<unique_ptr<AGDResultReader>> result_readers;
         vector<ResourceContainer<Data>*> results_data;
 
         results_data.resize(results_in->dim_size(0));
@@ -200,10 +202,10 @@ namespace tensorflow {
 
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, i, results_in, &results_data[i]));
           result_readers.push_back(
-                  unique_ptr<AGDRecordReader>(new AGDRecordReader(results_data[i], num_records)));
+                  unique_ptr<AGDResultReader>(new AGDResultReader(results_data[i], num_records)));
         }
 
-        const format::AlignmentResult* result;
+        Alignment result;
         const char* data, *meta, *base, *qual;
         const char* cigar;
         size_t len, meta_len, base_len, qual_len, cigar_len;
@@ -222,12 +224,11 @@ namespace tensorflow {
 
           // write an entry for each result, skip emtpy secondaries
           for (uint32 i = 0; i < result_readers.size(); i++) {
-            OP_REQUIRES_OK(ctx, result_readers[i]->GetNextRecord(&data, &len));
+            OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));
             OP_REQUIRES(ctx, i == 0 && len > 0 || i > 0, Internal("BAM output received 0 length primary result."));
 
-            result = reinterpret_cast<decltype(result)>(data);
-            cigar = data + sizeof(format::AlignmentResult);
-            cigar_len = len - sizeof(format::AlignmentResult);
+            cigar = result.cigar().c_str();
+            cigar_len = result.cigar().length();
             OP_REQUIRES_OK(ctx, ParseCigar(cigar, cigar_len, cigar_vec));
 
             size_t bamSize = BAMAlignment::size((unsigned) meta_len + 1, cigar_vec.size(), base_len, /*auxLen*/0);
@@ -250,21 +251,21 @@ namespace tensorflow {
             BAMAlignment *bam = (BAMAlignment *) (scratch_ + scratch_pos_);
             bam->block_size = (int) bamSize - 4;
 
-            int pos = FindChromosome(result->location_, ref_index);
+            int pos = FindChromosome(result.location(), ref_index);
             bam->refID = ref_index;
             bam->pos = pos;
             bam->l_read_name = (_uint8) meta_len + 1;
-            bam->MAPQ = result->mapq_;
+            bam->MAPQ = result.mapping_quality();
 
-            int mate_pos = FindChromosome(result->next_location_, mate_ref_index);
+            int mate_pos = FindChromosome(result.next_location(), mate_ref_index);
 
             int refLength = cigar_vec.size() > 0 ? 0 : base_len;
             for (int i = 0; i < cigar_vec.size(); i++) {
               refLength += BAMAlignment::CigarCodeToRefBase[cigar_vec[i] & 0xf] * (cigar_vec[i] >> 4);
             }
 
-            if (format::IsUnmapped(result)) {
-              if (format::IsNextUnmapped(result)) {
+            if (IsUnmapped(result.flag())) {
+              if (IsNextUnmapped(result.flag())) {
                 bam->bin = BAMAlignment::reg2bin(-1, 0);
               } else {
                 bam->bin = BAMAlignment::reg2bin(mate_pos, mate_pos + 1);
@@ -274,11 +275,11 @@ namespace tensorflow {
             }
 
             bam->n_cigar_op = cigar_vec.size();
-            bam->FLAG = result->flag_;
+            bam->FLAG = result.flag();
             bam->l_seq = base_len;
             bam->next_refID = mate_ref_index;
             bam->next_pos = mate_pos;
-            bam->tlen = (int) result->template_length_;
+            bam->tlen = (int) result.template_length();
             memcpy(bam->read_name(), meta, meta_len);
             bam->read_name()[meta_len] = 0;
             memcpy(bam->cigar(), &cigar_vec[0], cigar_vec.size() * 4);

@@ -9,13 +9,11 @@ namespace tensorflow {
 
   AGDResultReader::AGDResultReader(const char* resource, size_t num_records, 
       AGDRecordReader* metadata) : AGDRecordReader(resource, num_records), metadata_(metadata) {
-    const AlignmentResult* result;
-    const char* cigar;
-    size_t cigar_len;
-    Status s = PeekNextResult(&result, &cigar, &cigar_len);
-    start_location_ = result->location_;
-    GetResultAtIndex(num_records - 1, &result, &cigar, &cigar_len);
-    end_location_ = result->location_;
+    Alignment result;
+    Status s = PeekNextResult(result);
+    start_location_ = result.location();
+    GetResultAtIndex(num_records - 1, result);
+    end_location_ = result.location();
     if (metadata_)
       metadata_->Reset();
     LOG(INFO) << "AGDResult reader has chunk with first: " << start_location_ << " and last: " 
@@ -24,13 +22,11 @@ namespace tensorflow {
   
   AGDResultReader::AGDResultReader(ResourceContainer<Data>* resource, size_t num_records, 
       AGDRecordReader* metadata) : AGDRecordReader(resource, num_records), metadata_(metadata) {
-    const AlignmentResult* result;
-    const char* cigar;
-    size_t cigar_len;
-    Status s = PeekNextResult(&result, &cigar, &cigar_len);
-    start_location_ = result->location_;
-    GetResultAtIndex(num_records - 1, &result, &cigar, &cigar_len);
-    end_location_ = result->location_;
+    Alignment result;
+    Status s = PeekNextResult(result);
+    start_location_ = result.location();
+    GetResultAtIndex(num_records - 1, result);
+    end_location_ = result.location();
     if (metadata_)
       metadata_->Reset();
     LOG(INFO) << "AGDResult reader has chunk with first: " << start_location_ << " and last: " 
