@@ -13,7 +13,7 @@ namespace tensorflow {
 
 class ColumnBuilder {
 public:
-    virtual ~ColumnBuilder();
+    virtual ~ColumnBuilder() {};
     virtual void SetBufferPair(BufferPair* data);
 
     virtual void AppendRecord(const char* data, const std::size_t size);
