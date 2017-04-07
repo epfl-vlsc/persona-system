@@ -63,7 +63,7 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
     Create a ceph input pipeline.
     
     FIXME doesn't return the generic column name that was read. Must be assumed to be in order based on the columns
-    :param upstream_tensors: a tuple of tensors (key, pool_name, record_id), which are typically found in the metadata file. This controls the parallelism
+    :param upstream_tensors: a tuple of tensors (key, pool_name), which are typically found in the metadata file. This controls the parallelism
     :param user_name: 
     :param cluster_name: 
     :param ceph_conf_path: 
