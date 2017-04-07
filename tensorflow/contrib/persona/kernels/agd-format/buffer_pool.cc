@@ -1,6 +1,5 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool_op.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
-#include "data.h"
 
 namespace tensorflow {
   using namespace std;
