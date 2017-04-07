@@ -406,6 +406,11 @@ and is thus passed as an Attr instead of an input (for efficiency);
 Creates and initializes a pool containing a list of char buffers of size `buffer_size` bytes
   )doc");
 
+  REGISTER_REFERENCE_POOL("BufferPairPool")
+  .Doc(R"doc(
+Creates and initializes a pool containing a pair of char buffers of size `buffer_size` bytes
+  )doc");
+
   REGISTER_OP("BufferSink")
   .Attr("container: string = ''")
   .Attr("shared_name: string = ''")
