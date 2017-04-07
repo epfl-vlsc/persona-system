@@ -106,15 +106,15 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
     :return: yields the output of ceph write columns
     """
     def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
-        return persona_ops.agd_ceph_write_columns(cluster_name=cluster_name,
-                                                  user_name=user_name,
-                                                  ceph_conf_path=ceph_conf_path,
-                                                  pool_name=pool_name,
-                                                  record_id=record_id,
-                                                  num_records=num_records,
-                                                  first_ordinal=first_ordinal,
-                                                  file_path=key,
-                                                  column_handle=column_handle)
+        return persona_ops.agd_ceph_buffer_list_writer(cluster_name=cluster_name,
+                                                       user_name=user_name,
+                                                       ceph_conf_path=ceph_conf_path,
+                                                       pool_name=pool_name,
+                                                       record_id=record_id,
+                                                       num_records=num_records,
+                                                       first_ordinal=first_ordinal,
+                                                       file_path=key,
+                                                       column_handle=column_handle)
 
     for key, pool_name, num_records, first_ordinal, record_id, column_handle in upstream_tensors:
         yield make_ceph_writer(key=key,
@@ -160,15 +160,15 @@ def local_write_pipeline(upstream_tensors, record_type="results", name="local_wr
     :return: yield a writer for each record to be written in upstream tensors
     """
     def make_writer(record_id, file_path, first_ordinal, num_records, bl_handle):
-        return persona_ops.agd_write_columns(record_id=record_id,
-                                             record_type=record_type,
-                                             column_handle=bl_handle,
-                                             first_ordinal=first_ordinal,
-                                             num_records=num_records,
-                                             file_path=file_path)
+        return persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
+                                                              record_type=record_type,
+                                                              resource_handle=bl_handle,
+                                                              first_ordinal=first_ordinal,
+                                                              num_records=num_records,
+                                                              path=file_path)
 
     assert len(upstream_tensors) > 0
-    for buffer_list_handle, record_id, first_ordinal, num_records, file_path in upstream_tensors: # TODO check the order! assume pass-around thingy will be used
+    for buffer_list_handle, record_id, first_ordinal, num_records, file_path in upstream_tensors:
         yield make_writer(record_id=record_id,
                           file_path=file_path,
                           num_records=num_records,
