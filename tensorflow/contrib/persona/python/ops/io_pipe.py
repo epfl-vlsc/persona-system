@@ -86,7 +86,6 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
 
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(size=10, bound=False)
-    assert isinstance(buffer_pool, persona_ops.buffer_pool)
 
     for key, pool_name in upstream_tensors:
         validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
@@ -133,9 +132,9 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
     :param mmap_pool: if not None, provide a persona_ops.file_m_map pool to this method
     :param mmap_pool_args:
     :param name: 
-    :return: yield a tuple of 'file_path, persona_ops.file_m_map' for every tensor in upstream_tensors
+    :return: yield a tuple of 'file_path_base, [persona_ops.file_m_map for every column file]' for every tensor in upstream_tensors
     """
-    def make_reader(input_file_basename):
+    def make_readers(input_file_basename):
         prev = []
         for full_filename in expand_column_extensions(key=input_file_basename, columns=columns):
             with ops.control_dependencies(prev):
@@ -145,11 +144,10 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
 
     if mmap_pool is None:
         mmap_pool = persona_ops.m_map_pool(name=name, **mmap_pool_args)
-    assert isinstance(mmap_pool, persona_ops.m_map_pool)
 
     assert len(upstream_tensors) > 0
     for file_path in upstream_tensors:
-        yield file_path, make_reader(input_file_basename=file_path)
+        yield make_readers(input_file_basename=file_path)
 
 def local_write_pipeline(upstream_tensors, record_type="results", name="local_write_pipeline"):
     """
@@ -190,7 +188,6 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer
     """
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
-    assert isinstance(buffer_pool, persona_ops.buffer_pool)
     assert len(upstream_tensors) > 0
     for upstream_tensor in upstream_tensors:
         ut_shape = upstream_tensor.get_shape()
@@ -215,7 +212,6 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     """
     if buffer_pool is None and share_buffer_pool:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
-    assert isinstance(buffer_pool, persona_ops.buffer_pool) or buffer_pool is None
     assert len(upstream_tensorz) > 0
     process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
                        for upstream_tensors in upstream_tensorz)
@@ -251,7 +247,6 @@ def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=
 
     if agd_read_pool is None:
         agd_read_pool = persona_ops.agd_read_pool(**agd_read_pool_args, name="agd_reader_agd_read_pool")
-    assert isinstance(agd_read_pool, persona_ops.agd_read_pool)
 
     assert len(upstream_tensors) > 0
     for output_buffers, num_reads in upstream_tensors:
