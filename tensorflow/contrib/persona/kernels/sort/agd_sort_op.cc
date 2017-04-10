@@ -6,6 +6,7 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/parser.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/util.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/buffer_pair.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/column_builder.h"
 

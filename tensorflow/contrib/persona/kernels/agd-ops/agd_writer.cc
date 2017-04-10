@@ -36,7 +36,7 @@ namespace tensorflow {
 
   Status AGDWriterBase::SetOutputKey(OpKernelContext* ctx, const string &key) {
     Tensor *key_t;
-    TF_RETURN_IF_ERROR(ctx->allocate_output("path", TensorShape({}), &key_t));
+    TF_RETURN_IF_ERROR(ctx->allocate_output("output_path", TensorShape({}), &key_t));
     key_t->scalar<string>()() = key;
     return Status::OK();
   }

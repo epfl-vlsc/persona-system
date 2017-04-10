@@ -47,7 +47,7 @@ namespace tensorflow {
       }
 
       const Tensor *key_t, *pool_name_t;
-      OP_REQUIRES_OK(ctx, ctx->input("queue_key", &key_t));
+      OP_REQUIRES_OK(ctx, ctx->input("key", &key_t));
       OP_REQUIRES_OK(ctx, ctx->input("pool_name", &pool_name_t));
       auto file_key = key_t->scalar<string>()();
       auto pool_name = pool_name_t->scalar<string>()();
