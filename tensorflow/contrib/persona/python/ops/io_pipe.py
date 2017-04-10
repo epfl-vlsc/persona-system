@@ -253,6 +253,8 @@ def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=
         yield make_agd_read(column_buffers=output_buffers, num_reads=num_reads)
 
 def join(upstream_tensors, parallel, capacity, multi=False):
+    if not isinstance(upstream_tensors, (tuple, list)):
+        upstream_tensors = tuple(upstream_tensors)
     if multi:
         return batch_join_pdq(tensor_list_list=upstream_tensors, batch_size=1,
                               num_dq_ops=parallel, capacity=capacity)
