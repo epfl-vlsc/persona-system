@@ -36,6 +36,8 @@ namespace tensorflow {
   Status AGDResultReader::GetResultAtLocation(int64_t location, const char* metadata, 
         size_t metadata_len, Alignment& result, size_t* index) {
 
+    // this method should only be used on the primary results column
+    // empty results will cause it to return with errors::Unavailable
     if (!metadata_)
       return Internal("metadata was not supplied so GetResultAtLocation cannot work.");
 
@@ -98,6 +100,9 @@ namespace tensorflow {
       const char* data;
       size_t len;
       TF_RETURN_IF_ERROR(GetNextRecord(&data, &len));
+      if (len == 0) {
+        return errors::Unavailable("Empty result");
+      }
       result.ParseFromArray(data, len);
       return Status::OK();
     }
@@ -106,6 +111,9 @@ namespace tensorflow {
       const char* data;
       size_t len;
       TF_RETURN_IF_ERROR(PeekNextRecord(&data, &len));
+      if (len == 0) {
+        return errors::Unavailable("Empty result");
+      }
       result.ParseFromArray(data, len);
       return Status::OK();
     }
@@ -115,6 +123,9 @@ namespace tensorflow {
       const char* data;
       size_t len;
       TF_RETURN_IF_ERROR(GetRecordAt(index, &data, &len));
+      if (len == 0) {
+        return errors::Unavailable("Empty result");
+      }
       result.ParseFromArray(data, len);
       return Status::OK();
     }

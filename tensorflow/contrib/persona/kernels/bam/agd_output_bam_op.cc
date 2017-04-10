@@ -208,7 +208,7 @@ namespace tensorflow {
         Alignment result;
         const char* data, *meta, *base, *qual;
         const char* cigar;
-        size_t len, meta_len, base_len, qual_len, cigar_len;
+        size_t meta_len, base_len, qual_len, cigar_len;
         int ref_index, mate_ref_index;
         vector<uint32> cigar_vec;
         cigar_vec.reserve(20); // should usually be enough
@@ -224,8 +224,14 @@ namespace tensorflow {
 
           // write an entry for each result, skip emtpy secondaries
           for (uint32 i = 0; i < result_readers.size(); i++) {
-            OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));
-            OP_REQUIRES(ctx, i == 0 && len > 0 || i > 0, Internal("BAM output received 0 length primary result."));
+            //OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));
+            s = result_readers[i]->GetNextResult(result);
+            OP_REQUIRES(ctx, i == 0 && s.ok() || i > 0 && (s.ok() || IsUnavailable(s)),
+                        Internal("Output bam received bad alignment result"))
+            if (IsUnavailable(s)) {
+              // skip emtpy secondary
+              continue;
+            }
 
             cigar = result.cigar().c_str();
             cigar_len = result.cigar().length();
