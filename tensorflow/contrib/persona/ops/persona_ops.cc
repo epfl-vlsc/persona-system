@@ -437,7 +437,7 @@ we can use it in other pipelines where writers are used
   .Attr("ceph_conf_path: string")
   .Attr("read_size: int")
   .Input("buffer_handle: Ref(string)")
-  .Input("queue_key: string")
+  .Input("key: string")
   .Input("pool_name: string")
   .Output("file_handle: string")
   .SetShapeFn([](InferenceContext *c) {
@@ -458,9 +458,8 @@ Obtains file names from a queue, fetches those files from Ceph storage using Lib
 and writes them to a buffer from a pool of buffers.
 
 buffer_handle: a handle to the buffer pool
-queue_key: key reference to the filename queue
+key: key reference to the filename queue
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
-file_name: a Tensor() of string for the unique key for this file
   )doc");
 
   REGISTER_OP("CephWriter")
@@ -590,11 +589,10 @@ A pool to manage FastqReadResource objects
 Produces memory-mapped files, synchronously reads them, and produces a Tensor<2>
 with the container and shared name for the file.
 
-local_prefix: a directory on the local machine on which to find the keys
 This is used in the case of a remote reader giving only the filenames to this reader
 pool_handle: a handle to the filename queue
 file_handle: a Tensor(2) of strings to access the shared mmaped file resource to downstream nodes
-file_name: a Tensor() of string for the unique key for this file
+filename: a Tensor() of string for the unique key for this file
   )doc");
 
 
@@ -1090,7 +1088,7 @@ Intended to be used for BWAAssembler
   .Input("first_ordinal: int64") \
   .Input("num_records: int32") \
   .Input("resource_handle: string") \
-  .Output("path: string")
+  .Output("output_path: string")
 
 #define COMMON_AGD_DOC \
   "record_type: one of base, qual, meta, or results* " \
@@ -1112,7 +1110,7 @@ Intended to be used for BWAAssembler
     }
 
 #define CEPH_WRITER_OP(WRITER_TYPE) \
-  REGISTER_OP("AGDCeph" #WRITER_TYPE "Writer") \
+  REGISTER_OP("AGDCeph" WRITER_TYPE "Writer") \
   .Attr("cluster_name: string") \
   .Attr("user_name: string") \
   .Attr("ceph_conf_path: string") \
@@ -1128,7 +1126,7 @@ Intended to be used for BWAAssembler
     return Status::OK(); \
   }) \
   .Doc(R"doc( \
-  Write a record of type " #WRITER_TYPE " to Ceph \
+  Write a record of type " WRITER_TYPE " to Ceph \
    \
   cluster_name: Ceph cluster name \
   user_name: Ceph user name \
@@ -1139,7 +1137,7 @@ Intended to be used for BWAAssembler
 
 
 #define FS_WRITER_OP(WRITER_TYPE) \
-  REGISTER_OP("AGDFileSystem" #WRITER_TYPE "Writer") \
+  REGISTER_OP("AGDFileSystem" WRITER_TYPE "Writer") \
   AGD_COMMON_HEADER_ATTRIBUTES \
   .SetShapeFn([](InferenceContext *c) { \
     for (int i = 0; i < 4; i++) { \

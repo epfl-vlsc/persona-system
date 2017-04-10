@@ -72,7 +72,7 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
     :param ceph_read_size: 
     :param buffer_pool: 
     :param name: 
-    :return: a list of (key, pool_name, record_id, tuple(chunk_buffers)) for every tensor in upstream tensors
+    :return: a list of (key, pool_name, tuple(chunk_buffers)) for every tensor in upstream tensors
     """
     def make_ceph_reader(key, pool_name):
         return persona_ops.ceph_reader(cluster_name=cluster_name,
