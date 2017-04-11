@@ -294,8 +294,8 @@ private:
                 primaryResult.direction[i] = FORWARD; 
                 subchunk_status = aligner.writeResult(snap_read, primaryResult, result_builders[0], false);
                 // fill in blanks for secondaries
-                for (int i = 1; i < result_builders.size(); i++) {
-                  result_builders[i].AppendEmpty();
+                for (int i = 0; i < max_secondary_; i++) {
+                  result_builders[i+1].AppendEmpty();
                 }
               }
               continue;
@@ -308,7 +308,7 @@ private:
             // we either have paired secondaries, or single ended results for each, but not both
             if (num_secondary_results > 0) {
               while (subchunk_status.ok() && i < num_secondary_results) {
-                subchunk_status = aligner.writeResult(snap_read, secondary_results[i], result_builders[i], true);
+                subchunk_status = aligner.writeResult(snap_read, secondary_results[i], result_builders[i+1], true);
                 i++;
               }
             } else if (num_secondary_single_results_first > 0 || num_secondary_single_results_second > 0) {
@@ -317,21 +317,24 @@ private:
                     result_builders[i+1], index->getGenome(), &lvc, true);
                 i++;
               }
+              // fill in blanks
+              i = num_secondary_single_results_first;
+              while (i < max_secondary_) {
+                result_builders[i + 1].AppendEmpty();
+                i++;
+              }
               i = 0;
+              // neither single secondary results should have more than max_secondary_
               while (subchunk_status.ok() && i < num_secondary_single_results_second) {
-                subchunk_status = snap_wrapper::WriteSingleResult(snap_read[1], secondary_single_results[i+num_secondary_single_results_first],
+                subchunk_status = snap_wrapper::WriteSingleResult(snap_read[1],
+                                                                  secondary_single_results[i+num_secondary_single_results_first],
                     result_builders[i+1], index->getGenome(), &lvc, true);
                 i++;
               }
               // fill in the gaps
-              i = 0;
-              while (num_secondary_single_results_first + i < num_secondary_single_results_second) {
-                result_builders[num_secondary_single_results_first + i + 1].AppendEmpty();
-                i++;
-              }
-              i = 0;
-              while (num_secondary_single_results_second + i < num_secondary_single_results_first) {
-                result_builders[num_secondary_single_results_first + i + 1].AppendEmpty();
+              i = num_secondary_single_results_second;
+              while (i < max_secondary_) {
+                result_builders[i + 1].AppendEmpty();
                 i++;
               }
             }
@@ -343,8 +346,12 @@ private:
             return;
           }
 
-          for (auto buf : result_bufs)
+          auto idx_size = result_bufs[0]->index().size();
+          for (auto buf : result_bufs) {
+            if (idx_size != buf->index().size())
+              LOG(INFO) << "buf indexes do not have same size!!";
             buf->set_ready();
+          }
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         }
