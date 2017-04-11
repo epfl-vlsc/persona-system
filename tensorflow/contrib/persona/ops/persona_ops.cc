@@ -364,43 +364,6 @@ Verifies that the dataset referred to by `chunk_names` is sorted.
 Chunk names must be in contiguous order.
   )doc");
 
-  REGISTER_OP("AGDWriteColumns")
-  .Attr("record_type: list({'base', 'qual', 'metadata', 'results'})")
-  .Input("column_handle: string")
-  .Input("file_path: string")
-  .Input("record_id: string")
-  .Input("first_ordinal: int64")
-  .Input("num_records: int32")
-  .Output("key_out: string")
-  .SetShapeFn([](InferenceContext *c) {
-      ShapeHandle sh;
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
-      auto dim_handle = c->Dim(sh, 0);
-      auto dim_val = c->Value(dim_handle);
-      if (dim_val != 2) {
-        return Internal("column_handle must have dimensions {2}. Got ", dim_val);
-      }
-
-      for (int i = 1; i < 5; i++) {
-        TF_RETURN_IF_ERROR(c->WithRank(c->input(i), 0, &sh));
-      }
-      c->set_output(0, c->input(1)); // it will be copied from this param
-
-      return Status::OK();
-    })
-  .Doc(R"doc(
-Writes out columns from a specified BufferList. The list contains
-[data, index] BufferPairs. This Op constructs the header, unifies the buffers,
-and writes to disk. Normally, this corresponds to a set of bases, qual, meta,
-results columns. Thus the BufferList corresponds to an entire dataset chunk.
-
-This writes out to local disk only
-
-Assumes that the record_id for a given set does not change for the runtime of the graph
-and is thus passed as an Attr instead of an input (for efficiency);
-
-)doc");
-
   REGISTER_REFERENCE_POOL("BufferListPool")
   .Doc(R"doc(
 Creates and initializes a pool containing a list of char buffers of size `buffer_size` bytes
@@ -499,46 +462,6 @@ file_name: a Tensor() of string for the unique key for this file
 compress: whether or not to compress the column
   )doc");
 
-  REGISTER_OP("ColumnWriter")
-  .Attr("record_id: string")
-  .Attr("compressed: bool = false")
-  .Attr("record_types: list({'base', 'qual', 'metadata', 'results'})")
-  .Attr("output_dir: string = ''")
-  .Input("columns: string")
-  .Input("file_path: string")
-  .Input("first_ordinal: int64")
-  .Input("num_records: int32")
-  .Output("file_path_out: string")
-  .SetShapeFn([](InferenceContext *c) {
-      vector<string> record_types;
-      TF_RETURN_IF_ERROR(c->GetAttr("record_types", &record_types));
-
-      ShapeHandle input_data;
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 2, &input_data));
-      auto dim_handle = c->Dim(input_data, 1);
-      auto dim_value = c->Value(dim_handle);
-      if (dim_value != 2) {
-        return Internal("columns must be an Nx2 matrix, but got ", dim_value, " for the 2nd dim");
-      }
-
-      dim_handle = c->Dim(input_data, 0);
-      dim_value = c->Value(dim_handle);
-      auto expected_size = record_types.size();
-      if (dim_value != expected_size) {
-        return Internal("columns must have ", expected_size, " in 0 dim, but got ", dim_value);
-      }
-
-      for (int i = 1; i < 4; i++) {
-        TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 0, &input_data));
-      }
-
-      c->set_output(0, c->input(1));
-
-      return Status::OK();
-    })
-  .Doc(R"doc(
-)doc");
-
   REGISTER_OP("FastqChunker")
   .Attr("chunk_size: int >= 1")
   .Input("queue_handle: resource")
@@ -601,49 +524,6 @@ filename: a Tensor() of string for the unique key for this file
 Creates pools of MemoryMappedFile objects
 )doc");
 
-  REGISTER_OP("ParallelColumnWriter")
-          .Attr("compress: bool")
-          .Attr("record_id: string")
-          .Attr("record_type: string")
-          .Attr("output_dir: string = ''")
-          .Attr("extension: string = ''")
-          .Input("column_handle: string")
-          .Input("file_path: string")
-          .Input("first_ordinal: int64")
-          .Input("num_records: int32")
-          .Output("key_out: string")
-          .SetShapeFn([](InferenceContext* c) {
-            c->set_output(0, c->Scalar());
-            return Status::OK();
-          })
-          .Doc(R"doc(
-Writes out a column (just a character buffer) to the location specified by the input.
-This writes out to local disk only
-Assumes that the record_id for a given set does not change for the runtime of the graph
-and is thus passed as an Attr instead of an input (for efficiency);
-This also assumes that this writer only writes out a single record type.
-Thus we always need 3 of these for the full conversion pipeline
-)doc");
-
-#if 0
-  REGISTER_OP("ParallelSamWriter")
-  .Attr("sam_file_path: string = ''")
-  .Input("agd_results: string")
-  .Input("genome_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
-  .Input("read: string")
-  .Input("num_records: int32")
-  .Output("num_records_out: int32")
-  .SetIsStateful()
-  .Doc(R"doc(
-Writes out the output in the SAM format (just a character buffer) to the location specified by the input.
-
-This writes out to local disk only
-
-Assumes that the record_id for a given set does not change for the runtime of the graph
-and is thus passed as an Attr instead of an input (for efficiency);
-)doc");
-#endif
 
   REGISTER_OP("S3Reader")
   .Attr("access_key: string")
