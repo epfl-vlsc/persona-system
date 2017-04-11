@@ -90,7 +90,7 @@ class SnapAlignSingleOp : public OpKernel {
 
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
 
-  OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, [this, ctx, result_buffers](ResourceContainer<ReadResource> *rr) {
+    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<ReadResource>>(reads_container, [this, ctx, result_buffers](ResourceContainer<ReadResource> *rr) {
       ResourceReleaser<ReadResource> a(*rr);
       {
         ReadResourceReleaser r(*rr->get());
@@ -101,7 +101,7 @@ class SnapAlignSingleOp : public OpKernel {
         }
       }
     })),
-    Internal("Unable to push item onto work queue. Is it already closed?"));
+                Internal("Unable to push item onto work queue. Is it already closed?"));
   }
 
 
