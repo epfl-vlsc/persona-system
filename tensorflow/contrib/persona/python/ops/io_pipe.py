@@ -324,8 +324,8 @@ def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress
         bufs = array_ops.unstack(buffer_list)
       else: 
         bufs = [buffer_list]
+      writes = []
       for i, buf in enumerate(bufs):
-          print("buf shape is: {}".format(buf.get_shape()))
           writer_op = persona_ops.parallel_column_writer(
               column_handle=buf,
               record_type=column[i],
@@ -335,7 +335,8 @@ def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress
               file_path=key, name=name,
               compress=compress, output_dir=path
           )
-          write_ops.append([writer_op])
+          writes.append(writer_op)
+      write_ops.append(writes)
 
     sink_queue = batch_join_pdq(write_ops, capacity=10, num_dq_ops=1, batch_size=1, name=name)
     return sink_queue[0]

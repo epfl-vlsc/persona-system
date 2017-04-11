@@ -768,7 +768,7 @@ Creates and initializes a pool containing char buffers of size `buffer_size` byt
 #define MAKE_OP(_name_)                         \
   REGISTER_OP(_name_)                           \
   .Output("handle: Ref(string)")                \
-  .Attr("cmd_line: string")                     \
+  .Attr("cmd_line: list(string)")                     \
   .Attr("container: string = ''")               \
   .Attr("shared_name: string = ''")             \
   .SetIsStateful()                              \
