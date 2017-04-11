@@ -60,7 +60,7 @@ namespace tensorflow {
 
       ResourceContainer<Data> *agd_input;
       ResourceContainer<Buffer> *output_buffer_rc;
-      OP_REQUIRES_OK(ctx, LookupResource(ctx, HandleFromInput(ctx, 1), &agd_input));
+      OP_REQUIRES_OK(ctx, ctx->resource_manager()->Lookup(fileset(0), fileset(1), &agd_input));
       core::ScopedUnref unref_me(agd_input);
       {
         ResourceReleaser<Data> agd_releaser(*agd_input);
@@ -76,6 +76,7 @@ namespace tensorflow {
           OP_REQUIRES_OK(ctx, output_buffer_rc->allocate_output("processed_buffers", ctx));
           num_records() = num_recs_;
           first_ordinals() = first_ord_;
+          record_id() = record_id_;
         }
       }
     }
