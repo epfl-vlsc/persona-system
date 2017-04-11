@@ -14,7 +14,12 @@ from tensorflow.python.training.input import batch
 
 import json
 import os
-import itertools
+
+import logging
+logging.basicConfig()
+log = logging.getLogger(__file__)
+log.setLevel(logging.DEBUG)
+
 
 persona_ops = persona_ops_proxy()
 scalar_shape = tensor_shape.scalar()
@@ -157,12 +162,14 @@ def local_write_pipeline(upstream_tensors, record_type="results", name="local_wr
     :return: yield a writer for each record to be written in upstream tensors
     """
     def make_writer(record_id, file_path, first_ordinal, num_records, bl_handle):
-        return persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
-                                                              record_type=record_type,
-                                                              resource_handle=bl_handle,
-                                                              first_ordinal=first_ordinal,
-                                                              num_records=num_records,
-                                                              path=file_path)
+        bl_handle = array_ops.unstack(bl_handle)
+        for handle in bl_handle:
+            yield persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
+                                                                 record_type=record_type,
+                                                                 resource_handle=handle,
+                                                                 first_ordinal=first_ordinal,
+                                                                 num_records=num_records,
+                                                                 path=file_path)
 
     assert len(upstream_tensors) > 0
     for buffer_list_handle, record_id, first_ordinal, num_records, file_path in upstream_tensors:
@@ -232,6 +239,8 @@ def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=
     """
     def make_agd_read(column_buffers, num_reads):
         # order on column_buffers: bases, quals, metadata (if exists)
+        if isinstance(column_buffers, ops.Tensor):
+            column_buffers = array_ops.unstack(column_buffers)
         if include_meta:
             assert len(column_buffers) == 3
             return persona_ops.agd_assembler(agd_read_pool=agd_read_pool,
@@ -256,6 +265,8 @@ def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=
 def join(upstream_tensors, parallel, capacity, multi=False):
     if not isinstance(upstream_tensors, (tuple, list)):
         upstream_tensors = tuple(upstream_tensors)
+        if multi:
+            raise Exception("single example or generator given to multi join")
     if multi:
         return batch_join_pdq(tensor_list_list=upstream_tensors, batch_size=1,
                               num_dq_ops=parallel, capacity=capacity)

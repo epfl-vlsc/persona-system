@@ -711,8 +711,7 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
   .Input("output_buffer_list_queue_handle: resource")
   .SetIsStateful() // TODO not sure if needed
   .SetShapeFn([](InferenceContext *c) {
-      int i;
-      for (i = 0; i < 5; i++) {
+      for (int i = 0; i < 4; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
       return Status::OK();
