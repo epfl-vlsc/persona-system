@@ -92,6 +92,7 @@ namespace tensorflow {
             printf("\n");
           } else if (columns_[i] == "results" ) {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
+            LOG(INFO) << "length is " << length;
             agd_result.ParseFromArray(data, length);
             printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result.location(), agd_result.flag(),
                    agd_result.mapping_quality(), agd_result.next_location());
@@ -100,7 +101,8 @@ namespace tensorflow {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
             printf("Secondary result %d:\n", int(columns_[i].back() - '0'));
             if (length > 0) {
-              agd_result.ParseFromArray(data, length);
+              if (!agd_result.ParsePartialFromArray(data, length))
+                LOG(INFO) << "parsing secondary returned false!, length was " << length;
               printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result.location(), agd_result.flag(),
                      agd_result.mapping_quality(), agd_result.next_location());
               printf("CIGAR: %s \n\n", agd_result.cigar().c_str());
