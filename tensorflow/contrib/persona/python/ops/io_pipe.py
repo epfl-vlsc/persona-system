@@ -1,7 +1,6 @@
 
 # build input pipelines for AGD
 
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -10,7 +9,6 @@ from tensorflow.contrib.persona.python.ops.persona_ops import persona_ops as per
 from tensorflow.contrib.persona.python.ops.queues import batch_pdq, batch_join_pdq
 from tensorflow.python.framework import ops, dtypes, tensor_shape, constant_op
 from tensorflow.python.ops import string_ops, array_ops
-from tensorflow.python.ops import control_flow_ops
 from tensorflow.python import training
 from tensorflow.python.training.input import batch
 
@@ -20,6 +18,7 @@ import itertools
 
 persona_ops = persona_ops_proxy()
 scalar_shape = tensor_shape.scalar()
+resource_shape = tensor_shape.vector(2)
 pool_default_args = {'size':10, "bound": False}
 
 def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
@@ -132,7 +131,7 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
     :param mmap_pool: if not None, provide a persona_ops.file_m_map pool to this method
     :param mmap_pool_args:
     :param name: 
-    :return: yield a tuple of 'file_path_base, [persona_ops.file_m_map for every column file]' for every tensor in upstream_tensors
+    :return: yield a tuple of '(persona_ops.file_m_map for every column file, a generator)' for every tensor in upstream_tensors
     """
     def make_readers(input_file_basename):
         prev = []
@@ -188,12 +187,14 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer
     """
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
+    if isinstance(upstream_tensors, ops.Tensor):
+        upstream_tensors = array_ops.unstack(upstream_tensors)
     assert len(upstream_tensors) > 0
     for upstream_tensor in upstream_tensors:
         ut_shape = upstream_tensor.get_shape()
-        if ut_shape != scalar_shape:
+        if ut_shape != resource_shape:
             raise Exception("AGD_Reader pipeline encounter Tensor with shape {actual}, but expected {expected}".format(
-                actual=ut_shape, expected=scalar_shape
+                actual=ut_shape, expected=resource_shape
             ))
         output_buffer, num_records, first_ordinal, record_id = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
                                                                              verify=verify, name="agd_reader")
@@ -216,7 +217,7 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
                        for upstream_tensors in upstream_tensorz)
     for processed_tensors in process_tensorz:
-        output_buffers, num_recordss, first_ordinalss, record_ids = itertools.chain.from_iterable(*processed_tensors)
+        output_buffers, num_recordss, first_ordinalss, record_ids = zip(*processed_tensors)
         yield output_buffers, num_recordss[0], first_ordinalss[0], record_ids[0]
 
 def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=pool_default_args, include_meta=False, name="agd_read_assembler"):
