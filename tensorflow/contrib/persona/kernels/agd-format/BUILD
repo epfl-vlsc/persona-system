@@ -21,6 +21,7 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/snap-align:snap_lib",
         "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
         "//tensorflow/contrib/persona/kernels/lttng:trace",
+        "//tensorflow/contrib/persona/kernels/agd-format/proto:alignment_proto_cc",
         "//third_party/eigen3",
         "@protobuf//:protobuf",
         #"//tensorflow/core/kernels:ops_util"

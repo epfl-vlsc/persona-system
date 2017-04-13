@@ -1,7 +1,7 @@
 #pragma once
 
 #include "agd_record_reader.h"
-
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 
 namespace tensorflow {
 
@@ -28,20 +28,16 @@ namespace tensorflow {
     // the index position the read was found at.
     // NB cigar is not a proper c-string
     Status GetResultAtLocation(int64_t location, const char* metadata, 
-        size_t metadata_len, const format::AlignmentResult** result, const char** cigar, 
-        size_t* cigar_len, size_t* index=nullptr);
+        size_t metadata_len, Alignment& result, size_t* index=nullptr);
 
     // Get or peek next alignment result in the index. 
     // NB again cigar is not a proper c-string
-    Status GetNextResult(const format::AlignmentResult** result, const char** cigar, 
-        size_t* cigar_len);
-    Status PeekNextResult(const format::AlignmentResult** result, const char** cigar, 
-        size_t* cigar_len);
+    Status GetNextResult(Alignment& result);
+    Status PeekNextResult(Alignment& result);
 
     // Get a result at a specific index offset in the chunk
     // uses the Absolute index created on construction
-    Status GetResultAtIndex(size_t index, const format::AlignmentResult** result,
-        const char** cigar, size_t* cigar_len);
+    Status GetResultAtIndex(size_t index, Alignment& result);
 
     // is this location possibly contained
     // i.e. start_location_ <= location <= end_location_

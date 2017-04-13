@@ -212,7 +212,7 @@ private:
           //LOG(INFO) << "finalizer thread " << my_id << " got  interval: " << interval;
 
           for (int i = 0; i < result_builders.size(); i++)
-            result_builders[i].set_buffer_pair(result_bufs[i]);
+            result_builders[i].SetBufferPair(result_bufs[i]);
 
           Status s = aligner.AlignSubchunkSingle(subchunk_resource, result_builders);
 
