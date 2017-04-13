@@ -7,11 +7,10 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/parser.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/util.h"
-#include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
-#include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
+
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 
 namespace tensorflow {
-
 
   using namespace std;
   using namespace errors;
@@ -65,7 +64,7 @@ namespace tensorflow {
 
       OP_REQUIRES_OK(ctx, LoadChunk(ctx, chunk_names(which_chunk)));
 
-      const format::AlignmentResult* agd_result;
+      Alignment agd_result;
 
       while (current <= end) {
         int chunk_offset = current - chunksize*which_chunk;
@@ -82,22 +81,20 @@ namespace tensorflow {
             printf("\n");
           } else if (columns_[i] == "results" ) {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
-            agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-            printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result->location_, agd_result->flag_, agd_result->mapq_, agd_result->next_location_);
-            const char* cigardata = data + sizeof(format::AlignmentResult);
-            decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
-            fwrite(cigardata, cigarlen, 1, stdout);
-            printf("\n\n");
+            LOG(INFO) << "length is " << length;
+            agd_result.ParseFromArray(data, length);
+            printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result.location(), agd_result.flag(),
+                   agd_result.mapping_quality(), agd_result.next_location());
+            printf("CIGAR: %s \n\n", agd_result.cigar().c_str());
           } else if (columns_[i].find("secondary") != std::string::npos) {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
             printf("Secondary result %d:\n", int(columns_[i].back() - '0'));
             if (length > 0) {
-              agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-              printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result->location_, agd_result->flag_, agd_result->mapq_, agd_result->next_location_);
-              const char* cigardata = data + sizeof(format::AlignmentResult);
-              decltype(length) cigarlen = length - sizeof(format::AlignmentResult);
-              fwrite(cigardata, cigarlen, 1, stdout);
-              printf("\n\n");
+              if (!agd_result.ParsePartialFromArray(data, length))
+                LOG(INFO) << "parsing secondary returned false!, length was " << length;
+              printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result.location(), agd_result.flag(),
+                     agd_result.mapping_quality(), agd_result.next_location());
+              printf("CIGAR: %s \n\n", agd_result.cigar().c_str());
             } else {
               printf("had an empty secondary result\n");
             }

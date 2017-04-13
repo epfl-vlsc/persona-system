@@ -5,19 +5,13 @@
 #include <memory>
 #include <utility>
 #include <string>
+#include <vector>
 
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/resource_mgr.h"
-#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/PairedAligner.h" // for paired aligner options
-#include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/platform/macros.h"
-#include "tensorflow/core/platform/mutex.h"
-#include "tensorflow/core/platform/thread_annotations.h"
-#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
   using namespace std;
@@ -41,7 +35,7 @@ namespace tensorflow {
         void Compute(OpKernelContext* ctx) override {
             mutex_lock l(mu_);
             if (!options_handle_set_) {
-                OP_REQUIRES_OK(ctx, SetOptionsHandle(ctx, cmd_line_));
+                OP_REQUIRES_OK(ctx, SetOptionsHandle(ctx));
             }
             ctx->set_output_ref(0, &mu_, options_handle_.AccessTensor(ctx));
         }
@@ -60,14 +54,31 @@ namespace tensorflow {
         ContainerInfo cinfo_;
 
     private:
-        Status SetOptionsHandle(OpKernelContext* ctx, string cmd_line) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+        Status SetOptionsHandle(OpKernelContext* ctx) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
             TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
             OptionsContainer* options;
 
-            auto creator = [this, cmd_line](OptionsContainer** options) {
-              unique_ptr<T> t(new T(cmd_line_.c_str()));
-              *options = new OptionsContainer(move(t));
-              return Status::OK();
+            auto creator = [this](OptionsContainer** options) {
+                unique_ptr<T> t(new T("dummy"));
+                if (cmd_line_.size() > 0) {
+                    LOG(INFO) << "parsing cmd lines ...";
+                    const char* argv[cmd_line_.size()];
+                    for (size_t i = 0; i < cmd_line_.size(); i++) {
+                        argv[i] = cmd_line_[i].c_str();
+                    }
+                    int argc = cmd_line_.size();
+                    bool done;
+                    for (int i = 0; i < argc; i++) {
+                        if (!t->parse(argv, argc, i, &done))
+                            return errors::InvalidArgument("Could not parse snap arg ", string(argv[i]));
+                        if (done)
+                            break;
+                    }
+                    LOG(INFO) << "Done!!";
+                }
+
+                *options = new OptionsContainer(move(t));
+                return Status::OK();
             };
 
             TF_RETURN_IF_ERROR(
@@ -81,7 +92,7 @@ namespace tensorflow {
             return Status::OK();
         }
 
-        string cmd_line_;
+        std::vector<string> cmd_line_;
         mutex mu_;
         PersistentTensor options_handle_ GUARDED_BY(mu_);
         bool options_handle_set_ GUARDED_BY(mu_);

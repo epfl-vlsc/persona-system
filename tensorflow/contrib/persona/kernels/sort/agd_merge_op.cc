@@ -15,6 +15,9 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/util.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
 
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
+
+
 namespace tensorflow {
   using namespace std;
   using namespace errors;
@@ -32,8 +35,8 @@ namespace tensorflow {
         const char* data;
         size_t data_sz;
         TF_RETURN_IF_ERROR(results_.PeekNextRecord(&data, &data_sz));
-        current_result_ = reinterpret_cast<decltype(current_result_)>(data);
-        current_location_ = current_result_->location_;
+        current_result_.ParseFromArray(data, data_sz);
+        current_location_ = current_result_.location();
         return Status::OK();
       }
 
@@ -58,7 +61,7 @@ namespace tensorflow {
     private:
       vector<AGDRecordReader> other_columns_;
       AGDRecordReader results_;
-      const AlignmentResult *current_result_ = nullptr;
+      Alignment current_result_;
       int64_t current_location_ = -2048;
 
       static inline

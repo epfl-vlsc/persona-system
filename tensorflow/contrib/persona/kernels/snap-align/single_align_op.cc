@@ -272,7 +272,7 @@ private:
       size_t bases_len, qualities_len;
       SingleAlignmentResult primaryResult;
       vector<SingleAlignmentResult> secondaryResults;
-      secondaryResults.resize(max_secondary_);
+      secondaryResults.resize(alignmentResultBufferCount);
 
       int num_secondary_results;
       SAMFormat format(options_->useM);
@@ -291,6 +291,7 @@ private:
       timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
       std::chrono::high_resolution_clock::time_point end_time;
 
+      int num_reads_processed = 0;
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
         shared_ptr<ResourceContainer<ReadResource>> reads_container;
@@ -307,8 +308,8 @@ private:
             result_builders.resize(result_bufs.size());
           }
 
-          for (size_t i = 0; i < result_bufs.size(); i++) {
-            result_builders[i].set_buffer_pair(result_bufs[i]);
+          for (int i = 0; i < result_builders.size(); i++) {
+            result_builders[i].SetBufferPair(result_bufs[i]);
           }
 
           for (subchunk_status = subchunk_resource->get_next_record(snap_read); subchunk_status.ok();
@@ -320,15 +321,14 @@ private:
               primaryResult.location = InvalidGenomeLocation;
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
-              //result_builder.AppendAlignmentResult(primaryResult, "*", 4);
               auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
 
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
               }
-              for (int i = 1; i < max_secondary_; i++) {
+              for (int i = 0; i < max_secondary_; i++) {
                 // fill the columns with empties to maintain index equivalence
-                result_builders[i].AppendEmpty();
+                result_builders[i+1].AppendEmpty();
               }
               continue;
             }
@@ -337,7 +337,7 @@ private:
                                     &snap_read,
                                     &primaryResult,
                                     options_->maxSecondaryAlignmentAdditionalEditDistance,
-                                    alignmentResultBufferSize,
+                                    alignmentResultBufferCount,
                                     &num_secondary_results,
                                     max_secondary_,
                                     &secondaryResults[0] //secondaryResults
@@ -348,6 +348,7 @@ private:
             // First, write the primary results
             auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc, false);
 
+            num_reads_processed++;
             if (!s.ok()) {
               LOG(ERROR) << "adjustResults did not return OK!!!";
               compute_status_ = s;
@@ -356,7 +357,6 @@ private:
 
             // Then write the secondary results if we specified them
             for (int i = 0; i < num_secondary_results; i++) {
-
               s = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[i], result_builders[i+1], genome_, &lvc, true);
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
@@ -366,7 +366,7 @@ private:
             }
             for (int i = num_secondary_results; i < max_secondary_; i++) {
               // fill the columns with empties to maintain index equivalence
-              result_builders[i].AppendEmpty();
+              result_builders[i+1].AppendEmpty();
             }
           }
 

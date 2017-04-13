@@ -598,7 +598,7 @@ Creates and initializes a pool containing char buffers of size `buffer_size` byt
 #define MAKE_OP(_name_)                         \
   REGISTER_OP(_name_)                           \
   .Output("handle: Ref(string)")                \
-  .Attr("cmd_line: string")                     \
+  .Attr("cmd_line: list(string)")                     \
   .Attr("container: string = ''")               \
   .Attr("shared_name: string = ''")             \
   .SetIsStateful()                              \
@@ -945,8 +945,9 @@ Intended to be used for BWAAssembler
   Not all tags for SAM/BAM are currently supported, but support
   is planned. Currently supported is only required tags.
 
-  RG and aux data is currently not supported but will be added soon.
+  RG and aux data is currently not supported. 
 
+  results_handle: matrix of all results columns
   path: path for output .bam file
   pg_id: program id @PG for .bam
   ref_sequences: Reference sequences, @RG tags.

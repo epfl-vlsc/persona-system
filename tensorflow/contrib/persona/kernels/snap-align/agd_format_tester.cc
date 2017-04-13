@@ -3,6 +3,7 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer_list.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/format.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/util.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
@@ -89,10 +90,10 @@ namespace tensorflow {
       unsigned sam_mapQ;
       unsigned sam_flag;
       const char *sam_cigar;
-      size_t num_char, record_size, var_string_size;
+      size_t num_char, record_size;
 
 
-      const format::AlignmentResult *agd_result;
+      Alignment agd_result;
       bool should_error = false;
 
       int cur_buflist_index = 0;
@@ -112,27 +113,26 @@ namespace tensorflow {
         }
 
         record_size = size_index[cur_size_index];
-        var_string_size = record_size - sizeof(format::AlignmentResult);
 
-        agd_result = reinterpret_cast<const format::AlignmentResult *>(curr_record);
+        agd_result.ParseFromArray(curr_record, record_size);
 
-        string agd_cigar(reinterpret_cast<const char*>(curr_record + sizeof(format::AlignmentResult)), var_string_size);
+        string agd_cigar = agd_result.cigar();
 
-        if (sam_genomeLocation != agd_result->location_) {
+        if (sam_genomeLocation != agd_result.location()) {
           LOG(INFO) << "Mismatch: for record " << i + 1 << " the SAM location is " << sam_genomeLocation
-              << " and the agd location is " << agd_result->location_ << "\n";
+              << " and the agd location is " << agd_result.location() << "\n";
           should_error = true;
         }
 
-        if (sam_mapQ != agd_result->mapq_) {
+        if (sam_mapQ != agd_result.mapping_quality()) {
           LOG(INFO) << "Mismatch: for record " << i + 1 << " the SAM mapQ is " << sam_mapQ
-              << " and the agd mapQ is " << agd_result->mapq_ << "\n";
+              << " and the agd mapQ is " << agd_result.mapping_quality() << "\n";
           should_error = true;
         }
 
-        if (sam_flag != agd_result->flag_) {
+        if (sam_flag != agd_result.flag()) {
           LOG(INFO) << "Mismatch: for record " << i + 1 << " the SAM flag is " << sam_flag
-              << " and the agd flag is " << agd_result->flag_ << "\n";
+              << " and the agd flag is " << agd_result.flag() << "\n";
           should_error = true;
         }
 
