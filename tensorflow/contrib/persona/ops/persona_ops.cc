@@ -700,15 +700,11 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
 )doc");
 
   REGISTER_OP("SnapAlignSingle")
-  .Attr("num_threads: int")
   .Attr("subchunk_size: int")
-  .Attr("work_queue_size: int = 3")
   .Attr("max_secondary: int >= 0")
-  .Input("genome_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
-  .Input("output_buffer_list_queue_handle: resource")
+  .Output("result_buf_handle: string")
   .SetIsStateful() // TODO not sure if needed
   .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 4; i++) {
@@ -723,6 +719,29 @@ generation of alignment candidates.
 outputs a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
+
+  REGISTER_OP("SnapSingleExecutor")
+          .Attr("subchunk_size: int")
+          .Attr("max_secondary: int >= 0")
+          .Attr("num_threads: int >= 0")
+          .Attr("work_queue_size: int >= 0")
+          .Input("options_handle: Ref(string)")
+          .Input("genome_handle: Ref(string)")
+          .Output("executor_handle: string")
+          .SetIsStateful() // TODO not sure if needed
+          .SetShapeFn([](InferenceContext *c) {
+            for (int i = 0; i < 2; i++) {
+              TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+            }
+            return Status::OK();
+          })
+          .Doc(R"doc(
+            Aligns input `read`, which contains multiple reads.
+            Loads the SNAP-based hash table into memory on construction to perform
+            generation of alignment candidates.
+            outputs a tensor [num_reads] containing serialized reads and results
+            containing the alignment candidates.
+            )doc");
 
   REGISTER_OP("SnapIndexReferenceSequences")
     .Input("genome_handle: Ref(string)")
