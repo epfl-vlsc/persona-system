@@ -711,7 +711,10 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
       for (int i = 0; i < 3; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
-      c->set_output(0, c->Vector(2));
+      int max_secondary = 0;
+      TF_RETURN_IF_ERROR(c->GetAttr("max_secondary", &max_secondary));
+
+      c->set_output(0, c->Matrix(1+max_secondary, 2));
       return Status::OK();
     })
   .Doc(R"doc(
@@ -723,10 +726,11 @@ containing the alignment candidates.
 )doc");
 
   REGISTER_OP("SnapSingleExecutor")
-  .Attr("subchunk_size: int")
   .Attr("max_secondary: int >= 0")
   .Attr("num_threads: int >= 0")
   .Attr("work_queue_size: int >= 0")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
   .Input("options_handle: Ref(string)")
   .Input("genome_handle: Ref(string)")
   .Output("executor_handle: Ref(string)")

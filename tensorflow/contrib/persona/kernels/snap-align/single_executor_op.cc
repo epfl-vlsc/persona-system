@@ -33,7 +33,6 @@ namespace tensorflow {
     SnapSingleExecutorOp(OpKernelConstruction* context)
             : OpKernel(context), executor_handle_set_(false) {
       OP_REQUIRES_OK(context, context->GetAttr("max_secondary", &max_secondary_));
-      OP_REQUIRES_OK(context, context->GetAttr("subchunk_size", &max_secondary_));
       OP_REQUIRES_OK(context, context->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(context, context->GetAttr("work_queue_size", &capacity_));
       OP_REQUIRES_OK(context,
@@ -43,6 +42,8 @@ namespace tensorflow {
 
     void Compute(OpKernelContext* ctx) override {
       mutex_lock l(mu_);
+      if (!options_resource_)
+        OP_REQUIRES_OK(ctx, InitHandles(ctx));
       if (!executor_handle_set_) {
         OP_REQUIRES_OK(ctx, SetExecutorHandle(ctx));
       }
@@ -74,7 +75,7 @@ namespace tensorflow {
 
     Status SetExecutorHandle(OpKernelContext* ctx) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
       TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
-      ExecutorContainer* genome_index;
+      ExecutorContainer* new_executor;
 
       auto creator = [this, ctx](ExecutorContainer** executor) {
         LOG(INFO) << "creating snap single executor";
@@ -89,7 +90,7 @@ namespace tensorflow {
 
       TF_RETURN_IF_ERROR(
               cinfo_.resource_manager()->LookupOrCreate<ExecutorContainer>(
-                      cinfo_.container(), cinfo_.name(), &genome_index, creator));
+                      cinfo_.container(), cinfo_.name(), &new_executor, creator));
 
       auto h = executor_handle_.AccessTensor(ctx)->flat<string>();
       h(0) = cinfo_.container();
