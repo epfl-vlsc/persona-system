@@ -34,6 +34,7 @@ namespace tensorflow {
                        int max_secondary, int num_threads, int capacity) : index_(index),
                                                                            options_(options),
                                                                            num_threads_(num_threads),
+                                                                           max_secondary_(max_secondary),
                                                                            capacity_(capacity) {
       genome_ = index_->getGenome();
       // create a threadpool to execute stuff

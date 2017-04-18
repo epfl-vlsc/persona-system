@@ -52,6 +52,7 @@ class SnapAlignSingleOp : public OpKernel {
     OP_REQUIRES_OK(ctx, GetInput(ctx, &reads_container));
     auto reads = reads_container->get();
 
+    LOG(INFO) << "max secondary is : " << max_secondary_;
     vector <ResourceContainer<BufferList>*> result_buffers(max_secondary_+1);
     OP_REQUIRES_OK(ctx, GetResultBufferLists(ctx, result_buffers));
     buffer_lists_.clear();
