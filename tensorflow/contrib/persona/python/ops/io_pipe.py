@@ -162,7 +162,6 @@ def local_write_pipeline(upstream_tensors, record_type="results", name="local_wr
     :return: yield a writer for each record to be written in upstream tensors
     """
     def make_writer(record_id, file_path, first_ordinal, num_records, bl_handle):
-        print("bl handle is {}".format(bl_handle))
         bl_handle = array_ops.unstack(bl_handle)
         for handle in bl_handle:
             print("handle shape is : {}".format(handle.get_shape()))
