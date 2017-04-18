@@ -23,6 +23,11 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_inc_library(
+    name = "lockfree",
+    hdrs = glob(["lockfree/*.h"]),
+)
+
 filegroup(
     name = "all_files",
     srcs = glob(
