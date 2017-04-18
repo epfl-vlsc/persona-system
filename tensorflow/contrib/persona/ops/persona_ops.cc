@@ -704,13 +704,14 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
   .Attr("max_secondary: int >= 0")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
-  .Input("executor_handle: string")
+  .Input("executor_handle: Ref(string)")
   .Output("result_buf_handle: string")
   .SetIsStateful() // TODO not sure if needed
   .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 3; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
+      c->set_output(0, c->Vector(2));
       return Status::OK();
     })
   .Doc(R"doc(
@@ -728,7 +729,7 @@ containing the alignment candidates.
   .Attr("work_queue_size: int >= 0")
   .Input("options_handle: Ref(string)")
   .Input("genome_handle: Ref(string)")
-  .Output("executor_handle: string")
+  .Output("executor_handle: Ref(string)")
   .SetIsStateful() // TODO not sure if needed
   .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 2; i++) {
