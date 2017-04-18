@@ -727,6 +727,8 @@ containing the alignment candidates.
   .Attr("max_secondary: int >= 0")
   .Attr("num_threads: int >= 0")
   .Attr("work_queue_size: int >= 0")
+  .Attr("container: string = ''") \
+  .Attr("shared_name: string = ''") \
   .Input("options_handle: Ref(string)")
   .Input("genome_handle: Ref(string)")
   .Output("executor_handle: Ref(string)")
