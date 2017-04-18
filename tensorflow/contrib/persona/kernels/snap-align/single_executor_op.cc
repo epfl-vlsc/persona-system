@@ -45,12 +45,12 @@ namespace tensorflow {
       if (!options_resource_)
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       if (!executor_handle_set_) {
+        OP_REQUIRES_OK(ctx, InitHandles(ctx));
         OP_REQUIRES_OK(ctx, SetExecutorHandle(ctx));
       }
       ctx->set_output_ref(0, &mu_, executor_handle_.AccessTensor(ctx));
     }
 
-  protected:
     ~SnapSingleExecutorOp() override {
       // If the genome object was not shared, delete it.
       if (executor_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
@@ -58,10 +58,6 @@ namespace tensorflow {
                 cinfo_.container(), cinfo_.name()));
       }
     }
-
-  protected:
-
-    ContainerInfo cinfo_;
 
   private:
     Status InitHandles(OpKernelContext* ctx)
@@ -79,11 +75,9 @@ namespace tensorflow {
 
       auto creator = [this, ctx](ExecutorContainer** executor) {
         LOG(INFO) << "creating snap single executor";
-        //auto begin = std::chrono::high_resolution_clock::now();
         unique_ptr<SnapSingleExecutor> value(new SnapSingleExecutor(ctx->env(), index_resource_->get(),
                                                                     options_resource_->get(), max_secondary_,
                                                                     num_threads_, capacity_));
-        //auto end = std::chrono::high_resolution_clock::now();
         *executor = new ExecutorContainer(move(value));
         return Status::OK();
       };
@@ -100,13 +94,12 @@ namespace tensorflow {
     }
 
     mutex mu_;
-    int max_secondary_;
+    ContainerInfo cinfo_;
+    int max_secondary_, num_threads_, capacity_;
     BasicContainer<GenomeIndex> *index_resource_ = nullptr;
     BasicContainer<AlignerOptions>* options_resource_ = nullptr;
     PersistentTensor executor_handle_ GUARDED_BY(mu_);
     bool executor_handle_set_ GUARDED_BY(mu_);
-    int num_threads_;
-    int capacity_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("SnapSingleExecutor").Device(DEVICE_CPU), SnapSingleExecutorOp);

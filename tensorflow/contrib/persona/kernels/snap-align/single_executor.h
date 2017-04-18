@@ -30,30 +30,10 @@ namespace tensorflow {
 
 
   public:
+
     SnapSingleExecutor(Env *env, GenomeIndex *index, AlignerOptions *options,
-                       int max_secondary, int num_threads, int capacity) : index_(index),
-                                                                           options_(options),
-                                                                           num_threads_(num_threads),
-                                                                           max_secondary_(max_secondary),
-                                                                           capacity_(capacity) {
-      genome_ = index_->getGenome();
-      // create a threadpool to execute stuff
-      workers_.reset(new thread::ThreadPool(env, "SnapSingle", num_threads_));
-      request_queue_.reset(new ConcurrentQueue<std::shared_ptr<ResourceContainer<ReadResource>>>(capacity));
-      init_workers();
-    }
-
-    ~SnapSingleExecutor() {
-      if (!run_) {
-        LOG(ERROR) << "Unable to safely wait in ~SnapAlignSingleOp for all threads. run_ was toggled to false\n";
-      }
-      run_ = false;
-      request_queue_->unblock();
-      while (num_active_threads_.load(std::memory_order_relaxed) > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      }
-
-    }
+                       int max_secondary, int num_threads, int capacity);
+    ~SnapSingleExecutor();
 
     // shared ptr is assumed to have deleter that notifies caller of completion
     // should be thread safe
