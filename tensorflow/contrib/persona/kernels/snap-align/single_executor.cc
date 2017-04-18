@@ -13,7 +13,8 @@ namespace tensorflow {
                                          int max_secondary, int num_threads, int capacity) : index_(index),
                                                                                              options_(options),
                                                                                              num_threads_(num_threads),
-                                                                                             capacity_(capacity) {
+                                                                                             capacity_(capacity),
+                                                                                             max_secondary_(max_secondary) {
     genome_ = index_->getGenome();
     // create a threadpool to execute stuff
     workers_.reset(new thread::ThreadPool(env, "SnapSingle", num_threads_));
