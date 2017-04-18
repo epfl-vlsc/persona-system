@@ -16,3 +16,6 @@
 [submodule "tensorflow/contrib/persona/kernels/snap-align/snap"]
 	path = tensorflow/contrib/persona/kernels/snap-align/snap
 	url = git@github.com:epfl-vlsc/snap.git
+[submodule "tensorflow/contrib/persona/kernels/lockfree"]
+	path = tensorflow/contrib/persona/kernels/lockfree
+	url = https://github.com/cameron314/concurrentqueue.git
