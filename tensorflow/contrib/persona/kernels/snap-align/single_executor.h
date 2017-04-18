@@ -77,7 +77,7 @@ namespace tensorflow {
     Status compute_status_ = Status::OK();
     std::unique_ptr<thread::ThreadPool> workers_;
 
-    inline void init_workers();
+    void init_workers();
 
   };
 }
