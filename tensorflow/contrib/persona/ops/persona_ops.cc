@@ -650,7 +650,7 @@ shared_name: If non-empty, this options will be shared under the given name
     )doc");
 
   REGISTER_OP("NullAligner")
-  .Attr("subchunk_size: int")
+  .Attr("subchunk_size: int > 0")
   .Attr("wait_time_secs: float = 0.0")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
@@ -670,8 +670,8 @@ containing the alignment candidates.
 )doc");
 
   REGISTER_OP("SnapAlignPaired")
-  .Attr("num_threads: int")
-  .Attr("subchunk_size: int")
+  .Attr("num_threads: int > 0")
+  .Attr("subchunk_size: int > 0")
   .Attr("work_queue_size: int = 3")
   .Attr("max_secondary: int >= 0")
   .Input("genome_handle: Ref(string)")
@@ -700,7 +700,7 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
 )doc");
 
   REGISTER_OP("SnapAlignSingle")
-  .Attr("subchunk_size: int")
+  .Attr("subchunk_size: int > 0")
   .Attr("max_secondary: int >= 0")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
@@ -734,7 +734,6 @@ containing the alignment candidates.
   .Input("options_handle: Ref(string)")
   .Input("genome_handle: Ref(string)")
   .Output("executor_handle: Ref(string)")
-  .SetIsStateful() // TODO not sure if needed
   .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 2; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
