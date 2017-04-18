@@ -17,7 +17,7 @@ namespace tensorflow {
       return Status::OK();
   }
 
-  inline void SnapSingleExecutor::init_workers() {
+  void SnapSingleExecutor::init_workers() {
 
     auto aligner_func = [this]() {
       //std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();

@@ -22,9 +22,9 @@ cc_library(
 
 cc_library(
     name = "snap_align",
-    hdrs = ["SnapAlignerWrapper.h"],
+    hdrs = ["SnapAlignerWrapper.h", "single_executor.h"],
     includes = ["."],
-    srcs = glob(["*.cc"] + ["work_queue.h"]),
+    srcs = glob(["*.cc"]),
     copts = tf_copts() + ["-fexceptions"],
     nocopts = "-fno-exceptions",
     #linkopts = [
