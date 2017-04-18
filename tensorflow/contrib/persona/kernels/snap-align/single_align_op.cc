@@ -80,9 +80,7 @@ class SnapAlignSingleOp : public OpKernel {
       out_matrix(i, 1) = result_buffers[i]->name();
     }
 
-    LOG(INFO) << "snap single aligner waiting for notification";
     n.WaitForNotification();
-    LOG(INFO) << "got notification!";
   }
 
 
