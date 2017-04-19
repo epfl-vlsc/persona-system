@@ -11,39 +11,54 @@ cc_library(
     #srcs = glob(["libsnap.a"]),
     srcs = glob(["snap/SNAPLib/*.cpp"]),
     hdrs = glob(["snap/SNAPLib/*.h"]),
+    copts = [
+        "-pthread",
+        "-MMD",
+        "-msse",
+        "-mssse3",
+        "-msse4.2",
+        "-Wno-format",
+        "-std=c++11",
+    ],
     includes = ["snap/SNAPLib"],
     linkopts = [
-        "-lm", "-lrt", "-lz"
+        "-lm",
+        "-lrt",
+        "-lz",
     ],
     linkstatic = 1,
     visibility = ["//visibility:public"],
-    copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format", "-std=c++11"]
 )
 
 cc_library(
     name = "snap_align",
-    hdrs = ["SnapAlignerWrapper.h", "single_executor.h"],
-    includes = ["."],
     srcs = glob(["*.cc"]),
+    hdrs = [
+        "SnapAlignerWrapper.h",
+        "single_executor.h",
+    ],
     copts = tf_copts() + ["-fexceptions"],
-    nocopts = "-fno-exceptions",
+    includes = ["."],
+    linkopts = [
+        "-lboost_system",
+        "-lboost_timer",
+    ],
     #linkopts = [
-        #"-Wl,-Bsymbolic",
-        #"-lm"
+    #"-Wl,-Bsymbolic",
+    #"-lm"
     #],
     linkstatic = 1,
+    nocopts = "-fno-exceptions",
     visibility = ["//visibility:public"],
     deps = [
-            "//tensorflow/core:framework_headers_lib",
-            #":snap_protos_cc",
-            ":snap_lib",
-            "//tensorflow/contrib/persona/kernels/lttng:trace",
-            "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
-            "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
-            "//tensorflow/contrib/persona/kernels/concurrent_queue:concurrent_queue"
-            ],
-    alwayslink=1,
-    linkopts = [
-             "-lboost_system", "-lboost_timer"
-    ]
+        "//tensorflow/core:framework_headers_lib",
+        #":snap_protos_cc",
+        ":snap_lib",
+        "//tensorflow/contrib/persona/kernels/lttng:trace",
+        "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
+        "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
+        "//tensorflow/contrib/persona/kernels/concurrent_queue",
+        "//tensorflow/contrib/persona/kernels:lockfree",
+    ],
+    alwayslink = 1,
 )

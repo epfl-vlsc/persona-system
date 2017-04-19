@@ -2,6 +2,8 @@
 // Created by Stuart Byma on 17/04/17.
 //
 
+#pragma once
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -20,8 +22,8 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/SnapAlignerWrapper.h"
+#include "tensorflow/contrib/persona/kernels/executor/task_runner.h"
 
-#pragma once
 
 namespace tensorflow {
 

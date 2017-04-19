@@ -15,6 +15,7 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/agd-ops:agd_ops",
         "//tensorflow/contrib/persona/kernels/bam:agdbam",
         "//tensorflow/contrib/persona/kernels/bwa-align:bwa_align",
+        "//tensorflow/contrib/persona/kernels/executor",
         "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
         "//tensorflow/contrib/persona/kernels/snap-align:snap_align",
         "//tensorflow/contrib/persona/kernels/sort:agd_sort",
@@ -23,6 +24,7 @@ cc_library(
     alwayslink = 1,
 )
 
+# This needs to be in this file because the code is in a submodule
 cc_inc_library(
     name = "lockfree",
     hdrs = glob(["lockfree/*.h"]),
