@@ -25,10 +25,11 @@
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
+#include "tensorflow/contrib/persona/kernels/bwa-align/bwa_single_executor.h"
 
 namespace tensorflow {
-using namespace std;
-using namespace errors;
+  using namespace std;
+  using namespace errors;
 
   namespace {
     void resource_releaser(ResourceContainer<BWAReadResource> *rr) {
@@ -43,230 +44,116 @@ using namespace errors;
     }
   }
 
-class BWAAlignSingleOp : public OpKernel {
-  public:
-    explicit BWAAlignSingleOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("max_read_size", &max_read_size_));
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
-      subchunk_size_ *= 2;
+  class BWAAlignSingleOp : public OpKernel {
+    public:
+      explicit BWAAlignSingleOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
+        OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
+        OP_REQUIRES_OK(ctx, ctx->GetAttr("max_read_size", &max_read_size_));
+        OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
+        subchunk_size_ *= 2;
 
-      int capacity;
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("work_queue_size", &capacity));
-      request_queue_.reset(new ConcurrentQueue<shared_ptr<ResourceContainer<BWAReadResource>>>(capacity));
-      compute_status_ = Status::OK();
-    }
-
-    ~BWAAlignSingleOp() override {
-      if (!run_) {
-        LOG(ERROR) << "Unable to safely wait in ~BWAAlignSingleOp for all threads. run_ was toggled to false\n";
+        int capacity;
       }
-      run_ = false;
-      request_queue_->unblock();
-      core::ScopedUnref index_unref(index_resource_);
-      core::ScopedUnref options_unref(options_resource_);
-      //core::ScopedUnref buflist_pool_unref(buflist_pool_);
-      while (num_active_threads_.load() > 0) {
-        this_thread::sleep_for(chrono::milliseconds(10));
+
+      ~BWAAlignSingleOp() override {
+        core::ScopedUnref buflist_pool_unref(buflist_pool_);
       }
-      //LOG(INFO) << "finalize request queue push wait: " << request_queue_->num_push_waits();
-      //LOG(INFO) << "finalize request queue pop wait: " << request_queue_->num_pop_waits();
-      //LOG(INFO) << "finalize request queue peek wait: " << request_queue_->num_peek_waits();
-      uint64_t avg_inter_time = 0;
-      if (total_usec > 0)
-        avg_inter_time = total_usec / total_invoke_intervals;
 
-      //LOG(INFO) << "finalize average inter kernel time: " << avg_inter_time ? to_string(avg_inter_time) : "n/a";;
-      //LOG(INFO) << "done queue push wait: " << done_queue_->num_push_waits();
-      //LOG(INFO) << "done queue pop wait: " << done_queue_->num_pop_waits();
-      //VLOG(INFO) << "bwa finalize Destructor(" << this << ") finished\n";
-    }
-
-  void Compute(OpKernelContext* ctx) override {
-    if (first) {
-      first = false;
-    } else {
-      t_now = std::chrono::high_resolution_clock::now();
-      auto interval_time = std::chrono::duration_cast<std::chrono::microseconds>(t_now - t_last);
-      total_usec += interval_time.count();
-      total_invoke_intervals++;
-    }
-
-    if (index_resource_ == nullptr) {
-      OP_REQUIRES_OK(ctx, InitHandles(ctx));
-      init_workers(ctx);
-    }
-
-    if (!compute_status_.ok()) {
-      ctx->SetStatus(compute_status_);
-      return;
-    }
+      void Compute(OpKernelContext* ctx) override {
+        if (executor_resource_ == nullptr) {
+          OP_REQUIRES_OK(ctx, InitHandles(ctx));
+        }
 
 
-    OP_REQUIRES(ctx, run_, Internal("One of the aligner threads triggered a shutdown of the aligners. Please inspect!"));
+        //ResourceContainer<BufferList> *bufferlist_resource_container;
+        OP_REQUIRES_OK(ctx, GetResultBufferLists(ctx));
 
-    //ResourceContainer<BufferList> *bufferlist_resource_container;
-    OP_REQUIRES_OK(ctx, GetResultBufferLists(ctx));
+        ResourceContainer<BWAReadResource> *reads_container;
+        OP_REQUIRES_OK(ctx, GetInput(ctx, "read", &reads_container));
 
-    ResourceContainer<BWAReadResource> *reads_container;
-    OP_REQUIRES_OK(ctx, GetInput(ctx, "read", &reads_container));
+        // dont want to delete yet
+        core::ScopedUnref a(reads_container);
+        auto reads = reads_container->get();
 
-    // dont want to delete yet
-    core::ScopedUnref a(reads_container);
-    auto reads = reads_container->get();
+        OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
 
-    OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_)); 
+        Notification n;
+        OP_REQUIRES_OK(ctx, executor_->EnqueueChunk(shared_ptr<ResourceContainer<BWAReadResource>>(
+                reads_container, [this, ctx, &n](ResourceContainer<BWAReadResource> *rr) {
+                  ResourceReleaser<BWAReadResource> a(*rr);
+                  {
+                    ReadResourceReleaser r(*rr->get());
+                  }
+                  n.Notify();
+                }
+        )));
 
-    //LOG(INFO) << "finalizer processing and filling buflist: " << bl;
-    OP_REQUIRES(ctx, request_queue_->push(shared_ptr<ResourceContainer<BWAReadResource>>(reads_container, resource_releaser)), 
-        Internal("Unable to push item onto work queue. Is it already closed?"));
-    //LOG(INFO) << "waiting for ready";
-    //bl->wait_for_ready();
-    //LOG(INFO) << "done";
-    t_last = std::chrono::high_resolution_clock::now();
-  }
 
-private:
-  uint64 total_usec = 0;
-  uint64 total_invoke_intervals = 0;
-  bool first = true;
-  std::chrono::high_resolution_clock::time_point t_now;
-  std::chrono::high_resolution_clock::time_point t_last;
+        n.WaitForNotification();
+        //t_last = std::chrono::high_resolution_clock::now();
+      }
 
-  Status InitHandles(OpKernelContext* ctx)
-  {
-    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
-    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "index_handle", &index_resource_));
-    TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
+    private:
+      uint64 total_usec = 0;
+      uint64 total_invoke_intervals = 0;
+      std::chrono::high_resolution_clock::time_point t_now;
+      std::chrono::high_resolution_clock::time_point t_last;
 
-    bwa_options_ = options_resource_->get();
-    bwa_index_ = index_resource_->get();
-
-    return Status::OK();
-  }
-
-  Status GetInput(OpKernelContext *ctx, const string &input_name, ResourceContainer<BWAReadResource> **reads_container)
-  {
-    const Tensor *read_input;
-    TF_RETURN_IF_ERROR(ctx->input(input_name, &read_input));
-    auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
-    TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(data(0), data(1), reads_container));
-   
-    return Status::OK();
-  }
-  
-  Status GetResultBufferLists(OpKernelContext* ctx)
-  {
-    ResourceContainer<BufferList> *ctr;
-    Tensor* out_t;
-    buffer_lists_.clear();
-    buffer_lists_.reserve(max_secondary_+1);
-    TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", TensorShape({max_secondary_+1, 2}), &out_t));
-    auto out_matrix = out_t->matrix<string>();
-    for (int i = 0; i < max_secondary_+1; i++) {
-      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(&ctr));
-      //core::ScopedUnref a(reads_container);
-      ctr->get()->reset();
-      buffer_lists_.push_back(ctr->get());
-      out_matrix(i, 0) = ctr->container();
-      out_matrix(i, 1) = ctr->name();
-    }
-
-    return Status::OK();
-  }
-
-  inline void init_workers(OpKernelContext* ctx) {
-    auto aligner_func = [this] () {
-      std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
-      int my_id = 0;
+      Status InitHandles(OpKernelContext* ctx)
       {
-        mutex_lock l(mu_);
-        my_id = thread_id_++;
+        TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
+        TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "executor_handle", &executor_resource_));
+        executor_ = executor_resource_->get();
+
+        return Status::OK();
       }
 
-      bwa_wrapper::BWAAligner aligner(bwa_options_, bwa_index_, max_read_size_);
-      vector<AlignmentResultBuilder> result_builders;
-      result_builders.resize(max_secondary_+1);
+      Status GetInput(OpKernelContext *ctx, const string &input_name, ResourceContainer<BWAReadResource> **reads_container)
+      {
+        const Tensor *read_input;
+        TF_RETURN_IF_ERROR(ctx->input(input_name, &read_input));
+        auto data = read_input->vec<string>(); // data(0) = container, data(1) = name
+        TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(data(0), data(1), reads_container));
 
-      vector<BufferPair*> result_bufs;
-      result_bufs.reserve(max_secondary_+1);
-      ReadResource* subchunk_resource = nullptr;
-      Status io_chunk_status, subchunk_status;
-      //std::chrono::high_resolution_clock::time_point end_subchunk = std::chrono::high_resolution_clock::now();
-      //std::chrono::high_resolution_clock::time_point start_subchunk = std::chrono::high_resolution_clock::now();
-
-      while (run_) {
-        // reads must be in this scope for the custom releaser to work!
-        shared_ptr<ResourceContainer<BWAReadResource>> reads_container;
-        if (!request_queue_->peek(reads_container)) {
-          continue;
-        }
-        //timeLog.peek = std::chrono::high_resolution_clock::now();
-
-        auto *reads = reads_container->get();
-
-        size_t interval;
-        io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs, &interval);
-        while (io_chunk_status.ok()) {
-          //LOG(INFO) << "finalizer thread " << my_id << " got  interval: " << interval;
-
-          for (int i = 0; i < result_builders.size(); i++)
-            result_builders[i].SetBufferPair(result_bufs[i]);
-
-          Status s = aligner.AlignSubchunkSingle(subchunk_resource, result_builders);
-
-          if (!s.ok()){
-            compute_status_ = s;
-            return;
-          }
-
-          io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs, &interval);
-        }
-        
-        if (!IsResourceExhausted(io_chunk_status)) {
-          LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status << "\n";
-          compute_status_ = io_chunk_status;
-          return;
-        }
-
-        request_queue_->drop_if_equal(reads_container);
-
+        return Status::OK();
       }
 
-      //VLOG(INFO) << "base aligner thread ending.";
-      num_active_threads_--;
-    };
+      Status GetResultBufferLists(OpKernelContext* ctx)
+      {
+        ResourceContainer<BufferList> *ctr;
+        Tensor* out_t;
+        buffer_lists_.clear();
+        buffer_lists_.reserve(max_secondary_+1);
+        TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", TensorShape({max_secondary_+1, 2}), &out_t));
+        auto out_matrix = out_t->matrix<string>();
+        for (int i = 0; i < max_secondary_+1; i++) {
+          TF_RETURN_IF_ERROR(buflist_pool_->GetResource(&ctr));
+          //core::ScopedUnref a(reads_container);
+          ctr->get()->reset();
+          buffer_lists_.push_back(ctr->get());
+          out_matrix(i, 0) = ctr->container();
+          out_matrix(i, 1) = ctr->name();
+        }
 
-    auto worker_threadpool = ctx->device()->tensorflow_cpu_worker_threads()->workers;
-    for (int i = 0; i < num_threads_; i++)
-      worker_threadpool->Schedule(aligner_func);
-    num_active_threads_ = num_threads_;
-  }
+        return Status::OK();
+      }
 
-  ReferencePool<BufferList> *buflist_pool_ = nullptr;
-  BasicContainer<bwaidx_t> *index_resource_ = nullptr;
-  BasicContainer<mem_opt_t>* options_resource_ = nullptr;
-  bwaidx_t* bwa_index_ = nullptr;
-  mem_opt_t *bwa_options_ = nullptr;
-  int subchunk_size_;
-  volatile bool run_ = true;
-  uint64_t id_ = 0;
+      BasicContainer<BWASingleExecutor> *executor_resource_ = nullptr;
+      BWASingleExecutor* executor_;
 
-  atomic<uint32_t> num_active_threads_;
-  mutex mu_;
-  int thread_id_ = 0;
-  int max_read_size_;
-  int max_secondary_;
+      ReferencePool<BufferList> *buflist_pool_ = nullptr;
+      int subchunk_size_;
+      volatile bool run_ = true;
+      uint64_t id_ = 0;
 
-  int num_threads_;
-  vector<BufferList*> buffer_lists_;
+      int max_read_size_;
+      int max_secondary_;
 
-  unique_ptr<ConcurrentQueue<shared_ptr<ResourceContainer<BWAReadResource>>>> request_queue_;
+      vector<BufferList*> buffer_lists_;
 
-  Status compute_status_;
-  TF_DISALLOW_COPY_AND_ASSIGN(BWAAlignSingleOp);
-};
+
+      TF_DISALLOW_COPY_AND_ASSIGN(BWAAlignSingleOp);
+  };
 
   REGISTER_KERNEL_BUILDER(Name("BWAAlignSingle").Device(DEVICE_CPU), BWAAlignSingleOp);
 
