@@ -741,12 +741,8 @@ containing the alignment candidates.
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
-  .Doc(R"doc(
-            Aligns input `read`, which contains multiple reads.
-            Loads the SNAP-based hash table into memory on construction to perform
-            generation of alignment candidates.
-            outputs a tensor [num_reads] containing serialized reads and results
-            containing the alignment candidates.
+  .Doc(R"doc(Provides a multithreaded execution context
+to align single reads using the SNAP algorithm.
             )doc");
 
   REGISTER_OP("SnapIndexReferenceSequences")
@@ -764,15 +760,34 @@ containing the alignment candidates.
     (ref sequences).
     )doc");
 
+  REGISTER_OP("BWASingleExecutor")
+          .Attr("max_secondary: int >= 0")
+          .Attr("num_threads: int >= 0")
+          .Attr("work_queue_size: int >= 0")
+          .Attr("max_read_size: int = 400")
+          .Attr("container: string = ''")
+          .Attr("shared_name: string = ''")
+          .Input("options_handle: Ref(string)")
+          .Input("genome_handle: Ref(string)")
+          .Output("executor_handle: Ref(string)")
+          .SetShapeFn([](InferenceContext *c) {
+            for (int i = 0; i < 2; i++) {
+              TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+            }
+            c->set_output(0, c->Vector(2));
+            return Status::OK();
+          })
+          .Doc(R"doc(Provides a multithreaded execution context
+that aligns single reads using BWA. Pass to > 1 BWAAlignSingle nodes
+for optimal performance.
+            )doc");
+
   REGISTER_OP("BWAAlignSingle")
-  .Attr("num_threads: int")
   .Attr("subchunk_size: int")
-  .Attr("work_queue_size: int = 3")
   .Attr("max_read_size: int = 400")
   .Attr("max_secondary: int >= 1")
-  .Input("index_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
+          .Input("executor_handle: Ref(string)")
   .Input("read: string")
   .SetShapeFn([](InferenceContext* c) {
       int max_secondary = 0;
