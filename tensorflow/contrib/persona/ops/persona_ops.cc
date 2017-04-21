@@ -1083,4 +1083,21 @@ Intended to be used for BWAAssembler
 
   FS_WRITER_OP("Buffer")
   .Attr("compressed: bool");
+
+  REGISTER_OP("StageBarrier")
+  .Input("barrier_request_id: string")
+  .Input("barrier_request_count: int32 >= 1")
+  .Input("input_queue_ref: resource")
+  .Input("output_queue_ref: resource")
+  .Output("request_id_out: string")
+  .Output("request_count_out: int32")
+  .SetShapeFn([](InferenceContext* c) {
+    for (int i = 0; i < 2; i++) {
+      TF_RETURN_IF_ERROR(check_scalar(c, 0));
+      c->set_output(i, c->input(0));
+    }
+    return Status::OK();
+  })
+  .Doc(R"doc(
+  )doc");
 }
