@@ -59,8 +59,11 @@ namespace bwa_wrapper {
         ProcessResult(&alignments[1], nullptr, result_sup, cigar_sup);
         result_sup.set_cigar(cigar_sup);
         result_builders[1].AppendAlignmentResult(result_sup);
-      } else 
+      } else {
+        LOG(INFO) << "appending an empty";
         result_builders[1].AppendEmpty();
+
+      }
       //LOG(INFO) << "location " << result.location_ << " cigar: " << cigar;
 
       //TODO process XA tags of primary and append to secondary results columns
