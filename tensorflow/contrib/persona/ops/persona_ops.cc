@@ -121,7 +121,7 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("compress: bool")
-  .Attr("record_type: list({'base', 'qual', 'metadata', 'results'})")
+  .Attr("record_type: list({'raw','structured'})")
   .Input("output_queue_handle: resource")
   .Input("pool_name: string")
   .Input("record_id: string")
@@ -430,7 +430,7 @@ file_handle: a Tensor(2) of strings to access the file resource in downstream no
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("compress: bool")
-  .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
+  .Attr("record_type: {'raw','structured'}")
   .Input("column_handle: string")
   .Input("file_name: string")
   .Input("first_ordinal: int64")
@@ -1006,7 +1006,7 @@ Intended to be used for BWAAssembler
   // All the new prototypes of the write ops go here
 
 #define AGD_COMMON_HEADER_ATTRIBUTES \
-  .Attr("record_type: string") \
+  .Attr("record_type: {'raw', 'structured'}") \
   .Input("path: string") \
   .Input("record_id: string") \
   .Input("first_ordinal: int64") \
@@ -1022,16 +1022,6 @@ Intended to be used for BWAAssembler
   "num_records: the number of records in this chunk" \
   "resource_handle: a Vec(2) to look up the resource containing the data to be written" \
   "path: the output path of the key / file that was written"
-
-#define CHECK_RECORD_TYPE \
-    string record_type; \
-    TF_RETURN_IF_ERROR(c->GetAttr("record_type", &record_type)); \
-    if (!(record_type == "base" || record_type == "qual" || record_type == "metadata")) { \
-      string res = "results"; \
-      if (record_type.size() < res.size() || record_type.find(res) != 0) { \
-        return Internal("Attribute not one of 'base', 'qual', 'meta', or 'results.*': ", record_type); \
-      } \
-    }
 
 #define CEPH_WRITER_OP(WRITER_TYPE) \
   REGISTER_OP("AGDCeph" WRITER_TYPE "Writer") \
