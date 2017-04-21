@@ -24,6 +24,10 @@ namespace tensorflow {
     virtual Status get_next_record(const char** bases, size_t* bases_len,
         const char** quals) = 0;
 
+    virtual Status get_next_record(const char** bases, size_t* bases_len,
+                                   const char** quals, const char** meta,
+                                   size_t* meta_len) = 0;
+
     virtual std::size_t num_records();
 
     // Resets the iterator, and returns `true` only if the iterator was successfully reset
