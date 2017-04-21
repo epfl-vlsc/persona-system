@@ -27,7 +27,10 @@ namespace tensorflow {
         }
         for (size_t i = 0; i < num_buffers; ++i) {
           auto &data = buf_list[i].data();
-          TF_RETURN_IF_ERROR(WriteData(f, &data[0], data.size()));
+          if (data.size() != 0) {
+            TF_RETURN_IF_ERROR(WriteData(f, &data[0], data.size()));
+          }
+          // its OK if data is 0, just means this column has all empty records
         }
         buf_list.reset();
       }

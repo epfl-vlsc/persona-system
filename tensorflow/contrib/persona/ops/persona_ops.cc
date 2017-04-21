@@ -768,7 +768,7 @@ to align single reads using the SNAP algorithm.
           .Attr("container: string = ''")
           .Attr("shared_name: string = ''")
           .Input("options_handle: Ref(string)")
-          .Input("genome_handle: Ref(string)")
+          .Input("index_handle: Ref(string)")
           .Output("executor_handle: Ref(string)")
           .SetShapeFn([](InferenceContext *c) {
             for (int i = 0; i < 2; i++) {
@@ -933,6 +933,10 @@ Intended to be used for BWAAssembler
       .Attr("options: list(string)")
       .Attr("container: string = ''")
       .Attr("shared_name: string = ''")
+          .SetShapeFn([](InferenceContext* c) {
+            c->set_output(0, c->Vector(2));
+            return Status::OK();
+          })
       .SetIsStateful()
       .Doc(R"doc(
   An op that creates or gives ref to a bwa index.
@@ -1042,7 +1046,6 @@ Intended to be used for BWAAssembler
     } \
     TF_RETURN_IF_ERROR(check_vector(c, 5, 2)); \
     c->set_output(0, c->Scalar()); \
-    CHECK_RECORD_TYPE \
     return Status::OK(); \
   }) \
   .Doc(R"doc( \
@@ -1064,7 +1067,6 @@ Intended to be used for BWAAssembler
       TF_RETURN_IF_ERROR(check_scalar(c, i)); \
     } \
     TF_RETURN_IF_ERROR(check_vector(c, 4, 2)); \
-    CHECK_RECORD_TYPE \
     c->set_output(0, c->Scalar()); \
     return Status::OK(); \
   })
