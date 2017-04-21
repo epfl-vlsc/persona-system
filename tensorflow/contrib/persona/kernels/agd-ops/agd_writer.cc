@@ -8,22 +8,15 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
 
-  namespace {
-  }
   AGDWriterBase::AGDWriterBase(OpKernelConstruction *ctx) : OpKernel(ctx) {
     using namespace format;
     OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &record_suffix_));
     RecordType t;
-    if (record_suffix_.compare("base") == 0) {
-      t = RecordType::BASES;
-    } else if (record_suffix_.compare("qual") == 0) {
-      t = RecordType::QUALITIES;
-    } else if (record_suffix_.compare("metadata") == 0) {
-      t = RecordType::COMMENTS;
-    } else { // the results* setting is
-      t = RecordType::ALIGNMENT;
+    if (record_suffix_.compare("raw") == 0) {
+      t = RecordType::RAW;
+    } else {
+      t = RecordType::STRUCTURED;
     }
-    record_suffix_.insert(0, ".");
     header_.record_type = static_cast<uint8_t>(t);
     OP_REQUIRES_OK(ctx, SetCompressionType(ctx));
     // TODO Set up the ceph writer stuff

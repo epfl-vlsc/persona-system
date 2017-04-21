@@ -165,10 +165,9 @@ def local_write_pipeline(upstream_tensors, record_types=["results"], name="local
         bl_handle = array_ops.unstack(bl_handle)
         if not len(bl_handle) == len(record_types):
             raise Exception("number of record types must equal number of buffer list handles")
-        for i, handle in enumerate(bl_handle):
-            print("handle shape is : {}".format(handle.get_shape()))
+        for handle, record_type in zip(bl_handle, record_types):
             yield persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
-                                                                 record_type=record_types[i],
+                                                                 record_type=record_type,
                                                                  resource_handle=handle,
                                                                  first_ordinal=first_ordinal,
                                                                  num_records=num_records,
