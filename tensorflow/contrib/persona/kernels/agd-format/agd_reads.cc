@@ -107,7 +107,13 @@ namespace tensorflow {
       return ResourceExhausted("agd record container exhausted");
     }
   }
-    
+
+  Status AGDReadResource::get_next_record(const char** bases, size_t* bases_len,
+                         const char** quals, const char** meta,
+                         size_t* meta_len) {
+    return Internal("unimplemented");
+  }
+
   Status AGDReadResource::get_next_record(const char** bases, size_t* bases_len,
         const char** quals) {
     if (record_idx_ < num_records_) {
@@ -232,6 +238,12 @@ namespace tensorflow {
     } else {
       return ResourceExhausted("agd record container exhausted");
     }
+  }
+
+  Status AGDReadSubResource::get_next_record(const char** bases, size_t* bases_len,
+                                          const char** quals, const char** meta,
+                                          size_t* meta_len) {
+    return Internal("unimplemented");
   }
 
   bool AGDReadSubResource::reset_iter() {
