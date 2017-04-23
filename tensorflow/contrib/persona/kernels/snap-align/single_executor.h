@@ -63,4 +63,14 @@ namespace tensorflow {
     void init_workers();
 
   };
+
+  class SnapSingle : public TaskRunner<std::unique_ptr<ReadResource>> {
+  public:
+    SnapSingle(Env *env, GenomeIndex *index, AlignerOptions *options,
+               uint16_t max_secondary, uint16_t num_threads);
+
+    Status Start() override;
+  private:
+    uint16_t max_secondary_, num_threads_;
+  };
 }

@@ -233,4 +233,13 @@ namespace tensorflow {
     num_active_threads_ = num_threads_;
   }
 
+  SnapSingle::SnapSingle(Env *env, GenomeIndex *index, AlignerOptions *options, uint16_t max_secondary, uint16_t num_threads) :
+          TaskRunner<unique_ptr<ReadResource>>(env, num_threads, "SnapSingle"),
+          max_secondary_(max_secondary), num_threads_(num_threads) { }
+
+  Status SnapSingle::Start() {
+    // TODO write me!
+    return Status::OK();
+  }
+
 }

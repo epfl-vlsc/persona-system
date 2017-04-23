@@ -19,11 +19,11 @@ namespace tensorflow {
       Stop();
     }
 
-    bool Enqueue(T &t) final {
+    bool Enqueue(T &t) {
       return queue_.enqueue(t);
     }
 
-    bool EnqueueMany(T *t, size_t count) final {
+    bool EnqueueMany(T *t, size_t count) {
       return queue_.enqueue_bulk(t, count);
     }
 
@@ -38,7 +38,7 @@ namespace tensorflow {
     }
 
   protected:
-    bool DequeueOne(T &t) final {
+    bool DequeueOne(T &t) {
       return active_ && queue_.try_dequeue(t);
     };
 
@@ -67,7 +67,6 @@ namespace tensorflow {
         workers_->Schedule(RunWorker(worker));
       }
     }
-
 
   private:
     moodycamel::ConcurrentQueue<T> queue_;
