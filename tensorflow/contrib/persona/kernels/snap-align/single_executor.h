@@ -71,6 +71,8 @@ namespace tensorflow {
 
     Status Start() override;
   private:
+    GenomeIndex *index_;
+    AlignerOptions *options_;
     uint16_t max_secondary_, num_threads_;
   };
 }
