@@ -34,6 +34,11 @@ namespace tensorflow {
   public:
     FastqInterleavedChunkingOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
+      if (chunk_size_ % 2 != 0)
+        OP_REQUIRES(ctx, false, Internal("Interleaved chunker requires an even chunk size"));
+      // because we are integrating two fastq files into single interleaved chunks,
+      // we take half the number from each while constructing
+      chunk_size_ /= 2;
     }
 
     ~FastqInterleavedChunkingOp() {
@@ -49,7 +54,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->input("fastq_file_0", &fastq_file_0_t));
       auto fastq_file_0_data = fastq_file_0_t->vec<string>();
       OP_REQUIRES_OK(ctx, ctx->input("fastq_file_1", &fastq_file_1_t));
-      auto fastq_file_1_data = fastq_file_0_t->vec<string>();
+      auto fastq_file_1_data = fastq_file_1_t->vec<string>();
 
       auto *rmgr = ctx->resource_manager();
 
@@ -92,7 +97,7 @@ namespace tensorflow {
                                 ResourceContainer<FastqResource> *fastq_resource_1) {
       QueueInterface::Tuple tuple;
       auto *fr_0 = fastq_resource_0->get();
-      auto *fr_1 = fastq_resource_0->get();
+      auto *fr_1 = fastq_resource_1->get();
       if (fr_0->num_records() != fr_1->num_records())
         return Internal("Fastq paired resources did not having matching number of records.");
       auto num_records = fr_0->num_records() * 2;
@@ -112,7 +117,7 @@ namespace tensorflow {
       f_o_1(1) = fastq_resource_1->name();
       first_ord() = first_ordinal_;
       num_recs() = num_records;
-      first_ordinal_ += num_records*2;
+      first_ordinal_ += num_records;
       tuple.push_back(fastq_out_0);
       tuple.push_back(fastq_out_1);
       tuple.push_back(first_ord_out);
