@@ -121,7 +121,7 @@ file_buf_size: the buffer size used for each individual file, default 10MB.
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("compress: bool")
-  .Attr("record_type: list({'base', 'qual', 'metadata', 'results'})")
+  .Attr("record_type: list({'raw','structured'})")
   .Input("output_queue_handle: resource")
   .Input("pool_name: string")
   .Input("record_id: string")
@@ -430,7 +430,7 @@ file_handle: a Tensor(2) of strings to access the file resource in downstream no
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("compress: bool")
-  .Attr("record_type: {'base', 'qual', 'meta', 'results'}")
+  .Attr("record_type: {'raw','structured'}")
   .Input("column_handle: string")
   .Input("file_name: string")
   .Input("first_ordinal: int64")
@@ -741,12 +741,8 @@ containing the alignment candidates.
       c->set_output(0, c->Vector(2));
       return Status::OK();
       })
-  .Doc(R"doc(
-            Aligns input `read`, which contains multiple reads.
-            Loads the SNAP-based hash table into memory on construction to perform
-            generation of alignment candidates.
-            outputs a tensor [num_reads] containing serialized reads and results
-            containing the alignment candidates.
+  .Doc(R"doc(Provides a multithreaded execution context
+to align single reads using the SNAP algorithm.
             )doc");
 
   REGISTER_OP("SnapIndexReferenceSequences")
@@ -764,15 +760,34 @@ containing the alignment candidates.
     (ref sequences).
     )doc");
 
+  REGISTER_OP("BWASingleExecutor")
+          .Attr("max_secondary: int >= 0")
+          .Attr("num_threads: int >= 0")
+          .Attr("work_queue_size: int >= 0")
+          .Attr("max_read_size: int = 400")
+          .Attr("container: string = ''")
+          .Attr("shared_name: string = ''")
+          .Input("options_handle: Ref(string)")
+          .Input("index_handle: Ref(string)")
+          .Output("executor_handle: Ref(string)")
+          .SetShapeFn([](InferenceContext *c) {
+            for (int i = 0; i < 2; i++) {
+              TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+            }
+            c->set_output(0, c->Vector(2));
+            return Status::OK();
+          })
+          .Doc(R"doc(Provides a multithreaded execution context
+that aligns single reads using BWA. Pass to > 1 BWAAlignSingle nodes
+for optimal performance.
+            )doc");
+
   REGISTER_OP("BWAAlignSingle")
-  .Attr("num_threads: int")
   .Attr("subchunk_size: int")
-  .Attr("work_queue_size: int = 3")
   .Attr("max_read_size: int = 400")
   .Attr("max_secondary: int >= 1")
-  .Input("index_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
+          .Input("executor_handle: Ref(string)")
   .Input("read: string")
   .SetShapeFn([](InferenceContext* c) {
       int max_secondary = 0;
@@ -918,6 +933,10 @@ Intended to be used for BWAAssembler
       .Attr("options: list(string)")
       .Attr("container: string = ''")
       .Attr("shared_name: string = ''")
+          .SetShapeFn([](InferenceContext* c) {
+            c->set_output(0, c->Vector(2));
+            return Status::OK();
+          })
       .SetIsStateful()
       .Doc(R"doc(
   An op that creates or gives ref to a bwa index.
@@ -987,7 +1006,7 @@ Intended to be used for BWAAssembler
   // All the new prototypes of the write ops go here
 
 #define AGD_COMMON_HEADER_ATTRIBUTES \
-  .Attr("record_type: string") \
+  .Attr("record_type: {'raw', 'structured'}") \
   .Input("path: string") \
   .Input("record_id: string") \
   .Input("first_ordinal: int64") \
@@ -1004,16 +1023,6 @@ Intended to be used for BWAAssembler
   "resource_handle: a Vec(2) to look up the resource containing the data to be written" \
   "path: the output path of the key / file that was written"
 
-#define CHECK_RECORD_TYPE \
-    string record_type; \
-    TF_RETURN_IF_ERROR(c->GetAttr("record_type", &record_type)); \
-    if (!(record_type == "base" || record_type == "qual" || record_type == "metadata")) { \
-      string res = "results"; \
-      if (record_type.size() < res.size() || record_type.find(res) != 0) { \
-        return Internal("Attribute not one of 'base', 'qual', 'meta', or 'results.*': ", record_type); \
-      } \
-    }
-
 #define CEPH_WRITER_OP(WRITER_TYPE) \
   REGISTER_OP("AGDCeph" WRITER_TYPE "Writer") \
   .Attr("cluster_name: string") \
@@ -1027,7 +1036,6 @@ Intended to be used for BWAAssembler
     } \
     TF_RETURN_IF_ERROR(check_vector(c, 5, 2)); \
     c->set_output(0, c->Scalar()); \
-    CHECK_RECORD_TYPE \
     return Status::OK(); \
   }) \
   .Doc(R"doc( \
@@ -1049,7 +1057,6 @@ Intended to be used for BWAAssembler
       TF_RETURN_IF_ERROR(check_scalar(c, i)); \
     } \
     TF_RETURN_IF_ERROR(check_vector(c, 4, 2)); \
-    CHECK_RECORD_TYPE \
     c->set_output(0, c->Scalar()); \
     return Status::OK(); \
   })
@@ -1066,4 +1073,21 @@ Intended to be used for BWAAssembler
 
   FS_WRITER_OP("Buffer")
   .Attr("compressed: bool");
+
+  REGISTER_OP("StageBarrier")
+  .Input("barrier_request_id: string")
+  .Input("barrier_request_count: int32 >= 1")
+  .Input("input_queue_ref: resource")
+  .Input("output_queue_ref: resource")
+  .Output("request_id_out: string")
+  .Output("request_count_out: int32")
+  .SetShapeFn([](InferenceContext* c) {
+    for (int i = 0; i < 2; i++) {
+      TF_RETURN_IF_ERROR(check_scalar(c, 0));
+      c->set_output(i, c->input(0));
+    }
+    return Status::OK();
+  })
+  .Doc(R"doc(
+  )doc");
 }

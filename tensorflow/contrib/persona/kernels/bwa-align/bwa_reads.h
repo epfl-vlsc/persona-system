@@ -1,3 +1,4 @@
+#pragma once
 
 #include "tensorflow/contrib/persona/kernels/agd-format/agd_reads.h"
 #include "tensorflow/core/lib/core/errors.h"

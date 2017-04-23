@@ -24,19 +24,6 @@ namespace tensorflow {
 using namespace std;
 using namespace errors;
 
-  namespace {
-    void resource_releaser(ResourceContainer<BWAReadResource> *rr) {
-      ResourceReleaser<BWAReadResource> a(*rr);
-      {
-        ReadResourceReleaser r(*rr->get());
-      }
-    }
-
-    void no_resource_releaser(ResourceContainer<BWAReadResource> *rr) {
-      // nothing to do
-    }
-  }
-
   class BWAPairedEndStatOp : public OpKernel {
     public:
       explicit BWAPairedEndStatOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
