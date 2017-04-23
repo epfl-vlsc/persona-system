@@ -162,15 +162,19 @@ Converts an input file into three files of bases, qualities, and metadata
 )doc");
 
   REGISTER_OP("AGDInterleavedConverter")
-          .Input("buffer_list_pool: Ref(string)")
+          .Input("buffer_pair_pool: Ref(string)")
           .Input("input_data_0: string")
           .Input("input_data_1: string")
-          .Output("agd_columns: string")
+          .Output("bases_out: string")
+          .Output("qual_out: string")
+          .Output("meta_out: string")
           .SetShapeFn([](InferenceContext *c) {
             for (int i = 0; i < 3; i++) {
               TF_RETURN_IF_ERROR(check_vector(c, i, 2));
             }
             c->set_output(0, c->Vector(2));
+            c->set_output(1, c->Vector(2));
+            c->set_output(2, c->Vector(2));
 
             return Status::OK();
           })
@@ -1127,7 +1131,7 @@ Intended to be used for BWAAssembler
 
   REGISTER_OP("StageBarrier")
   .Input("barrier_request_id: string")
-  .Input("barrier_request_count: int32 >= 1")
+  .Input("barrier_request_count: int32")
   .Input("input_queue_ref: resource")
   .Input("output_queue_ref: resource")
   .Output("request_id_out: string")
