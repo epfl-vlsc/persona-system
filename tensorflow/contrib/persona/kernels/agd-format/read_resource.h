@@ -3,11 +3,14 @@
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/Read.h"
 #include "buffer_list.h"
+#include "read_resource_splitter.h"
 #include <vector>
 #include <memory>
 #include <atomic>
 
 namespace tensorflow {
+
+  class ReadResourceSplitter;
 
   class ReadResource {
   public:
@@ -31,6 +34,8 @@ namespace tensorflow {
     virtual bool reset_iter();
 
     virtual void release();
+
+    virtual Status SplitResource(std::size_t chunk_size, ReadResourceSplitter &splitter);
 
     // Only valid if the subclass implements subchunks
     virtual Status split(std::size_t chunk, std::vector<BufferList*>& bl);

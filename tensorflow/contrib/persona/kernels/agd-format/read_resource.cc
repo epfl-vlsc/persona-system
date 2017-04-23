@@ -27,6 +27,10 @@ namespace tensorflow {
 
   void ReadResource::release() {}
 
+  Status ReadResource::SplitResource(size_t num_subchunks, ReadResourceSplitter &splitter) {
+    return Unimplemented("resource splitting not supported for this resource");
+  }
+
   ReadResourceReleaser::ReadResourceReleaser(ReadResource &r) : rr_(r) {}
 
   ReadResourceReleaser::~ReadResourceReleaser()

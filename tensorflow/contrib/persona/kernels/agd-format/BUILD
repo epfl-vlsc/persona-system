@@ -23,6 +23,7 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/lttng:trace",
         "//tensorflow/contrib/persona/kernels/agd-format/proto:alignment_proto_cc",
         "//third_party/eigen3",
+        "//tensorflow/contrib/persona/kernels/executor",
         "@protobuf//:protobuf",
         #"//tensorflow/core/kernels:ops_util"
     ],

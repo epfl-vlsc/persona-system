@@ -2,7 +2,10 @@
 
 #include "tensorflow/contrib/persona/kernels/lockfree/concurrentqueue.h"
 #include "tensorflow/core/lib/core/status.h"
+#include "tensorflow/core/lib/core/threadpool.h"
+#include "tensorflow/core/platform/env.h"
 #include <functional>
+#include <thread>
 
 namespace tensorflow {
   template <typename T>
