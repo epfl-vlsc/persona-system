@@ -9,8 +9,14 @@ namespace tensorflow {
   class TaskRunner {
   public:
 
+    typedef std::function< std::function<bool (T&)> > ThreadFunction;
+
     TaskRunner(Env *env, size_t num_threads, const std::string &name = "TaskRunner") {
       workers_.reset(new thread::ThreadPool(env, name, num_threads));
+    }
+
+    ~TaskRunner() {
+      Stop();
     }
 
     bool Enqueue(T &t) final {
@@ -21,23 +27,29 @@ namespace tensorflow {
       return queue_.enqueue_bulk(t, count);
     }
 
-    Status Start() {
-      return Status::OK();
-    };
+    virtual Status Start() = 0;
+
+    void Stop() {
+      using namespace std;
+      active_ = false;
+      while (num_workers_.load(memory_order_relaxed) != 0) {
+        this_thread::sleep_for(shutdown_pause_);
+      }
+    }
 
   protected:
     bool DequeueOne(T &t) final {
-      return queue_.try_dequeue(t);
+      return active_ && queue_.try_dequeue(t);
     };
 
-    std::function<void()> RunWorker(std::function< std::function< bool(T&) >> worker) {
+    std::function<void()> RunWorker(ThreadFunction worker) {
       using namespace std;
       auto wrapper = [this, worker]() {
         auto before = num_workers_.fetch_add(1, memory_order_relaxed);
         if (before == 0) {
           active_ = true;
         }
-        worker(this->Dequeue);
+        worker(this->DequeueOne);
         before = num_workers_.fetch_sub(1, memory_order_relaxed);
         if (before == 1) {
           active_ = false;
@@ -47,12 +59,12 @@ namespace tensorflow {
       return wrapper;
     }
 
-    void AddWorker(std::function<void()> worker) {
+    void AddWorker(ThreadFunction worker, uint_fast16_t worker_count = 1) {
       using namespace std;
-      workers_->Schedule(worker);
-      auto before = num_workers_.fetch_add(1, memory_order_relaxed);
-      if (before == 0) {
-        active_ = true;
+      for (uint_fast16_t i = 0; i < worker_count; ++i) {
+        // TODO not sure if we need to call Runworker each time
+        // try without it to see if that works?
+        workers_->Schedule(RunWorker(worker));
       }
     }
 
@@ -62,5 +74,6 @@ namespace tensorflow {
     std::unique_ptr<thread::ThreadPool> workers_;
     std::atomic_uint_fast16_t num_workers_{0};
     volatile bool active_ = false;
+    std::chrono::milliseconds shutdown_pause_{10};
   };
 } // namespace tensorflow {

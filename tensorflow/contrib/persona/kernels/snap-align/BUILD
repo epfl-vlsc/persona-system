@@ -58,7 +58,7 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
         "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
         "//tensorflow/contrib/persona/kernels/concurrent_queue",
-        "//tensorflow/contrib/persona/kernels:lockfree",
+        "//tensorflow/contrib/persona/kernels/executor",
     ],
     alwayslink = 1,
 )
