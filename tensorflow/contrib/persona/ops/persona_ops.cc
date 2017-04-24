@@ -1145,4 +1145,21 @@ Intended to be used for BWAAssembler
   })
   .Doc(R"doc(
   )doc");
+  
+  REGISTER_OP("BufferPairCompressor")
+  .Input("buffer_pool: Ref(string)")
+  .Input("buffer_pair: string")
+  .Output("compressed_buffer: string")
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+      for (int i = 0; i < 2; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Compresses the prepared buffer_pair records into a buffer.
+)doc");
 }

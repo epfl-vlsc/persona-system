@@ -20,6 +20,7 @@ namespace tensorflow {
     OP_REQUIRES(ctx, f != nullptr, Internal("Unable to open file at path ", path));
 
     OP_REQUIRES_OK(ctx, WriteData(f, reinterpret_cast<const char*>(&header_), sizeof(header_)));
+    LOG(INFO) << "writer resource " << resource_vec(0) << ", " << resource_vec(1);
     OP_REQUIRES_OK(ctx, WriteResource(ctx, f, resource_vec(0), resource_vec(1)));
     OP_REQUIRES_OK(ctx, SetOutputKey(ctx, path));
 
