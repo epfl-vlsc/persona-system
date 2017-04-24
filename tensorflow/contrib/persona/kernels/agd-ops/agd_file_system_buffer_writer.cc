@@ -8,16 +8,12 @@ namespace tensorflow {
   class AGDFileSystemBufferWriter : public AGDFileSystemWriterBase {
   public:
     AGDFileSystemBufferWriter(OpKernelConstruction *ctx) : AGDFileSystemWriterBase(ctx) {
-      OP_REQUIRES_OK(ctx, SetCompressionType(ctx));
+      bool compress;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("compressed", &compress));
+      header_.compression_type = compress ? format::CompressionType::GZIP : format::CompressionType::UNCOMPRESSED;
     }
 
   protected:
-    Status SetCompressionType(OpKernelConstruction *ctx) override {
-      bool compress;
-      TF_RETURN_IF_ERROR(ctx->GetAttr("compressed", &compress));
-      header_.compression_type = compress ? format::CompressionType::GZIP : format::CompressionType::UNCOMPRESSED;
-      return Status::OK();
-    }
 
     Status WriteResource(OpKernelContext *ctx, FILE *f, const std::string &container, const std::string &name) override {
       ResourceContainer<Data> *column;

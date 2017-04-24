@@ -7,15 +7,13 @@ namespace tensorflow {
 
   class AGDCephBufferWriter : public AGDCephWriterBase {
   public:
-    AGDCephBufferWriter(OpKernelConstruction *ctx) : AGDCephWriterBase(ctx) {}
+    AGDCephBufferWriter(OpKernelConstruction *ctx) : AGDCephWriterBase(ctx) {
+      bool compress;
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("compressed", &compress));
+      header_.compression_type = compress ? format::CompressionType::GZIP : format::CompressionType::UNCOMPRESSED;
+    }
 
   protected:
-    Status SetCompressionType(OpKernelConstruction *ctx) override {
-      bool compress;
-      TF_RETURN_IF_ERROR(ctx->GetAttr("compress", &compress));
-      header_.compression_type = compress ? format::CompressionType::GZIP : format::CompressionType::UNCOMPRESSED;
-      return Status::OK();
-    }
 
     Status WritePayload(OpKernelContext *ctx, const string &container, const string &name, const string &key, librados::bufferlist &write_buf_list) override {
       ResourceContainer<Data> *column;
