@@ -257,7 +257,8 @@ Status compressGZIP(const char* segment,
 
     int status;
     do {
-      ensure_extend_capacity((stream_.avail_in / 2) + 512); // in case of round off at the end
+      if (stream_.avail_out == 0)
+        ensure_extend_capacity((stream_.avail_in / 2) + 512); // in case of round off at the end
       status = deflate(&stream_, Z_NO_FLUSH);
       switch (status) {
       default:
@@ -289,7 +290,8 @@ Status compressGZIP(const char* segment,
       stream_.next_in = nullptr;
       stream_.avail_in = 0;
       do {
-        ensure_extend_capacity(32);
+        if (stream_.avail_out == 0)
+          ensure_extend_capacity(32);
         status = deflate(&stream_, Z_FINISH);
         if (status != Z_STREAM_END) {
           return Internal("deflate(Z_FINISH) return status ", status);
@@ -301,6 +303,7 @@ Status compressGZIP(const char* segment,
       if (status != Z_OK) {
         return Internal("deflateEnd() didn't receive Z_OK. Got: ", status);
       }
+      output_.resize(stream_.total_out);
     }
     return Status::OK();
   }
