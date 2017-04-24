@@ -18,17 +18,15 @@ namespace tensorflow {
     }
 
     Status WritePayload(OpKernelContext *ctx, const string &container, const string &name, const string &key, librados::bufferlist &write_buf_list) override {
-      ResourceContainer<Buffer> *column;
+      ResourceContainer<Data> *column;
       TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(container, name, &column));
 
       core::ScopedUnref column_releaser(column);
       {
-        ResourceReleaser<Buffer> pool_releaser(*column);
+        ResourceReleaser<Data> pool_releaser(*column);
         auto *b = column->get();
-        auto &buf = *b;
-        write_buf_list.push_back(ceph::buffer::create_static(buf.size(),const_cast<char*>(&buf[0])));
+        write_buf_list.push_back(ceph::buffer::create_static(b->size(),const_cast<char*>(b->data())));
         TF_RETURN_IF_ERROR(SendWrite(write_buf_list, key));
-        buf.reset();
       }
       return Status::OK();
     }

@@ -5,7 +5,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
-#include "tensorflow/contrib/persona/kernels/agd-format/buffer_list.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/buffer_pair.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/compression.h"
 
 namespace tensorflow {
@@ -70,7 +70,7 @@ namespace tensorflow {
       (*buffer)->get()->reset();
      
       TF_RETURN_IF_ERROR((*buffer)->allocate_output("compressed_buffer", ctx));
-      //LOG(INFO) << "compressed buffer: " << out_vec(0) << ", " << out_vec(1);
+      //LOG(INFO) << "compressed buffer: " << (*buffer)->container() << ", " << (*buffer)->name();
 
       return Status::OK();
     }
