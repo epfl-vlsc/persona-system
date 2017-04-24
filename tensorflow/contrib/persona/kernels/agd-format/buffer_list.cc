@@ -21,10 +21,6 @@ namespace tensorflow {
     return size_;
   }
 
-  void BufferList::increase_size(std::size_t additional_elements) {
-    resize(size_+additional_elements);
-  }
-
   BufferPair& BufferList::operator[](size_t index) {
     if (index >= size_) {
       LOG(ERROR) << "FATAL: get_at requested index " << index << ", with only " << size_ << " elements. Real size: " << buf_list_.size();

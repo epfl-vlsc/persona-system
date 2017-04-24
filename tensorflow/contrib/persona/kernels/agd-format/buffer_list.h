@@ -16,6 +16,5 @@ namespace tensorflow {
       std::size_t size() const;
       void resize(std::size_t size);
       void reset();
-      void increase_size(std::size_t additional_elements);
     };
 } // namespace tensorflow {

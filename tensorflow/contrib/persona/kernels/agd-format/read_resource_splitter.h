@@ -13,22 +13,22 @@ namespace tensorflow {
 
   class ReadResourceSplitter {
   public:
-    typedef std::pair<std::unique_ptr<ReadResource, std::function<void(ReadResource*)>>, std::vector<BufferPair*>> QueueType;
+    typedef std::tuple<ReadResource*, std::vector<BufferPair*>, std::shared_ptr<ReadResourceSplitter>> QueueType;
     ReadResourceSplitter(std::vector<BufferList*> &bl);
     ~ReadResourceSplitter();
 
-    void AddSubchunk(ReadResource *rr);
+    void AddSubchunks(ReadResource *rr[], std::size_t count);
     void EnqueueAll(TaskRunner<QueueType> &runner);
 
   private:
-    void SubchunkDone(ReadResource *rr);
+    void SubchunksDone();
 
     void WaitForDone();
 
-    std::atomic_uint_fast16_t outstanding_chunks_{0};
     mutable mutex mu_;
     mutable std::condition_variable wait_for_completion_;
     std::vector<BufferList*> &buffer_lists_;
     std::vector<QueueType> enqueue_batch_;
+    volatile bool pending_ = true;
   };
 } // namespace tensorflow {

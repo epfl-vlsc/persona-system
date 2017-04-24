@@ -6,9 +6,9 @@ namespace tensorflow {
 
   void ReadResourceSplitter::WaitForDone() {
     mutex_lock l(mu_);
-    if (outstanding_chunks_.load(memory_order_relaxed) != 0) {
+    if (pending_) {
       wait_for_completion_.wait(l, [this]() {
-        return outstanding_chunks_.load(memory_order_relaxed) == 0;
+        return !pending_;
       });
     }
   }
@@ -17,17 +17,25 @@ namespace tensorflow {
     WaitForDone();
   }
 
-  void ReadResourceSplitter::AddSubchunk(ReadResource *rr) {
+  void ReadResourceSplitter::AddSubchunks(ReadResource *rr[], size_t count) {
     vector<BufferPair*> pairs;
     for (auto b : buffer_lists_) {
-      b->increase_size(1);
-      // add the appended last element
-      pairs.push_back(&(*b)[b->size()-1]);
+      b->resize(count);
     }
-    unique_ptr<ReadResource, function<void(ReadResource*)>> a(rr, [this](ReadResource *a) {
-      SubchunkDone(a);
+    shared_ptr<ReadResourceSplitter> a(this, [this](ReadResourceSplitter *v){
+      SubchunksDone();
     });
-    enqueue_batch_.push_back(make_pair(move(a), move(pairs)));
+
+    auto num_columns = buffer_lists_.size();
+    for (size_t subchunk_num = 0; subchunk_num < count; ++subchunk_num) {
+      vector <BufferPair*> bps;
+      bps.reserve(num_columns);
+      for (size_t column_num = 0; column_num < num_columns; ++column_num) {
+        bps[column_num] = &(*buffer_lists_[column_num])[subchunk_num];
+      }
+
+      enqueue_batch_.push_back(make_tuple(rr[subchunk_num], move(bps), a));
+    }
   }
 
   ReadResourceSplitter::ReadResourceSplitter(std::vector<BufferList *> &bl) :
@@ -39,7 +47,12 @@ namespace tensorflow {
 
   void ReadResourceSplitter::EnqueueAll(TaskRunner<QueueType> &runner) {
     auto sz = enqueue_batch_.size();
-    outstanding_chunks_.store(sz, memory_order_relaxed);
     runner.EnqueueMany(&enqueue_batch_[0], sz);
+  }
+
+  void ReadResourceSplitter::SubchunksDone() {
+    mutex_lock l(mu_);
+    pending_ = false;
+    wait_for_completion_.notify_all();
   }
 } // namespace tensorflow {
