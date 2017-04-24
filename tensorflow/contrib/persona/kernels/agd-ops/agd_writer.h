@@ -8,7 +8,6 @@ namespace tensorflow {
   public:
     AGDWriterBase(OpKernelConstruction *ctx);
   protected:
-    virtual Status SetCompressionType(OpKernelConstruction *ctx);
     Status SetOutputKey(OpKernelContext* ctx, const string &key);
     Status SetHeaderValues(OpKernelContext* ctx);
 

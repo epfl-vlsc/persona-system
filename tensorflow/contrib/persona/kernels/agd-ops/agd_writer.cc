@@ -18,13 +18,8 @@ namespace tensorflow {
       t = RecordType::STRUCTURED;
     }
     header_.record_type = static_cast<uint8_t>(t);
-    OP_REQUIRES_OK(ctx, SetCompressionType(ctx));
-    // TODO Set up the ceph writer stuff
-  }
-
-  Status AGDWriterBase::SetCompressionType(OpKernelConstruction *ctx) {
+    // This is just a safe default
     header_.compression_type = format::CompressionType::UNCOMPRESSED;
-    return Status::OK();
   }
 
   Status AGDWriterBase::SetOutputKey(OpKernelContext* ctx, const string &key) {
