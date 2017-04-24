@@ -161,6 +161,27 @@ and is thus passed as an Attr instead of an input (for efficiency);
 Converts an input file into three files of bases, qualities, and metadata
 )doc");
 
+  REGISTER_OP("AGDInterleavedConverter")
+          .Input("buffer_pair_pool: Ref(string)")
+          .Input("input_data_0: string")
+          .Input("input_data_1: string")
+          .Output("bases_out: string")
+          .Output("qual_out: string")
+          .Output("meta_out: string")
+          .SetShapeFn([](InferenceContext *c) {
+            for (int i = 0; i < 3; i++) {
+              TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+            }
+            c->set_output(0, c->Vector(2));
+            c->set_output(1, c->Vector(2));
+            c->set_output(2, c->Vector(2));
+
+            return Status::OK();
+          })
+          .Doc(R"doc(
+Converts two input files into three files of interleaved bases, qualities, and metadata
+)doc");
+
   REGISTER_OP("AGDMarkDuplicates")
   .Input("buffer_list_pool: Ref(string)")
   .Input("results_handle: string")
@@ -486,6 +507,40 @@ compress: whether or not to compress the column
       return Status::OK();
     })
   .Doc(R"doc(
+
+)doc");
+
+  REGISTER_OP("FastqInterleavedChunker")
+          .Attr("chunk_size: int >= 1")
+          .Input("queue_handle: resource")
+          .Input("fastq_file_0: string") // TODO change this to resource when you update the op
+          .Input("fastq_file_1: string") // TODO change this to resource when you update the op
+          .Input("fastq_pool: Ref(string)")
+          .SetShapeFn([](InferenceContext *c) {
+            ShapeHandle fastq_file;
+            TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 1, &fastq_file));
+            auto dim_handle = c->Dim(fastq_file, 0);
+            auto fastq_dim = c->Value(dim_handle);
+            if (fastq_dim != 2) {
+              return Internal("fastq_file requires 2-dimensional vector");
+            }
+            TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 1, &fastq_file));
+            dim_handle = c->Dim(fastq_file, 0);
+            fastq_dim = c->Value(dim_handle);
+            if (fastq_dim != 2) {
+              return Internal("fastq_file requires 2-dimensional vector");
+            }
+
+            TF_RETURN_IF_ERROR(c->WithRank(c->input(3), 1, &fastq_file));
+            dim_handle = c->Dim(fastq_file, 0);
+            fastq_dim = c->Value(dim_handle);
+            if (fastq_dim != 2) {
+              return Internal("fastq_pool requires 2-dimensional vector");
+            }
+
+            return Status::OK();
+          })
+          .Doc(R"doc(
 
 )doc");
 
@@ -1076,7 +1131,7 @@ Intended to be used for BWAAssembler
 
   REGISTER_OP("StageBarrier")
   .Input("barrier_request_id: string")
-  .Input("barrier_request_count: int32 >= 1")
+  .Input("barrier_request_count: int32")
   .Input("input_queue_ref: resource")
   .Input("output_queue_ref: resource")
   .Output("request_id_out: string")
@@ -1090,4 +1145,21 @@ Intended to be used for BWAAssembler
   })
   .Doc(R"doc(
   )doc");
+  
+  REGISTER_OP("BufferPairCompressor")
+  .Input("buffer_pool: Ref(string)")
+  .Input("buffer_pair: string")
+  .Output("compressed_buffer: string")
+  .SetShapeFn([](shape_inference::InferenceContext *c) {
+      using namespace shape_inference;
+      for (int i = 0; i < 2; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Compresses the prepared buffer_pair records into a buffer.
+)doc");
 }

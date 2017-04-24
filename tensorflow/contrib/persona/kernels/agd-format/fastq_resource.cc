@@ -35,6 +35,26 @@ namespace tensorflow {
     return Internal("unimplemented");
   }
 
+  Status FastqResource::get_next_record(const char** bases, size_t* bases_len,
+                                        const char** quals, const char** meta,
+                                        size_t* meta_len) {
+
+    if (!fastq_file_) {
+      return Internal("get_next_record called with null data!");
+    } else if (current_record_idx_ == max_records_) {
+      return ResourceExhausted("no more records in this file");
+    }
+
+    read_line(meta, meta_len, 1); // +1 to skip '@'
+    read_line(bases, bases_len);
+    skip_line();
+    read_line(quals, bases_len);
+    current_record_idx_++;
+
+    return Status::OK();
+
+  }
+
   Status FastqResource::get_next_record(Read &snap_read)
   {
     if (!fastq_file_) {

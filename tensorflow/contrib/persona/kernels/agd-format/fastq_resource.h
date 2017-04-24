@@ -25,6 +25,9 @@ namespace tensorflow {
 
     Status get_next_record(const char** bases, size_t* bases_len, const char** quals) override;
 
+    Status get_next_record(const char** bases, size_t* bases_len, const char** quals,
+                           const char** meta, size_t* meta_len) override;
+
     bool reset_iter() override;
 
     void release() override;

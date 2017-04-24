@@ -7,27 +7,23 @@ namespace tensorflow {
 
   class AGDFileSystemBufferWriter : public AGDFileSystemWriterBase {
   public:
-    AGDFileSystemBufferWriter(OpKernelConstruction *ctx) : AGDFileSystemWriterBase(ctx) {}
-
-  protected:
-    Status SetCompressionType(OpKernelConstruction *ctx) override {
+    AGDFileSystemBufferWriter(OpKernelConstruction *ctx) : AGDFileSystemWriterBase(ctx) {
       bool compress;
-      TF_RETURN_IF_ERROR(ctx->GetAttr("compress", &compress));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("compressed", &compress));
       header_.compression_type = compress ? format::CompressionType::GZIP : format::CompressionType::UNCOMPRESSED;
-      return Status::OK();
     }
 
+  protected:
+
     Status WriteResource(OpKernelContext *ctx, FILE *f, const std::string &container, const std::string &name) override {
-      ResourceContainer<Buffer> *column;
+      ResourceContainer<Data> *column;
       TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(container, name, &column));
 
       core::ScopedUnref column_releaser(column);
       {
-        ResourceReleaser<Buffer> pool_releaser(*column);
+        ResourceReleaser<Data> pool_releaser(*column);
         auto *b = column->get();
-        auto &buf = *b;
-        TF_RETURN_IF_ERROR(WriteData(f, &buf[0], buf.size()));
-        buf.reset();
+        TF_RETURN_IF_ERROR(WriteData(f, b->data(), b->size()));
       }
       return Status::OK();
     }
