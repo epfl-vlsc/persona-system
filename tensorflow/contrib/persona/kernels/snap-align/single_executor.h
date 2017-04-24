@@ -20,6 +20,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/GenomeIndex.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/read_resource_splitter.h"
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/SnapAlignerWrapper.h"
 #include "tensorflow/contrib/persona/kernels/executor/task_runner.h"
@@ -64,13 +65,15 @@ namespace tensorflow {
 
   };
 
-  class SnapSingle : public TaskRunner<std::unique_ptr<ReadResource>> {
+  class SnapSingle : public TaskRunner<ReadResourceSplitter::QueueType> {
   public:
     SnapSingle(Env *env, GenomeIndex *index, AlignerOptions *options,
                uint16_t max_secondary, uint16_t num_threads);
 
     Status Start() override;
   private:
+    void Worker(std::function<bool (ReadResourceSplitter::QueueType&)> dequeue_func);
+
     GenomeIndex *index_;
     AlignerOptions *options_;
     uint16_t max_secondary_, num_threads_;

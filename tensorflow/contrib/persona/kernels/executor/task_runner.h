@@ -12,7 +12,7 @@ namespace tensorflow {
   class TaskRunner {
   public:
 
-    typedef std::function< std::function<bool (T&)> > ThreadFunction;
+    typedef std::function<void (std::function<bool (T&)>) > ThreadFunction;
 
     TaskRunner(Env *env, size_t num_threads, const std::string &name = "TaskRunner") {
       workers_.reset(new thread::ThreadPool(env, name, num_threads));
@@ -52,7 +52,7 @@ namespace tensorflow {
         if (before == 0) {
           active_ = true;
         }
-        worker(this->DequeueOne);
+        worker([this](T &t) { return DequeueOne(t); });
         before = num_workers_.fetch_sub(1, memory_order_relaxed);
         if (before == 1) {
           active_ = false;
