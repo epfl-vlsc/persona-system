@@ -102,5 +102,81 @@ namespace tensorflow {
     bool executor_handle_set_ GUARDED_BY(mu_);
   };
 
+  class NewSnapSingleExecutorOp : public OpKernel {
+  public:
+    typedef BasicContainer<SnapSingle> ExecutorContainer;
+
+    NewSnapSingleExecutorOp(OpKernelConstruction* context)
+            : OpKernel(context), executor_handle_set_(false) {
+      OP_REQUIRES_OK(context, context->GetAttr("max_secondary", &max_secondary_));
+      OP_REQUIRES_OK(context, context->GetAttr("num_threads", &num_threads_));
+      OP_REQUIRES_OK(context,
+                     context->allocate_persistent(DT_STRING, TensorShape({ 2 }),
+                                                  &executor_handle_, nullptr));
+    }
+
+    void Compute(OpKernelContext* ctx) override {
+      mutex_lock l(mu_);
+      if (!options_resource_)
+        OP_REQUIRES_OK(ctx, InitHandles(ctx));
+      if (!executor_handle_set_) {
+        OP_REQUIRES_OK(ctx, InitHandles(ctx));
+        OP_REQUIRES_OK(ctx, SetExecutorHandle(ctx));
+      }
+      ctx->set_output_ref(0, &mu_, executor_handle_.AccessTensor(ctx));
+    }
+
+    ~NewSnapSingleExecutorOp() override {
+      // If the genome object was not shared, delete it.
+      if (executor_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
+        TF_CHECK_OK(cinfo_.resource_manager()->Delete<ExecutorContainer>(
+                cinfo_.container(), cinfo_.name()));
+      }
+    }
+
+  private:
+    Status InitHandles(OpKernelContext* ctx)
+    {
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "options_handle", &options_resource_));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "genome_handle", &index_resource_));
+      TF_RETURN_IF_ERROR(snap_wrapper::init());
+
+      return Status::OK();
+    }
+
+    Status SetExecutorHandle(OpKernelContext* ctx) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+      TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
+      ExecutorContainer* new_executor;
+
+      auto creator = [this, ctx](ExecutorContainer** executor) {
+        LOG(INFO) << "creating snap single executor";
+        unique_ptr<SnapSingle> value(new SnapSingle(ctx->env(), index_resource_->get(),
+                                                    options_resource_->get(), max_secondary_,
+                                                    num_threads_));
+        *executor = new ExecutorContainer(move(value));
+        return Status::OK();
+      };
+
+      TF_RETURN_IF_ERROR(
+              cinfo_.resource_manager()->LookupOrCreate<ExecutorContainer>(
+                      cinfo_.container(), cinfo_.name(), &new_executor, creator));
+
+      auto h = executor_handle_.AccessTensor(ctx)->flat<string>();
+      h(0) = cinfo_.container();
+      h(1) = cinfo_.name();
+      executor_handle_set_ = true;
+      return Status::OK();
+    }
+
+    mutex mu_;
+    ContainerInfo cinfo_;
+    int max_secondary_, num_threads_;
+    BasicContainer<GenomeIndex> *index_resource_ = nullptr;
+    BasicContainer<AlignerOptions>* options_resource_ = nullptr;
+    PersistentTensor executor_handle_ GUARDED_BY(mu_);
+    bool executor_handle_set_ GUARDED_BY(mu_);
+  };
+
   REGISTER_KERNEL_BUILDER(Name("SnapSingleExecutor").Device(DEVICE_CPU), SnapSingleExecutorOp);
+  REGISTER_KERNEL_BUILDER(Name("NewSnapSingleExecutor").Device(DEVICE_CPU), NewSnapSingleExecutorOp);
 }  // namespace tensorflow
