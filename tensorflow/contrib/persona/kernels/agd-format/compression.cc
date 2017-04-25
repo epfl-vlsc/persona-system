@@ -240,6 +240,7 @@ Status compressGZIP(const char* segment,
                               Z_DEFLATED, window_bits | ENABLE_ZLIB_GZIP_COMPRESS,
                               9, // higher memory, better speed
                               Z_DEFAULT_STRATEGY);
+    //int status = deflateInit(&stream_, Z_DEFAULT_COMPRESSION);
     if (status != Z_OK) {
         return Internal("deflateInit() didn't return Z_OK. Return ", status, " with 2nd param ", Z_DEFAULT_COMPRESSION);
     }
@@ -256,26 +257,21 @@ Status compressGZIP(const char* segment,
     stream_.avail_in = segment_size;
 
     int status;
-    do {
+    while (stream_.avail_in != 0) {
       if (stream_.avail_out == 0)
         ensure_extend_capacity((stream_.avail_in / 2) + 512); // in case of round off at the end
       status = deflate(&stream_, Z_NO_FLUSH);
-      switch (status) {
-      default:
+      if (status != Z_OK)
         return Internal("deflate(Z_NO_FLUSH) return status ", status);
-      // in these cases, just call again with more memory
-      case Z_OK:
-      case Z_BUF_ERROR:
-        break;
-      }
-    } while (stream_.avail_out == 0);
+      output_.resize(stream_.total_out);
+    } 
 
     // according to the documentation, this is the assumption when avail_out > 0 and all input has been consumed
     if (stream_.avail_in != 0) {
       return Internal("Compressor: stream.avail in > 0! Got ", stream_.avail_in);
     }
 
-    output_.resize(output_.capacity() - stream_.avail_out);
+    output_.resize(stream_.total_out);
 
     return Status::OK();
   }
@@ -290,8 +286,7 @@ Status compressGZIP(const char* segment,
       stream_.next_in = nullptr;
       stream_.avail_in = 0;
       do {
-        if (stream_.avail_out == 0)
-          ensure_extend_capacity(32);
+        ensure_extend_capacity(32);
         status = deflate(&stream_, Z_FINISH);
         if (status != Z_STREAM_END) {
           return Internal("deflate(Z_FINISH) return status ", status);
