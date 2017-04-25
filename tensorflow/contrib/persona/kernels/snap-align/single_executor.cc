@@ -239,13 +239,146 @@ namespace tensorflow {
           index_(index), options_(options) {}
 
   Status SnapSingle::Start() {
-    //this->AddWorker()
     AddWorker([this](function<bool (ReadResourceSplitter::QueueType&)> dequeue_func) { Worker(dequeue_func); }, num_threads_);
     return Status::OK();
   }
 
   void SnapSingle::Worker(function<bool(ReadResourceSplitter::QueueType &)> dequeue_func) {
-    // TODO all the logic goes here!
+    unsigned alignmentResultBufferCount;
+    if (options_->maxSecondaryAlignmentAdditionalEditDistance < 0) {
+      alignmentResultBufferCount = 1; // For the primary alignment
+    } else {
+      alignmentResultBufferCount =
+              BaseAligner::getMaxSecondaryResults(options_->numSeedsFromCommandLine, options_->seedCoverage,
+                                                  MAX_READ_LENGTH, options_->maxHits, index_->getSeedLength()) +
+              1; // +1 for the primary alignment
+    }
+
+    size_t alignmentResultBufferSize =
+            sizeof(SingleAlignmentResult) * (alignmentResultBufferCount + 1); // +1 is for primary result
+
+    unique_ptr<BigAllocator> allocator(new BigAllocator(BaseAligner::getBigAllocatorReservation(index_, true,
+                                                                                                options_->maxHits,
+                                                                                                MAX_READ_LENGTH,
+                                                                                                index_->getSeedLength(),
+                                                                                                options_->numSeedsFromCommandLine,
+                                                                                                options_->seedCoverage,
+                                                                                                options_->maxSecondaryAlignmentsPerContig)
+                                                        + alignmentResultBufferSize));
+
+    BaseAligner *base_aligner = new(allocator.get()) BaseAligner(
+            index_,
+            options_->maxHits,
+            options_->maxDist,
+            MAX_READ_LENGTH,
+            options_->numSeedsFromCommandLine,
+            options_->seedCoverage,
+            options_->minWeightToCheck,
+            options_->extraSearchDepth,
+            false, false, false, // stuff that would decrease performance without impacting quality
+            options_->maxSecondaryAlignmentsPerContig,
+            nullptr, nullptr, // Uncached Landau-Vishkin
+            nullptr, // No need for stats
+            allocator.get()
+    );
+
+    allocator->checkCanaries();
+
+    base_aligner->setExplorePopularSeeds(options_->explorePopularSeeds);
+    base_aligner->setStopOnFirstHit(options_->stopOnFirstHit);
+
+    const char *bases, *qualities;
+    size_t bases_len, qualities_len;
+    SingleAlignmentResult primaryResult;
+    vector<SingleAlignmentResult> secondaryResults;
+    secondaryResults.resize(alignmentResultBufferCount);
+
+    int num_secondary_results, flag;
+    SAMFormat format(options_->useM);
+    vector<AlignmentResultBuilder> result_builders(max_secondary_ + 1);
+    string cigarString;
+    Read snap_read;
+    LandauVishkinWithCigar lvc;
+    auto genome = index_->getGenome();
+
+    ReadResource *subchunk_resource = nullptr;
+    Status subchunk_status;
+
+    // Have to construct a default value :/
+    ReadResourceSplitter::QueueType queue_value = make_tuple(nullptr, vector<BufferPair *>(), nullptr);
+
+    for (auto dequeue_ok = dequeue_func(queue_value); dequeue_ok; dequeue_ok = dequeue_func(queue_value)) {
+      auto read_resource = get<0>(queue_value);
+      auto &columns = get<1>(queue_value);
+
+      if (columns.size() != max_secondary_ + 1) {
+        LOG(ERROR) << "Received a column group of results of size " << columns.size() << ", but was expected a size of "
+                   << max_secondary_ + 1;
+        return;
+      }
+
+      for (size_t i = 0; i < columns.size(); ++i) {
+        result_builders[i].SetBufferPair(columns[i]);
+      }
+
+      for (subchunk_status = read_resource->get_next_record(snap_read);
+           subchunk_status.ok();
+           subchunk_status = read_resource->get_next_record(snap_read)) {
+
+        cigarString.clear();
+        snap_read.clip(options_->clipping);
+
+        if (snap_read.getDataLength() < options_->minReadLength || snap_read.countOfNs() > options_->maxDist) {
+          primaryResult.status = AlignmentResult::NotFound;
+          primaryResult.location = InvalidGenomeLocation;
+          primaryResult.mapq = 0;
+          primaryResult.direction = FORWARD;
+          subchunk_status = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome, &lvc,
+                                                            false);
+          if (!subchunk_status.ok()) {
+            LOG(ERROR) << "adjustResults did not return OK!!!";
+            return;
+          }
+          for (int i = 1; i < max_secondary_ + 1; i++) {
+            // fill the columns with empties to maintain index equivalence
+            result_builders[i].AppendEmpty();
+          }
+          continue;
+        }
+
+        base_aligner->AlignRead(
+                &snap_read,
+                &primaryResult,
+                options_->maxSecondaryAlignmentAdditionalEditDistance,
+                alignmentResultBufferCount,
+                &num_secondary_results,
+                max_secondary_,
+                &secondaryResults[0] //secondaryResults
+        );
+
+        // First, write the primary results
+        subchunk_status = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome, &lvc,
+                                                          false);
+        if (!subchunk_status.ok()) {
+          LOG(ERROR) << "Write single results didn't return OK";
+          return;
+        }
+
+        int secondary_result_index = 0;
+        for (; secondary_result_index < num_secondary_results; secondary_result_index++) {
+          subchunk_status = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[secondary_result_index], result_builders[secondary_result_index + 1], genome,
+                                                            &lvc, true);
+          if (!subchunk_status.ok()) {
+            LOG(ERROR) << "adjustResults for secondary results did not return OK!!!";
+            return;
+          }
+        }
+        for (; secondary_result_index < max_secondary_; secondary_result_index++) {
+          // fill the columns with empties to maintain index equivalence
+          result_builders[secondary_result_index + 1].AppendEmpty();
+        }
+      }
+    }
   }
 
-}
+} // namespace tensorflow {
