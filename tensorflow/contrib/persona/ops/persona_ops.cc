@@ -780,6 +780,31 @@ outputs a tensor [num_reads] containing serialized reads and results
 containing the alignment candidates.
 )doc");
 
+  REGISTER_OP("NewSnapAlignSingle")
+          .Attr("subchunk_size: int >= 1")
+          .Attr("max_secondary: int >= 0")
+          .Input("buffer_list_pool: Ref(string)")
+          .Input("read: string")
+          .Input("executor_handle: Ref(string)")
+          .Output("result_buf_handle: string")
+          .SetShapeFn([](InferenceContext *c) {
+            for (int i = 0; i < 3; i++) {
+              TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+            }
+            int max_secondary = 0;
+            TF_RETURN_IF_ERROR(c->GetAttr("max_secondary", &max_secondary));
+
+            c->set_output(0, c->Matrix(1+max_secondary, 2));
+            return Status::OK();
+          })
+          .Doc(R"doc(
+Aligns input `read`, which contains multiple reads.
+Loads the SNAP-based hash table into memory on construction to perform
+generation of alignment candidates.
+outputs a tensor [num_reads] containing serialized reads and results
+containing the alignment candidates.
+)doc");
+
   REGISTER_OP("SnapSingleExecutor")
   .Attr("max_secondary: int >= 0")
   .Attr("num_threads: int >= 0")
