@@ -15,15 +15,14 @@ namespace tensorflow {
   public:
     typedef std::tuple<ReadResource*, std::vector<BufferPair*>, std::shared_ptr<ReadResourceSplitter>> QueueType;
     ReadResourceSplitter(std::vector<BufferList*> &bl);
-    ~ReadResourceSplitter();
 
     void AddSubchunks(ReadResource *rr[], std::size_t count);
     void EnqueueAll(TaskRunner<QueueType> &runner);
 
+    void WaitForDone();
+
   private:
     void SubchunksDone();
-
-    void WaitForDone();
 
     mutable mutex mu_;
     mutable std::condition_variable wait_for_completion_;
