@@ -800,6 +800,25 @@ containing the alignment candidates.
 to align single reads using the SNAP algorithm.
             )doc");
 
+  REGISTER_OP("NewSnapSingleExecutor")
+          .Attr("max_secondary: int >= 0")
+          .Attr("num_threads: int >= 0")
+          .Attr("container: string = ''")
+          .Attr("shared_name: string = ''")
+          .Input("options_handle: Ref(string)")
+          .Input("genome_handle: Ref(string)")
+          .Output("executor_handle: Ref(string)")
+          .SetShapeFn([](InferenceContext *c) {
+            for (int i = 0; i < 2; i++) {
+              TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+            }
+            c->set_output(0, c->Vector(2));
+            return Status::OK();
+          })
+          .Doc(R"doc(Provides a multithreaded execution context
+to align single reads using the SNAP algorithm.
+            )doc");
+
   REGISTER_OP("SnapIndexReferenceSequences")
     .Input("genome_handle: Ref(string)")
     .SetShapeFn([](InferenceContext* c) {
