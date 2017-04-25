@@ -19,20 +19,20 @@ namespace tensorflow {
     }
 
     ~AGDConverterOp() {
-      core::ScopedUnref a(buflist_pool_);
+      core::ScopedUnref a(bufpair_pool_);
     }
 
     void Compute(OpKernelContext* ctx) override {
-      if (!buflist_pool_) {
+      if (!bufpair_pool_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
 
       ResourceContainer<ReadResource> *reads_container;
-      ResourceContainer<BufferList> *buffer_list_resource;
-      OP_REQUIRES_OK(ctx, GetResources(ctx, &reads_container, &buffer_list_resource));
+      ResourceContainer<BufferPair> *bases_container, *qual_container, *meta_container;
+      OP_REQUIRES_OK(ctx, GetResources(ctx, &reads_container, &bases_container,
+      &qual_container, &meta_container));
 
       auto *read_resource = reads_container->get();
-      auto *buffer_list = buffer_list_resource->get();
 
       // These nested scopes are to make sure the RAII fires off in-order
       core::ScopedUnref a1(reads_container);
@@ -40,25 +40,25 @@ namespace tensorflow {
         ResourceReleaser<ReadResource> a2(*reads_container);
         {
           ReadResourceReleaser a3(*read_resource);
-          buffer_list->resize(3);
+          auto& bases_buf = *bases_container->get();
+          auto& qualities_buf = *qual_container->get();
+          auto& metadata_buf = *meta_container->get();
 
-          auto &bases = (*buffer_list)[0];
-          auto &qualities = (*buffer_list)[1];
-          auto &metadata = (*buffer_list)[2];
 
-          const char *read_data;
-          unsigned read_data_length;
-          Read read;
-          auto status = read_resource->get_next_record(read);
+          size_t meta_len;
+          size_t bases_len;
+          const char* bases, *qual, *meta;
+          auto status = read_resource->get_next_record(&bases, &bases_len, &qual, &meta, &meta_len);
           while (status.ok()) {
 
-            OP_REQUIRES_OK(ctx, AppendRecord(read.getId(), read.getIdLength(), metadata));
-            read_data_length = read.getDataLength();
-            OP_REQUIRES_OK(ctx, AppendRecord(read.getQuality(), read_data_length, qualities));
-            OP_REQUIRES_OK(ctx, IntoBases(read.getData(), read_data_length, bases_));
-            OP_REQUIRES_OK(ctx, AppendRecord(&bases_[0], bases_.size(), bases));
+            OP_REQUIRES_OK(ctx, AppendRecord(meta, meta_len, metadata_buf));
+            //LOG(INFO) << "0: meta: " << string(meta, meta_len);
+            //LOG(INFO) << "0: base: " << string(bases, bases_len);
+            OP_REQUIRES_OK(ctx, AppendRecord(qual, bases_len, qualities_buf));
+            OP_REQUIRES_OK(ctx, IntoBases(bases, bases_len, bases_));
+            OP_REQUIRES_OK(ctx, AppendRecord(&bases_[0], bases_.size(), bases_buf));
 
-            status = read_resource->get_next_record(read);
+            status = read_resource->get_next_record(&bases, &bases_len, &qual, &meta, &meta_len);
           }
 
           OP_REQUIRES(ctx, IsResourceExhausted(status), status);
@@ -67,7 +67,7 @@ namespace tensorflow {
     }
 
   private:
-    ReferencePool<BufferList> *buflist_pool_ = nullptr;
+    ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
     vector<BinaryBases> bases_;
 
     template <typename T>
@@ -90,21 +90,30 @@ namespace tensorflow {
     }
 
     Status Init(OpKernelContext* ctx) {
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufpair_pool_));
       return Status::OK();
     }
 
     Status GetResources(OpKernelContext *ctx,
                         ResourceContainer<ReadResource> **reads_container,
-                        ResourceContainer<BufferList> **buffer_list) {
+                        ResourceContainer<BufferPair> **base_bufpair,
+                        ResourceContainer<BufferPair> **qual_bufpair,
+                        ResourceContainer<BufferPair> **meta_bufpair) {
       const Tensor *input_data_t;
       TF_RETURN_IF_ERROR(ctx->input("input_data", &input_data_t));
       auto input_data_v = input_data_t->vec<string>();
       TF_RETURN_IF_ERROR(ctx->resource_manager()->Lookup(input_data_v(0), input_data_v(1),
                                                          reads_container));
-      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(buffer_list));
-      (*buffer_list)->get()->reset();
-      TF_RETURN_IF_ERROR((*buffer_list)->allocate_output("agd_columns", ctx));
+      
+      TF_RETURN_IF_ERROR(bufpair_pool_->GetResource(base_bufpair));
+      TF_RETURN_IF_ERROR(bufpair_pool_->GetResource(qual_bufpair));
+      TF_RETURN_IF_ERROR(bufpair_pool_->GetResource(meta_bufpair));
+      (*base_bufpair)->get()->reset();
+      (*qual_bufpair)->get()->reset();
+      (*meta_bufpair)->get()->reset();
+      TF_RETURN_IF_ERROR((*base_bufpair)->allocate_output("bases_out", ctx));
+      TF_RETURN_IF_ERROR((*qual_bufpair)->allocate_output("qual_out", ctx));
+      TF_RETURN_IF_ERROR((*meta_bufpair)->allocate_output("meta_out", ctx));
       return Status::OK();
     }
   };
