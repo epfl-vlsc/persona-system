@@ -47,6 +47,8 @@ namespace tensorflow {
     Status split(std::size_t chunk, std::vector<BufferList*>& bl) override;
     Status get_next_subchunk(ReadResource **rr, std::vector<BufferPair*>& b) override;
 
+    Status SplitResource(std::size_t chunk_size, ReadResourceSplitter &splitter) override;
+
   protected:
     std::vector<AGDReadSubResource> sub_resources_;
     std::atomic_size_t sub_resource_index_;

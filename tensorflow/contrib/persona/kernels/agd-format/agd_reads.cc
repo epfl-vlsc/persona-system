@@ -165,6 +165,38 @@ namespace tensorflow {
     return Status::OK();
   }
 
+  Status AGDReadResource::SplitResource(size_t chunk, ReadResourceSplitter &splitter) {
+    sub_resources_.clear();
+
+    reset_iter(); // who cares doesn't die for now
+
+    decltype(base_data_) base_start = base_data_, qual_start = qual_data_, meta_start = nullptr;
+    decltype(chunk) max_range;
+    for (decltype(num_records_) i = 0; i < num_records_; i += chunk) {
+      max_range = i + chunk;
+      if (max_range > num_records_) {
+        // deals with the tail
+        max_range = num_records_;
+      }
+
+      sub_resources_.push_back(AGDReadSubResource(*this, i, max_range, base_start, qual_start, meta_start));
+
+      // actually advance the records
+      for (decltype(i) j = i; j < max_range; ++j) {
+        base_start += base_idx_[j];
+        qual_start += qual_idx_[j];
+      }
+    }
+
+    auto num_subchunks = sub_resources_.size();
+    ReadResource *resource_ptrs[num_subchunks];
+    for (size_t i = 0; i < num_subchunks; i++) {
+      resource_ptrs[i] = &sub_resources_[i];
+    }
+    splitter.AddSubchunks(resource_ptrs, num_subchunks);
+    return Status::OK();
+  }
+
   Status AGDReadResource::split(size_t chunk, vector<BufferList*>& bl) {
     sub_resources_.clear();
 
