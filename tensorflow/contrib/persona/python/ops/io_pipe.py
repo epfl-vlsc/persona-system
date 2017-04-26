@@ -25,6 +25,8 @@ persona_ops = persona_ops_proxy()
 scalar_shape = tensor_shape.scalar()
 resource_shape = tensor_shape.vector(2)
 pool_default_args = {'size':10, "bound": False}
+suffix_separator = constant_op.constant(".")
+default_records_type = ({"type": "structured", "extension": "results"},)
 
 def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     tensor_shape = tensor.get_shape()
@@ -153,7 +155,7 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
     for file_path in upstream_tensors:
         yield make_readers(input_file_basename=file_path)
 
-def local_write_pipeline(upstream_tensors, record_types=["results"], name="local_write_pipeline"):
+def local_write_pipeline(upstream_tensors, record_types=default_records_type, name="local_write_pipeline"):
     """
     Create a local write pipeline, based on the number of upstream tensors received.
     :param upstream_tensors: a list of tensor tuples of type: buffer_list_handle, record_id, first_ordinal, num_records, file_path
@@ -166,12 +168,15 @@ def local_write_pipeline(upstream_tensors, record_types=["results"], name="local
         if not len(bl_handle) == len(record_types):
             raise Exception("number of record types must equal number of buffer list handles")
         for handle, record_type in zip(bl_handle, record_types):
+            if not ("extension" in record_type and "type" in record_type):
+                raise Exception("""Record type '{}' doesnt' contain "extension" or "type" """.format(record_type))
+            full_filepath = string_ops.string_join([file_path, suffix_separator, record_type["extension"]])
             yield persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
-                                                                 record_type=record_type,
+                                                                 record_type=record_type["type"],
                                                                  resource_handle=handle,
                                                                  first_ordinal=first_ordinal,
                                                                  num_records=num_records,
-                                                                 path=file_path)
+                                                                 path=full_filepath)
 
     assert len(upstream_tensors) > 0
     for buffer_list_handle, record_id, first_ordinal, num_records, file_path in upstream_tensors:
@@ -414,11 +419,10 @@ def persona_in_pipe(columns, dataset_dir, metadata_path=None, key=None, mmap_poo
         raise Exception("If keys is None, must also pass a valid metadata file")
       key = _key_maker(chunknames)
 
-    suffix_sep = constant_op.constant(".")
     chunk_filenames = []
     for extension in columns:
       extension_op = constant_op.constant(extension)
-      new_name = string_ops.string_join([key, suffix_sep, extension_op]) # e.g. key.results
+      new_name = string_ops.string_join([key, suffix_separator, extension_op]) # e.g. key.results
       chunk_filenames.append(new_name)
 
     # cascading MMAP operations give better disk performance

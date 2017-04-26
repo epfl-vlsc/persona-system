@@ -146,14 +146,18 @@ and is thus passed as an Attr instead of an input (for efficiency);
 )doc");
 
   REGISTER_OP("AGDConverter")
-  .Input("buffer_list_pool: Ref(string)")
+  .Input("buffer_pair_pool: Ref(string)")
   .Input("input_data: string")
-  .Output("agd_columns: string")
+  .Output("bases_out: string")
+  .Output("qual_out: string")
+  .Output("meta_out: string")
   .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 2; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
       c->set_output(0, c->Vector(2));
+      c->set_output(1, c->Vector(2));
+      c->set_output(2, c->Vector(2));
 
       return Status::OK();
     })
@@ -162,23 +166,23 @@ Converts an input file into three files of bases, qualities, and metadata
 )doc");
 
   REGISTER_OP("AGDInterleavedConverter")
-          .Input("buffer_pair_pool: Ref(string)")
-          .Input("input_data_0: string")
-          .Input("input_data_1: string")
-          .Output("bases_out: string")
-          .Output("qual_out: string")
-          .Output("meta_out: string")
-          .SetShapeFn([](InferenceContext *c) {
-            for (int i = 0; i < 3; i++) {
-              TF_RETURN_IF_ERROR(check_vector(c, i, 2));
-            }
-            c->set_output(0, c->Vector(2));
-            c->set_output(1, c->Vector(2));
-            c->set_output(2, c->Vector(2));
+  .Input("buffer_pair_pool: Ref(string)")
+  .Input("input_data_0: string")
+  .Input("input_data_1: string")
+  .Output("bases_out: string")
+  .Output("qual_out: string")
+  .Output("meta_out: string")
+  .SetShapeFn([](InferenceContext *c) {
+      for (int i = 0; i < 3; i++) {
+      TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+      c->set_output(0, c->Vector(2));
+      c->set_output(1, c->Vector(2));
+      c->set_output(2, c->Vector(2));
 
-            return Status::OK();
-          })
-          .Doc(R"doc(
+      return Status::OK();
+      })
+  .Doc(R"doc(
 Converts two input files into three files of interleaved bases, qualities, and metadata
 )doc");
 
