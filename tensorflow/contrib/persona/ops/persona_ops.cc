@@ -784,7 +784,6 @@ containing the alignment candidates.
 )doc");
 
   REGISTER_OP("SnapSingleExecutor")
-  .Attr("max_secondary: int >= 0")
   .Attr("num_threads: int >= 0")
   .Attr("work_queue_size: int >= 0")
   .Attr("container: string = ''")

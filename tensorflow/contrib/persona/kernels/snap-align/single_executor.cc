@@ -10,11 +10,10 @@ namespace tensorflow {
   using namespace errors;
 
   SnapSingleExecutor::SnapSingleExecutor(Env *env, GenomeIndex *index, AlignerOptions *options,
-                                         int max_secondary, int num_threads, int capacity) : index_(index),
-                                                                                             options_(options),
-                                                                                             num_threads_(num_threads),
-                                                                                             capacity_(capacity),
-                                                                                             max_secondary_(max_secondary) {
+                                         int num_threads, int capacity) : index_(index),
+                                                                          options_(options),
+                                                                          num_threads_(num_threads),
+                                                                          capacity_(capacity) {
     genome_ = index_->getGenome();
     // create a threadpool to execute stuff
     workers_.reset(new thread::ThreadPool(env, "SnapSingle", num_threads_));
@@ -108,6 +107,7 @@ namespace tensorflow {
       int flag;
       Read snap_read;
       LandauVishkinWithCigar lvc;
+      size_t num_columns;
 
       vector<BufferPair *> result_bufs;
       ReadResource *subchunk_resource = nullptr;
@@ -130,12 +130,13 @@ namespace tensorflow {
 
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         while (io_chunk_status.ok()) {
+          num_columns = result_bufs.size();
 
-          if (result_bufs.size() > result_builders.size()) {
-            result_builders.resize(result_bufs.size());
+          if (num_columns > result_builders.size()) {
+            result_builders.resize(num_columns);
           }
 
-          for (int i = 0; i < result_builders.size(); i++) {
+          for (int i = 0; i < num_columns; i++) {
             result_builders[i].SetBufferPair(result_bufs[i]);
           }
 
@@ -154,9 +155,9 @@ namespace tensorflow {
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
               }
-              for (int i = 0; i < max_secondary_; i++) {
+              for (decltype(num_columns) i = 1; i < num_columns; i++) {
                 // fill the columns with empties to maintain index equivalence
-                result_builders[i + 1].AppendEmpty();
+                result_builders[i].AppendEmpty();
               }
               continue;
             }
@@ -167,7 +168,7 @@ namespace tensorflow {
                     options_->maxSecondaryAlignmentAdditionalEditDistance,
                     alignmentResultBufferCount,
                     &num_secondary_results,
-                    max_secondary_,
+                    num_columns-1, // maximum number of secondary results
                     &secondaryResults[0] //secondaryResults
             );
 
@@ -194,9 +195,9 @@ namespace tensorflow {
                 return;
               }
             }
-            for (int i = num_secondary_results; i < max_secondary_; i++) {
+            for (int i = num_secondary_results+1; i < num_columns; i++) {
               // fill the columns with empties to maintain index equivalence
-              result_builders[i + 1].AppendEmpty();
+              result_builders[i].AppendEmpty();
             }
           }
 
