@@ -51,8 +51,9 @@ namespace format {
   };
 
   enum RecordType {
-    RAW = 0,
-    STRUCTURED = 1
+    TEXT = 0,
+    STRUCTURED = 1,
+    COMPACTED_BASES = 2
   };
 
   enum BaseAlphabet {

@@ -12,8 +12,10 @@ namespace tensorflow {
     using namespace format;
     OP_REQUIRES_OK(ctx, ctx->GetAttr("record_type", &record_suffix_));
     RecordType t;
-    if (record_suffix_.compare("raw") == 0) {
-      t = RecordType::RAW;
+    if (record_suffix_.compare("text") == 0) {
+      t = RecordType::TEXT;
+    } else if (record_suffix_.compare("base_compact") == 0) {
+      t = RecordType::COMPACTED_BASES;
     } else {
       t = RecordType::STRUCTURED;
     }
