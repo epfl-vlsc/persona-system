@@ -188,7 +188,7 @@ def local_write_pipeline(upstream_tensors, record_types=default_records_type, na
                           first_ordinal=first_ordinal,
                           bl_handle=buffer_list_handle)
 
-def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, twobit=False, buffer_pool_args=pool_default_args, name="agd_reader_pipeline"):
+def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_args=pool_default_args, name="agd_reader_pipeline"):
     """
     Yield a pipeline of input buffers processed by AGDReader.
     
@@ -213,10 +213,10 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, twobit
                 actual=ut_shape, expected=resource_shape
             ))
         output_buffer, num_records, first_ordinal, record_id = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
-                                                                             verify=verify, twobit=twobit, name="agd_reader")
+                                                                                      verify=verify, unpack=True, name="agd_reader")
         yield output_buffer, num_records, first_ordinal, record_id
 
-def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, twobit=False, share_buffer_pool=True, buffer_pool_args=pool_default_args, name="agd_reader_multi_column_pipeline"):
+def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, share_buffer_pool=True, buffer_pool_args=pool_default_args, name="agd_reader_multi_column_pipeline"):
     """
     Create an AGDReader pipeline for an iterable of columns. Each column group is assumed to have the same first ordinal, number of records, and record id.
     :param upstream_tensorz: a list of list of tensors, each item being a column group
@@ -230,7 +230,7 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     if buffer_pool is None and share_buffer_pool:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
     assert len(upstream_tensorz) > 0
-    process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, twobit=twobit, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
+    process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
                        for upstream_tensors in upstream_tensorz)
     for processed_tensors in process_tensorz:
         output_buffers, num_recordss, first_ordinalss, record_ids = zip(*processed_tensors)
