@@ -1,5 +1,4 @@
-#ifndef TENSORFLOW_CORE_USER_OPS_AGD_FORMAT_PARSER_H_
-#define TENSORFLOW_CORE_USER_OPS_AGD_FORMAT_PARSER_H_
+#pragma once
 
 #include "format.h"
 #include "tensorflow/core/lib/core/errors.h"
@@ -11,6 +10,7 @@
 #include <cstdint>
 
 namespace tensorflow {
+  extern unsigned char nst_nt4_table[256];
 
   template <size_t N>
   class BaseMapping {
@@ -58,5 +58,3 @@ namespace tensorflow {
   };
 
 }  //  namespace tensorflow {
-
-#endif
