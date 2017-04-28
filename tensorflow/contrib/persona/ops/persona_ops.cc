@@ -1024,7 +1024,7 @@ Intended to be used for BWAAssembler
 )doc");
 
   REGISTER_OP("TwoBitConverter")
-  .Input("int32: num_records")
+  .Input("num_records: int32")
   .Input("input: string")
   .Output("output: string")
   .SetShapeFn([](InferenceContext *c) {
