@@ -31,8 +31,7 @@ namespace tensorflow {
 
   public:
 
-    SnapSingleExecutor(Env *env, GenomeIndex *index, AlignerOptions *options,
-                       int max_secondary, int num_threads, int capacity);
+    SnapSingleExecutor(Env *env, GenomeIndex *index, AlignerOptions *options, int num_threads, int capacity);
     ~SnapSingleExecutor();
 
     // shared ptr is assumed to have deleter that notifies caller of completion
@@ -45,7 +44,6 @@ namespace tensorflow {
     AlignerOptions *options_ = nullptr;
     const Genome *genome_ = nullptr;
     volatile bool run_ = true;
-    int max_secondary_;
 
     std::atomic_uint_fast32_t num_active_threads_, id_{0};
     mutex mu_;
