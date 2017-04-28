@@ -144,7 +144,9 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
         prev = []
         for full_filename in expand_column_extensions(key=input_file_basename, columns=columns):
             with ops.control_dependencies(prev):
-                yield persona_ops.file_m_map(filename=full_filename, pool_handle=mmap_pool, synchronous=sync)
+                mmap_op = persona_ops.file_m_map(filename=full_filename, pool_handle=mmap_pool, synchronous=sync)
+                yield mmap_op
+                prev.append(mmap_op)
 
     columns = validate_columns(columns=columns)
 
