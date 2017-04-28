@@ -1025,6 +1025,21 @@ Intended to be used for BWAAssembler
   This is the single threaded stage of processing a chunk.
 )doc");
 
+  REGISTER_OP("TwoBitConverter")
+  .Input("int32: num_records")
+  .Input("input: string")
+  .Output("output: string")
+  .SetShapeFn([](InferenceContext *c) {
+    TF_RETURN_IF_ERROR(check_scalar(c, 0));
+    TF_RETURN_IF_ERROR(check_vector(c, 1, 2));
+    c->set_output(0, c->input(1));
+    return Status::OK();
+  })
+  .Doc(R"doc(
+Converts from an ASCII base buffer to a 2-bit output buffer, for BWA conversion.
+This uses the same buffer, and can handle any Data type that exposes mutable access (e.g. Buffer)
+)doc");
+
   REGISTER_OP("AgdOutputBam")
   .Attr("path: string")
   .Attr("pg_id: string")
