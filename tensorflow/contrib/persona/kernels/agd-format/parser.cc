@@ -133,6 +133,7 @@ namespace tensorflow {
     switch (record_type) {
     case RecordType::TEXT:
     case RecordType::STRUCTURED:
+    case RecordType::COMPACTED_BASES:
       break;
     default:
       return Internal("Invalid record type ", file_header->record_type);
