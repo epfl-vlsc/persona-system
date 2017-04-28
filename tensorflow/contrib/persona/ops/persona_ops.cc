@@ -278,7 +278,6 @@ Prints records to stdout from record indices `start` to `finish`.
   .Attr("verify: bool = false")
   .Attr("reserve: int = 8192")
   .Attr("unpack: bool = true")
-  .Attr("twobit: bool = false")
   .Input("buffer_pool: Ref(string)")
   .Input("file_handle: string")
   .Output("processed_buffers: string")
@@ -1080,7 +1079,7 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   // All the new prototypes of the write ops go here
 
 #define AGD_COMMON_HEADER_ATTRIBUTES \
-  .Attr("record_type: {'raw', 'structured'}") \
+  .Attr("record_type: {'text', 'base_compact', 'structured'}") \
   .Input("path: string") \
   .Input("record_id: string") \
   .Input("first_ordinal: int64") \
