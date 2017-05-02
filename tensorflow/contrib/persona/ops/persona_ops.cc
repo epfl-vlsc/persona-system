@@ -423,7 +423,7 @@ we can use it in other pipelines where writers are used
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("read_size: int")
-  .Input("buffer_handle: Ref(string)")
+  .Input("buffer_pool: Ref(string)")
   .Input("key: string")
   .Input("pool_name: string")
   .Output("file_handle: string")
@@ -444,7 +444,7 @@ we can use it in other pipelines where writers are used
 Obtains file names from a queue, fetches those files from Ceph storage using Librados,
 and writes them to a buffer from a pool of buffers.
 
-buffer_handle: a handle to the buffer pool
+buffer_pool: a handle to the buffer pool
 key: key reference to the filename queue
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
   )doc");

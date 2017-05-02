@@ -27,6 +27,9 @@ resource_shape = tensor_shape.vector(2)
 pool_default_args = {'size':10, "bound": False}
 suffix_separator = constant_op.constant(".")
 default_records_type = ({"type": "structured", "extension": "results"},)
+def check_valid_record_type(record_type):
+    if not ("type" in record_type and "extension" in record_type and isinstance(record_type, dict)):
+        raise Exception("Invalid record type: {}".format(record_type))
 
 def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     tensor_shape = tensor.get_shape()
@@ -86,7 +89,7 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
                                        pool_name=pool_name,
                                        ceph_conf_path=ceph_conf_path,
                                        read_size=ceph_read_size,
-                                       queue_key=key,
+                                       key=key,
                                        buffer_pool=buffer_pool) # buffer_pool is in scope. hooray python!
     columns = validate_columns(columns=columns)
 
@@ -100,7 +103,7 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
         yield key, pool_name, chunk_buffers
 
 # note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
-def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, name="ceph_write_pipeline"):
+def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, record_types=default_records_type, name="ceph_write_pipeline"):
     """
     Create a ceph write pipeline for aligner results (that outputs a BufferList, which we must wait on for completion
     :param upstream_tensors: a list of aligner output tensors of type (key, first ordinal, number of records, pool name, record id, column handle)
@@ -111,15 +114,23 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
     :return: yields the output of ceph write columns
     """
     def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
-        return persona_ops.agd_ceph_buffer_list_writer(cluster_name=cluster_name,
-                                                       user_name=user_name,
-                                                       ceph_conf_path=ceph_conf_path,
-                                                       pool_name=pool_name,
-                                                       record_id=record_id,
-                                                       num_records=num_records,
-                                                       first_ordinal=first_ordinal,
-                                                       file_path=key,
-                                                       column_handle=column_handle)
+        column_handles = array_ops.unstack(column_handle)
+        if not len(column_handles) == len(record_types):
+            raise Exception("number of record types ({r}) must be equal to number of columns ({c})".format(r=len(record_types),
+                                                                                                           c=len(column_handles)))
+        for handle, record_type in zip(column_handles, record_types):
+            check_valid_record_type(record_type=record_type)
+            full_key = string_ops.string_join([key, record_type["extension"]])
+            return persona_ops.agd_ceph_buffer_list_writer(cluster_name=cluster_name,
+                                                           user_name=user_name,
+                                                           ceph_conf_path=ceph_conf_path,
+                                                           pool_name=pool_name,
+                                                           record_id=record_id,
+                                                           record_type=record_type["type"],
+                                                           num_records=num_records,
+                                                           first_ordinal=first_ordinal,
+                                                           path=full_key,
+                                                           resource_handle=handle)
 
     for key, pool_name, num_records, first_ordinal, record_id, column_handle in upstream_tensors:
         yield make_ceph_writer(key=key,
@@ -170,8 +181,7 @@ def local_write_pipeline(upstream_tensors, record_types=default_records_type, na
         if not len(bl_handle) == len(record_types):
             raise Exception("number of record types must equal number of buffer list handles")
         for handle, record_type in zip(bl_handle, record_types):
-            if not ("extension" in record_type and "type" in record_type):
-                raise Exception("""Record type '{}' doesnt' contain "extension" or "type" """.format(record_type))
+            check_valid_record_type(record_type=record_type)
             full_filepath = string_ops.string_join([file_path, suffix_separator, record_type["extension"]])
             yield persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
                                                                  record_type=record_type["type"],
@@ -515,7 +525,7 @@ def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None,
       for chunk_filename in chunk_filenames:
         # [0] because ceph_reader also outputs filename which we don't need
         bb = persona_ops.ceph_reader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name,
-                                ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_handle=buffer_pool,
+                                ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_pool=buffer_pool,
                                 queue_key=chunk_filename, name=name)[0]
         chunk_buffers.append(bb)
       chunk_buffers.append(key)
