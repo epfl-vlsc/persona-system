@@ -120,7 +120,7 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
                                                                                                            c=len(column_handles)))
         for handle, record_type in zip(column_handles, record_types):
             check_valid_record_type(record_type=record_type)
-            full_key = string_ops.string_join([key, record_type["extension"]])
+            full_key = string_ops.string_join([key, suffix_separator, record_type["extension"]])
             return persona_ops.agd_ceph_buffer_list_writer(cluster_name=cluster_name,
                                                            user_name=user_name,
                                                            ceph_conf_path=ceph_conf_path,

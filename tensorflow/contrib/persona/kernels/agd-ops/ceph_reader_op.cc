@@ -73,6 +73,7 @@ namespace tensorflow {
 
   private:
     librados::IoCtx io_ctx;
+    bool initialized = false;
     string cluster_name;
     string user_name;
     string ceph_conf;
@@ -83,7 +84,7 @@ namespace tensorflow {
     /* Read an object from Ceph synchronously */
     Status CephReadObject(const string &file_key, const string &pool_name, ResourceContainer<Buffer> *ref_buffer) {
       int ret = 0;
-      if (pool_name != io_ctx.get_pool_name()) {
+      if (initialized == false || pool_name != io_ctx.get_pool_name()) {
         // TODO need to close before creating a new one?
         ret = cluster.ioctx_create(pool_name.c_str(), io_ctx);
         if (ret != 0) {
@@ -91,6 +92,7 @@ namespace tensorflow {
         } else {
           VLOG(INFO) << "Creating a new context because pool name changed to " << pool_name;
         }
+        initialized = true;
       }
       auto buf = ref_buffer->get();
 
