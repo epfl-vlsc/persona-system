@@ -43,7 +43,7 @@ namespace tensorflow {
 
     void Compute(OpKernelContext* ctx) override {
       if (!ref_pool_) {
-        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_handle", &ref_pool_));
+        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_pool", &ref_pool_));
       }
 
       const Tensor *key_t, *pool_name_t;
