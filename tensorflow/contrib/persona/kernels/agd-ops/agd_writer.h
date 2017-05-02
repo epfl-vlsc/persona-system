@@ -12,7 +12,6 @@ namespace tensorflow {
     Status SetHeaderValues(OpKernelContext* ctx);
 
     format::FileHeader header_;
-    std::string record_suffix_;
   private:
     std::string record_id_;
   };

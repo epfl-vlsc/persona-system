@@ -30,7 +30,7 @@ namespace tensorflow {
     const Tensor *key_t, *resource_t;
     OP_REQUIRES_OK(ctx, ctx->input("path", &key_t));
     OP_REQUIRES_OK(ctx, ctx->input("resource_handle", &resource_t));
-    auto key = key_t->scalar<string>()() + record_suffix_;
+    auto &key = key_t->scalar<string>()();
     auto resource_vec = resource_t->vec<string>();
 
     OP_REQUIRES_OK(ctx, SetHeaderValues(ctx));
