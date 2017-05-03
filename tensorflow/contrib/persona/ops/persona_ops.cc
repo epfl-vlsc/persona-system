@@ -1179,4 +1179,18 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   .Doc(R"doc(
 Compresses the prepared buffer_pair records into a buffer.
 )doc");
+
+  REGISTER_OP("BufferListCompressor")
+  .Input("buffer_pool: Ref(string)")
+  .Input("buffer_list: string")
+  .Output("buffer: string")
+  .SetShapeFn([](InferenceContext *c) {
+      for (int i = 0; i < 2; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+      c->set_output(0, c->input(1));
+    })
+  .Doc(R"doc(
+Compresses the prepared buffer_list records and into individual buffers, and then outputs them
+)doc");
 }
