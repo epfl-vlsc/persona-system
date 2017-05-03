@@ -14,7 +14,7 @@ from tensorflow.python.training.input import batch
 
 import json
 import os
-import itertools
+import functools
 
 import logging
 logging.basicConfig()
@@ -111,11 +111,14 @@ def aligner_compress_pipeline(upstream_tensors, buffer_pool=None, buffer_pool_ar
     :param name: 
     :return: 
     """
+    def compress_buffer_list(buffer_list):
+        return persona_ops.buffer_list_compressor(buffer_list=buffer_list, buffer_pool=buffer_pool)
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args)
-    for buffer_list in itertools.chain.from_iterable(array_ops.unstack(a) for a in upstream_tensors):
-        yield persona_ops.buffer_list_compressor(buffer_pool=buffer_pool,
-                                                 buffer_list=buffer_list)
+    for buffer_lists in upstream_tensors:
+        bls_unstacked = array_ops.unstack(buffer_lists)
+        compressed_buffers = tuple(compress_buffer_list(a) for a in bls_unstacked)
+        yield array_ops.stack(compressed_buffers)
 
 # note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
 def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, compressed, record_types=default_records_type, name="ceph_write_pipeline"):
@@ -129,7 +132,7 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
     :return: yields the output of ceph write columns
     """
     if compressed:
-        writer_op = persona_ops.agd_ceph_buffer_writer
+        writer_op = functools.partial(persona_ops.agd_ceph_buffer_writer, compressed=True)
     else:
         writer_op = persona_ops.agd_ceph_buffer_list_writer
     def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
@@ -196,7 +199,7 @@ def local_write_pipeline(upstream_tensors, compressed, record_types=default_reco
     :return: yield a writer for each record to be written in upstream tensors
     """
     if compressed:
-        writer_op = persona_ops.agd_file_system_buffer_writer
+        writer_op = functools.partial(persona_ops.agd_file_system_buffer_writer, compressed=True)
     else:
         writer_op = persona_ops.agd_file_system_buffer_list_writer
     def make_writer(record_id, file_path, first_ordinal, num_records, bl_handle):
