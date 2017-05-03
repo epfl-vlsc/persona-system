@@ -1189,6 +1189,7 @@ Compresses the prepared buffer_pair records into a buffer.
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
       c->set_output(0, c->input(1));
+      return Status::OK();
     })
   .Doc(R"doc(
 Compresses the prepared buffer_list records and into individual buffers, and then outputs them
