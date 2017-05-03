@@ -40,6 +40,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, buf_pool_->GetResource(&output_buffer));
       auto *buf = output_buffer->get();
       AppendingGZIPCompressor compressor(*buf);
+      OP_REQUIRES_OK(ctx, compressor.init());
 
       for (size_t i = 0; i < num_chunks; i++) {
         auto &buf_pair = (*buf_list)[i];

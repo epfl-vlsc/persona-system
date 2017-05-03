@@ -48,7 +48,7 @@ namespace tensorflow {
 
     Status CompressBuffer(BufferPair &buf_pair, Buffer *buf) {
       AppendingGZIPCompressor compressor(*buf); // destructor releases GZIP resources
-      compressor.init();
+      TF_RETURN_IF_ERROR(compressor.init());
       auto &index = buf_pair.index();
       TF_RETURN_IF_ERROR(compressor.appendGZIP(index.data(), index.size()));
       auto &data = buf_pair.data();
