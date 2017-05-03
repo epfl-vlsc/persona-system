@@ -14,6 +14,7 @@ from tensorflow.python.training.input import batch
 
 import json
 import os
+import itertools
 
 import logging
 logging.basicConfig()
@@ -67,7 +68,7 @@ def expand_column_extensions(key, columns):
         yield string_ops.string_join(inputs=[key, c], separator=".", name="AGD_column_expansion")
 
 def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, columns,
-                       ceph_read_size=2**26, buffer_pool=None, name="ceph_read_pipeline"):
+                       ceph_read_size=2**26, buffer_pool=None, buffer_pool_args=pool_default_args, name="ceph_read_pipeline"):
     """
     Create a ceph input pipeline.
     
@@ -94,7 +95,7 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
     columns = validate_columns(columns=columns)
 
     if buffer_pool is None:
-        buffer_pool = persona_ops.buffer_pool(size=10, bound=False)
+        buffer_pool = persona_ops.buffer_pool(**buffer_pool_args)
 
     for key, pool_name in upstream_tensors:
         validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
@@ -103,7 +104,21 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
         yield key, pool_name, chunk_buffers
 
 # note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
-def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, record_types=default_records_type, name="ceph_write_pipeline"):
+def aligner_compress_pipeline(upstream_tensors, buffer_pool=None, buffer_pool_args=pool_default_args, name="aligner_compress_pipeline"):
+    """
+    Compresses a list of upstream tensors of buffer list (via handles) into buffers
+    :param upstream_tensors: 
+    :param name: 
+    :return: 
+    """
+    if buffer_pool is None:
+        buffer_pool = persona_ops.buffer_pool(**buffer_pool_args)
+    for buffer_list in itertools.chain.from_iterable(array_ops.unstack(a) for a in upstream_tensors):
+        yield persona_ops.buffer_list_compressor(buffer_pool=buffer_pool,
+                                                 buffer_list=buffer_list)
+
+# note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
+def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, compressed, record_types=default_records_type, name="ceph_write_pipeline"):
     """
     Create a ceph write pipeline for aligner results (that outputs a BufferList, which we must wait on for completion
     :param upstream_tensors: a list of aligner output tensors of type (key, first ordinal, number of records, pool name, record id, column handle)
@@ -113,6 +128,10 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
     :param name: 
     :return: yields the output of ceph write columns
     """
+    if compressed:
+        writer_op = persona_ops.agd_ceph_buffer_writer
+    else:
+        writer_op = persona_ops.agd_ceph_buffer_list_writer
     def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
         column_handles = array_ops.unstack(column_handle)
         if not len(column_handles) == len(record_types):
@@ -121,16 +140,16 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
         for handle, record_type in zip(column_handles, record_types):
             check_valid_record_type(record_type=record_type)
             full_key = string_ops.string_join([key, suffix_separator, record_type["extension"]])
-            return persona_ops.agd_ceph_buffer_list_writer(cluster_name=cluster_name,
-                                                           user_name=user_name,
-                                                           ceph_conf_path=ceph_conf_path,
-                                                           pool_name=pool_name,
-                                                           record_id=record_id,
-                                                           record_type=record_type["type"],
-                                                           num_records=num_records,
-                                                           first_ordinal=first_ordinal,
-                                                           path=full_key,
-                                                           resource_handle=handle)
+            return writer_op(cluster_name=cluster_name,
+                             user_name=user_name,
+                             ceph_conf_path=ceph_conf_path,
+                             pool_name=pool_name,
+                             record_id=record_id,
+                             record_type=record_type["type"],
+                             num_records=num_records,
+                             first_ordinal=first_ordinal,
+                             path=full_key,
+                             resource_handle=handle)
 
     for key, pool_name, num_records, first_ordinal, record_id, column_handle in upstream_tensors:
         yield make_ceph_writer(key=key,
@@ -168,7 +187,7 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
     for file_path in upstream_tensors:
         yield make_readers(input_file_basename=file_path)
 
-def local_write_pipeline(upstream_tensors, record_types=default_records_type, name="local_write_pipeline"):
+def local_write_pipeline(upstream_tensors, compressed, record_types=default_records_type, name="local_write_pipeline"):
     """
     Create a local write pipeline, based on the number of upstream tensors received.
     :param upstream_tensors: a list of tensor tuples of type: buffer_list_handle, record_id, first_ordinal, num_records, file_path
@@ -176,6 +195,10 @@ def local_write_pipeline(upstream_tensors, record_types=default_records_type, na
     :param name: 
     :return: yield a writer for each record to be written in upstream tensors
     """
+    if compressed:
+        writer_op = persona_ops.agd_file_system_buffer_writer
+    else:
+        writer_op = persona_ops.agd_file_system_buffer_list_writer
     def make_writer(record_id, file_path, first_ordinal, num_records, bl_handle):
         bl_handle = array_ops.unstack(bl_handle)
         if not len(bl_handle) == len(record_types):
@@ -183,12 +206,12 @@ def local_write_pipeline(upstream_tensors, record_types=default_records_type, na
         for handle, record_type in zip(bl_handle, record_types):
             check_valid_record_type(record_type=record_type)
             full_filepath = string_ops.string_join([file_path, suffix_separator, record_type["extension"]])
-            yield persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
-                                                                 record_type=record_type["type"],
-                                                                 resource_handle=handle,
-                                                                 first_ordinal=first_ordinal,
-                                                                 num_records=num_records,
-                                                                 path=full_filepath)
+            yield writer_op(record_id=record_id,
+                            record_type=record_type["type"],
+                            resource_handle=handle,
+                            first_ordinal=first_ordinal,
+                            num_records=num_records,
+                            path=full_filepath)
 
     assert len(upstream_tensors) > 0
     for buffer_list_handle, record_id, first_ordinal, num_records, file_path in upstream_tensors:
