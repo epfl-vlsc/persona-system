@@ -36,8 +36,6 @@ class SnapAlignSingleOp : public OpKernel {
     explicit SnapAlignSingleOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
-      resource_container_shape_ = TensorShape({max_secondary_+1, 2});
-
     }
 
     ~SnapAlignSingleOp() override {
@@ -84,7 +82,6 @@ class SnapAlignSingleOp : public OpKernel {
     n.WaitForNotification();
   }
 
-
 private:
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   BasicContainer<SnapSingleExecutor> *executor_resource_ = nullptr;
@@ -95,9 +92,6 @@ private:
   vector <BufferList*> buffer_lists_; // just used as a cache to proxy the ResourceContainer<BufferList> instances to split()
 
   mutex mu_;
-
-  TensorShape resource_container_shape_;
-
 
   Status InitHandles(OpKernelContext* ctx)
   {
@@ -140,12 +134,15 @@ class NewSnapAlignSingleOp : public OpKernel {
     explicit NewSnapAlignSingleOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
-      resource_container_shape_ = TensorShape({max_secondary_+1, 2});
-
     }
 
     ~NewSnapAlignSingleOp() override {
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
+      core::ScopedUnref executor_unref(executor_resource_);
+      auto e = executor_resource_->get();
+      if (e) {
+        e->Stop();
+      }
     }
 
   void Compute(OpKernelContext* ctx) override {
@@ -169,7 +166,7 @@ class NewSnapAlignSingleOp : public OpKernel {
       {
         ReadResourceSplitter splitter(buffer_lists_);
         OP_REQUIRES_OK(ctx, reads->SplitResource(subchunk_size_, splitter));
-        splitter.EnqueueAll(*executor_);
+        OP_REQUIRES_OK(ctx, splitter.EnqueueAll(*executor_));
         splitter.WaitForDone();
       }
     }
@@ -183,7 +180,6 @@ class NewSnapAlignSingleOp : public OpKernel {
     }
   }
 
-
 private:
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   BasicContainer<SnapSingle> *executor_resource_ = nullptr;
@@ -194,8 +190,6 @@ private:
   vector <BufferList*> buffer_lists_; // just used as a cache to proxy the ResourceContainer<BufferList> instances to split()
 
   mutex mu_;
-
-  TensorShape resource_container_shape_;
 
   Status InitHandles(OpKernelContext* ctx)
   {

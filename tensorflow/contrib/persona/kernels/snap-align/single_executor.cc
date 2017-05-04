@@ -94,8 +94,6 @@ namespace tensorflow {
       base_aligner->setExplorePopularSeeds(options_->explorePopularSeeds);
       base_aligner->setStopOnFirstHit(options_->stopOnFirstHit);
 
-      const char *bases, *qualities;
-      size_t bases_len, qualities_len;
       SingleAlignmentResult primaryResult;
       vector<SingleAlignmentResult> secondaryResults;
       secondaryResults.resize(alignmentResultBufferCount);
@@ -104,7 +102,6 @@ namespace tensorflow {
       SAMFormat format(options_->useM);
       vector<AlignmentResultBuilder> result_builders;
       string cigarString;
-      int flag;
       Read snap_read;
       LandauVishkinWithCigar lvc;
       size_t num_columns;
@@ -172,8 +169,6 @@ namespace tensorflow {
                     &secondaryResults[0] //secondaryResults
             );
 
-            flag = 0;
-
             // First, write the primary results
             auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc,
                                                      false);
@@ -234,10 +229,9 @@ namespace tensorflow {
     num_active_threads_ = num_threads_;
   }
 
-  SnapSingle::SnapSingle(Env *env, GenomeIndex *index, AlignerOptions *options, uint16_t max_secondary, uint16_t num_threads) :
+  SnapSingle::SnapSingle(Env *env, GenomeIndex *index, AlignerOptions *options, uint16_t num_threads) :
           TaskRunner<ReadResourceSplitter::QueueType>(env, num_threads, "SnapSingle"),
-          max_secondary_(max_secondary), num_threads_(num_threads),
-          index_(index), options_(options) {}
+          num_threads_(num_threads), index_(index), options_(options) {}
 
   Status SnapSingle::Start() {
     AddWorker([this](function<bool (ReadResourceSplitter::QueueType&)> dequeue_func) { Worker(dequeue_func); }, num_threads_);
@@ -288,15 +282,14 @@ namespace tensorflow {
     base_aligner->setExplorePopularSeeds(options_->explorePopularSeeds);
     base_aligner->setStopOnFirstHit(options_->stopOnFirstHit);
 
-    const char *bases, *qualities;
-    size_t bases_len, qualities_len;
+    size_t num_columns;
     SingleAlignmentResult primaryResult;
     vector<SingleAlignmentResult> secondaryResults;
     secondaryResults.resize(alignmentResultBufferCount);
 
-    int num_secondary_results, flag;
+    int num_secondary_results;
     SAMFormat format(options_->useM);
-    vector<AlignmentResultBuilder> result_builders(max_secondary_ + 1);
+    vector<AlignmentResultBuilder> result_builders;
     string cigarString;
     Read snap_read;
     LandauVishkinWithCigar lvc;
@@ -305,20 +298,26 @@ namespace tensorflow {
     ReadResource *subchunk_resource = nullptr;
     Status subchunk_status;
 
-    // Have to construct a default value :/
-    ReadResourceSplitter::QueueType queue_value = make_tuple(nullptr, vector<BufferPair *>(), nullptr);
-
-    for (auto dequeue_ok = dequeue_func(queue_value); dequeue_ok; dequeue_ok = dequeue_func(queue_value)) {
+    for (;;) {
+      // need to make this exit scope so the destructor will fire!
+      ReadResourceSplitter::QueueType queue_value;
+      if (!dequeue_func(queue_value)) {
+        break;
+      }
       auto read_resource = get<0>(queue_value);
       auto &columns = get<1>(queue_value);
-
-      if (columns.size() != max_secondary_ + 1) {
-        LOG(ERROR) << "Received a column group of results of size " << columns.size() << ", but was expected a size of "
-                   << max_secondary_ + 1;
-        return;
+      auto &rrs = get<2>(queue_value);
+      num_columns = columns.size();
+      if (num_columns == 0) {
+        LOG(ERROR) << "Got an empty (0) column set for alignment! Skipping, but this is a bug!";
+        continue;
       }
 
-      for (size_t i = 0; i < columns.size(); ++i) {
+      if (num_columns > result_builders.size()) {
+        result_builders.resize(num_columns);
+      }
+
+      for (size_t i = 0; i < num_columns; ++i) {
         result_builders[i].SetBufferPair(columns[i]);
       }
 
@@ -340,7 +339,7 @@ namespace tensorflow {
             LOG(ERROR) << "adjustResults did not return OK!!!";
             return;
           }
-          for (int i = 1; i < max_secondary_ + 1; i++) {
+          for (decltype(num_columns) i = 1; i < num_columns; i++) {
             // fill the columns with empties to maintain index equivalence
             result_builders[i].AppendEmpty();
           }
@@ -353,7 +352,7 @@ namespace tensorflow {
                 options_->maxSecondaryAlignmentAdditionalEditDistance,
                 alignmentResultBufferCount,
                 &num_secondary_results,
-                max_secondary_,
+                num_columns-1, // maximum number of secondary results
                 &secondaryResults[0] //secondaryResults
         );
 
@@ -365,6 +364,7 @@ namespace tensorflow {
           return;
         }
 
+        // Then write the secondary results if we specified them
         int secondary_result_index = 0;
         for (; secondary_result_index < num_secondary_results; secondary_result_index++) {
           subchunk_status = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[secondary_result_index], result_builders[secondary_result_index + 1], genome,
@@ -374,9 +374,10 @@ namespace tensorflow {
             return;
           }
         }
-        for (; secondary_result_index < max_secondary_; secondary_result_index++) {
-          // fill the columns with empties to maintain index equivalence
-          result_builders[secondary_result_index + 1].AppendEmpty();
+
+        // fill the columns with empties to maintain index equivalence
+        for (secondary_result_index += 1; secondary_result_index < num_columns; secondary_result_index++) {
+          result_builders[secondary_result_index].AppendEmpty();
         }
       }
     }

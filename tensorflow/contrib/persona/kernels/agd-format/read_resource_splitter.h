@@ -17,7 +17,7 @@ namespace tensorflow {
     ReadResourceSplitter(std::vector<BufferList*> &bl);
 
     void AddSubchunks(ReadResource *rr[], std::size_t count);
-    void EnqueueAll(TaskRunner<QueueType> &runner);
+    Status EnqueueAll(TaskRunner<QueueType> &runner);
 
     void WaitForDone();
 

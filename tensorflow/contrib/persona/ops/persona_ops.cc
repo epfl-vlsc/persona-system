@@ -828,7 +828,6 @@ to align single reads using the SNAP algorithm.
             )doc");
 
   REGISTER_OP("NewSnapSingleExecutor")
-          .Attr("max_secondary: int >= 0")
           .Attr("num_threads: int >= 0")
           .Attr("container: string = ''")
           .Attr("shared_name: string = ''")

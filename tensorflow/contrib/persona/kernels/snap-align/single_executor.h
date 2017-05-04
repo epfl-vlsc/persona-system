@@ -65,8 +65,7 @@ namespace tensorflow {
 
   class SnapSingle : public TaskRunner<ReadResourceSplitter::QueueType> {
   public:
-    SnapSingle(Env *env, GenomeIndex *index, AlignerOptions *options,
-               uint16_t max_secondary, uint16_t num_threads);
+    SnapSingle(Env *env, GenomeIndex *index, AlignerOptions *options, uint16_t num_threads);
 
     Status Start() override;
   private:
@@ -74,6 +73,6 @@ namespace tensorflow {
 
     GenomeIndex *index_;
     AlignerOptions *options_;
-    uint16_t max_secondary_, num_threads_;
+    uint16_t num_threads_;
   };
 }

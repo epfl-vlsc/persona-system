@@ -107,7 +107,6 @@ namespace tensorflow {
 
     NewSnapSingleExecutorOp(OpKernelConstruction* context)
             : OpKernel(context), executor_handle_set_(false) {
-      OP_REQUIRES_OK(context, context->GetAttr("max_secondary", &max_secondary_));
       OP_REQUIRES_OK(context, context->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(context,
                      context->allocate_persistent(DT_STRING, TensorShape({ 2 }),
@@ -119,7 +118,6 @@ namespace tensorflow {
       if (!options_resource_)
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       if (!executor_handle_set_) {
-        OP_REQUIRES_OK(ctx, InitHandles(ctx));
         OP_REQUIRES_OK(ctx, SetExecutorHandle(ctx));
       }
       ctx->set_output_ref(0, &mu_, executor_handle_.AccessTensor(ctx));
@@ -148,10 +146,11 @@ namespace tensorflow {
       ExecutorContainer* new_executor;
 
       auto creator = [this, ctx](ExecutorContainer** executor) {
-        LOG(INFO) << "creating snap single executor";
+        LOG(INFO) << "creating new snap single executor";
         unique_ptr<SnapSingle> value(new SnapSingle(ctx->env(), index_resource_->get(),
-                                                    options_resource_->get(), max_secondary_,
+                                                    options_resource_->get(),
                                                     num_threads_));
+        TF_RETURN_IF_ERROR(value->Start());
         *executor = new ExecutorContainer(move(value));
         return Status::OK();
       };
@@ -169,7 +168,7 @@ namespace tensorflow {
 
     mutex mu_;
     ContainerInfo cinfo_;
-    int max_secondary_, num_threads_;
+    int num_threads_;
     BasicContainer<GenomeIndex> *index_resource_ = nullptr;
     BasicContainer<AlignerOptions>* options_resource_ = nullptr;
     PersistentTensor executor_handle_ GUARDED_BY(mu_);

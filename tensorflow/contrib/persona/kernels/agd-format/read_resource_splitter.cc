@@ -1,8 +1,9 @@
 #include "read_resource_splitter.h"
+#include "tensorflow/core/lib/core/errors.h"
 
 namespace tensorflow {
   using namespace std;
-  using namespace error;
+  using namespace errors;
 
   void ReadResourceSplitter::WaitForDone() {
     mutex_lock l(mu_);
@@ -27,7 +28,7 @@ namespace tensorflow {
       vector <BufferPair*> bps;
       bps.reserve(num_columns);
       for (size_t column_num = 0; column_num < num_columns; ++column_num) {
-        bps[column_num] = &(*buffer_lists_[column_num])[subchunk_num];
+        bps.push_back(&(*buffer_lists_[column_num])[subchunk_num]);
       }
 
       enqueue_batch_.push_back(make_tuple(rr[subchunk_num], move(bps), a));
@@ -41,9 +42,13 @@ namespace tensorflow {
     }
   }
 
-  void ReadResourceSplitter::EnqueueAll(TaskRunner<QueueType> &runner) {
+  Status ReadResourceSplitter::EnqueueAll(TaskRunner<QueueType> &runner) {
     auto sz = enqueue_batch_.size();
-    runner.EnqueueMany(&enqueue_batch_[0], sz);
+    if (!runner.EnqueueMany(&enqueue_batch_[0], sz)) {
+      return Internal("ReadResourceSplitter: EnqueueMany failed");
+    }
+    enqueue_batch_.clear();
+    return Status::OK();
   }
 
   void ReadResourceSplitter::SubchunksDone() {
