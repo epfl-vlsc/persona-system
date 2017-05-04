@@ -40,6 +40,10 @@ namespace tensorflow {
     return buf_.get();
   }
 
+  char* Buffer::mutable_data() {
+    return buf_.get();
+  }
+
   size_t Buffer::size() const {
     return size_;
   }

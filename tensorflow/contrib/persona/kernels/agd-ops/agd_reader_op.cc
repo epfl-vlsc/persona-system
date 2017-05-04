@@ -15,7 +15,6 @@
 
 namespace tensorflow {
 
-
   using namespace std;
   using namespace errors;
 
@@ -23,7 +22,6 @@ namespace tensorflow {
   public:
     AGDReaderOp(OpKernelConstruction *context) : OpKernel(context) {
       OP_REQUIRES_OK(context, context->GetAttr("verify", &verify_));
-      OP_REQUIRES_OK(context, context->GetAttr("twobit", &twobit_));
       if (verify_) {
         LOG(INFO) << name() << " enabled verification\n";
       }
@@ -72,7 +70,7 @@ namespace tensorflow {
           output_ptr->reserve(250*1024*1024); // make sure its big enough if its fresh.
 
           OP_REQUIRES_OK(ctx, rec_parser_.ParseNew(input_data->data(), input_data->size(),
-                                                   verify_, output_ptr, &first_ord_, &num_recs_, record_id_, unpack_, twobit_));
+                                                   verify_, output_ptr, &first_ord_, &num_recs_, record_id_, unpack_));
           OP_REQUIRES_OK(ctx, output_buffer_rc->allocate_output("processed_buffers", ctx));
           num_records() = num_recs_;
           first_ordinals() = first_ord_;
@@ -82,12 +80,10 @@ namespace tensorflow {
     }
 
   private:
-    bool verify_ = false;
-    bool twobit_ = false;
+    bool verify_ = false, unpack_ = true;
     RecordParser rec_parser_;
     size_t reserve_bytes_;
     ReferencePool<Buffer> *buffer_pool_ = nullptr;
-    bool unpack_ = true;
     const TensorShape scalar_shape_{};
 
     uint32_t num_recs_;

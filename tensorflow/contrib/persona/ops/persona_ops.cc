@@ -278,7 +278,6 @@ Prints records to stdout from record indices `start` to `finish`.
   .Attr("verify: bool = false")
   .Attr("reserve: int = 8192")
   .Attr("unpack: bool = true")
-  .Attr("twobit: bool = false")
   .Input("buffer_pool: Ref(string)")
   .Input("file_handle: string")
   .Output("processed_buffers: string")
@@ -424,7 +423,7 @@ we can use it in other pipelines where writers are used
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("read_size: int")
-  .Input("buffer_handle: Ref(string)")
+  .Input("buffer_pool: Ref(string)")
   .Input("key: string")
   .Input("pool_name: string")
   .Output("file_handle: string")
@@ -445,7 +444,7 @@ we can use it in other pipelines where writers are used
 Obtains file names from a queue, fetches those files from Ceph storage using Librados,
 and writes them to a buffer from a pool of buffers.
 
-buffer_handle: a handle to the buffer pool
+buffer_pool: a handle to the buffer pool
 key: key reference to the filename queue
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
   )doc");
@@ -810,7 +809,6 @@ containing the alignment candidates.
 )doc");
 
   REGISTER_OP("SnapSingleExecutor")
-  .Attr("max_secondary: int >= 0")
   .Attr("num_threads: int >= 0")
   .Attr("work_queue_size: int >= 0")
   .Attr("container: string = ''")
@@ -1069,6 +1067,21 @@ Intended to be used for BWAAssembler
   This is the single threaded stage of processing a chunk.
 )doc");
 
+  REGISTER_OP("TwoBitConverter")
+  .Input("num_records: int32")
+  .Input("input: string")
+  .Output("output: string")
+  .SetShapeFn([](InferenceContext *c) {
+    TF_RETURN_IF_ERROR(check_scalar(c, 0));
+    TF_RETURN_IF_ERROR(check_vector(c, 1, 2));
+    c->set_output(0, c->input(1));
+    return Status::OK();
+  })
+  .Doc(R"doc(
+Converts from an ASCII base buffer to a 2-bit output buffer, for BWA conversion.
+This uses the same buffer, and can handle any Data type that exposes mutable access (e.g. Buffer)
+)doc");
+
   REGISTER_OP("AgdOutputBam")
   .Attr("path: string")
   .Attr("pg_id: string")
@@ -1109,7 +1122,7 @@ Intended to be used for BWAAssembler
   // All the new prototypes of the write ops go here
 
 #define AGD_COMMON_HEADER_ATTRIBUTES \
-  .Attr("record_type: {'raw', 'structured'}") \
+  .Attr("record_type: {'text', 'base_compact', 'structured'}") \
   .Input("path: string") \
   .Input("record_id: string") \
   .Input("first_ordinal: int64") \
@@ -1209,5 +1222,20 @@ Intended to be used for BWAAssembler
     })
   .Doc(R"doc(
 Compresses the prepared buffer_pair records into a buffer.
+)doc");
+
+  REGISTER_OP("BufferListCompressor")
+  .Input("buffer_pool: Ref(string)")
+  .Input("buffer_list: string")
+  .Output("buffer: string")
+  .SetShapeFn([](InferenceContext *c) {
+      for (int i = 0; i < 2; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      }
+      c->set_output(0, c->input(1));
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Compresses the prepared buffer_list records and into individual buffers, and then outputs them
 )doc");
 }

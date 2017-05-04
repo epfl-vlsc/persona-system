@@ -32,7 +32,6 @@ namespace tensorflow {
 
     SnapSingleExecutorOp(OpKernelConstruction* context)
             : OpKernel(context), executor_handle_set_(false) {
-      OP_REQUIRES_OK(context, context->GetAttr("max_secondary", &max_secondary_));
       OP_REQUIRES_OK(context, context->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(context, context->GetAttr("work_queue_size", &capacity_));
       OP_REQUIRES_OK(context,
@@ -76,7 +75,7 @@ namespace tensorflow {
       auto creator = [this, ctx](ExecutorContainer** executor) {
         LOG(INFO) << "creating snap single executor";
         unique_ptr<SnapSingleExecutor> value(new SnapSingleExecutor(ctx->env(), index_resource_->get(),
-                                                                    options_resource_->get(), max_secondary_,
+                                                                    options_resource_->get(),
                                                                     num_threads_, capacity_));
         *executor = new ExecutorContainer(move(value));
         return Status::OK();
@@ -95,7 +94,7 @@ namespace tensorflow {
 
     mutex mu_;
     ContainerInfo cinfo_;
-    int max_secondary_, num_threads_, capacity_;
+    int num_threads_, capacity_;
     BasicContainer<GenomeIndex> *index_resource_ = nullptr;
     BasicContainer<AlignerOptions>* options_resource_ = nullptr;
     PersistentTensor executor_handle_ GUARDED_BY(mu_);

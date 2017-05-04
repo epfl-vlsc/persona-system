@@ -38,10 +38,10 @@ namespace tensorflow {
 
         char& operator[](std::size_t idx) const;
 
-        void set_ready();
         void reset();
         virtual const char* data() const override;
         virtual std::size_t size() const override;
+        virtual char* mutable_data() override;
         std::size_t capacity() const;
     };
 } // namespace tensorflow {

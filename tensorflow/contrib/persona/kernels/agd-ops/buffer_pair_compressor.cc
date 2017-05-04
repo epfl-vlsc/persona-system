@@ -33,11 +33,14 @@ namespace tensorflow {
       ResourceContainer<BufferPair> *buffer_pair_resource;
       ResourceContainer<Buffer> *buffer_resource;
       OP_REQUIRES_OK(ctx, GetResources(ctx, &buffer_pair_resource, &buffer_resource));
-      ResourceReleaser<BufferPair> blr_releaser(*buffer_pair_resource);
-      auto *buf_pair = buffer_pair_resource->get();
-      auto *buf = buffer_resource->get();
+      core::ScopedUnref a(buffer_pair_resource);
+      {
+        ResourceReleaser<BufferPair> blr_releaser(*buffer_pair_resource);
+        auto *buf_pair = buffer_pair_resource->get();
+        auto *buf = buffer_resource->get();
 
-      OP_REQUIRES_OK(ctx, CompressBuffer(*buf_pair, buf));
+        OP_REQUIRES_OK(ctx, CompressBuffer(*buf_pair, buf));
+      }
     }
 
   private:
@@ -45,7 +48,7 @@ namespace tensorflow {
 
     Status CompressBuffer(BufferPair &buf_pair, Buffer *buf) {
       AppendingGZIPCompressor compressor(*buf); // destructor releases GZIP resources
-      compressor.init();
+      TF_RETURN_IF_ERROR(compressor.init());
       auto &index = buf_pair.index();
       TF_RETURN_IF_ERROR(compressor.appendGZIP(index.data(), index.size()));
       auto &data = buf_pair.data();
@@ -70,7 +73,6 @@ namespace tensorflow {
       (*buffer)->get()->reset();
      
       TF_RETURN_IF_ERROR((*buffer)->allocate_output("compressed_buffer", ctx));
-      //LOG(INFO) << "compressed buffer: " << (*buffer)->container() << ", " << (*buffer)->name();
 
       return Status::OK();
     }

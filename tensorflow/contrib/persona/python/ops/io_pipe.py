@@ -14,6 +14,7 @@ from tensorflow.python.training.input import batch
 
 import json
 import os
+import functools
 
 import logging
 logging.basicConfig()
@@ -27,6 +28,9 @@ resource_shape = tensor_shape.vector(2)
 pool_default_args = {'size':10, "bound": False}
 suffix_separator = constant_op.constant(".")
 default_records_type = ({"type": "structured", "extension": "results"},)
+def check_valid_record_type(record_type):
+    if not ("type" in record_type and "extension" in record_type and isinstance(record_type, dict)):
+        raise Exception("Invalid record type: {}".format(record_type))
 
 def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     tensor_shape = tensor.get_shape()
@@ -64,7 +68,7 @@ def expand_column_extensions(key, columns):
         yield string_ops.string_join(inputs=[key, c], separator=".", name="AGD_column_expansion")
 
 def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, columns,
-                       ceph_read_size=2**26, buffer_pool=None, name="ceph_read_pipeline"):
+                       ceph_read_size=2**26, buffer_pool=None, buffer_pool_args=pool_default_args, name="ceph_read_pipeline"):
     """
     Create a ceph input pipeline.
     
@@ -86,12 +90,12 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
                                        pool_name=pool_name,
                                        ceph_conf_path=ceph_conf_path,
                                        read_size=ceph_read_size,
-                                       queue_key=key,
+                                       key=key,
                                        buffer_pool=buffer_pool) # buffer_pool is in scope. hooray python!
     columns = validate_columns(columns=columns)
 
     if buffer_pool is None:
-        buffer_pool = persona_ops.buffer_pool(size=10, bound=False)
+        buffer_pool = persona_ops.buffer_pool(**buffer_pool_args)
 
     for key, pool_name in upstream_tensors:
         validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
@@ -100,7 +104,24 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
         yield key, pool_name, chunk_buffers
 
 # note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
-def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, name="ceph_write_pipeline"):
+def aligner_compress_pipeline(upstream_tensors, buffer_pool=None, buffer_pool_args=pool_default_args, name="aligner_compress_pipeline"):
+    """
+    Compresses a list of upstream tensors of buffer list (via handles) into buffers
+    :param upstream_tensors: 
+    :param name: 
+    :return: 
+    """
+    def compress_buffer_list(buffer_list):
+        return persona_ops.buffer_list_compressor(buffer_list=buffer_list, buffer_pool=buffer_pool)
+    if buffer_pool is None:
+        buffer_pool = persona_ops.buffer_pool(**buffer_pool_args)
+    for buffer_lists in upstream_tensors:
+        bls_unstacked = array_ops.unstack(buffer_lists)
+        compressed_buffers = tuple(compress_buffer_list(a) for a in bls_unstacked)
+        yield array_ops.stack(compressed_buffers)
+
+# note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
+def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, compressed, record_types=default_records_type, name="ceph_write_pipeline"):
     """
     Create a ceph write pipeline for aligner results (that outputs a BufferList, which we must wait on for completion
     :param upstream_tensors: a list of aligner output tensors of type (key, first ordinal, number of records, pool name, record id, column handle)
@@ -110,16 +131,28 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
     :param name: 
     :return: yields the output of ceph write columns
     """
+    if compressed:
+        writer_op = functools.partial(persona_ops.agd_ceph_buffer_writer, compressed=True)
+    else:
+        writer_op = persona_ops.agd_ceph_buffer_list_writer
     def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
-        return persona_ops.agd_ceph_buffer_list_writer(cluster_name=cluster_name,
-                                                       user_name=user_name,
-                                                       ceph_conf_path=ceph_conf_path,
-                                                       pool_name=pool_name,
-                                                       record_id=record_id,
-                                                       num_records=num_records,
-                                                       first_ordinal=first_ordinal,
-                                                       file_path=key,
-                                                       column_handle=column_handle)
+        column_handles = array_ops.unstack(column_handle)
+        if not len(column_handles) == len(record_types):
+            raise Exception("number of record types ({r}) must be equal to number of columns ({c})".format(r=len(record_types),
+                                                                                                           c=len(column_handles)))
+        for handle, record_type in zip(column_handles, record_types):
+            check_valid_record_type(record_type=record_type)
+            full_key = string_ops.string_join([key, suffix_separator, record_type["extension"]])
+            return writer_op(cluster_name=cluster_name,
+                             user_name=user_name,
+                             ceph_conf_path=ceph_conf_path,
+                             pool_name=pool_name,
+                             record_id=record_id,
+                             record_type=record_type["type"],
+                             num_records=num_records,
+                             first_ordinal=first_ordinal,
+                             path=full_key,
+                             resource_handle=handle)
 
     for key, pool_name, num_records, first_ordinal, record_id, column_handle in upstream_tensors:
         yield make_ceph_writer(key=key,
@@ -144,7 +177,9 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
         prev = []
         for full_filename in expand_column_extensions(key=input_file_basename, columns=columns):
             with ops.control_dependencies(prev):
-                yield persona_ops.file_m_map(filename=full_filename, pool_handle=mmap_pool, synchronous=sync)
+                mmap_op = persona_ops.file_m_map(filename=full_filename, pool_handle=mmap_pool, synchronous=sync)
+                yield mmap_op
+                prev.append(mmap_op)
 
     columns = validate_columns(columns=columns)
 
@@ -155,7 +190,7 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
     for file_path in upstream_tensors:
         yield make_readers(input_file_basename=file_path)
 
-def local_write_pipeline(upstream_tensors, record_types=default_records_type, name="local_write_pipeline"):
+def local_write_pipeline(upstream_tensors, compressed, record_types=default_records_type, name="local_write_pipeline"):
     """
     Create a local write pipeline, based on the number of upstream tensors received.
     :param upstream_tensors: a list of tensor tuples of type: buffer_list_handle, record_id, first_ordinal, num_records, file_path
@@ -163,20 +198,23 @@ def local_write_pipeline(upstream_tensors, record_types=default_records_type, na
     :param name: 
     :return: yield a writer for each record to be written in upstream tensors
     """
+    if compressed:
+        writer_op = functools.partial(persona_ops.agd_file_system_buffer_writer, compressed=True)
+    else:
+        writer_op = persona_ops.agd_file_system_buffer_list_writer
     def make_writer(record_id, file_path, first_ordinal, num_records, bl_handle):
         bl_handle = array_ops.unstack(bl_handle)
         if not len(bl_handle) == len(record_types):
             raise Exception("number of record types must equal number of buffer list handles")
         for handle, record_type in zip(bl_handle, record_types):
-            if not ("extension" in record_type and "type" in record_type):
-                raise Exception("""Record type '{}' doesnt' contain "extension" or "type" """.format(record_type))
+            check_valid_record_type(record_type=record_type)
             full_filepath = string_ops.string_join([file_path, suffix_separator, record_type["extension"]])
-            yield persona_ops.agd_file_system_buffer_list_writer(record_id=record_id,
-                                                                 record_type=record_type["type"],
-                                                                 resource_handle=handle,
-                                                                 first_ordinal=first_ordinal,
-                                                                 num_records=num_records,
-                                                                 path=full_filepath)
+            yield writer_op(record_id=record_id,
+                            record_type=record_type["type"],
+                            resource_handle=handle,
+                            first_ordinal=first_ordinal,
+                            num_records=num_records,
+                            path=full_filepath)
 
     assert len(upstream_tensors) > 0
     for buffer_list_handle, record_id, first_ordinal, num_records, file_path in upstream_tensors:
@@ -186,7 +224,7 @@ def local_write_pipeline(upstream_tensors, record_types=default_records_type, na
                           first_ordinal=first_ordinal,
                           bl_handle=buffer_list_handle)
 
-def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, twobit=False, buffer_pool_args=pool_default_args, name="agd_reader_pipeline"):
+def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_args=pool_default_args, name="agd_reader_pipeline"):
     """
     Yield a pipeline of input buffers processed by AGDReader.
     
@@ -211,10 +249,10 @@ def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, twobit
                 actual=ut_shape, expected=resource_shape
             ))
         output_buffer, num_records, first_ordinal, record_id = persona_ops.agd_reader(buffer_pool=buffer_pool, file_handle=upstream_tensor,
-                                                                             verify=verify, twobit=twobit, name="agd_reader")
+                                                                                      verify=verify, unpack=True, name="agd_reader")
         yield output_buffer, num_records, first_ordinal, record_id
 
-def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, twobit=False, share_buffer_pool=True, buffer_pool_args=pool_default_args, name="agd_reader_multi_column_pipeline"):
+def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool=None, share_buffer_pool=True, buffer_pool_args=pool_default_args, name="agd_reader_multi_column_pipeline"):
     """
     Create an AGDReader pipeline for an iterable of columns. Each column group is assumed to have the same first ordinal, number of records, and record id.
     :param upstream_tensorz: a list of list of tensors, each item being a column group
@@ -228,7 +266,7 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     if buffer_pool is None and share_buffer_pool:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args, name="agd_reader_buffer_pool")
     assert len(upstream_tensorz) > 0
-    process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, twobit=twobit, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
+    process_tensorz = (agd_reader_pipeline(upstream_tensors=upstream_tensors, verify=verify, buffer_pool_args=buffer_pool_args, buffer_pool=buffer_pool)
                        for upstream_tensors in upstream_tensorz)
     for processed_tensors in process_tensorz:
         output_buffers, num_recordss, first_ordinalss, record_ids = zip(*processed_tensors)
@@ -513,7 +551,7 @@ def persona_ceph_in_pipe(columns, ceph_params, metadata_path=None, keys=None,
       for chunk_filename in chunk_filenames:
         # [0] because ceph_reader also outputs filename which we don't need
         bb = persona_ops.ceph_reader(cluster_name=cluster_name, user_name=user_name, pool_name=pool_name,
-                                ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_handle=buffer_pool,
+                                ceph_conf_path=ceph_conf_path, read_size=ceph_read_size, buffer_pool=buffer_pool,
                                 queue_key=chunk_filename, name=name)[0]
         chunk_buffers.append(bb)
       chunk_buffers.append(key)

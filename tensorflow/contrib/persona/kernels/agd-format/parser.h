@@ -1,5 +1,4 @@
-#ifndef TENSORFLOW_CORE_USER_OPS_AGD_FORMAT_PARSER_H_
-#define TENSORFLOW_CORE_USER_OPS_AGD_FORMAT_PARSER_H_
+#pragma once
 
 #include "format.h"
 #include "tensorflow/core/lib/core/errors.h"
@@ -11,6 +10,7 @@
 #include <cstdint>
 
 namespace tensorflow {
+  extern unsigned char nst_nt4_table[256];
 
   template <size_t N>
   class BaseMapping {
@@ -47,7 +47,7 @@ namespace tensorflow {
     explicit RecordParser();
 
     Status ParseNew(const char* data, const std::size_t length, const bool verify, Buffer *result_buffer, 
-        uint64_t *first_ordinal, uint32_t *num_records, string &record_id, bool unpack=true, bool twobit=false);
+        uint64_t *first_ordinal, uint32_t *num_records, string &record_id, bool unpack=true);
 
   private:
 
@@ -58,5 +58,3 @@ namespace tensorflow {
   };
 
 }  //  namespace tensorflow {
-
-#endif
