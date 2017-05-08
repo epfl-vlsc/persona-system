@@ -187,7 +187,7 @@ Converts two input files into three files of interleaved bases, qualities, and m
 )doc");
 
   REGISTER_OP("AGDMarkDuplicates")
-  .Input("buffer_list_pool: Ref(string)")
+  .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handle: string")
   .Input("num_records: int32")
   .Output("marked_results: string")
