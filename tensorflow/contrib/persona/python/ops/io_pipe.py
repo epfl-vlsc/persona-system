@@ -342,17 +342,17 @@ def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=
     for output_buffers, num_reads in upstream_tensors:
         yield make_agd_read(column_buffers=output_buffers, num_reads=num_reads)
 
-def join(upstream_tensors, parallel, capacity, multi=False):
+def join(upstream_tensors, parallel, capacity, multi=False, name="join"):
     if not isinstance(upstream_tensors, (tuple, list)):
         upstream_tensors = tuple(upstream_tensors)
         if multi:
             raise Exception("single example or generator given to multi join")
     if multi:
         return batch_join_pdq(tensor_list_list=upstream_tensors, batch_size=1,
-                              num_dq_ops=parallel, capacity=capacity)
+                              num_dq_ops=parallel, capacity=capacity, name=name)
     else:
         return batch_pdq(tensor_list=upstream_tensors, batch_size=1,
-                         capacity=capacity, num_dq_ops=parallel)
+                         capacity=capacity, num_dq_ops=parallel, name=name)
 
 #### old stuff ####
 
