@@ -1064,7 +1064,8 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   .Attr("cluster_name: string") \
   .Attr("user_name: string") \
   .Attr("ceph_conf_path: string") \
-  .Input("pool_name: string") \
+  .Attr("pool_name: string") \
+  .Input("namespace: string") \
   AGD_COMMON_HEADER_ATTRIBUTES \
   .SetShapeFn([](InferenceContext *c) { \
     for (int i = 0; i < 5; i++) { \
