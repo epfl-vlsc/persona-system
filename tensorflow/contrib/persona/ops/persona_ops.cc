@@ -187,7 +187,7 @@ Converts two input files into three files of interleaved bases, qualities, and m
 )doc");
 
   REGISTER_OP("AGDMarkDuplicates")
-  .Input("buffer_list_pool: Ref(string)")
+  .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handle: string")
   .Input("num_records: int32")
   .Output("marked_results: string")
@@ -423,9 +423,10 @@ we can use it in other pipelines where writers are used
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("read_size: int")
+  .Attr("pool_name: string")
   .Input("buffer_pool: Ref(string)")
   .Input("key: string")
-  .Input("pool_name: string")
+  .Input("namespace: string")
   .Output("file_handle: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
@@ -447,43 +448,6 @@ and writes them to a buffer from a pool of buffers.
 buffer_pool: a handle to the buffer pool
 key: key reference to the filename queue
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
-  )doc");
-
-  REGISTER_OP("CephWriter")
-  .Attr("cluster_name: string")
-  .Attr("user_name: string")
-  .Attr("ceph_conf_path: string")
-  .Attr("compress: bool")
-  .Attr("record_type: {'raw','structured'}")
-  .Input("column_handle: string")
-  .Input("file_name: string")
-  .Input("first_ordinal: int64")
-  .Input("num_records: int32")
-  .Input("pool_name: string")
-  .Input("record_id: string")
-  .Output("key_out: string")
-  .SetShapeFn([](InferenceContext *c) {
-      ShapeHandle sh;
-      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
-      auto dim_handle = c->Dim(sh, 0);
-      auto dim_val = c->Value(dim_handle);
-      if (dim_val != 2) {
-        return Internal("buffer_handle must have dimensions {2}. Got ", dim_val);
-      }
-      for (int i = 1; i < 6; i++) {
-        TF_RETURN_IF_ERROR(c->WithRank(c->input(i), 0, &sh));
-      }
-
-      c->set_output(0, c->input(1)); // This op literally just copies the key
-
-      return Status::OK();
-    })
-  .Doc(R"doc(
-Writes data in column_handle to object file_name in specified Ceph cluster.
-
-column_handle: a handle to the buffer pool
-file_name: a Tensor() of string for the unique key for this file
-compress: whether or not to compress the column
   )doc");
 
   REGISTER_OP("FastqChunker")
@@ -1143,7 +1107,8 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   .Attr("cluster_name: string") \
   .Attr("user_name: string") \
   .Attr("ceph_conf_path: string") \
-  .Input("pool_name: string") \
+  .Attr("pool_name: string") \
+  .Input("namespace: string") \
   AGD_COMMON_HEADER_ATTRIBUTES \
   .SetShapeFn([](InferenceContext *c) { \
     for (int i = 0; i < 5; i++) { \

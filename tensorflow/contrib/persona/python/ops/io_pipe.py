@@ -67,7 +67,7 @@ def expand_column_extensions(key, columns):
     for c in columns:
         yield string_ops.string_join(inputs=[key, c], separator=".", name="AGD_column_expansion")
 
-def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, columns,
+def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, columns, pool_name,
                        ceph_read_size=2**26, buffer_pool=None, buffer_pool_args=pool_default_args, name="ceph_read_pipeline"):
     """
     Create a ceph input pipeline.
@@ -84,9 +84,10 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
     :param name: 
     :return: a list of (key, pool_name, tuple(chunk_buffers)) for every tensor in upstream tensors
     """
-    def make_ceph_reader(key, pool_name):
+    def make_ceph_reader(key, namespace):
         return persona_ops.ceph_reader(cluster_name=cluster_name,
                                        user_name=user_name,
+                                       namespace=namespace,
                                        pool_name=pool_name,
                                        ceph_conf_path=ceph_conf_path,
                                        read_size=ceph_read_size,
@@ -97,13 +98,12 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
     if buffer_pool is None:
         buffer_pool = persona_ops.buffer_pool(**buffer_pool_args)
 
-    for key, pool_name in upstream_tensors:
+    for key, namespace in upstream_tensors:
         validate_shape_and_dtype(tensor=key, expected_shape=scalar_shape, expected_dtype=dtypes.string)
-        validate_shape_and_dtype(tensor=pool_name, expected_shape=scalar_shape, expected_dtype=dtypes.string)
-        chunk_buffers = tuple(make_ceph_reader(key=column_key, pool_name=pool_name) for column_key in expand_column_extensions(key=key, columns=columns))
-        yield key, pool_name, chunk_buffers
+        validate_shape_and_dtype(tensor=namespace, expected_shape=scalar_shape, expected_dtype=dtypes.string)
+        chunk_buffers = tuple(make_ceph_reader(key=column_key, namespace=namespace) for column_key in expand_column_extensions(key=key, columns=columns))
+        yield key, namespace, chunk_buffers
 
-# note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
 def aligner_compress_pipeline(upstream_tensors, buffer_pool=None, buffer_pool_args=pool_default_args, name="aligner_compress_pipeline"):
     """
     Compresses a list of upstream tensors of buffer list (via handles) into buffers
@@ -120,8 +120,8 @@ def aligner_compress_pipeline(upstream_tensors, buffer_pool=None, buffer_pool_ar
         compressed_buffers = tuple(compress_buffer_list(a) for a in bls_unstacked)
         yield array_ops.stack(compressed_buffers)
 
-# note: upstream tensors has the record_id, pool_name, key, and chunk_buffers. Mark this in the doc
-def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path, compressed, record_types=default_records_type, name="ceph_write_pipeline"):
+# note: upstream tensors has the record_id, namespace, key, and chunk_buffers. Mark this in the doc
+def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, pool_name, ceph_conf_path, compressed, record_types=default_records_type, name="ceph_write_pipeline"):
     """
     Create a ceph write pipeline for aligner results (that outputs a BufferList, which we must wait on for completion
     :param upstream_tensors: a list of aligner output tensors of type (key, first ordinal, number of records, pool name, record id, column handle)
@@ -135,7 +135,7 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
         writer_op = functools.partial(persona_ops.agd_ceph_buffer_writer, compressed=True)
     else:
         writer_op = persona_ops.agd_ceph_buffer_list_writer
-    def make_ceph_writer(key, first_ordinal, num_records, column_handle, pool_name, record_id):
+    def make_ceph_writer(key, first_ordinal, num_records, column_handle, namespace, record_id):
         column_handles = array_ops.unstack(column_handle)
         if not len(column_handles) == len(record_types):
             raise Exception("number of record types ({r}) must be equal to number of columns ({c})".format(r=len(record_types),
@@ -147,6 +147,7 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
                              user_name=user_name,
                              ceph_conf_path=ceph_conf_path,
                              pool_name=pool_name,
+                             namespace=namespace,
                              record_id=record_id,
                              record_type=record_type["type"],
                              num_records=num_records,
@@ -154,12 +155,12 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, ceph_
                              path=full_key,
                              resource_handle=handle)
 
-    for key, pool_name, num_records, first_ordinal, record_id, column_handle in upstream_tensors:
+    for key, namespace, num_records, first_ordinal, record_id, column_handle in upstream_tensors:
         yield make_ceph_writer(key=key,
                                first_ordinal=first_ordinal,
                                num_records=num_records,
                                record_id=record_id,
-                               pool_name=pool_name,
+                               namespace=namespace,
                                column_handle=column_handle)
 
 def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mmap_pool_args=pool_default_args, name="local_read_pipeline"):
@@ -342,17 +343,17 @@ def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=
     for output_buffers, num_reads in upstream_tensors:
         yield make_agd_read(column_buffers=output_buffers, num_reads=num_reads)
 
-def join(upstream_tensors, parallel, capacity, multi=False):
+def join(upstream_tensors, parallel, capacity, multi=False, name="join"):
     if not isinstance(upstream_tensors, (tuple, list)):
         upstream_tensors = tuple(upstream_tensors)
         if multi:
             raise Exception("single example or generator given to multi join")
     if multi:
         return batch_join_pdq(tensor_list_list=upstream_tensors, batch_size=1,
-                              num_dq_ops=parallel, capacity=capacity)
+                              num_dq_ops=parallel, capacity=capacity, name=name)
     else:
         return batch_pdq(tensor_list=upstream_tensors, batch_size=1,
-                         capacity=capacity, num_dq_ops=parallel)
+                         capacity=capacity, num_dq_ops=parallel, name=name)
 
 #### old stuff ####
 

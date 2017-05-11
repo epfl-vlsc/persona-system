@@ -43,13 +43,13 @@ namespace tensorflow {
 
     ~AGDMarkDuplicatesOp() {
       LOG(INFO) << "Found a total of " << num_dups_found_ << " duplicates.";
-      core::ScopedUnref unref_listpool(bufferlist_pool_);
+      core::ScopedUnref unref_listpool(bufferpair_pool_);
       delete signature_map_;
     }
 
-    Status GetOutputBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
+    Status GetOutputBufferPair(OpKernelContext* ctx, ResourceContainer<BufferPair> **ctr)
     {
-      TF_RETURN_IF_ERROR(bufferlist_pool_->GetResource(ctr));
+      TF_RETURN_IF_ERROR(bufferpair_pool_->GetResource(ctr));
       (*ctr)->get()->reset();
       TF_RETURN_IF_ERROR((*ctr)->allocate_output("marked_results", ctx));
       return Status::OK();
@@ -57,7 +57,7 @@ namespace tensorflow {
     
     Status InitHandles(OpKernelContext* ctx)
     {
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &bufferlist_pool_));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufferpair_pool_));
 
       return Status::OK();
     }
@@ -166,10 +166,11 @@ namespace tensorflow {
     }
 
     void Compute(OpKernelContext* ctx) override {
-      if (!bufferlist_pool_) {
+      if (!bufferpair_pool_) {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       }
 
+      LOG(INFO) << "Starting duplicate mark";
       const Tensor* results_t, *num_results_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_results_t));
       OP_REQUIRES_OK(ctx, ctx->input("results_handle", &results_t));
@@ -182,12 +183,11 @@ namespace tensorflow {
 
       // get output buffer pairs (pair holds [index, data] to construct
       // the results builder for output
-      ResourceContainer<BufferList> *output_bufferlist_container;
-      OP_REQUIRES_OK(ctx, GetOutputBufferList(ctx, &output_bufferlist_container));
-      auto output_bufferlist = output_bufferlist_container->get();
-      output_bufferlist->resize(1);
+      ResourceContainer<BufferPair> *output_bufferpair_container;
+      OP_REQUIRES_OK(ctx, GetOutputBufferPair(ctx, &output_bufferpair_container));
+      auto output_bufferpair = output_bufferpair_container->get();
       AlignmentResultBuilder results_builder;
-      results_builder.SetBufferPair(&(*output_bufferlist)[0]);
+      results_builder.SetBufferPair(output_bufferpair);
 
 
       Alignment result;
@@ -259,7 +259,7 @@ namespace tensorflow {
     }
 
   private:
-    ReferencePool<BufferList> *bufferlist_pool_ = nullptr;
+    ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
 
     struct Signature {
       uint32_t position = 0;
