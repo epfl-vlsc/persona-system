@@ -14,8 +14,6 @@ namespace tensorflow {
     Status SendWrite(librados::bufferlist &write_buf_list, const std::string &key);
 
   private:
-    Status SetPool(OpKernelContext *ctx);
-    std::string cluster_name_, user_name_, pool_name_, ceph_conf_path_;
     librados::Rados cluster_;
     librados::IoCtx io_ctx_;
     librados::bufferlist write_buf_list_;
