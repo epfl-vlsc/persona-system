@@ -423,9 +423,10 @@ we can use it in other pipelines where writers are used
   .Attr("user_name: string")
   .Attr("ceph_conf_path: string")
   .Attr("read_size: int")
+  .Attr("pool_name: string")
   .Input("buffer_pool: Ref(string)")
   .Input("key: string")
-  .Input("pool_name: string")
+  .Input("namespace: string")
   .Output("file_handle: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle sh;
