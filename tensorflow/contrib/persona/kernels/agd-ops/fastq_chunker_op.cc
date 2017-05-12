@@ -112,6 +112,8 @@ namespace tensorflow {
     unique_ptr<FastqResource> CreateObject() override {
       return unique_ptr<FastqResource>(new FastqResource());
     };
+  private:
+    TF_DISALLOW_COPY_AND_ASSIGN(FastqPoolOp);
   };
 
   REGISTER_KERNEL_BUILDER(Name(op_name.c_str()).Device(DEVICE_CPU), FastqChunkingOp);

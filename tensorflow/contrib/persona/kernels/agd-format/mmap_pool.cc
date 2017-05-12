@@ -14,6 +14,9 @@ namespace tensorflow {
     unique_ptr<MemoryMappedFile> CreateObject() override {
       return unique_ptr<MemoryMappedFile>(new MemoryMappedFile());
     }
+
+  private:
+    TF_DISALLOW_COPY_AND_ASSIGN(MMapPoolOp);
   };
 
   REGISTER_KERNEL_BUILDER(Name("MMapPool").Device(DEVICE_CPU), MMapPoolOp);

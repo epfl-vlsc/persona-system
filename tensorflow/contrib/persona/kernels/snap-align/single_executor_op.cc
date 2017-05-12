@@ -31,7 +31,7 @@ namespace tensorflow {
     typedef BasicContainer<SnapSingleExecutor> ExecutorContainer;
 
     SnapSingleExecutorOp(OpKernelConstruction* context)
-            : OpKernel(context), executor_handle_set_(false) {
+            : OpKernel(context) {
       OP_REQUIRES_OK(context, context->GetAttr("num_threads", &num_threads_));
       OP_REQUIRES_OK(context, context->GetAttr("work_queue_size", &capacity_));
       OP_REQUIRES_OK(context,
@@ -44,7 +44,6 @@ namespace tensorflow {
       if (!options_resource_)
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       if (!executor_handle_set_) {
-        OP_REQUIRES_OK(ctx, InitHandles(ctx));
         OP_REQUIRES_OK(ctx, SetExecutorHandle(ctx));
       }
       ctx->set_output_ref(0, &mu_, executor_handle_.AccessTensor(ctx));
@@ -98,7 +97,8 @@ namespace tensorflow {
     BasicContainer<GenomeIndex> *index_resource_ = nullptr;
     BasicContainer<AlignerOptions>* options_resource_ = nullptr;
     PersistentTensor executor_handle_ GUARDED_BY(mu_);
-    bool executor_handle_set_ GUARDED_BY(mu_);
+    volatile bool executor_handle_set_ = false GUARDED_BY(mu_);
+    TF_DISALLOW_COPY_AND_ASSIGN(SnapSingleExecutorOp);
   };
 
   REGISTER_KERNEL_BUILDER(Name("SnapSingleExecutor").Device(DEVICE_CPU), SnapSingleExecutorOp);
