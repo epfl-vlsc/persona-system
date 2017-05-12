@@ -114,6 +114,8 @@ namespace tensorflow {
     unique_ptr<BWAReadResource> CreateObject() override {
       return unique_ptr<BWAReadResource>(new BWAReadResource());
     };
+  private:
+    TF_DISALLOW_COPY_AND_ASSIGN(BWAAssemblerPoolOp);
   };
 
 

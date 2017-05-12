@@ -112,6 +112,8 @@ namespace tensorflow {
     unique_ptr<AGDReadResource> CreateObject() override {
       return unique_ptr<AGDReadResource>(new AGDReadResource());
     };
+  private:
+    TF_DISALLOW_COPY_AND_ASSIGN(AGDAssemblerPoolOp);
   };
 
 
