@@ -193,7 +193,7 @@ namespace tensorflow {
     for (size_t i = 0; i < num_subchunks; i++) {
       resource_ptrs[i] = &sub_resources_[i];
     }
-    splitter.AddSubchunks(resource_ptrs, num_subchunks);
+    splitter.EnqueueSubchunks(resource_ptrs, num_subchunks);
     return Status::OK();
   }
 

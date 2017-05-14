@@ -26,6 +26,7 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource_splitter.h"
 #include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/single_executor.h"
+#include "tensorflow/contrib/persona/kernels/agd-format/contig_container.h"
 
 namespace tensorflow {
 using namespace std;
@@ -164,9 +165,8 @@ class NewSnapAlignSingleOp : public OpKernel {
       }
 
       {
-        ReadResourceSplitter splitter(buffer_lists_);
+        ReadResourceSplitter splitter(buffer_lists_, *executor_, pair_resources_);
         OP_REQUIRES_OK(ctx, reads->SplitResource(subchunk_size_, splitter));
-        OP_REQUIRES_OK(ctx, splitter.EnqueueAll(*executor_));
         splitter.WaitForDone();
       }
     }
@@ -184,8 +184,9 @@ private:
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   BasicContainer<SnapSingle> *executor_resource_ = nullptr;
   SnapSingle* executor_;
-  int subchunk_size_;
-  int max_secondary_;
+  int subchunk_size_, max_secondary_;
+  // Use contig container here
+  ContigContainer<ContigContainer<BufferPair*>> pair_resources_;
 
   vector <BufferList*> buffer_lists_; // just used as a cache to proxy the ResourceContainer<BufferList> instances to split()
 

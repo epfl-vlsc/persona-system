@@ -305,7 +305,7 @@ namespace tensorflow {
         break;
       }
       auto read_resource = get<0>(queue_value);
-      auto &columns = get<1>(queue_value);
+      auto &columns = *get<1>(queue_value);
       auto &rrs = get<2>(queue_value);
       num_columns = columns.size();
       if (num_columns == 0) {

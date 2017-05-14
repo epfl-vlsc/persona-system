@@ -7,13 +7,14 @@ cc_library(
     name = "agd_format",
     srcs = glob(["*.cc"]),
     hdrs = glob(["*.h"]),
-    copts = tf_copts(),
+    copts = tf_copts() + ["-fexceptions"],
     linkopts = [
         "-lz",
         "-lrados",
         "-lboost_system",
     ],
     linkstatic = 1,
+    nocopts = "-fno-exceptions",
     visibility = ["//visibility:public"],
     deps = [
         "//tensorflow/core:framework_headers_lib",

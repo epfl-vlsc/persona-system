@@ -14,7 +14,8 @@ namespace tensorflow {
     }
   }
 
-  void ReadResourceSplitter::AddSubchunks(ReadResource *rr[], size_t count) {
+  Status ReadResourceSplitter::EnqueueSubchunks(ReadResource **rr, size_t count) {
+    std::vector<QueueType> enqueue_batch;
     for (auto b : buffer_lists_) {
       b->resize(count);
     }
@@ -22,32 +23,32 @@ namespace tensorflow {
       SubchunksDone();
     });
 
+    pair_resources_.resize(count);
+
     auto num_columns = buffer_lists_.size();
     for (size_t subchunk_num = 0; subchunk_num < count; ++subchunk_num) {
-      vector <BufferPair*> bps;
-      bps.reserve(num_columns);
+      auto &cc = pair_resources_[subchunk_num];
+      cc.clear();
       for (size_t column_num = 0; column_num < num_columns; ++column_num) {
-        bps.push_back(&(*buffer_lists_[column_num])[subchunk_num]);
+        auto &bl = *buffer_lists_[column_num];
+        cc.push_back(&bl[subchunk_num]);
       }
 
-      enqueue_batch_.push_back(make_tuple(rr[subchunk_num], move(bps), a));
+      enqueue_batch.push_back(make_tuple(rr[subchunk_num], &cc, a));
     }
+
+    if (!runner_.EnqueueMany(&enqueue_batch[0], count)) {
+      return Internal("ReadResourceSplitter: EnqueueMany failed");
+    }
+
+    return Status::OK();
   }
 
-  ReadResourceSplitter::ReadResourceSplitter(std::vector<BufferList *> &bl) :
-          buffer_lists_(bl) {
+  ReadResourceSplitter::ReadResourceSplitter(std::vector<BufferList *> &bl, TaskRunner<QueueType> &runner, ContigContainer<ColumnContainer> &pair_resources) :
+          buffer_lists_(bl), runner_(runner), pair_resources_(pair_resources) {
     for (auto b : bl) {
       b->reset();
     }
-  }
-
-  Status ReadResourceSplitter::EnqueueAll(TaskRunner<QueueType> &runner) {
-    auto sz = enqueue_batch_.size();
-    if (!runner.EnqueueMany(&enqueue_batch_[0], sz)) {
-      return Internal("ReadResourceSplitter: EnqueueMany failed");
-    }
-    enqueue_batch_.clear();
-    return Status::OK();
   }
 
   void ReadResourceSplitter::SubchunksDone() {
