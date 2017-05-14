@@ -48,7 +48,6 @@ tf_cc_test(
         ":saved_model_half_plus_two",
     ],
     linkstatic = 1,
-    tags = ["manual"],
     deps = [
         ":constants",
         ":loader",
@@ -67,6 +66,7 @@ filegroup(
     name = "saved_model_half_plus_two",
     srcs = glob([
         "testdata/half_plus_two_pbtxt/**",
+        "testdata/half_plus_two_main_op/**",
         "testdata/half_plus_two/**",
     ]),
 )
