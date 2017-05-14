@@ -15,7 +15,6 @@ namespace tensorflow {
   }
 
   void ReadResourceSplitter::AddSubchunks(ReadResource *rr[], size_t count) {
-    vector<BufferPair*> pairs;
     for (auto b : buffer_lists_) {
       b->resize(count);
     }
