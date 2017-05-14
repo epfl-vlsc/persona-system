@@ -13,7 +13,9 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Operations that generate constants.  See the ${@python/constant} guide.
+"""Operations that generate constants.
+
+See the @{$python/constant_op$constants guide}.
 
 @@zeros
 @@zeros_like
@@ -30,6 +32,7 @@
 @@random_crop
 @@multinomial
 @@random_gamma
+@@random_poisson
 @@set_random_seed
 """
 

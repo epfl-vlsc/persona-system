@@ -780,6 +780,7 @@ containing the alignment candidates.
   .Input("options_handle: Ref(string)")
   .Input("genome_handle: Ref(string)")
   .Output("executor_handle: Ref(string)")
+  .SetIsStateful()
   .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 2; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));

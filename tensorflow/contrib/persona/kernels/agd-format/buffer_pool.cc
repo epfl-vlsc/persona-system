@@ -13,6 +13,9 @@ namespace tensorflow {
     unique_ptr<Buffer> CreateObject() override {
       return unique_ptr<Buffer>(new Buffer());
     }
+
+  private:
+    TF_DISALLOW_COPY_AND_ASSIGN(BufferPoolOp);
   };
 
   REGISTER_KERNEL_BUILDER(Name("BufferPool").Device(DEVICE_CPU), BufferPoolOp);

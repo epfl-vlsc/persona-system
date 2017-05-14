@@ -13,7 +13,9 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Support for training models.  See the @{$python/train} guide.
+"""Support for training models.
+
+See the @{$python/train} guide.
 
 @@Optimizer
 @@GradientDescentOptimizer
@@ -43,6 +45,7 @@
 @@ExponentialMovingAverage
 @@Coordinator
 @@QueueRunner
+@@LooperThread
 @@add_queue_runner
 @@start_queue_runners
 @@Server
@@ -71,12 +74,13 @@
 @@NanTensorHook
 @@SummarySaverHook
 @@GlobalStepWaiterHook
-@@LooperThread
 @@FinalOpsHook
 @@FeedFnHook
 @@global_step
 @@basic_train_loop
 @@get_global_step
+@@get_or_create_global_step
+@@create_global_step
 @@assert_global_step
 @@write_graph
 """
@@ -128,6 +132,8 @@ from tensorflow.python.training.basic_session_run_hooks import NanLossDuringTrai
 from tensorflow.python.training.basic_session_run_hooks import NanTensorHook
 from tensorflow.python.training.basic_session_run_hooks import SummarySaverHook
 from tensorflow.python.training.basic_session_run_hooks import GlobalStepWaiterHook
+from tensorflow.python.training.basic_session_run_hooks import FinalOpsHook
+from tensorflow.python.training.basic_session_run_hooks import FeedFnHook
 from tensorflow.python.training.basic_loops import basic_train_loop
 from tensorflow.python.training.device_setter import replica_device_setter
 from tensorflow.python.training.monitored_session import Scaffold
@@ -157,6 +163,8 @@ from tensorflow.python.training.training_util import write_graph
 from tensorflow.python.training.training_util import global_step
 from tensorflow.python.training.training_util import get_global_step
 from tensorflow.python.training.training_util import assert_global_step
+from tensorflow.python.training.training_util import create_global_step
+from tensorflow.python.training.training_util import get_or_create_global_step
 from tensorflow.python.pywrap_tensorflow import do_quantize_training_on_graphdef
 from tensorflow.python.pywrap_tensorflow import NewCheckpointReader
 

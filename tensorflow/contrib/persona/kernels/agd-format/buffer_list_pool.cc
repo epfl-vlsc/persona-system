@@ -13,6 +13,8 @@ namespace tensorflow {
     unique_ptr<BufferList> CreateObject() override {
       return unique_ptr<BufferList>(new BufferList());
     }
+  private:
+    TF_DISALLOW_COPY_AND_ASSIGN(BufferListPoolOp);
   };
 
   REGISTER_KERNEL_BUILDER(Name("BufferListPool").Device(DEVICE_CPU), BufferListPoolOp);
