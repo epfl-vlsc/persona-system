@@ -28,8 +28,10 @@ limitations under the License.
 #include "tensorflow/core/kernels/conv_ops_gpu.h"
 #include "tensorflow/core/kernels/ops_util.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/lib/gtl/inlined_vector.h"
 #include "tensorflow/core/util/padding.h"
 #include "tensorflow/core/util/tensor_format.h"
+#include "tensorflow/core/util/use_cudnn.h"
 
 #if GOOGLE_CUDA
 #include "tensorflow/core/platform/stream_executor.h"
@@ -260,6 +262,11 @@ class Conv3DBackpropFilterOp : public OpKernel {
     OP_REQUIRES_OK(context,
                    context->allocate_output(0, filter_shape, &filter_backprop));
 
+    if (input_shape.num_elements() == 0) {
+      filter_backprop->template flat<T>().setZero();
+      return;
+    }
+
     // For the backprop of the filter, we need to also transpose the
     // out_backprop.
     // The shape of backprop is
@@ -370,6 +377,12 @@ DECLARE_GPU_SPEC(float);
 #undef DECLARE_GPU_SPEC
 }  // namespace functor
 
+// A dummy type to group backward data autotune results together.
+struct Conv3dBackwardDataAutoTuneGroup {};
+typedef AutoTuneSingleton<Conv3dBackwardDataAutoTuneGroup, ConvParameters,
+                          perftools::gputools::dnn::AlgorithmConfig>
+
+    AutoTuneConv3dBwdData;
 template <typename T>
 class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
  public:
@@ -385,6 +398,7 @@ class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
         errors::InvalidArgument("Current implementation does not yet support "
                                 "strides in the batch and depth dimensions."));
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding_));
+    cudnn_use_autotune_ = CudnnUseAutotune();
   }
   void Compute(OpKernelContext* context) override {
     const Tensor& filter = context->input(1);
@@ -405,11 +419,38 @@ class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
     auto* stream = context->op_device_context()->stream();
     OP_REQUIRES(context, stream, errors::Internal("No GPU stream available."));
 
-    if (filter_size[1] == 1 && filter_size[2] == 1 && filter_size[0] == 1 &&
+    if (filter_size[0] == 1 && filter_size[1] == 1 && filter_size[2] == 1 &&
         stride_[0] == 1 && stride_[1] == 1 && stride_[2] == 1) {
-      const uint64 m = batch * input_size[1] * input_size[2] * input_size[0];
+      const uint64 m = batch * input_size[0] * input_size[1] * input_size[2];
       const uint64 k = out_depth;
       const uint64 n = in_depth;
+
+      auto a_ptr = AsDeviceMemory(out_backprop.template flat<T>().data(),
+                                  out_backprop.template flat<T>().size());
+      auto b_ptr = AsDeviceMemory(filter.template flat<T>().data(),
+                                  filter.template flat<T>().size());
+      auto c_ptr = AsDeviceMemory(in_backprop->template flat<T>().data(),
+                                  in_backprop->template flat<T>().size());
+
+      auto transpose = perftools::gputools::blas::Transpose::kTranspose;
+      auto no_transpose = perftools::gputools::blas::Transpose::kNoTranspose;
+
+      bool blas_launch_status =
+          stream
+              ->ThenBlasGemm(transpose, no_transpose, n, m, k, 1.0f, b_ptr, k,
+                             a_ptr, k, 0.0f, &c_ptr, n)
+              .ok();
+      if (!blas_launch_status) {
+        context->SetStatus(errors::Internal("Blas SGEMM launch failed : m=", m,
+                                            ", n=", n, ", k=", k));
+      }
+      return;
+    } else if (filter_size[0] == input_size[0] &&
+               filter_size[1] == input_size[1] &&
+               filter_size[2] == input_size[2] && padding_ == Padding::VALID) {
+      const uint64 m = batch;
+      const uint64 k = out_depth;
+      const uint64 n = input_size[0] * input_size[1] * input_size[2] * in_depth;
 
       auto a_ptr = AsDeviceMemory(out_backprop.template flat<T>().data(),
                                   out_backprop.template flat<T>().size());
@@ -536,13 +577,80 @@ class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
     static int64 ConvolveBackwardDataScratchSize = GetCudnnWorkspaceLimit(
         "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32);  // 4GB by default
 
+    const int device_id = stream->parent()->device_ordinal();
+    DataType dtype = context->input(0).dtype();
+    const ConvParameters conv_parameters = {
+        batch,
+        in_depth,
+        {{input_size[0], input_size[1], input_size[2]}},
+        out_depth,
+        {{filter_size[0], filter_size[1], filter_size[2]}},
+        {{strides[0], strides[1], strides[2]}},
+        {{padding_planes, padding_rows, padding_cols}},
+        dtype,
+        device_id,
+    };
+
+    using perftools::gputools::dnn::AlgorithmConfig;
+    using perftools::gputools::dnn::AlgorithmType;
+    using perftools::gputools::dnn::ProfileResult;
+    using perftools::gputools::dnn::kDefaultAlgorithm;
+    AlgorithmConfig algorithm_config;
+    if (cudnn_use_autotune_ && !AutoTuneConv3dBwdData::GetInstance()->Find(
+                                   conv_parameters, &algorithm_config)) {
+      std::vector<AlgorithmType> algorithms;
+      CHECK(stream->parent()->GetConvolveBackwardDataAlgorithms(&algorithms));
+      ProfileResult best_result;
+      ProfileResult best_result_no_scratch;
+      for (auto profile_algorithm : algorithms) {
+        // TODO(zhengxq): profile each algorithm multiple times to better
+        // accuracy.
+        CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
+                                                context);
+        ProfileResult profile_result;
+        bool cudnn_launch_status =
+            stream
+                ->ThenConvolveBackwardDataWithAlgorithm(
+                    filter_desc, filter_ptr, output_desc, out_backprop_ptr,
+                    conv_desc, input_desc, &in_backprop_ptr, &scratch_allocator,
+                    AlgorithmConfig(profile_algorithm), &profile_result)
+                .ok();
+        if (cudnn_launch_status) {
+          if (profile_result.is_valid()) {
+            if (profile_result.elapsed_time_in_ms() <
+                best_result.elapsed_time_in_ms()) {
+              best_result = profile_result;
+            }
+            if (scratch_allocator.TotalByteSize() == 0 &&
+                profile_result.elapsed_time_in_ms() <
+                    best_result_no_scratch.elapsed_time_in_ms()) {
+              best_result_no_scratch = profile_result;
+            }
+          }
+        }
+      }
+      OP_REQUIRES(context,
+                  best_result.is_valid() &&
+                      best_result.algorithm() != kDefaultAlgorithm,
+                  errors::NotFound("No algorithm worked!"));
+      OP_REQUIRES(context,
+                  best_result_no_scratch.is_valid() &&
+                      best_result_no_scratch.algorithm() != kDefaultAlgorithm,
+                  errors::NotFound("No algorithm without scratch worked!"));
+      algorithm_config.set_algorithm(best_result.algorithm());
+      algorithm_config.set_algorithm_no_scratch(
+          best_result_no_scratch.algorithm());
+      AutoTuneConv3dBwdData::GetInstance()->Insert(conv_parameters,
+                                                   algorithm_config);
+    }
     CudnnScratchAllocator scratch_allocator(ConvolveBackwardDataScratchSize,
                                             context);
     bool cudnn_launch_status =
         stream
-            ->ThenConvolveBackwardDataWithScratch(
+            ->ThenConvolveBackwardDataWithAlgorithm(
                 filter_desc, filter_ptr, output_desc, out_backprop_ptr,
-                conv_desc, input_desc, &in_backprop_ptr, &scratch_allocator)
+                conv_desc, input_desc, &in_backprop_ptr, &scratch_allocator,
+                algorithm_config, nullptr)
             .ok();
 
     if (!cudnn_launch_status) {
@@ -581,7 +689,14 @@ class Conv3DBackpropInputOp<GPUDevice, T> : public OpKernel {
   std::vector<int32> stride_;
   Padding padding_;
   bool takes_shape_;
+  bool cudnn_use_autotune_;
 };
+
+// A dummy type to group backward filter autotune results together.
+struct Conv3dBackwardFilterAutoTuneGroup {};
+typedef AutoTuneSingleton<Conv3dBackwardFilterAutoTuneGroup, ConvParameters,
+                          perftools::gputools::dnn::AlgorithmConfig>
+    AutoTuneConv3dBwdFilter;
 
 template <typename T>
 class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
@@ -598,6 +713,7 @@ class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
         errors::InvalidArgument("Current implementation does not yet support "
                                 "strides in the batch and depth dimensions."));
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding_));
+    cudnn_use_autotune_ = CudnnUseAutotune();
   }
 
   void Compute(OpKernelContext* context) override {
@@ -656,7 +772,33 @@ class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
                                             ", n=", n, ", k=", k));
       }
       return;
+    } else if (filter_size[0] == input_size[0] &&
+               filter_size[1] == input_size[1] &&
+               filter_size[2] == input_size[2] && padding_ == Padding::VALID) {
+      const uint64 m = input_size[0] * input_size[1] * input_size[2] * in_depth;
+      const uint64 k = batch;
+      const uint64 n = out_depth;
+
+      auto a_ptr = AsDeviceMemory(input.template flat<T>().data(),
+                                  input.template flat<T>().size());
+      auto b_ptr = AsDeviceMemory(out_backprop.template flat<T>().data(),
+                                  out_backprop.template flat<T>().size());
+      auto c_ptr = AsDeviceMemory(filter_backprop->template flat<T>().data(),
+                                  filter_backprop->template flat<T>().size());
+
+      bool blas_launch_status =
+          stream
+              ->ThenBlasGemm(perftools::gputools::blas::Transpose::kNoTranspose,
+                             perftools::gputools::blas::Transpose::kTranspose,
+                             n, m, k, 1.0f, b_ptr, n, a_ptr, m, 0.0f, &c_ptr, n)
+              .ok();
+      if (!blas_launch_status) {
+        context->SetStatus(errors::Internal("Blas SGEMM launch failed : m=", m,
+                                            ", n=", n, ", k=", k));
+      }
+      return;
     }
+
     int padding_rows = 0, padding_cols = 0, padding_planes = 0;
 
     if (padding_ == Padding::SAME) {
@@ -762,13 +904,83 @@ class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
 
     static int64 ConvolveBackwardFilterScratchSize = GetCudnnWorkspaceLimit(
         "TF_CUDNN_WORKSPACE_LIMIT_IN_MB", 1LL << 32);  // 4GB by default
+
+    const int device_id = stream->parent()->device_ordinal();
+    DataType dtype = input.dtype();
+    const ConvParameters conv_parameters = {
+        batch,
+        in_depth,
+        {{input_size[0], input_size[1], input_size[2]}},
+        out_depth,
+        {{filter_size[0], filter_size[1], filter_size[2]}},
+        {{strides[0], strides[1], strides[2]}},
+        {{padding_planes, padding_rows, padding_cols}},
+        dtype,
+        device_id,
+    };
+
+    using perftools::gputools::dnn::AlgorithmConfig;
+    using perftools::gputools::dnn::AlgorithmType;
+    using perftools::gputools::dnn::ProfileResult;
+    using perftools::gputools::dnn::kDefaultAlgorithm;
+    AlgorithmConfig algorithm_config;
+
+    if (cudnn_use_autotune_ && !AutoTuneConv3dBwdFilter::GetInstance()->Find(
+                                   conv_parameters, &algorithm_config)) {
+      std::vector<AlgorithmType> algorithms;
+      CHECK(stream->parent()->GetConvolveBackwardFilterAlgorithms(&algorithms));
+      ProfileResult best_result;
+      ProfileResult best_result_no_scratch;
+      for (auto profile_algorithm : algorithms) {
+        // TODO(zhengxq): profile each algorithm multiple times to better
+        // accuracy.
+        CudnnScratchAllocator scratch_allocator(
+            ConvolveBackwardFilterScratchSize, context);
+        ProfileResult profile_result;
+        bool cudnn_launch_status =
+            stream
+                ->ThenConvolveBackwardFilterWithAlgorithm(
+                    input_desc, input_ptr, output_desc, out_backprop_ptr,
+                    conv_desc, filter_desc, &filter_backprop_ptr,
+                    &scratch_allocator, AlgorithmConfig(profile_algorithm),
+                    &profile_result)
+                .ok();
+        if (cudnn_launch_status) {
+          if (profile_result.is_valid()) {
+            if (profile_result.elapsed_time_in_ms() <
+                best_result.elapsed_time_in_ms()) {
+              best_result = profile_result;
+            }
+            if (scratch_allocator.TotalByteSize() == 0 &&
+                profile_result.elapsed_time_in_ms() <
+                    best_result_no_scratch.elapsed_time_in_ms()) {
+              best_result_no_scratch = profile_result;
+            }
+          }
+        }
+      }
+      OP_REQUIRES(context,
+                  best_result.is_valid() &&
+                      best_result.algorithm() != kDefaultAlgorithm,
+                  errors::NotFound("No algorithm worked!"));
+      OP_REQUIRES(context,
+                  best_result_no_scratch.is_valid() &&
+                      best_result_no_scratch.algorithm() != kDefaultAlgorithm,
+                  errors::NotFound("No algorithm without scratch worked!"));
+      algorithm_config.set_algorithm(best_result.algorithm());
+      algorithm_config.set_algorithm_no_scratch(
+          best_result_no_scratch.algorithm());
+      AutoTuneConv3dBwdFilter::GetInstance()->Insert(conv_parameters,
+                                                     algorithm_config);
+    }
     CudnnScratchAllocator scratch_allocator(ConvolveBackwardFilterScratchSize,
                                             context);
     bool cudnn_launch_status =
         stream
-            ->ThenConvolveBackwardFilterWithScratch(
+            ->ThenConvolveBackwardFilterWithAlgorithm(
                 input_desc, input_ptr, output_desc, out_backprop_ptr, conv_desc,
-                filter_desc, &filter_backprop_ptr, &scratch_allocator)
+                filter_desc, &filter_backprop_ptr, &scratch_allocator,
+                algorithm_config, nullptr)
             .ok();
 
     if (!cudnn_launch_status) {
@@ -789,6 +1001,7 @@ class Conv3DBackpropFilterOp<GPUDevice, T> : public OpKernel {
   std::vector<int32> stride_;
   Padding padding_;
   bool takes_shape_;
+  bool cudnn_use_autotune_;
 };
 
 REGISTER_KERNEL_BUILDER(

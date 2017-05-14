@@ -241,7 +241,7 @@ class Supervisor(object):
         on a chief supervisor for inits and restore.
       init_op: `Operation`.  Used by chief supervisors to initialize the model
         when it can not be recovered.  Defaults to an `Operation` that
-        initializes all variables.  If `None`, no initialization is done
+        initializes all global variables.  If `None`, no initialization is done
         automatically unless you pass a value for `init_fn`, see below.
       init_feed_dict: A dictionary that maps `Tensor` objects to feed values.
         This feed dictionary will be used when `init_op` is evaluated.
@@ -1027,7 +1027,7 @@ class SVStepCounterThread(coordinator.LooperThread):
     elapsed_time = current_time - self._last_time
     self._last_time = current_time
     # Reports the number of steps done per second
-    steps_per_sec = added_steps / elapsed_time
+    steps_per_sec = added_steps / elapsed_time if elapsed_time != 0. else float("inf")
     summary = Summary(value=[Summary.Value(tag=self._summary_tag,
                                            simple_value=steps_per_sec)])
     if self._sv.summary_writer:
