@@ -142,7 +142,7 @@ namespace tensorflow {
     }
 
     Status SetExecutorHandle(OpKernelContext* ctx) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-      TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
+      TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def(), true));
       ExecutorContainer* new_executor;
 
       auto creator = [this, ctx](ExecutorContainer** executor) {

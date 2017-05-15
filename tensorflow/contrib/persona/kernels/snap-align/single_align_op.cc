@@ -165,6 +165,7 @@ class NewSnapAlignSingleOp : public OpKernel {
       }
 
       {
+        ReadResourceReleaser rrr(*reads);
         ReadResourceSplitter splitter(buffer_lists_, *executor_, pair_resources_);
         OP_REQUIRES_OK(ctx, reads->SplitResource(subchunk_size_, splitter));
         splitter.WaitForDone();
