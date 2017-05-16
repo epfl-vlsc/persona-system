@@ -29,14 +29,24 @@ namespace tensorflow {
     }
 
     ~AGDSortOp() {
-      core::ScopedUnref unref_listpool(bufferlist_pool_);
+      core::ScopedUnref unref_listpool(bufferpair_pool_);
     }
 
-    Status GetOutputBufferList(OpKernelContext* ctx, ResourceContainer<BufferList> **ctr)
+    Status GetOutputBufferPairs(OpKernelContext* ctx, vector<ResourceContainer<BufferPair>*>& ctrs)
     {
-      TF_RETURN_IF_ERROR(bufferlist_pool_->GetResource(ctr));
-      (*ctr)->get()->reset();
-      TF_RETURN_IF_ERROR((*ctr)->allocate_output("partial_handle", ctx));
+      Tensor* bufs_out_t;
+      TF_RETURN_IF_ERROR(ctx->allocate_output("partial_handle", TensorShape({4, 2}), &bufs_out_t));
+      auto bufs_out = bufs_out_t->matrix<string>();
+
+      ctrs.resize(4);
+      for (size_t i = 0; i < 4; i++) {
+
+        TF_RETURN_IF_ERROR(bufferpair_pool_->GetResource(&ctrs[i]));
+        ctrs[i]->get()->reset();
+        bufs_out(i, 0) = ctrs[i]->container();
+        bufs_out(i, 1) = ctrs[i]->name();
+      }
+      //TF_RETURN_IF_ERROR((*ctr)->allocate_output("partial_handle", ctx));
       return Status::OK();
     }
 
@@ -59,8 +69,8 @@ namespace tensorflow {
     
 
     void Compute(OpKernelContext* ctx) override {
-      if (!bufferlist_pool_) {
-        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_list_pool", &bufferlist_pool_));
+      if (!bufferpair_pool_) {
+        OP_REQUIRES_OK(ctx, GetResourceFromContext(ctx, "buffer_pair_pool", &bufferpair_pool_));
       }
 
       sort_index_.clear();
@@ -103,7 +113,14 @@ namespace tensorflow {
         int j = 0;
         while(status.ok()) {
           //agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
-          agd_result.ParseFromArray(data, size);
+          bool check = agd_result.ParseFromArray(data, size);
+          if (!check) {
+            LOG(INFO) << "could not parse protobuf, data was ";
+            fwrite(data, size, 1, stdout);
+            LOG(INFO) << "and size was " << size;
+          }
+          LOG(INFO) << agd_result.DebugString();
+          LOG(INFO) << "location is " << agd_result.location();
           entry.location = agd_result.location();
           entry.chunk = i;
           entry.index = j;
@@ -137,18 +154,17 @@ namespace tensorflow {
 
       // get output buffer pairs (pair holds [index, data] to construct
       // AGD format temp output file in next dataflow stage)
-      ResourceContainer<BufferList> *output_bufferlist_container;
-      OP_REQUIRES_OK(ctx, GetOutputBufferList(ctx, &output_bufferlist_container));
-      auto output_bufferlist = output_bufferlist_container->get();
-      output_bufferlist->resize(4);
+      vector<ResourceContainer<BufferPair>*> bufpair_containers;
+      OP_REQUIRES_OK(ctx, GetOutputBufferPairs(ctx, bufpair_containers));
+      
       ColumnBuilder bases_builder;
       ColumnBuilder qualities_builder;
       ColumnBuilder metadata_builder;
       ColumnBuilder results_builder;
-      bases_builder.SetBufferPair(&(*output_bufferlist)[0]);
-      qualities_builder.SetBufferPair(&(*output_bufferlist)[1]);
-      metadata_builder.SetBufferPair(&(*output_bufferlist)[2]);
-      results_builder.SetBufferPair(&(*output_bufferlist)[3]);
+      bases_builder.SetBufferPair(bufpair_containers[0]->get());
+      qualities_builder.SetBufferPair(bufpair_containers[1]->get());
+      metadata_builder.SetBufferPair(bufpair_containers[2]->get());
+      results_builder.SetBufferPair(bufpair_containers[3]->get());
 
       for (size_t i = 0; i < sort_index_.size(); i++) {
         auto& entry = sort_index_[i];
@@ -173,7 +189,7 @@ namespace tensorflow {
     }
 
   private:
-    ReferencePool<BufferList> *bufferlist_pool_ = nullptr;
+    ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
 
     struct SortEntry {
       int64 location;
