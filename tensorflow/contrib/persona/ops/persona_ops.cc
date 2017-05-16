@@ -308,7 +308,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
   )doc");
 
   REGISTER_OP("AGDSortMetadata")
-  .Input("buffer_list_pool: Ref(string)")
+  .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handles: string")
   .Input("bases_handles: string")
   .Input("qualities_handles: string")
@@ -317,7 +317,7 @@ reserve: the number of bytes to call 'reserve' on the vector.
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
   .SetShapeFn([](InferenceContext *c) {
-      c->set_output(0, c->Vector(2));
+      c->set_output(0, c->Matrix(4, 2));
       c->set_output(1, c->Scalar());
 
       return Status::OK();
@@ -344,7 +344,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   )doc");
 
   REGISTER_OP("AGDSort")
-  .Input("buffer_list_pool: Ref(string)")
+  .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handles: string")
   .Input("bases_handles: string")
   .Input("qualities_handles: string")
@@ -353,7 +353,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
   .SetShapeFn([](InferenceContext *c) {
-      c->set_output(0, c->Vector(2));
+      c->set_output(0, c->Matrix(4, 2));
       c->set_output(1, c->Scalar());
 
       return Status::OK();
