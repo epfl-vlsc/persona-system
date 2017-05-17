@@ -225,7 +225,7 @@ trading memory for faster execution.
 
   REGISTER_OP("AGDMergeMetadata")
   .Attr("chunk_size: int >= 1")
-  .Input("buffer_list_pool: Ref(string)")
+  .Input("buffer_pair_pool: Ref(string)")
   .Input("output_buffer_queue_handle: resource")
   .Input("chunk_group_handles: string") // a record of NUM_SUPER_CHUNKS x NUM_COLUMNS x 2 (2 for reference)
   .Doc(R"doc(
