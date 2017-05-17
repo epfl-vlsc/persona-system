@@ -37,16 +37,18 @@ namespace tensorflow {
 
       expected_element_count_map_[input_name] = input_count;
 
-      if (expected_element_count_map_.count(input_name) == 0) {
+      if (expected_element_count_map_.count(input_name) == 1) {
         vector<QueueInterface::Tuple> a;
         a.reserve(input_count);
         pending_element_map_.emplace(input_name, move(a));
       }
 
+      //LOG(INFO) << "Barrier is waiting for input!!";
       while (!InputDone(input_name)) {
         OP_REQUIRES_OK_ASYNC(ctx, ProcessBarrierInput(ctx), done);
       }
 
+      //LOG(INFO) << "barrier is dumping to downstream!";
       EnqueueAllDownstream(ctx, input_name);
 
       Tensor *output_name_t, *output_count_t;
@@ -97,7 +99,8 @@ namespace tensorflow {
 
       inline
       bool InputDone(const string &input_key) const {
-        return pending_element_map_.at(input_key).size() == expected_element_count_map_.at(input_key);
+        bool ret = (pending_element_map_.at(input_key).size() == expected_element_count_map_.at(input_key));
+        return ret;
       }
 
     Status Init(OpKernelContext *ctx) {
