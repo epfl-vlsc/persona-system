@@ -119,8 +119,6 @@ namespace tensorflow {
             fwrite(data, size, 1, stdout);
             LOG(INFO) << "and size was " << size;
           }
-          LOG(INFO) << agd_result.DebugString();
-          LOG(INFO) << "location is " << agd_result.location();
           entry.location = agd_result.location();
           entry.chunk = i;
           entry.index = j;

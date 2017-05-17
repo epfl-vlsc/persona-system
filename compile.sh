@@ -3,7 +3,7 @@
 # unofficial "bash strict mode"
 # http://redsymbol.net/articles/unofficial-bash-strict-mode/
 # Commented out 'u' because the `activate` script has some unassignment issues
-# set -u
+set -u
 set -eo pipefail
 IFS=$'\n\t'
 
@@ -33,6 +33,9 @@ if [ $build_type == "opt" ]; then
 elif [ $build_type == "vtune" ]; then
     build_type="opt"
     extra_opts="--copt -g --copt -O3"
+elif [ $build_type = "perf" ]; then
+    build_type="dbg"
+    extra_copts="--copt -pg"
 fi
 
 # this is the option to build with the old ABI
@@ -42,4 +45,5 @@ fi
 echo "Building configuration $build_type"
 #max_build_threads=$(bc <<< "scale=0; ($(nproc) * 1.1) / 1" )
 max_build_threads=$(nproc)
+set +u
 eval "bazel build $extra_opts -j $max_build_threads -c $build_type //tensorflow/tools/pip_package:build_pip_package"
