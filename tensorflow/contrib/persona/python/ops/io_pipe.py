@@ -49,9 +49,9 @@ def validate_columns(columns):
     """
     if len(columns) == 0:
         raise Exception("Ceph Read Pipeline must read >0 columns")
-    columns = set(columns)
+    new_columns = set(columns)
 
-    invalid_columns = columns - valid_columns
+    invalid_columns = new_columns - valid_columns
     if len(invalid_columns) != 0:
         raise Exception("Can't instantiate Ceph Read Pipeline with invalid columns: {}".format(invalid_columns))
 
