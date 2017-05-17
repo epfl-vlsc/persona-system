@@ -1130,6 +1130,7 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   )doc");
   
   REGISTER_OP("BufferPairCompressor")
+  .Attr("pack: bool = false")
   .Input("buffer_pool: Ref(string)")
   .Input("buffer_pair: string")
   .Output("compressed_buffer: string")
@@ -1144,6 +1145,7 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
     })
   .Doc(R"doc(
 Compresses the prepared buffer_pair records into a buffer.
+pack: pack into binary bases. will cause an error if the bufferpair does not contain bases.
 )doc");
 
   REGISTER_OP("BufferListCompressor")

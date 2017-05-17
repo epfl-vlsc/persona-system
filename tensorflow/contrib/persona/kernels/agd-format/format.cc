@@ -153,7 +153,8 @@ Status BinaryBases::setBase(const char base, size_t position) {
     b = BaseAlphabet::N;
     break;
   default:
-    return InvalidArgument("Unable to convert the following base character: ", string(&base, 1));
+    return InvalidArgument("Unable to convert the following base character: ", string(&base, 1),
+    " are you sure this column is base pair data?");
   }
 
   return setBaseAtPosition(b, position);
