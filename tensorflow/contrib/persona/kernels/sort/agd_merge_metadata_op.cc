@@ -42,16 +42,14 @@ namespace tensorflow {
         return Status::OK();
       }
 
-      Status append_to_buffer_list(BufferList *bl) {
-        const char* data;
-
+      Status append_to_buffer_pairs(vector<BufferPair*> &bp_vec) {
         // first, dump the alignment result in the first column
-        auto &bp_metadata = (*bl)[0];
+        auto bp_metadata = bp_vec[0];
         TF_RETURN_IF_ERROR(copy_record(bp_metadata, metadata_));
 
         size_t bl_idx = 1;
         for (auto &r : other_columns_) {
-          auto &bp = (*bl)[bl_idx++];
+          auto bp = bp_vec[bl_idx++];
           TF_RETURN_IF_ERROR(copy_record(bp, r));
         }
 
@@ -66,18 +64,17 @@ namespace tensorflow {
     private:
       vector<AGDRecordReader> other_columns_;
       AGDRecordReader metadata_;
-      //const AlignmentResult *current_result_ = nullptr;
       const char * current_meta_ = nullptr;
       size_t current_size_;
       //int64_t current_location_ = -2048;
 
       static inline
       Status
-      copy_record(BufferPair& bp, AGDRecordReader &r) {
+      copy_record(BufferPair* bp, AGDRecordReader &r) {
         const char *record_data;
         size_t record_size;
-        auto &index = bp.index();
-        auto &data = bp.data();
+        auto &index = bp->index();
+        auto &data = bp->data();
 
         TF_RETURN_IF_ERROR(r.GetNextRecord(&record_data, &record_size));
         auto char_sz = static_cast<char>(record_size);
@@ -167,18 +164,22 @@ namespace tensorflow {
         score_heap.push(MetadataScore(meta, size, &cc));
       }
 
-      int current_chunk_size = 0;
+      size_t current_chunk_size = 0;
       ColumnCursor *cc;
-      ResourceContainer<BufferList> *bl_ctr;
-      OP_REQUIRES_OK(ctx, buflist_pool_->GetResource(&bl_ctr));
-      auto bl = bl_ctr->get();
-      bl->resize(num_columns);
+      vector<ResourceContainer<BufferPair>*> bp_ctrs;
+      vector<BufferPair*> bufferpairs;
+      bp_ctrs.resize(num_columns);
+      for (auto& bp : bp_ctrs) {
+        OP_REQUIRES_OK(ctx, bufpair_pool_->GetResource(&bp));
+        bufferpairs.push_back(bp->get());
+      }
+
       Status s;
       while (!score_heap.empty()) {
         auto &top = score_heap.top();
         cc = get<2>(top);
 
-        cc->append_to_buffer_list(bl);
+        cc->append_to_buffer_pairs(bufferpairs);
 
         score_heap.pop();
 
@@ -194,16 +195,18 @@ namespace tensorflow {
         // pre-increment because we just added 1 to the chunk size
         // we're guaranteed that chunk size is at least 1
         if (++current_chunk_size == chunk_size_) {
-          OP_REQUIRES_OK(ctx, EnqueueBufferList(ctx, bl_ctr, current_chunk_size));
-          OP_REQUIRES_OK(ctx, buflist_pool_->GetResource(&bl_ctr));
-          bl = bl_ctr->get();
-          bl->resize(num_columns);
+          OP_REQUIRES_OK(ctx, EnqueueBufferPairs(ctx, bp_ctrs, current_chunk_size));
+          bufferpairs.clear();
+          for (auto& bp : bp_ctrs) {
+            OP_REQUIRES_OK(ctx, bufpair_pool_->GetResource(&bp));
+            bufferpairs.push_back(bp->get());
+          }
           current_chunk_size = 0;
         }
       }
 
       if (current_chunk_size > 0) {
-        OP_REQUIRES_OK(ctx, EnqueueBufferList(ctx, bl_ctr, current_chunk_size));
+        OP_REQUIRES_OK(ctx, EnqueueBufferPairs(ctx, bp_ctrs, current_chunk_size));
       }
 
       // Not sure if needed when using a queue runner?
@@ -212,31 +215,38 @@ namespace tensorflow {
 
   private:
     QueueInterface *queue_ = nullptr;
-    ReferencePool<Buffer> *buffer_pool_ = nullptr;
-    ReferencePool<BufferList> *buflist_pool_ = nullptr;
+    ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
     TensorShape enqueue_shape_{{2}}, num_records_shape_{};
     int chunk_size_;
 
     Status Init(OpKernelContext *ctx) {
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 1), &queue_));
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_list_pool", &buflist_pool_));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufpair_pool_));
       return Status::OK();
     }
 
-    Status EnqueueBufferList(OpKernelContext *ctx, ResourceContainer<BufferList> *bl_ctr, size_t chunk_size) {
+    Status EnqueueBufferPairs(OpKernelContext *ctx, vector<ResourceContainer<BufferPair>*> &bp_ctrs, size_t chunk_size) {
       QueueInterface::Tuple tuple; // just a vector<Tensor>
-      Tensor container_out, num_recs_out;
-      TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_STRING, enqueue_shape_, &container_out));
+      vector<Tensor> containers_out;
+      Tensor num_recs_out;
+      containers_out.resize(bp_ctrs.size());
+      for (auto& t : containers_out)
+        TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_STRING, enqueue_shape_, &t));
+
       TF_RETURN_IF_ERROR(ctx->allocate_temp(DT_INT32, num_records_shape_, &num_recs_out));
-      auto container_out_vec = container_out.vec<string>();
       num_recs_out.scalar<int>()() = chunk_size;
       tuple.push_back(num_recs_out);
-      container_out_vec(0) = bl_ctr->container();
-      container_out_vec(1) = bl_ctr->name();
-      tuple.push_back(container_out); // performs a shallow copy. Destructor doesn't release resources
+
+      for (size_t i = 0; i < bp_ctrs.size(); i++) {
+        auto container_out_vec = containers_out[i].vec<string>();
+        container_out_vec(0) = bp_ctrs[i]->container();
+        container_out_vec(1) = bp_ctrs[i]->name();
+        tuple.push_back(containers_out[i]); // performs a shallow copy. Destructor doesn't release resources
+      }
 
       TF_RETURN_IF_ERROR(queue_->ValidateTuple(tuple));
 
+      // This is the synchronous version
       Notification n;
       queue_->TryEnqueue(tuple, ctx, [&n]() { n.Notify(); });
       n.WaitForNotification();
