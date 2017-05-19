@@ -16,6 +16,18 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
 
+  // TODO should probalby put this in an H file somewhere
+  inline bool operator<(const Position& lhs, const Position& rhs) {
+    if (lhs.ref_index() < rhs.ref_index()) {
+      return true;
+    } else if (lhs.ref_index() == rhs.ref_index()) {
+      if (lhs.position() < rhs.position()) return true;
+      else return false;
+    } else
+      return false;
+  }
+
+
   class AGDVerifySortOp : public OpKernel {
   public:
     AGDVerifySortOp(OpKernelConstruction *context) : OpKernel(context) {
@@ -45,7 +57,9 @@ namespace tensorflow {
       auto chunksize = chunk_size_t->scalar<int>()();
 
       Status status;
-      int64_t prev_location = 0;
+      Position prev_position;
+      prev_position.set_ref_index(-1);
+      prev_position.set_position(-1);
       int index = 0;
       Alignment agd_result;
 
@@ -60,15 +74,15 @@ namespace tensorflow {
         while (status.ok()) {
           //agd_result = reinterpret_cast<const format::AlignmentResult*>(data);
           //LOG(INFO) << "AGD location is: " << agd_result->location_;
-          if (agd_result.location() < prev_location) {
+          if (agd_result.position() < prev_position) {
             LOG(INFO) << "AGD SET IS NOT SORTED. Offending entry in chunk " << i 
-              << " at index " << index << ". Prev: " << prev_location << " Curr: "
-              << agd_result.location();
+              << " at index " << index << ". Prev: " << prev_position.DebugString() << " Curr: "
+              << agd_result.position().DebugString();
 
             return;
           }
           index++;
-          prev_location = agd_result.location();
+          prev_position = agd_result.position();
           status = results_reader.GetNextResult(agd_result);
         }
       }

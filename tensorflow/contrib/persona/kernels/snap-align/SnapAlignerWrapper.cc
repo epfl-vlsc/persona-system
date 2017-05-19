@@ -214,14 +214,16 @@ namespace snap_wrapper {
           result.status[i] = NotFound;
           result.location[i] = InvalidGenomeLocation;
           finalLocations[i] = InvalidGenomeLocation;
-          results[i].set_location(finalLocations[i]);
+          //results[i].set_location(finalLocations[i]);
+          results[i].mutable_position()->set_position(0);
+          results[i].mutable_position()->set_ref_index(0);
         } else {
           if (addFrontClipping > 0) {
             cumulativePositiveAddFrontClipping[i] += addFrontClipping;
             read.setAdditionalFrontClipping(cumulativePositiveAddFrontClipping[i]);
           }
           finalLocations[i] += addFrontClipping;
-          results[i].set_location(finalLocations[i]); //update in the result itself
+          //results[i].set_location(finalLocations[i]); //update in the result itself
         }
         if (i == 1) // if i is 1 we need to redo the first one because the second has a location change
           i = -1;
@@ -232,6 +234,16 @@ namespace snap_wrapper {
     // Loop again now that all the adjustments worked correctly
     // TODO put an assert check here to make sure the read pair is properly formed
     for (size_t i = 0; i < 2; ++i) {
+      GenomeDistance extraBasesClippedBefore;
+      const Genome::Contig *contig = genome->getContigForRead(finalLocations[i], snap_reads[i].getDataLength(), &extraBasesClippedBefore);
+      _ASSERT(NULL != contig && contig->length > genome->getChromosomePadding());
+      if (extraBasesClippedBefore != 0) return errors::Internal("read location needs to be adjusted and SNAP post process fixed");
+      finalLocations[i] += extraBasesClippedBefore;
+
+      int contigIndex = (int)(contig - genome->getContigs());
+      GenomeLocation positionInContig = finalLocations[i] - contig->beginningLocation + 1; // SAM is 1-based
+      results[i].mutable_position()->set_position(positionInContig);
+      results[i].mutable_position()->set_ref_index(contigIndex);
       results[i].set_cigar(cigars[i]);
       result_column.AppendAlignmentResult(results[i]);
     }
@@ -289,7 +301,17 @@ namespace snap_wrapper {
         }
       }
     }
-    format_result.set_location(finalLocation);
+
+    GenomeDistance extraBasesClippedBefore;
+    const Genome::Contig *contig = genome->getContigForRead(finalLocation, snap_read.getDataLength(), &extraBasesClippedBefore);
+    _ASSERT(NULL != contig && contig->length > genome->getChromosomePadding());
+    finalLocation += extraBasesClippedBefore;
+
+    char* contigName = contig->name;
+    int contigIndex = (int)(contig - genome->getContigs());
+    GenomeLocation positionInContig = finalLocation - contig->beginningLocation + 1; // SAM is 1-based
+    format_result.mutable_position()->set_position(positionInContig);
+    format_result.mutable_position()->set_ref_index(contigIndex);
     format_result.set_cigar(cigar);
     result_column.AppendAlignmentResult(format_result);
     return Status::OK();
@@ -485,10 +507,8 @@ namespace snap_wrapper {
       }
     }
 
-    finalResult.set_location(genomeLocation);
     finalResult.set_mapping_quality(mapQuality);
     finalResult.set_flag(flags);
-    finalResult.set_next_location(mateLocation);
     finalResult.set_template_length(templateLength);
 
     const int cigarBufSize = MAX_READ * 2;

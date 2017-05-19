@@ -23,6 +23,16 @@ namespace tensorflow {
   using namespace std;
   using namespace errors;
 
+  inline bool operator<(const Position& lhs, const Position& rhs) {
+    if (lhs.ref_index() < rhs.ref_index()) {
+      return true;
+    } else if (lhs.ref_index() == rhs.ref_index()) {
+      if (lhs.position() < rhs.position()) return true;
+      else return false;
+    } else
+      return false;
+  }
+
   class AGDSortOp : public OpKernel {
   public:
     AGDSortOp(OpKernelConstruction *context) : OpKernel(context) {
@@ -119,13 +129,13 @@ namespace tensorflow {
             fwrite(data, size, 1, stdout);
             LOG(INFO) << "and size was " << size;
           }
-          entry.location = agd_result.location();
+          entry.position = agd_result.position();
           entry.chunk = i;
           entry.index = j;
           sort_index_.push_back(entry);
-          if (entry.location < 0)
+          /*if (entry.location < 0)
             LOG(INFO) << "location: " << entry.location << " at index " << entry.index << " in chunk "
-              << entry.chunk << " appears to be invalid.";
+              << entry.chunk << " appears to be invalid.";*/
 
           status = result_reader.GetNextRecord(&data, &size);
           j++;
@@ -135,7 +145,7 @@ namespace tensorflow {
       // phase 2: sort the vector by genome_location
       LOG(INFO) << "running std sort on " << sort_index_.size() << " SortEntry's";
       std::sort(sort_index_.begin(), sort_index_.end(), [](const SortEntry& a, const SortEntry& b) {
-          return a.location < b.location;
+          return a.position < b.position;
           });
 
       LOG(INFO) << "Sort finished.";
@@ -190,7 +200,9 @@ namespace tensorflow {
     ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
 
     struct SortEntry {
-      int64 location;
+      // should double check actual size of this, using a protobuf object here might
+      // not be a good idea
+      Position position;
       uint8_t chunk;
       int index;
     };

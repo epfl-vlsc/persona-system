@@ -84,8 +84,9 @@ namespace tensorflow {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
             LOG(INFO) << "length is " << length;
             agd_result.ParseFromArray(data, length);
-            printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result.location(), agd_result.flag(),
-                   agd_result.mapping_quality(), agd_result.next_location());
+            printf("Loc: %lld contig: %lld Flag: %04x MAPQ: %d Nextlog: %lld Nextcontig: %lld\n", agd_result.position().position(),
+                   agd_result.position().ref_index(), agd_result.flag(),
+                   agd_result.mapping_quality(), agd_result.next_position().position(), agd_result.next_position().ref_index());
             printf("CIGAR: %s \n\n", agd_result.cigar().c_str());
           } else if (columns_[i].find("secondary") != std::string::npos) {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
@@ -93,8 +94,9 @@ namespace tensorflow {
             if (length > 0) {
               if (!agd_result.ParsePartialFromArray(data, length))
                 LOG(INFO) << "parsing secondary returned false!, length was " << length;
-              printf("Loc: %lld Flag: %04x MAPQ: %d Next: %ld\n", agd_result.location(), agd_result.flag(),
-                     agd_result.mapping_quality(), agd_result.next_location());
+              printf("Loc: %lld contig: %lld Flag: %04x MAPQ: %d Nextloc: %lld Nextcontig: %lld\n", agd_result.position().position(),
+                     agd_result.position().ref_index(), agd_result.flag(),
+                     agd_result.mapping_quality(), agd_result.next_position().position(), agd_result.next_position().ref_index());
               printf("CIGAR: %s \n\n", agd_result.cigar().c_str());
             } else {
               printf("had an empty secondary result\n");

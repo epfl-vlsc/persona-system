@@ -3,6 +3,7 @@
 #include "bwa/bwamem.h"
 #include "bwa/bntseq.h"
 #include "tensorflow/contrib/persona/kernels/bwa-align/bwa/bwamem.h"
+#include "tensorflow/contrib/persona/kernels/bwa-align/bwa/bntseq.h"
 
 namespace bwa_wrapper {
   using namespace tensorflow;
@@ -134,15 +135,19 @@ namespace bwa_wrapper {
     flag |= bwaresult->rid < 0? 0x4 : 0; // is mapped
     flag |= bwamate && bwamate->rid < 0? 0x8 : 0; // is mate mapped
     if (bwaresult->rid < 0 && bwamate && bwamate->rid >= 0) { // copy mate to alignment
-      result.set_location(bwamate->pos + index_->bns->anns[bwamate->rid].offset);
-    } else
-      result.set_location(bwaresult->pos + index_->bns->anns[bwaresult->rid].offset);
+      result.mutable_position()->set_position(bwamate->pos); // + index_->bns->anns[bwamate->rid].offset);
+      result.mutable_position()->set_ref_index(bwamate->rid);
+    } else {
+      result.mutable_position()->set_position(bwaresult->pos); // + index_->bns->anns[bwamate->rid].offset);
+      result.mutable_position()->set_ref_index(bwaresult->rid);
+    }
 
     //LOG(INFO) << "location is: " << result.location_ - index_->bns->anns[bwaresult->rid].offset;
     flag |= bwaresult->is_rev? 0x10 : 0; // is on the reverse strand
     flag |= bwamate && bwamate->is_rev? 0x20 : 0; // is mate on the reverse strand
     result.set_flag(flag);
-    result.set_next_location(0);
+    //result.mutable_next_position()->set_position(0);
+    //result.mutable_next_position()->set_ref_name("");
     result.set_template_length(0);
     result.set_mapping_quality(bwaresult->mapq);
     cigar = "";
@@ -160,12 +165,20 @@ namespace bwa_wrapper {
       } else cigar = "*"; // having a coordinate but unaligned (e.g. when copy_mate is true)
     } 
 
-    if (bwamate && bwamate->rid >= 0)
-      result.set_next_location(bwamate->pos + index_->bns->anns[bwamate->rid].offset);
-    else if (bwamate)
-      result.set_next_location(result.location()); // mate unmapped, set next to this ones location
-    else
-      result.set_next_location(0); // there is no mate
+    if (bwamate && bwamate->rid >= 0){
+      //result.set_next_location(bwamate->pos + index_->bns->anns[bwamate->rid].offset);
+      result.mutable_next_position()->set_position(bwamate->pos);
+      result.mutable_next_position()->set_ref_index(bwamate->rid);
+    }
+    else if (bwamate) {
+      //result.set_next_location(result.location()); // mate unmapped, set next to this ones location
+      result.mutable_next_position()->set_position(result.position().position());
+      result.mutable_next_position()->set_ref_index(result.position().ref_index());
+    }
+    else {
+      result.mutable_next_position()->set_position(-1);
+      result.mutable_next_position()->set_ref_index(-1);
+    }
 
     if (bwamate && bwamate->rid >= 0) {
 

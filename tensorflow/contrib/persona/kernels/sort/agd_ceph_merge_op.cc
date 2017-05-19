@@ -27,6 +27,16 @@ namespace tensorflow {
   using namespace errors;
   using namespace format;
 
+  inline bool operator>(const Position& lhs, const Position& rhs) {
+    if (lhs.ref_index() > rhs.ref_index()) {
+      return true;
+    } else if (lhs.ref_index() == rhs.ref_index()) {
+      if (lhs.position() > rhs.position()) return true;
+      else return false;
+    } else
+      return false;
+  }
+
   namespace {
     const string op_name("AGDCephMerge");
 
@@ -54,7 +64,7 @@ namespace tensorflow {
         size_t data_sz;
         TF_RETURN_IF_ERROR(results_->PeekNextRecord(&data, &data_sz));
         current_result_.ParseFromArray(data, data_sz);
-        current_location_ = current_result_.location();
+        current_position_ = current_result_.position();
         return Status::OK();
       }
 
@@ -74,8 +84,8 @@ namespace tensorflow {
         return Status::OK();
       }
 
-      inline int64_t get_location() {
-        return current_location_;
+      inline Position get_location() {
+        return current_position_;
       }
 
       // this is supposed to be called from another thread because
@@ -98,7 +108,7 @@ namespace tensorflow {
       vector<unique_ptr<AGDRemoteRecordReader>> other_columns_;
       unique_ptr<AGDRemoteRecordReader> results_;
       Alignment current_result_;
-      int64_t current_location_ = -2048;
+      Position current_position_;
 
       static inline
       Status
@@ -117,7 +127,7 @@ namespace tensorflow {
       }
     };
 
-    typedef pair<int64_t, ColumnCursor*> GenomeScore;
+    typedef pair<Position, ColumnCursor*> GenomeScore;
     struct ScoreComparator {
       bool operator()(const GenomeScore &a, const GenomeScore &b) {
         return a.first > b.first;

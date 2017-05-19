@@ -4,11 +4,16 @@ option cc_enable_arenas = true;
 // this aims to be somewhat compatible with ga4gh
 // protobuf schemas -- experimental
 
+message Position {
+  int32 ref_index = 1;
+  int64 position = 2;
+}
+
 message Alignment {
   uint32 flag = 1;
   int32 mapping_quality = 2;
-  int64 location = 3;
-  int64 next_location = 4;
+  Position position = 3;
+  Position next_position = 4;
   int64 template_length = 5;
   string cigar = 6;
 }
