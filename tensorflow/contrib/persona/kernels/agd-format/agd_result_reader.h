@@ -1,6 +1,7 @@
 #pragma once
 
 #include "agd_record_reader.h"
+#include <utility>
 #include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 
 namespace tensorflow {
@@ -16,6 +17,9 @@ namespace tensorflow {
    */
   class AGDResultReader : public AGDRecordReader {
   public:
+
+    // class Position is defined by alignment.pb.h
+
     // metadata column is required to disambiguate results that mapped to 
     // the same position.
     // if null is passed, GetResultAtLocation will not work.
@@ -26,8 +30,7 @@ namespace tensorflow {
     // for log(n) performance. metadata may be used to disambiguate reads
     // that have mapped to the same position, which is likely. Also returns
     // the index position the read was found at.
-    // NB cigar is not a proper c-string
-    Status GetResultAtLocation(int64_t location, const char* metadata, 
+    Status GetResultAtPosition(Position& position, const char* metadata,
         size_t metadata_len, Alignment& result, size_t* index=nullptr);
 
     // Get or peek next alignment result in the index. 
@@ -41,13 +44,15 @@ namespace tensorflow {
 
     // is this location possibly contained
     // i.e. start_location_ <= location <= end_location_
-    bool IsPossiblyContained(int64_t location) {
-      return location >= start_location_ && location <= end_location_;
+    bool IsPossiblyContained(Position& position) {
+      return position.ref_index() >= start_position_.ref_index() && position.ref_index() <= end_position_.ref_index()
+              && position.position() >= start_position_.position() && position.position() <= end_position_.position();
     }
 
   private:
-    int64_t start_location_;
-    int64_t end_location_;
+
+    Position start_position_;
+    Position end_position_;
     AGDRecordReader* metadata_;
 
   };

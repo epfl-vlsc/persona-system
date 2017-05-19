@@ -257,13 +257,12 @@ namespace tensorflow {
             BAMAlignment *bam = (BAMAlignment *) (scratch_ + scratch_pos_);
             bam->block_size = (int) bamSize - 4;
 
-            int pos = FindChromosome(result.location(), ref_index);
-            bam->refID = ref_index;
-            bam->pos = pos;
+            bam->refID = result.position().ref_index();
+            bam->pos = result.position().position();
             bam->l_read_name = (_uint8) meta_len + 1;
             bam->MAPQ = result.mapping_quality();
-
-            int mate_pos = FindChromosome(result.next_location(), mate_ref_index);
+            bam->next_refID = result.next_position().ref_index();
+            bam->next_pos = result.next_position().position();
 
             int refLength = cigar_vec.size() > 0 ? 0 : base_len;
             for (int i = 0; i < cigar_vec.size(); i++) {
@@ -274,17 +273,15 @@ namespace tensorflow {
               if (IsNextUnmapped(result.flag())) {
                 bam->bin = BAMAlignment::reg2bin(-1, 0);
               } else {
-                bam->bin = BAMAlignment::reg2bin(mate_pos, mate_pos + 1);
+                bam->bin = BAMAlignment::reg2bin(bam->next_pos, bam->next_pos + 1);
               }
             } else {
-              bam->bin = BAMAlignment::reg2bin(pos, pos + refLength);
+              bam->bin = BAMAlignment::reg2bin(bam->pos, bam->pos + refLength);
             }
 
             bam->n_cigar_op = cigar_vec.size();
             bam->FLAG = result.flag();
             bam->l_seq = base_len;
-            bam->next_refID = mate_ref_index;
-            bam->next_pos = mate_pos;
             bam->tlen = (int) result.template_length();
             memcpy(bam->read_name(), meta, meta_len);
             bam->read_name()[meta_len] = 0;
@@ -426,14 +423,7 @@ namespace tensorflow {
         return Status::OK();
       }
 
-      int FindChromosome(int64_t location, int &ref_seq) {
-         int index = 0;
-         while (location > ref_size_totals_[index]) index++;
-         ref_seq = index;
-         return (index == 0) ? (int)location : (int)(location - ref_size_totals_[index-1]);
-      }
-    
-      Status LoadDataResource(OpKernelContext* ctx, const Tensor* handle_t, 
+      Status LoadDataResource(OpKernelContext* ctx, const Tensor* handle_t,
           ResourceContainer<Data>** container) {
         auto rmgr = ctx->resource_manager();
         auto handles_vec = handle_t->vec<string>();

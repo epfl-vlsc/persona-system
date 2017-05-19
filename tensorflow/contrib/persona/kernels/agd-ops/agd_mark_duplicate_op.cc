@@ -33,6 +33,10 @@ namespace tensorflow {
   using namespace errors;
   using namespace format;
 
+  inline bool operator==(const Position& lhs, const Position& rhs) {
+    return (lhs.ref_index() == rhs.ref_index() && lhs.position() == rhs.position());
+  }
+
   class AGDMarkDuplicatesOp : public OpKernel {
   public:
     AGDMarkDuplicatesOp(OpKernelConstruction *context) : OpKernel(context) {
@@ -122,11 +126,11 @@ namespace tensorflow {
       }
       //LOG(INFO) << "the location is: " << result->location_;
       if (IsForwardStrand(result->flag())) {
-        position = static_cast<uint32_t>(result->location() - sclip);
+        position = static_cast<uint32_t>(result->position().position() - sclip);
       } else {
         // im not 100% sure this is correct ...
         // but if it goes for every signature then it shouldn't matter
-        position = static_cast<uint32_t>(result->location() + ralen + eclip - 1);
+        position = static_cast<uint32_t>(result->position().position() + ralen + eclip - 1);
       }
       //LOG(INFO) << "position is now: " << position;
       if (position < 0)
@@ -198,7 +202,7 @@ namespace tensorflow {
       while (s.ok()) {
         if (!IsPrimary(result.flag()))
           OP_REQUIRES_OK(ctx, Internal("Non-primary result detected in primary result column at location ",
-                result.location()));
+                result.position().DebugString()));
         if (!IsPaired(result.flag())) {
           // we have a single alignment
           if (IsUnmapped(result.flag())) {
@@ -212,7 +216,7 @@ namespace tensorflow {
         } else { // we have a pair, get the mate
           OP_REQUIRES_OK(ctx, results_reader.GetNextResult(mate));
 
-          OP_REQUIRES(ctx, (result.next_location() == mate.location()) && (mate.next_location() == result.location()),
+          OP_REQUIRES(ctx, (result.next_position() == mate.position()) && (mate.next_position() == result.position()),
               Internal("Malformed pair or the data is not in metadata (QNAME) order. At index: ", results_reader.GetCurrentIndex()-1,
                 "result 1: ", result.DebugString(), " result2: ", mate.DebugString()));
 
@@ -231,6 +235,7 @@ namespace tensorflow {
             Signature sig;
             sig.is_forward = IsForwardStrand(result.flag());
             sig.is_mate_forward = IsForwardStrand(mate.flag());
+            // adjust position depending on cigar clipping
             OP_REQUIRES_OK(ctx, CalculatePosition(&result, sig.position));
             OP_REQUIRES_OK(ctx, CalculatePosition(&mate, sig.position_mate));
 
@@ -263,12 +268,15 @@ namespace tensorflow {
 
     struct Signature {
       uint32_t position = 0;
+      uint32_t ref_index = 0;
       uint32_t position_mate = 0;
+      uint32_t ref_index_mate = 0;
       bool is_forward = true;
       bool is_mate_forward = true;
       bool operator==(const Signature& s) {
         return (s.position == position) && (s.position_mate == position_mate)
-          && (s.is_forward == is_forward) && (s.is_mate_forward == is_mate_forward);
+          && (s.is_forward == is_forward) && (s.is_mate_forward == is_mate_forward)
+                && (s.ref_index == ref_index) && (s.ref_index_mate == ref_index_mate);
       }
       string ToString() const {
         return string("pos: ") + to_string(position) + " matepos: " + to_string(position_mate)
@@ -279,7 +287,8 @@ namespace tensorflow {
     struct EqSignature {
       bool operator()(Signature sig1, Signature sig2) const {
         return (sig1.position == sig2.position) && (sig1.position_mate == sig2.position_mate) 
-          && (sig1.is_forward == sig2.is_forward) && (sig1.is_mate_forward == sig2.is_mate_forward);
+          && (sig1.is_forward == sig2.is_forward) && (sig1.is_mate_forward == sig2.is_mate_forward)
+          && (sig1.ref_index == sig2.ref_index) && (sig1.ref_index_mate == sig2.ref_index_mate);
       }
     };
 
@@ -287,12 +296,16 @@ namespace tensorflow {
       size_t operator()(Signature const& s) const {
         size_t p = hash<uint32_t>{}(s.position);
         size_t pm = hash<uint32_t>{}(s.position_mate);
+        size_t ri = hash<uint32_t>{}(s.ref_index);
+        size_t rim = hash<uint32_t>{}(s.ref_index_mate);
         size_t i = hash<bool>{}(s.is_forward);
         size_t m = hash<bool>{}(s.is_mate_forward);
         // maybe this is too expensive
+        boost::hash_combine(ri, rim);
         boost::hash_combine(p, pm);
         boost::hash_combine(i, m);
         boost::hash_combine(p, i);
+        boost::hash_combine(p, ri);
         //LOG(INFO) << "hash was called on " << s.ToString() << " and value was: " << p;
         return p;
       }
