@@ -302,14 +302,18 @@ namespace snap_wrapper {
       }
     }
 
-    GenomeDistance extraBasesClippedBefore;
-    const Genome::Contig *contig = genome->getContigForRead(finalLocation, snap_read.getDataLength(), &extraBasesClippedBefore);
-    _ASSERT(NULL != contig && contig->length > genome->getChromosomePadding());
-    finalLocation += extraBasesClippedBefore;
+    GenomeLocation positionInContig = -1;
+    int contigIndex = -1;
+    if (result.status != NotFound) {
+      GenomeDistance extraBasesClippedBefore;
+      const Genome::Contig *contig = genome->getContigForRead(finalLocation, snap_read.getDataLength(), &extraBasesClippedBefore);
+      _ASSERT(NULL != contig && contig->length > genome->getChromosomePadding());
+      finalLocation += extraBasesClippedBefore;
 
-    char* contigName = contig->name;
-    int contigIndex = (int)(contig - genome->getContigs());
-    GenomeLocation positionInContig = finalLocation - contig->beginningLocation + 1; // SAM is 1-based
+      char* contigName = contig->name;
+      int contigIndex = (int)(contig - genome->getContigs());
+      positionInContig = finalLocation - contig->beginningLocation;
+    }
     format_result.mutable_position()->set_position(positionInContig);
     format_result.mutable_position()->set_ref_index(contigIndex);
     format_result.set_cigar(cigar);
