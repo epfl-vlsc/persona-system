@@ -215,8 +215,8 @@ namespace snap_wrapper {
           result.location[i] = InvalidGenomeLocation;
           finalLocations[i] = InvalidGenomeLocation;
           //results[i].set_location(finalLocations[i]);
-          results[i].mutable_position()->set_position(0);
-          results[i].mutable_position()->set_ref_index(0);
+          results[i].mutable_position()->set_position(-1);
+          results[i].mutable_position()->set_ref_index(-1);
         } else {
           if (addFrontClipping > 0) {
             cumulativePositiveAddFrontClipping[i] += addFrontClipping;
@@ -234,17 +234,6 @@ namespace snap_wrapper {
     // Loop again now that all the adjustments worked correctly
     // TODO put an assert check here to make sure the read pair is properly formed
     for (size_t i = 0; i < 2; ++i) {
-      GenomeDistance extraBasesClippedBefore;
-      const Genome::Contig *contig = genome->getContigForRead(finalLocations[i], snap_reads[i].getDataLength(), &extraBasesClippedBefore);
-      _ASSERT(NULL != contig && contig->length > genome->getChromosomePadding());
-      if (extraBasesClippedBefore != 0) return errors::Internal("read location needs to be adjusted and SNAP post process fixed");
-      finalLocations[i] += extraBasesClippedBefore;
-
-      int contigIndex = (int)(contig - genome->getContigs());
-      GenomeLocation positionInContig = finalLocations[i] - contig->beginningLocation + 1; // SAM is 1-based
-      results[i].mutable_position()->set_position(positionInContig);
-      results[i].mutable_position()->set_ref_index(contigIndex);
-      results[i].set_cigar(cigars[i]);
       result_column.AppendAlignmentResult(results[i]);
     }
 
@@ -302,21 +291,7 @@ namespace snap_wrapper {
       }
     }
 
-    GenomeLocation positionInContig = -1;
-    int contigIndex = -1;
-    if (result.status != NotFound) {
-      GenomeDistance extraBasesClippedBefore;
-      const Genome::Contig *contig = genome->getContigForRead(finalLocation, snap_read.getDataLength(), &extraBasesClippedBefore);
-      _ASSERT(NULL != contig && contig->length > genome->getChromosomePadding());
-      finalLocation += extraBasesClippedBefore;
-
-      char* contigName = contig->name;
-      int contigIndex = (int)(contig - genome->getContigs());
-      positionInContig = finalLocation - contig->beginningLocation;
-    }
-    format_result.mutable_position()->set_position(positionInContig);
-    format_result.mutable_position()->set_ref_index(contigIndex);
-    format_result.set_cigar(cigar);
+    //format_result.set_cigar(cigar);
     result_column.AppendAlignmentResult(format_result);
     return Status::OK();
   }
@@ -439,7 +414,7 @@ namespace snap_wrapper {
 
       contigName = contig->name;
       contigIndex = (int)(contig - genome->getContigs());
-      positionInContig = genomeLocation - contig->beginningLocation + 1; // SAM is 1-based
+      positionInContig = genomeLocation - contig->beginningLocation; // SAM is 1-based
       mapQuality = max(0, min(70, mapQuality));       // FIXME: manifest constant.
     } else {
       flags |= SAM_UNMAPPED;
@@ -457,7 +432,7 @@ namespace snap_wrapper {
         mateLocation += mateExtraBasesClippedBefore;
         matecontigName = mateContig->name;
         mateContigIndex = (int)(mateContig - genome->getContigs());
-        matePositionInContig = mateLocation - mateContig->beginningLocation + 1;
+        matePositionInContig = mateLocation - mateContig->beginningLocation;
 
         if (mateDirection == RC) {
           flags |= SAM_NEXT_REVERSED;
@@ -509,11 +484,16 @@ namespace snap_wrapper {
       if (contigName == matecontigName) {
         matecontigName = "=";     // SAM Spec says to do this when they're equal (and not *, which won't happen because this is a pointer, not string, compare)
       }
+      finalResult.mutable_next_position()->set_position(matePositionInContig);
+      finalResult.mutable_next_position()->set_ref_index(mateContigIndex);
     }
 
     finalResult.set_mapping_quality(mapQuality);
     finalResult.set_flag(flags);
     finalResult.set_template_length(templateLength);
+    finalResult.mutable_position()->set_position(positionInContig);
+    finalResult.mutable_position()->set_ref_index(contigIndex);
+
 
     const int cigarBufSize = MAX_READ * 2;
     char cigarBuf[cigarBufSize];
@@ -532,8 +512,10 @@ namespace snap_wrapper {
       if (*addFrontClipping != 0) {
         // higher up the call stack deals with this
         //return errors::Internal("something went horribly wrong creating a cigar string");
-      } else
+      } else {
         cigar = thecigar;
+        finalResult.set_cigar(thecigar);
+      }
     }
 
     return Status::OK();
