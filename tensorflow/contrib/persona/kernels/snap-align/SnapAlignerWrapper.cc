@@ -226,9 +226,10 @@ namespace snap_wrapper {
           //results[i].set_location(finalLocations[i]); //update in the result itself
         }
         if (i == 1) // if i is 1 we need to redo the first one because the second has a location change
-          i = -1;
+          i -= 2;
+        else
+          i -= 1; // just redo the first now
       }
-      //LOG(INFO) << "cigar is: " << cigars[i];
     }
 
     // Loop again now that all the adjustments worked correctly
