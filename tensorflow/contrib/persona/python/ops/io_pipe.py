@@ -143,7 +143,7 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, pool_
         for handle, record_type in zip(column_handles, record_types):
             check_valid_record_type(record_type=record_type)
             full_key = string_ops.string_join([key, suffix_separator, record_type["extension"]])
-            return writer_op(cluster_name=cluster_name,
+            yield writer_op(cluster_name=cluster_name,
                              user_name=user_name,
                              ceph_conf_path=ceph_conf_path,
                              pool_name=pool_name,
