@@ -94,23 +94,23 @@ namespace tensorflow {
           subchunk_status = Status::OK();
           while (subchunk_status.ok()) {
             // assume reads are successive.
-            for (size_t i = 0; i < 2; ++i) {
-              auto &sread = snap_read[i];
+            size_t read_idx;
+            for (read_idx = 0; read_idx < 2; ++read_idx) {
+              auto &sread = snap_read[read_idx];
               subchunk_status = subchunk_resource->get_next_record(sread);
               if (subchunk_status.ok()) {
                 sread.clip(options_->clipping);
-                useless[i] = sread.getDataLength() < options_->minReadLength && sread.countOfNs() > options_->maxDist;
+                useless[read_idx] = sread.getDataLength() < options_->minReadLength && sread.countOfNs() > options_->maxDist;
               } else {
                 break;
               }
             }
 
             if (!subchunk_status.ok()) {
-              if (IsResourceExhausted(subchunk_status)) {
+              if (!(IsResourceExhausted(subchunk_status) && read_idx == 0)) {
                 LOG(ERROR) << "Subchunk is exhausted on an odd number of records";
+                subchunk_status = Internal("Unable to get 2 records for snap read. Must have an even number in the subchunking!");
               }
-              subchunk_status = Internal(
-                      "Unable to get 2 records for snap read. Must have an even number in the subchunking!");
               break;
             }
 
