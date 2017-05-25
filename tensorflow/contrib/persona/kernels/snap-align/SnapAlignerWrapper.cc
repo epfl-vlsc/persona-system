@@ -28,8 +28,8 @@ namespace snap_wrapper {
     return Status::OK();
   }
 
-  PairedAligner::PairedAligner(const PairedAlignerOptions *options_, GenomeIndex *index, int max_secondary) :
-    options(options_), format(options_->useM), genome(index->getGenome()), max_secondary_(max_secondary) {
+  PairedAligner::PairedAligner(const PairedAlignerOptions *options_, GenomeIndex *index) :
+    options(options_), format(options_->useM), genome(index->getGenome()) {
     size_t memoryPoolSize = IntersectingPairedEndAligner::getBigAllocatorReservation(
                                 index,
                                 options->intersectingAlignerMaxHits,
@@ -136,6 +136,8 @@ namespace snap_wrapper {
     }
 
     allocator->checkCanaries();
+    secondary_results_.reset(new PairedAlignmentResult[maxPairedSecondaryHits_]);
+    secondary_single_results_.reset(new SingleAlignmentResult[maxSingleSecondaryHits_]);
   }
 
   PairedAligner::~PairedAligner() {
@@ -146,10 +148,11 @@ namespace snap_wrapper {
     // No need to call delete on allocator. unique_ptr takes care of it
   }
 
+  // FIXME need to pass in max_secondary to this method
   void
-  PairedAligner::align(array<Read, 2> &snap_reads, PairedAlignmentResult &result,
-      PairedAlignmentResult* secondary_results, int* num_secondary_results, 
-      SingleAlignmentResult* secondary_single_results, int* num_secondary_single_results_first,
+  PairedAligner::align(array<Read, 2> &snap_reads, PairedAlignmentResult &result, int max_secondary,
+      PairedAlignmentResult** secondary_results, int* num_secondary_results,
+      SingleAlignmentResult** secondary_single_results, int* num_secondary_single_results_first,
       int* num_secondary_single_results_second) {
 
     aligner->align(&snap_reads[0], &snap_reads[1],
@@ -157,13 +160,14 @@ namespace snap_wrapper {
                    options->maxSecondaryAlignmentAdditionalEditDistance,
                    maxPairedSecondaryHits_, // secondary results buffer size
                    num_secondary_results,
-                   secondary_results, // secondary results buffer
+                   secondary_results_.get(), // secondary results buffer
                    maxSingleSecondaryHits_, // single secondary buffer size
-                   max_secondary_, // maxSecondaryAlignmentsToReturn
+                   max_secondary, //max_secondary_, // maxSecondaryAlignmentsToReturn
                    num_secondary_single_results_first,
                    num_secondary_single_results_second,
-                   secondary_single_results); // more stuff related to secondary results
-
+                   secondary_single_results_.get()); // more stuff related to secondary results
+    *secondary_results = secondary_results_.get();
+    *secondary_single_results = secondary_single_results_.get();
   }
 
   Status

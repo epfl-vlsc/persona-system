@@ -18,7 +18,13 @@ namespace tensorflow {
     // create a threadpool to execute stuff
     workers_.reset(new thread::ThreadPool(env, "SnapSingle", num_threads_));
     request_queue_.reset(new ConcurrentQueue<std::shared_ptr<ResourceContainer<ReadResource>>>(capacity));
-    init_workers();
+    auto s = snap_wrapper::init();
+    if (s.ok()) {
+      init_workers();
+    } else {
+      LOG(ERROR) << "Unable to run snap_wrapper::init()";
+      compute_status_ = s;
+    }
   }
 
   SnapSingleExecutor::~SnapSingleExecutor() {
@@ -113,12 +119,6 @@ namespace tensorflow {
       ReadResource *subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
 
-      //time_log timeLog;
-      uint64 total = 0;
-      //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
-      //std::chrono::high_resolution_clock::time_point end_time;
-
-      int num_reads_processed = 0;
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
         shared_ptr<ResourceContainer < ReadResource> > reads_container;
@@ -178,7 +178,6 @@ namespace tensorflow {
             auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc,
                                                      false);
 
-            num_reads_processed++;
             if (!s.ok()) {
               LOG(ERROR) << "adjustResults did not return OK!!!";
               compute_status_ = s;
@@ -219,19 +218,12 @@ namespace tensorflow {
         }
       }
 
-      //std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
-      /*struct rusage usage;
-      int ret = getrusage(RUSAGE_THREAD, &usage);*/
-
-      double total_s = (double) total / 1000000.0f;
-
       base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
       VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_.fetch_sub(1, memory_order_relaxed);
     };
+    num_active_threads_ = num_threads_;
     for (int i = 0; i < num_threads_; i++)
       workers_->Schedule(aligner_func);
-    num_active_threads_ = num_threads_;
   }
-
-}
+} // namespace tensorflow {
