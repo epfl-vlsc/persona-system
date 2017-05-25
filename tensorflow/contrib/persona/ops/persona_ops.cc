@@ -694,15 +694,13 @@ containing the alignment candidates.
   REGISTER_OP("SnapAlignPaired")
   .Attr("subchunk_size: int >= 1")
   .Attr("max_secondary: int >= 0")
-  .Input("genome_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
   .Input("executor_handle: Ref(string)")
   .Output("result_buf_handle: string")
   .SetIsStateful()
   .SetShapeFn([](InferenceContext *c) {
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < 3; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
       int max_secondary = 0;
