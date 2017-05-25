@@ -60,6 +60,18 @@ class ConcurrentQueue {
 
  };
 
+  template <typename T>
+  class ScopeDropIfEqual {
+  public:
+    ScopeDropIfEqual(ConcurrentQueue<T> &queue, T &item) : queue_(queue), item_(item) {}
+    ~ScopeDropIfEqual() {
+      queue_.drop_if_equal(item_);
+    }
+  private:
+    ConcurrentQueue<T> &queue_;
+    T &item_;
+  };
+
 template <typename T>
 bool ConcurrentQueue<T>::peek(T& item) {
   bool popped = false;

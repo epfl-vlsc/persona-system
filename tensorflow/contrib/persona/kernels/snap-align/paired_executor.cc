@@ -78,6 +78,7 @@ namespace tensorflow {
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
+        ScopeDropIfEqual<decltype(reads_container)> scope_dropper(*request_queue_, reads_container);
 
         auto *reads = reads_container->get();
 
@@ -189,7 +190,6 @@ namespace tensorflow {
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         } // io chunk loop
 
-        request_queue_->drop_if_equal(reads_container);
         LOG(INFO) << "Use count on reads container: " << reads_container.use_count();
       }
 
