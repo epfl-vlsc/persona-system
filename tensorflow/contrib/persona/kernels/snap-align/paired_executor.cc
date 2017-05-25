@@ -49,13 +49,7 @@ namespace tensorflow {
   void SnapPairedExecutor::init_workers() {
 
     auto aligner_func = [this]() {
-      int my_id = id_.fetch_add(1, memory_order_relaxed);
-
-      int capacity = request_queue_->capacity();
-
       snap_wrapper::PairedAligner aligner(options_, index_);
-
-      bool first_is_primary = true; // we only ever generate one result
 
       PairedAlignmentResult primaryResult;
       vector<AlignmentResultBuilder> result_builders;

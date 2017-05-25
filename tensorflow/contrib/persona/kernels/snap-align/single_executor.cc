@@ -100,17 +100,13 @@ namespace tensorflow {
       base_aligner->setExplorePopularSeeds(options_->explorePopularSeeds);
       base_aligner->setStopOnFirstHit(options_->stopOnFirstHit);
 
-      const char *bases, *qualities;
-      size_t bases_len, qualities_len;
       SingleAlignmentResult primaryResult;
       vector<SingleAlignmentResult> secondaryResults;
       secondaryResults.resize(alignmentResultBufferCount);
 
       int num_secondary_results;
-      SAMFormat format(options_->useM);
       vector<AlignmentResultBuilder> result_builders;
       string cigarString;
-      int flag;
       Read snap_read;
       LandauVishkinWithCigar lvc;
       size_t num_columns;
@@ -172,8 +168,6 @@ namespace tensorflow {
                     num_columns-1, // maximum number of secondary results
                     &secondaryResults[0] //secondaryResults
             );
-
-            flag = 0;
 
             // First, write the primary results
             auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc,

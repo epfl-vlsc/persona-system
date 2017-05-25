@@ -46,7 +46,7 @@ namespace tensorflow {
     const Genome *genome_ = nullptr;
     volatile bool run_ = true;
 
-    std::atomic_uint_fast32_t num_active_threads_, id_{0};
+    std::atomic_uint_fast32_t num_active_threads_;
     mutex mu_;
 
     int num_threads_;
