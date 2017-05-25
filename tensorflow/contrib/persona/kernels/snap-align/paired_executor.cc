@@ -182,8 +182,6 @@ namespace tensorflow {
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         } // io chunk loop
-
-        LOG(INFO) << "Use count on reads container: " << reads_container.use_count();
       }
 
       VLOG(INFO) << "base aligner thread ending.";
