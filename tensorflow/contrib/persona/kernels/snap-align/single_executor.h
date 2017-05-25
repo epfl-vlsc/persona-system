@@ -38,6 +38,7 @@ namespace tensorflow {
     // should be thread safe
     Status EnqueueChunk(std::shared_ptr<ResourceContainer < ReadResource > > chunk);
 
+    Status ok() const;
 
   private:
     GenomeIndex *index_ = nullptr;

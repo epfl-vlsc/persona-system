@@ -214,7 +214,7 @@ namespace tensorflow {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status
                      << "\n";
           compute_status_ = io_chunk_status;
-          return;
+          break;
         }
       }
 
@@ -225,5 +225,9 @@ namespace tensorflow {
     num_active_threads_ = num_threads_;
     for (int i = 0; i < num_threads_; i++)
       workers_->Schedule(aligner_func);
+  }
+
+  Status SnapSingleExecutor::ok() const {
+    return compute_status_;
   }
 } // namespace tensorflow {

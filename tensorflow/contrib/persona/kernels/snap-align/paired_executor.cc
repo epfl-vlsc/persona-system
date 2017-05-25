@@ -178,16 +178,19 @@ namespace tensorflow {
                 i++;
               }
             }
-          }
+          } // subchunk loop
 
           if (!IsResourceExhausted(subchunk_status)) {
             compute_status_ = subchunk_status;
             run_ = false;
-            return;
+            break;
           }
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
-        }
+        } // io chunk loop
+
+        request_queue_->drop_if_equal(reads_container);
+        LOG(INFO) << "Use count on reads container: " << reads_container.use_count();
       }
 
       VLOG(INFO) << "base aligner thread ending.";
@@ -197,6 +200,10 @@ namespace tensorflow {
     num_active_threads_ = num_threads_;
     for (uint_fast32_t i = 0; i < num_threads_; i++)
       workers_->Schedule(aligner_func);
+  }
+
+  Status SnapPairedExecutor::ok() const {
+    return compute_status_;
   }
 
 } // namespace tensorflow {
