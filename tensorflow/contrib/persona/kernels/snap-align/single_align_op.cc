@@ -81,6 +81,7 @@ class SnapAlignSingleOp : public OpKernel {
     }
 
     n.WaitForNotification();
+    OP_REQUIRES_OK(ctx, executor_->ok());
   }
 
 private:

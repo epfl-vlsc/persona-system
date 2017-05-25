@@ -54,17 +54,18 @@ class SnapAlignPairedOp : public OpKernel {
     OP_REQUIRES_OK(ctx, reads->split(subchunk_size_, buffer_lists_));
 
     Notification n;
-    OP_REQUIRES_OK(ctx, executor_->EnqueueChunk(shared_ptr<ResourceContainer<ReadResource>>(
+    shared_ptr<ResourceContainer<ReadResource>> container_wrapper(
             reads_container, [this, ctx, &n](ResourceContainer<ReadResource> *rr) {
               ResourceReleaser<ReadResource> a(*rr);
               {
                 ReadResourceReleaser r(*rr->get());
                 n.Notify();
               }
-            }
-    )));
+            });
+    OP_REQUIRES_OK(ctx, executor_->EnqueueChunk(move(container_wrapper)));
 
     n.WaitForNotification();
+    OP_REQUIRES_OK(ctx, executor_->ok());
   }
 
 private:
@@ -88,16 +89,16 @@ private:
 
   Status GetResultBufferLists(OpKernelContext* ctx)
   {
-    ResourceContainer<BufferList> **ctr;
+    ResourceContainer<BufferList> *ctr;
     Tensor* out_t;
     TF_RETURN_IF_ERROR(ctx->allocate_output("result_buf_handle", resource_container_shape_, &out_t));
     auto out_matrix = out_t->matrix<string>();
     for (int i = 0; i < max_secondary_+1; i++) {
-      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(ctr));
-      (*ctr)->get()->reset();
-      buffer_lists_[i] = (*ctr)->get();
-      out_matrix(i, 0) = (*ctr)->container();
-      out_matrix(i, 1) = (*ctr)->name();
+      TF_RETURN_IF_ERROR(buflist_pool_->GetResource(&ctr));
+      ctr->get()->reset();
+      buffer_lists_[i] = ctr->get();
+      out_matrix(i, 0) = ctr->container();
+      out_matrix(i, 1) = ctr->name();
     }
 
     return Status::OK();
