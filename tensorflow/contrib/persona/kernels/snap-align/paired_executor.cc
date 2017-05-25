@@ -53,7 +53,6 @@ namespace tensorflow {
 
       PairedAlignmentResult primaryResult;
       vector<AlignmentResultBuilder> result_builders;
-      string cigarString;
       array<Read, 2> snap_read;
       LandauVishkinWithCigar lvc;
 
