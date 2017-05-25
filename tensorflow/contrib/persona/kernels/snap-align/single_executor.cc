@@ -176,38 +176,48 @@ namespace tensorflow {
             if (!s.ok()) {
               LOG(ERROR) << "adjustResults did not return OK!!!";
               compute_status_ = s;
-              return;
+              break;
             }
 
             // Then write the secondary results if we specified them
-            for (int i = 0; i < num_secondary_results; i++) {
+            for (decltype(num_secondary_results) i = 0; i < num_secondary_results; i++) {
               s = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[i], result_builders[i + 1], genome_,
                                                   &lvc, true);
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
-                compute_status_ = s;
-                return;
+                break;
               }
             }
-            for (int i = num_secondary_results+1; i < num_columns; i++) {
-              // fill the columns with empties to maintain index equivalence
-              result_builders[i].AppendEmpty();
+
+            if (s.ok()) {
+              for (decltype(num_secondary_results) i = num_secondary_results+1; i < num_columns; i++) {
+                // fill the columns with empties to maintain index equivalence
+                result_builders[i].AppendEmpty();
+              }
+            } else {
+              compute_status_ = s;
+              break;
             }
           }
 
           if (!IsResourceExhausted(subchunk_status)) {
             LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
             compute_status_ = subchunk_status;
-            return;
+            break;
+          } else if (!compute_status_.ok()) {
+            break;
           }
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         }
 
-        if (!IsResourceExhausted(io_chunk_status)) {
+        auto compute_error = !compute_status_.ok();
+        if (!IsResourceExhausted(io_chunk_status) || compute_error) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status
                      << "\n";
-          compute_status_ = io_chunk_status;
+          if (!compute_error)
+            compute_status_ = io_chunk_status;
+          run_ = false;
           break;
         }
       }
