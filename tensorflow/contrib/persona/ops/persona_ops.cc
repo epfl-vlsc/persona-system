@@ -1016,8 +1016,13 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   .Input("qualities_handle: string")
   .Input("metadata_handle: string")
   .Input("num_records: int32")
+          .Output("chunk: int32")
   .SetShapeFn([](InferenceContext* c) {
-    return NoOutputs(c);
+      for (size_t i = 1; i < 3; i++)
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      TF_RETURN_IF_ERROR(check_scalar(c, 4));
+      c->set_output(0, c->Scalar());
+      return Status::OK();
     })
   .SetIsStateful()
   .Doc(R"doc(
