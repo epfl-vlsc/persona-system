@@ -427,6 +427,8 @@ namespace snap_wrapper {
       extraBasesClippedBefore = 0;
     }
 
+    finalResult.mutable_next_position()->set_position(-1);
+    finalResult.mutable_next_position()->set_ref_index(-1);
 
     if (hasMate) {
       flags |= SAM_MULTI_SEGMENT;

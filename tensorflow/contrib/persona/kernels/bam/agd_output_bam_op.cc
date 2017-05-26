@@ -1,3 +1,7 @@
+
+// Stuart Byma
+// Using BAM format headers/processing from SNAP
+
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "tensorflow/core/framework/shape_inference.h"
@@ -43,27 +47,23 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, ctx->GetAttr("ref_seq_sizes", &ref_sizes_));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("sort_order", &sort_order));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads_));
+        LOG(INFO) << "using " << num_threads_ << " threads";
 
         OP_REQUIRES(ctx, ref_seqs_.size() == ref_sizes_.size(), 
             Internal("ref seqs was not same size as ref seq sizes lists"));
         stringstream header_ss;
         header_ss << "@HD\tVN:1.4\tSO:";
         header_ss << sort_order << endl;
-        /*for (int i = 0; i < ref_seqs.size(); i++) {
-          header_ss << "@SQ SN:" << ref_seqs[i] << " LN:" << to_string(ref_seq_sizes[i]) << endl;
-        }*/
         ref_size_totals_.reserve(ref_seqs_.size());
         int64_t total = 0;
         for (int i = 0; i < ref_seqs_.size(); i++) {
           total += ref_sizes_[i];
-          //ref_vec.push_back(RefData(ref_seqs_[i], ref_sizes_[i]));
           ref_size_totals_.push_back(total);
         }
         // open the file, we dont write yet
         bam_fp_ = fopen(path.c_str(), "w");
         header_ = header_ss.str();
 
-        //LOG(INFO) << "num_threads is " << num_threads_;
         buffer_queue_.reset(new ConcurrentQueue<BufferRef>(num_threads_*2));
         compress_queue_.reset(new ConcurrentQueue<CompressItem>(num_threads_*2));
         write_queue_.reset(new PriorityConcurrentQueue<WriteItem>(num_threads_*2));
@@ -73,7 +73,6 @@ namespace tensorflow {
         buffers_.resize(num_threads_*2);
         for (int i = 0; i < num_threads_*2; i++) {
           buffers_[i].reset(new char[buffer_size_]);
-          //LOG(INFO) << "pushing back a buffer";
           buffer_queue_->push(&buffers_[i]);
         }
         
@@ -82,7 +81,6 @@ namespace tensorflow {
 
       ~AgdOutputBamOp() override {
         // drain the queues first
-        //LOG(INFO) << "waiting for c queues ...";
         while (compress_queue_->size() > 0) {
           this_thread::sleep_for(chrono::milliseconds(10));
         }
@@ -176,12 +174,6 @@ namespace tensorflow {
           first_ = false;
         }
 
-        Tensor* out_t;
-        OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk", TensorShape({}), &out_t));
-        auto& out = out_t->scalar<int32>()();
-        out = count_;
-        count_++;
-
         const Tensor *results_in, *bases_in, *qualities_in, *metadata_in, *num_records_t;
         OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
         OP_REQUIRES_OK(ctx, ctx->input("results_handle", &results_in));
@@ -223,11 +215,13 @@ namespace tensorflow {
           OP_REQUIRES_OK(ctx, meta_reader.GetNextRecord(&meta, &meta_len));
           OP_REQUIRES_OK(ctx, base_reader.GetNextRecord(&base, &base_len));
           OP_REQUIRES_OK(ctx, qual_reader.GetNextRecord(&qual, &qual_len));
+          // cut off the metadata, it can't have spaces apparently
           const char* occ = strchr(meta, ' ');
           if (occ) 
             meta_len = occ - meta;
 
-          // write an entry for each result, skip emtpy secondaries
+          LOG(INFO) << "processing record " << string(meta, meta_len);
+          // write an entry for each result, skip empty secondaries
           for (uint32 i = 0; i < result_readers.size(); i++) {
             //OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));
             s = result_readers[i]->GetNextResult(result);
@@ -302,6 +296,8 @@ namespace tensorflow {
 
            // s = result_readers.GetNextRecord(&data, &len);
           }
+
+          s = result_readers[0]->PeekNextResult(result);
         }
 
         resource_releaser(bases_data);
@@ -309,6 +305,13 @@ namespace tensorflow {
         resource_releaser(meta_data);
         for (auto d : results_data)
           resource_releaser(d);
+
+
+        Tensor* out_t;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk", TensorShape({}), &out_t));
+        auto& out = out_t->scalar<int32>()();
+        out = count_;
+        count_++;
 
       }
 
@@ -471,8 +474,8 @@ namespace tensorflow {
             auto index = get<4>(item); 
 
             compressed_size = 0;
-            //LOG(INFO) << my_id <<  " compressor compressing index " << index << " at size " << in_size << " bytes to " 
-              //<< " output buf with size " << out_size;
+            //LOG(INFO) << my_id <<  " compressor compressing index " << index << " at size " << in_size << " bytes to "
+             // << " output buf with size " << out_size;
             Status s = CompressToBuffer(in_buf->get(), in_size, out_buf->get(), out_size, compressed_size);
             if (!s.ok()) {
               LOG(ERROR) << "Error in compress and write";
