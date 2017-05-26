@@ -36,15 +36,15 @@ class SnapAlignSingleOp : public OpKernel {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("subchunk_size", &subchunk_size_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("max_secondary", &max_secondary_));
       resource_container_shape_ = TensorShape({max_secondary_+1, 2});
-
     }
 
     ~SnapAlignSingleOp() override {
       core::ScopedUnref buflist_pool_unref(buflist_pool_);
+      core::ScopedUnref executor_resource_unref(executor_resource_);
     }
 
   void Compute(OpKernelContext* ctx) override {
-    if (executor_resource_ == nullptr) {
+    if (!executor_resource_) {
       OP_REQUIRES_OK(ctx, InitHandles(ctx));
     }
 
@@ -67,13 +67,13 @@ class SnapAlignSingleOp : public OpKernel {
               ResourceReleaser<ReadResource> a(*rr);
               {
                 ReadResourceReleaser r(*rr->get());
+                n.Notify();
               }
-              n.Notify();
             }
     )));
 
     Tensor* out_t;
-    OP_REQUIRES_OK(ctx, ctx->allocate_output("result_buf_handle", TensorShape({max_secondary_+1, 2}), &out_t));
+    OP_REQUIRES_OK(ctx, ctx->allocate_output("result_buf_handle", resource_container_shape_, &out_t));
     auto out_matrix = out_t->matrix<string>();
     for (int i = 0; i < max_secondary_+1; i++) {
       out_matrix(i, 0) = result_buffers[i]->container();
@@ -81,22 +81,17 @@ class SnapAlignSingleOp : public OpKernel {
     }
 
     n.WaitForNotification();
+    OP_REQUIRES_OK(ctx, executor_->ok());
   }
-
 
 private:
   ReferencePool<BufferList> *buflist_pool_ = nullptr;
   BasicContainer<SnapSingleExecutor> *executor_resource_ = nullptr;
   SnapSingleExecutor* executor_;
-  int subchunk_size_;
-  int max_secondary_;
-
+  int subchunk_size_, max_secondary_;
   vector <BufferList*> buffer_lists_; // just used as a cache to proxy the ResourceContainer<BufferList> instances to split()
-
   mutex mu_;
-
   TensorShape resource_container_shape_;
-
 
   Status InitHandles(OpKernelContext* ctx)
   {
