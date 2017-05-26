@@ -18,7 +18,13 @@ namespace tensorflow {
     // create a threadpool to execute stuff
     workers_.reset(new thread::ThreadPool(env, "SnapSingle", num_threads_));
     request_queue_.reset(new ConcurrentQueue<std::shared_ptr<ResourceContainer<ReadResource>>>(capacity));
-    init_workers();
+    auto s = snap_wrapper::init();
+    if (s.ok()) {
+      init_workers();
+    } else {
+      LOG(ERROR) << "Unable to run snap_wrapper::init()";
+      compute_status_ = s;
+    }
   }
 
   SnapSingleExecutor::~SnapSingleExecutor() {
@@ -94,17 +100,13 @@ namespace tensorflow {
       base_aligner->setExplorePopularSeeds(options_->explorePopularSeeds);
       base_aligner->setStopOnFirstHit(options_->stopOnFirstHit);
 
-      const char *bases, *qualities;
-      size_t bases_len, qualities_len;
       SingleAlignmentResult primaryResult;
       vector<SingleAlignmentResult> secondaryResults;
       secondaryResults.resize(alignmentResultBufferCount);
 
       int num_secondary_results;
-      SAMFormat format(options_->useM);
       vector<AlignmentResultBuilder> result_builders;
       string cigarString;
-      int flag;
       Read snap_read;
       LandauVishkinWithCigar lvc;
       size_t num_columns;
@@ -113,18 +115,13 @@ namespace tensorflow {
       ReadResource *subchunk_resource = nullptr;
       Status io_chunk_status, subchunk_status;
 
-      //time_log timeLog;
-      uint64 total = 0;
-      //timeLog.end_subchunk = std::chrono::high_resolution_clock::now();
-      //std::chrono::high_resolution_clock::time_point end_time;
-
-      int num_reads_processed = 0;
       while (run_) {
         // reads must be in this scope for the custom releaser to work!
         shared_ptr<ResourceContainer < ReadResource> > reads_container;
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
+        ScopeDropIfEqual<decltype(reads_container)> scope_dropper(*request_queue_, reads_container);
 
         auto *reads = reads_container->get();
 
@@ -172,66 +169,69 @@ namespace tensorflow {
                     &secondaryResults[0] //secondaryResults
             );
 
-            flag = 0;
-
             // First, write the primary results
             auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc,
                                                      false);
 
-            num_reads_processed++;
             if (!s.ok()) {
               LOG(ERROR) << "adjustResults did not return OK!!!";
               compute_status_ = s;
-              return;
+              break;
             }
 
             // Then write the secondary results if we specified them
-            for (int i = 0; i < num_secondary_results; i++) {
+            for (decltype(num_secondary_results) i = 0; i < num_secondary_results; i++) {
               s = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[i], result_builders[i + 1], genome_,
                                                   &lvc, true);
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
-                compute_status_ = s;
-                return;
+                break;
               }
             }
-            for (int i = num_secondary_results+1; i < num_columns; i++) {
-              // fill the columns with empties to maintain index equivalence
-              result_builders[i].AppendEmpty();
+
+            if (s.ok()) {
+              for (decltype(num_secondary_results) i = num_secondary_results+1; i < num_columns; i++) {
+                // fill the columns with empties to maintain index equivalence
+                result_builders[i].AppendEmpty();
+              }
+            } else {
+              compute_status_ = s;
+              break;
             }
           }
 
           if (!IsResourceExhausted(subchunk_status)) {
             LOG(ERROR) << "Subchunk iteration ended without resource exhaustion!";
             compute_status_ = subchunk_status;
-            return;
+            break;
+          } else if (!compute_status_.ok()) {
+            break;
           }
 
           io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs);
         }
 
-        request_queue_->drop_if_equal(reads_container);
-        if (!IsResourceExhausted(io_chunk_status)) {
+        auto compute_error = !compute_status_.ok();
+        if (!IsResourceExhausted(io_chunk_status) || compute_error) {
           LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError for I/O Chunk! : " << io_chunk_status
                      << "\n";
-          compute_status_ = io_chunk_status;
-          return;
+          if (!compute_error)
+            compute_status_ = io_chunk_status;
+          run_ = false;
+          break;
         }
       }
-
-      //std::chrono::duration<double> thread_time = std::chrono::duration_cast<std::chrono::duration<double>>(end_time - start_time);
-      /*struct rusage usage;
-      int ret = getrusage(RUSAGE_THREAD, &usage);*/
-
-      double total_s = (double) total / 1000000.0f;
 
       base_aligner->~BaseAligner(); // This calls the destructor without calling operator delete, allocator owns the memory.
       VLOG(INFO) << "base aligner thread ending.";
       num_active_threads_.fetch_sub(1, memory_order_relaxed);
     };
+    num_active_threads_ = num_threads_;
     for (int i = 0; i < num_threads_; i++)
       workers_->Schedule(aligner_func);
-    num_active_threads_ = num_threads_;
   }
 
-}
+  Status SnapSingleExecutor::ok() const {
+    return compute_status_;
+  }
+} // namespace tensorflow {

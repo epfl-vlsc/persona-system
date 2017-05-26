@@ -25,29 +25,27 @@ namespace snap_wrapper {
     class PairedAligner
     {
     public:
-      PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index_resource, int max_secondary);
+      PairedAligner(const PairedAlignerOptions *options, GenomeIndex *index_resource);
       ~PairedAligner();
 
       // void for speed, as this is called per-read!
-      void align(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result,
-          PairedAlignmentResult* secondary_results, int* num_secondary_results, 
-          SingleAlignmentResult* secondary_single_results, int* num_secondary_single_results_first,
+      void align(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result, int max_secondary,
+          PairedAlignmentResult** secondary_results, int* num_secondary_results,
+          SingleAlignmentResult** secondary_single_results, int* num_secondary_single_results_first,
           int* num_secondary_single_results_second);
 
       Status writeResult(std::array<Read, 2> &snap_reads, PairedAlignmentResult &result,
                          AlignmentResultBuilder &result_column, bool is_secondary);
 
-      int MaxPairedSecondary() { return maxPairedSecondaryHits_; }
-      int MaxSingleSecondary() { return maxSingleSecondaryHits_; }
-
     private:
       std::unique_ptr<BigAllocator> allocator;
+      std::unique_ptr<PairedAlignmentResult[]> secondary_results_;
+      std::unique_ptr<SingleAlignmentResult[]> secondary_single_results_;
       IntersectingPairedEndAligner *intersectingAligner;
       ChimericPairedEndAligner *aligner;
       const PairedAlignerOptions *options;
       const Genome *genome;
       unsigned maxPairedSecondaryHits_, maxSingleSecondaryHits_;
-      int max_secondary_;
 
       // members for writing out the cigar string
       SAMFormat format;

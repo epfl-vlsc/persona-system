@@ -45,7 +45,7 @@ namespace tensorflow {
     header_.last_ordinal = first_ordinal + num_records;
 
     if (record_id != record_id_) {
-      auto copy_size = min(sizeof(record_id.size()), sizeof(format::FileHeader::string_id));
+      auto copy_size = min(record_id.size(), sizeof(format::FileHeader::string_id));
       strncpy(&header_.string_id[0], record_id.c_str(), copy_size);
     }
 
