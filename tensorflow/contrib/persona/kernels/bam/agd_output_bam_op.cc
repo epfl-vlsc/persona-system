@@ -176,6 +176,11 @@ namespace tensorflow {
           first_ = false;
         }
 
+        Tensor* out_t;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk", TensorShape({}), &out_t));
+        auto& out = out_t->scalar<int32>()();
+        out = count_;
+        count_++;
 
         const Tensor *results_in, *bases_in, *qualities_in, *metadata_in, *num_records_t;
         OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
@@ -549,6 +554,7 @@ namespace tensorflow {
       vector<string> ref_seqs_;
       vector<int32> ref_sizes_;
       vector<int64> ref_size_totals_;
+      int32 count_ = 0;
       string header_;
   
       mutex mu_;
