@@ -1020,6 +1020,41 @@ Converts from an ASCII base buffer to a 2-bit output buffer, for BWA conversion.
 This uses the same buffer, and can handle any Data type that exposes mutable access (e.g. Buffer)
 )doc");
 
+  REGISTER_OP("AGDImportBam")
+  .Attr("path: string")
+  .Attr("num_threads: int >= 1")
+  .Attr("ref_seq_lens: list(int)")
+  .Attr("chunk_size: int = 100000")
+  .Attr("unaligned: bool = false")
+  .Input("bufpair_pool: Ref(string)")
+  .Output("chunk_out: string")
+  .Output("num_records: int")
+  .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
+      bool unaligned;
+      TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
+      int dim;
+      if (unaligned) dim = 3;
+      else dim = 4;
+      c->set_output(0, c->Matrix(dim, 2));
+      c->set_output(1, c->Scalar());
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Import AGD chunks from a BAM file. The BAM can be aligned or unaligned. 
+If paired, sort order MUST be by ID (metadata).
+
+path: the full path of the BAM file
+num_threads: number of threads to give BAM reader
+ref_seq_lens: vector of reference sequence lengths
+chunk_size: the output dataset chunk size (default 100K)
+unaligned: set to true if the bam file is unaligned (or you don't want to import results)
+bufpair_pool: reference to buffer pair pool
+chunk_out: a 3 or 4 x 2 matrix containing handles to chunks in buffer pairs
+num_records: number of records in output. Usually `chunk_size` except for the last one
+)doc");
+
   REGISTER_OP("AgdOutputBam")
   .Attr("path: string")
   .Attr("pg_id: string")
