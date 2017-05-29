@@ -34,11 +34,7 @@ namespace tensorflow {
   public:
     FastqInterleavedChunkingOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
-      if (chunk_size_ % 2 != 0)
-        OP_REQUIRES(ctx, false, Internal("Interleaved chunker requires an even chunk size"));
-      // because we are integrating two fastq files into single interleaved chunks,
-      // we take half the number from each while constructing
-      chunk_size_ /= 2;
+      // Chunk size is in terms of paired records
     }
 
     ~FastqInterleavedChunkingOp() {
@@ -84,6 +80,9 @@ namespace tensorflow {
         *(fastq_resource_1->get()) = move(fr_1);
 
         OP_REQUIRES_OK(ctx, EnqueueFastqResource(ctx, fastq_resource_0, fastq_resource_1));
+      }
+      if (chunker_1.next_chunk(fr_1)) {
+        LOG(WARNING) << "Paired fastq chunker: second file has more chunks than the first!";
       }
     }
 
