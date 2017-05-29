@@ -15,7 +15,7 @@ namespace tensorflow {
 
     OP_REQUIRES_OK(ctx, SetHeaderValues(ctx));
 
-    VLOG(INFO) << "opening file with path: " << path;
+    //VLOG(INFO) << "opening file with path: " << path;
     FILE *f = fopen(path.c_str(), "w+");
     OP_REQUIRES(ctx, f != nullptr, Internal("Unable to open file at path ", path));
 
