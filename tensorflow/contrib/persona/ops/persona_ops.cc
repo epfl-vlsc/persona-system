@@ -223,6 +223,18 @@ same location. Our implementation uses google::dense_hash_table,
 trading memory for faster execution.
   )doc");
 
+  REGISTER_OP("AGDFlagstat")
+  .Input("results_handle: string")
+  .Input("num_records: int32")
+  .Output("result: int32")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->input(1));
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Flagstat module that gathers and displays stats on a dataset
+  )doc");
+
   REGISTER_OP("AGDMergeMetadata")
   .Attr("chunk_size: int >= 1")
   .Input("buffer_pair_pool: Ref(string)")
