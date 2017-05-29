@@ -55,7 +55,7 @@ namespace tensorflow {
         reader_->init(path.c_str(), ReadSupplierQueue::BufferCount(num_threads), 0, 0);
 
         ref_size_totals_.reserve(ref_seq_lens_.size());
-        int64_t total = 0;
+        int64 total = 0;
         for (auto len : ref_seq_lens_) {
           total += len;
           //ref_vec.push_back(RefData(ref_seqs_[i], ref_sizes_[i]));
@@ -231,7 +231,7 @@ namespace tensorflow {
 
       ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
 
-      int64 FindChromosome(int64_t location, int &ref_idx) {
+      int64 FindChromosome(int64 location, int &ref_idx) {
         int index = 0;
         while (location > ref_size_totals_[index]) index++;
         ref_idx = index;
@@ -243,7 +243,7 @@ namespace tensorflow {
       ReaderContext reader_context_; 
       int chunk_size_;
       vector<int> ref_seq_lens_;
-      vector<int> ref_size_totals_;;
+      vector<int64> ref_size_totals_;;
       TF_DISALLOW_COPY_AND_ASSIGN(AgdImportBamOp);
   };
 

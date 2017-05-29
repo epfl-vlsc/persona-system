@@ -1028,7 +1028,7 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   .Attr("unaligned: bool = false")
   .Input("bufpair_pool: Ref(string)")
   .Output("chunk_out: string")
-  .Output("num_records: int")
+  .Output("num_records: int32")
   .SetIsStateful()
   .SetShapeFn([](InferenceContext *c) {
       TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
