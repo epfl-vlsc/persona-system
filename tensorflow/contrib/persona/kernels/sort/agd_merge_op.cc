@@ -44,7 +44,8 @@ namespace tensorflow {
         const char* data;
         size_t data_sz;
         TF_RETURN_IF_ERROR(results_.PeekNextRecord(&data, &data_sz));
-        current_result_.ParseFromArray(data, data_sz);
+        if (!current_result_.ParseFromArray(data, data_sz))
+          return Internal("failed to parse result from proto");
         current_position_ = current_result_.position();
         return Status::OK();
       }
@@ -174,6 +175,7 @@ namespace tensorflow {
       bp_ctrs.resize(num_columns);
       for (auto& bp : bp_ctrs) {
         OP_REQUIRES_OK(ctx, bufpair_pool_->GetResource(&bp));
+        bp->get()->reset();
         bufferpairs.push_back(bp->get());
       }
 
@@ -201,6 +203,7 @@ namespace tensorflow {
           bufferpairs.clear();
           for (auto& bp : bp_ctrs) {
             OP_REQUIRES_OK(ctx, bufpair_pool_->GetResource(&bp));
+            bp->get()->reset();
             bufferpairs.push_back(bp->get());
           }
           current_chunk_size = 0;
@@ -222,7 +225,6 @@ namespace tensorflow {
     int chunk_size_;
 
     Status Init(OpKernelContext *ctx) {
-      LOG(INFO) << "getting resource!";
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 1), &queue_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufpair_pool_));
       return Status::OK();
