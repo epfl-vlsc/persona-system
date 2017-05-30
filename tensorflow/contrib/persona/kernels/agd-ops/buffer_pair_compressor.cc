@@ -69,7 +69,12 @@ namespace tensorflow {
       for (size_t i = 0; i < index_size; i++) {
         auto entry_size = index[i];
         auto* base_data = &data[current_offset];
-        TF_RETURN_IF_ERROR(format::IntoBases(base_data, entry_size, compact_));
+        Status s = format::IntoBases(base_data, entry_size, compact_);
+        if (!s.ok()) {
+          string test(base_data, entry_size);
+          LOG(INFO) << "compacting: " << test;
+        }
+        TF_RETURN_IF_ERROR(s);
         TF_RETURN_IF_ERROR(AppendRecord(&compact_[0], compact_.size(), bufpair));
         current_offset += entry_size;
       }
