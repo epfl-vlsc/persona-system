@@ -201,7 +201,7 @@ namespace snap_wrapper {
                                        &addFrontClipping,
                                        true, // useM
                                        true,
-                                       (i == 0) ? true : false,
+                                       i == 0,
                                        &snap_reads[1 - i],
                                        result.status[1 - i],
                                        finalLocations[1 - i],
