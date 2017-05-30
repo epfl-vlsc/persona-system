@@ -52,17 +52,28 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, ctx->GetAttr("unaligned", &unaligned_));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("ref_seq_lens", &ref_seq_lens_));
 
-        reader_context_.genome = nullptr;
-        reader_ = new BAMReader(reader_context_);
-        reader_->init(path.c_str(), ReadSupplierQueue::BufferCount(num_threads), 0, 0);
+        // build a dummy genome so SNAP BAMreader will give us correct
+        // location information from an alignment
+        genome_.reset(new Genome(0xffffffff, 0xffffffff, 0));
 
         ref_size_totals_.reserve(ref_seq_lens_.size());
         int64 total = 0;
+        vector<char> dummy;
         for (auto len : ref_seq_lens_) {
+          genome_->startContig("test");
+          dummy.resize(len);
+          genome_->addData(&dummy[0], len);
+
           total += len;
           //ref_vec.push_back(RefData(ref_seqs_[i], ref_sizes_[i]));
           ref_size_totals_.push_back(total);
         }
+        genome_->fillInContigLengths();
+
+        reader_context_.genome = genome_.get();
+        reader_ = new BAMReader(reader_context_);
+        reader_->init(path.c_str(), ReadSupplierQueue::BufferCount(num_threads), 0, 0);
+
 
       }
     
@@ -191,8 +202,9 @@ namespace tensorflow {
             i--;
             continue;
           }
-          string test = std::string(bam_read.getUnclippedData(), bam_read.getUnclippedLength());
-          LOG(INFO) << "length is " << bam_read.getUnclippedLength() << " bases are " << test << "end";
+          if (isRC) {
+            bam_read.becomeRC();
+          }
           TF_RETURN_IF_ERROR(IntoBases(bam_read.getUnclippedData(), bam_read.getUnclippedLength(), bases_));
 
           bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
@@ -211,6 +223,9 @@ namespace tensorflow {
             if (!reader_->getNextRead(&mate_bam_read, &result, &mate_location, &mate_isRC, &mapq, &flag, 
                   &cigar)) {
               return Internal("pair not found for read!!");
+            }
+            if (mate_isRC) {
+              mate_bam_read.becomeRC();
             }
             TF_RETURN_IF_ERROR(IntoBases(mate_bam_read.getData(), mate_bam_read.getDataLength(), bases_));
 
@@ -275,6 +290,7 @@ namespace tensorflow {
         return (index == 0) ? (int)location : (int)(location - ref_size_totals_[index-1]);
       }
 
+      unique_ptr<Genome> genome_;
       bool unaligned_;
       BAMReader* reader_ = nullptr;
       ReaderContext reader_context_; 
