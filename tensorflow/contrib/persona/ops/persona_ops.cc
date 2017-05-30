@@ -165,6 +165,63 @@ and is thus passed as an Attr instead of an input (for efficiency);
 Converts an input file into three files of bases, qualities, and metadata
 )doc");
 
+
+
+
+
+
+
+
+REGISTER_OP("AGDGeneCoverage")
+.Attr("ref_sequences: list(string)")
+.Attr("ref_seq_sizes: list(int)")
+.Attr("scale: int")
+.Attr("max: int")
+.Attr("bg: bool")
+.Attr("d: bool")
+.Attr("strand: string")
+.Input("results_handle: string")
+.Input("num_records: int32")
+.Output("zeroed: int32")
+.SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->input(1));
+      return Status::OK();
+    })
+
+
+
+// .SetShapeFn([](InferenceContext *c) {
+//     ShapeHandle input_data;
+//     int arr_size;
+//     TF_RETURN_IF_ERROR(c->GetAttr("ref_size",&arr_size));
+//     // TODO give shape to inputhandle ie int32 of size equi to ref_size
+//     c->set_output(0, input_data);
+//
+//     return Status::OK();
+//   })
+.SetIsStateful()
+.Doc(R"doc(
+Gives coverage of each of the base-pair in reference genome.
+)doc");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   REGISTER_OP("AGDInterleavedConverter")
   .Input("buffer_pair_pool: Ref(string)")
   .Input("input_data_0: string")
@@ -222,6 +279,7 @@ to determine if there are reads/pairs mapped to the exact
 same location. Our implementation uses google::dense_hash_table,
 trading memory for faster execution.
   )doc");
+
 
   REGISTER_OP("AGDMergeMetadata")
   .Attr("chunk_size: int >= 1")
@@ -821,7 +879,7 @@ for optimal performance.
   .Output("result_buf_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
-  Run single-ended alignment with BWA MEM. 
+  Run single-ended alignment with BWA MEM.
   max_secondary must be at least 1 for chimeric reads that BWA may output.
 )doc");
 
@@ -1026,7 +1084,7 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   Not all tags for SAM/BAM are currently supported, but support
   is planned. Currently supported is only required tags.
 
-  RG and aux data is currently not supported. 
+  RG and aux data is currently not supported.
 
   results_handle: matrix of all results columns
   path: path for output .bam file
@@ -1128,7 +1186,7 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   })
   .Doc(R"doc(
   )doc");
-  
+
   REGISTER_OP("BufferPairCompressor")
   .Attr("pack: bool = false")
   .Input("buffer_pool: Ref(string)")
