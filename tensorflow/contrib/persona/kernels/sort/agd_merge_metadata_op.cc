@@ -171,6 +171,7 @@ namespace tensorflow {
       bp_ctrs.resize(num_columns);
       for (auto& bp : bp_ctrs) {
         OP_REQUIRES_OK(ctx, bufpair_pool_->GetResource(&bp));
+        bp->get()->reset();
         bufferpairs.push_back(bp->get());
       }
 
@@ -199,6 +200,7 @@ namespace tensorflow {
           bufferpairs.clear();
           for (auto& bp : bp_ctrs) {
             OP_REQUIRES_OK(ctx, bufpair_pool_->GetResource(&bp));
+            bp->get()->reset();
             bufferpairs.push_back(bp->get());
           }
           current_chunk_size = 0;
