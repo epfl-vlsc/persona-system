@@ -27,7 +27,8 @@
 namespace tensorflow {
   using namespace std;
   using namespace errors;
-  
+  using namespace format;
+
   using shape_inference::InferenceContext;
    
   namespace { 
@@ -50,17 +51,29 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("unaligned", &unaligned_));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("ref_seq_lens", &ref_seq_lens_));
-        
-        reader_ = new BAMReader(reader_context_);
-        reader_->init(path.c_str(), ReadSupplierQueue::BufferCount(num_threads), 0, 0);
+
+        // build a dummy genome so SNAP BAMreader will give us correct
+        // location information from an alignment
+        genome_.reset(new Genome(0xffffffff, 0xffffffff, 0));
 
         ref_size_totals_.reserve(ref_seq_lens_.size());
         int64 total = 0;
+        vector<char> dummy;
         for (auto len : ref_seq_lens_) {
+          genome_->startContig("test");
+          dummy.resize(len);
+          genome_->addData(&dummy[0], len);
+
           total += len;
           //ref_vec.push_back(RefData(ref_seqs_[i], ref_sizes_[i]));
           ref_size_totals_.push_back(total);
         }
+        genome_->fillInContigLengths();
+
+        reader_context_.genome = genome_.get();
+        reader_ = new BAMReader(reader_context_);
+        reader_->init(path.c_str(), ReadSupplierQueue::BufferCount(num_threads), 0, 0);
+
 
       }
     
@@ -73,7 +86,7 @@ namespace tensorflow {
 
       Status InitHandles(OpKernelContext* ctx)
       {
-        TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufpair_pool_));
+        TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "bufpair_pool", &bufpair_pool_));
 
         return Status::OK();
       }
@@ -81,6 +94,7 @@ namespace tensorflow {
       ~AgdImportBamOp() override {
         // drain the queues first
         core::ScopedUnref unref_listpool(bufpair_pool_);
+        delete reader_;
       }
 
       Status GetBufferForBuilder(OpKernelContext* ctx, ColumnBuilder& builder, Tensor* out, int index) {
@@ -91,6 +105,7 @@ namespace tensorflow {
         auto out_mat = out->matrix<string>();
         out_mat(index, 0) = output_bufpair_ctr->container();
         out_mat(index, 1) = output_bufpair_ctr->name();
+        return Status::OK();
       }
 
       void Compute(OpKernelContext* ctx) override {
@@ -98,12 +113,19 @@ namespace tensorflow {
           OP_REQUIRES_OK(ctx, InitHandles(ctx));
         }
 
-        Tensor* out_t;
+        Tensor* out_t, *num_recs_t, *first_ord_t;
         if (unaligned_) {
           OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk_out", TensorShape({3, 2}), &out_t));
         } else {
           OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk_out", TensorShape({4, 2}), &out_t));
         }
+
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records", TensorShape({}), &num_recs_t));
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("first_ordinal", TensorShape({}), &first_ord_t));
+
+        auto& num_recs = num_recs_t->scalar<int>()();
+        auto& first_ord = first_ord_t->scalar<int64>()();
+        first_ord = first_ordinal_;
 
         ColumnBuilder base_builder;
         OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, base_builder, out_t, 0));
@@ -112,18 +134,26 @@ namespace tensorflow {
         ColumnBuilder meta_builder;
         OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, meta_builder, out_t, 2));
 
+        Status s;
+        // if paired, num_recs_out will be 2x chunksize
+        int num_recs_out;
         if (unaligned_) {
-          OP_REQUIRES_OK(ctx, ProcessUnaligned(base_builder, qual_builder, meta_builder));
+          s = ProcessUnaligned(base_builder, qual_builder, meta_builder, num_recs_out);
         } else {
           AlignmentResultBuilder results_builder;
           OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, results_builder, out_t, 3));
-          OP_REQUIRES_OK(ctx, ProcessAligned(base_builder, qual_builder, meta_builder, results_builder));
+          s = ProcessAligned(base_builder, qual_builder, meta_builder, results_builder, num_recs_out);
         }
+        num_recs = num_recs_out;
+        first_ordinal_ += num_recs_out;
+        OP_REQUIRES_OK(ctx, s);
       }
 
     private:
 
-      Status ProcessUnaligned(ColumnBuilder& bases, ColumnBuilder& qual, ColumnBuilder& meta) {
+      vector<BinaryBases> bases_;
+
+      Status ProcessUnaligned(ColumnBuilder& bases, ColumnBuilder& qual, ColumnBuilder& meta, int& num_recs) {
         Read bam_read;
         AlignmentResult result;
         GenomeLocation location;
@@ -131,20 +161,25 @@ namespace tensorflow {
         unsigned mapq;
         unsigned flag;
         const char* cigar;
+        num_recs = 0;
         for (size_t i = 0; i < chunk_size_; i++) {
           if (!reader_->getNextRead(&bam_read, &result, &location, &isRC, &mapq, &flag, 
                 &cigar)) {
             return OutOfRange("No more reads in BAM file");
           }
-          bases.AppendRecord(bam_read.getData(), bam_read.getDataLength());
-          qual.AppendRecord(bam_read.getQuality(), bam_read.getDataLength());
+
+          TF_RETURN_IF_ERROR(IntoBases(bam_read.getUnclippedData(), bam_read.getUnclippedLength(), bases_));
+
+          bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
+          qual.AppendRecord(bam_read.getUnclippedQuality(), bam_read.getUnclippedLength());
           meta.AppendRecord(bam_read.getId(), bam_read.getIdLength());
+          num_recs++;
         }
         return Status::OK();
       }
       
       Status ProcessAligned(ColumnBuilder& bases, ColumnBuilder& qual, ColumnBuilder& meta,
-          AlignmentResultBuilder& results) {
+          AlignmentResultBuilder& results, int& num_recs) {
         Read bam_read, mate_bam_read;
         AlignmentResult result;
         GenomeLocation location, mate_location;
@@ -157,12 +192,22 @@ namespace tensorflow {
         int32 ref_idx;
         int64 mate_position;
         int32 mate_ref_idx;
+        num_recs = 0;
         for (size_t i = 0; i < chunk_size_; i++) {
           if (!reader_->getNextRead(&bam_read, &result, &location, &isRC, &mapq, &flag, 
                 &cigar)) {
             return OutOfRange("No more reads in BAM file");
           }
-          bases.AppendRecord(bam_read.getUnclippedData(), bam_read.getUnclippedLength());
+          if (IsSecondary(flag) || IsSupplemental(flag)) {// skip secondary/supplemental
+            i--;
+            continue;
+          }
+          if (isRC) {
+            bam_read.becomeRC();
+          }
+          TF_RETURN_IF_ERROR(IntoBases(bam_read.getUnclippedData(), bam_read.getUnclippedLength(), bases_));
+
+          bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
           qual.AppendRecord(bam_read.getUnclippedQuality(), bam_read.getUnclippedLength());
           meta.AppendRecord(bam_read.getId(), bam_read.getIdLength());
           position = FindChromosome(location, ref_idx);
@@ -172,13 +217,19 @@ namespace tensorflow {
           alignment.set_flag(flag);
           alignment.set_cigar(cigar);
           alignment.set_template_length(0);
+          num_recs++;
           
           if (IsPaired(flag)) {
             if (!reader_->getNextRead(&mate_bam_read, &result, &mate_location, &mate_isRC, &mapq, &flag, 
                   &cigar)) {
               return Internal("pair not found for read!!");
             }
-            bases.AppendRecord(mate_bam_read.getUnclippedData(), mate_bam_read.getUnclippedLength());
+            if (mate_isRC) {
+              mate_bam_read.becomeRC();
+            }
+            TF_RETURN_IF_ERROR(IntoBases(mate_bam_read.getData(), mate_bam_read.getDataLength(), bases_));
+
+            bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
             qual.AppendRecord(mate_bam_read.getUnclippedQuality(), mate_bam_read.getUnclippedLength());
             meta.AppendRecord(mate_bam_read.getId(), mate_bam_read.getIdLength());
             mate_position = FindChromosome(mate_location, mate_ref_idx);
@@ -222,7 +273,8 @@ namespace tensorflow {
             results.AppendAlignmentResult(alignment);
             results.AppendAlignmentResult(mate_alignment);
 
-          } else 
+            num_recs++;
+          } else
             results.AppendAlignmentResult(alignment);
 
         }
@@ -238,10 +290,12 @@ namespace tensorflow {
         return (index == 0) ? (int)location : (int)(location - ref_size_totals_[index-1]);
       }
 
+      unique_ptr<Genome> genome_;
       bool unaligned_;
       BAMReader* reader_ = nullptr;
       ReaderContext reader_context_; 
       int chunk_size_;
+      int64 first_ordinal_ = 0;
       vector<int> ref_seq_lens_;
       vector<int64> ref_size_totals_;;
       TF_DISALLOW_COPY_AND_ASSIGN(AgdImportBamOp);
