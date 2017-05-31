@@ -137,12 +137,12 @@ namespace tensorflow {
         if (status == EOF) 
           LOG(INFO) << "WARNING: Failed to close BAM file pointer: " << status;
 
-        LOG(INFO) << "compress queue push wait: " << compress_queue_->num_push_waits();
+        /*LOG(INFO) << "compress queue push wait: " << compress_queue_->num_push_waits();
         LOG(INFO) << "write queue push wait: " << write_queue_->num_push_waits();
         LOG(INFO) << "compress queue pop wait: " << compress_queue_->num_pop_waits();
         LOG(INFO) << "write queue pop wait: " << write_queue_->num_pop_waits();
         LOG(INFO) << "buffer queue push wait: " << buffer_queue_->num_push_waits();
-        LOG(INFO) << "buffer queue pop wait: " << buffer_queue_->num_pop_waits();
+        LOG(INFO) << "buffer queue pop wait: " << buffer_queue_->num_pop_waits();*/
       }
 
       void Compute(OpKernelContext* ctx) override {
@@ -220,7 +220,7 @@ namespace tensorflow {
           if (occ) 
             meta_len = occ - meta;
 
-          LOG(INFO) << "processing record " << string(meta, meta_len);
+          //LOG(INFO) << "processing record " << string(meta, meta_len);
           // write an entry for each result, skip empty secondaries
           for (uint32 i = 0; i < result_readers.size(); i++) {
             //OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));

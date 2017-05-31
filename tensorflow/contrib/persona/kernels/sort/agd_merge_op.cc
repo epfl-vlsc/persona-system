@@ -137,6 +137,7 @@ namespace tensorflow {
       ResourceContainer<Data> *data;
 
       decltype(num_columns) column;
+      LOG(INFO) << "AGD Merge: merging " << num_super_chunks << " intermediate files ...";
       for (decltype(num_super_chunks) super_chunk = 0; super_chunk < num_super_chunks; ++super_chunk) {
         column = 0;
         // First, we look up the results column
