@@ -39,6 +39,7 @@ namespace tensorflow {
       ResourceContainer<Buffer> *output_buffer;
       OP_REQUIRES_OK(ctx, buf_pool_->GetResource(&output_buffer));
       auto *buf = output_buffer->get();
+      buf->reset();
       AppendingGZIPCompressor compressor(*buf);
       OP_REQUIRES_OK(ctx, compressor.init());
 
