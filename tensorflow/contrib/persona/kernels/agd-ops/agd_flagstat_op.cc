@@ -33,12 +33,58 @@ namespace tensorflow {
 
   class AGDFlagstatOp : public OpKernel {
   public:
+
+    int64 count_total_reads[2]; 
+    int64 count_secondary[2]; 
+    int64 count_supplementary[2]; 
+    int64 count_duplicates[2]; 
+    int64 count_mapped[2]; 
+    int64 count_paired[2]; 
+    int64 count_first[2]; 
+    int64 count_last[2]; 
+    int64 count_properly_paired[2]; 
+    int64 count_with_itself_and_mate_mapped[2];
+    int64 count_singletons[2]; 
+    int64 count_mate_mapped_to_diff_chr[2]; 
+    int64 count_mate_mapped_to_diff_chr_mapq[2]; 
+
+
     AGDFlagstatOp(OpKernelConstruction *context) : OpKernel(context) {
       cout<<"Starting flagstat constructor \n";
+      for(int64 i = 0 ; i < 2 ; i++ )
+      {
+        count_total_reads[i] = 0;
+        count_secondary[i] = 0; 
+        count_supplementary[i] = 0; 
+        count_duplicates[i] = 0; 
+        count_mapped[i] = 0; 
+        count_paired[i] = 0; 
+        count_first[i] = 0; 
+        count_last[i] = 0; 
+        count_properly_paired[i] = 0; 
+        count_with_itself_and_mate_mapped[i] = 0;
+        count_singletons[i] = 0; 
+        count_mate_mapped_to_diff_chr[i] = 0; 
+        count_mate_mapped_to_diff_chr_mapq[i] = 0;
+      }
     }
 
     ~AGDFlagstatOp() {
       cout<<"Done flagstat destructor \n";
+      cout<<count_total_reads[0]<<" + "<<count_total_reads[1]<<" (QC-passed + QC-failed reads)\n";
+      cout<<count_secondary[0]<<" + "<<count_secondary[1]<<" secondaries\n";
+      cout<<count_supplementary[0]<<" + "<<count_supplementary[1]<<" supplementaries\n";
+      cout<<count_duplicates[0]<<" + "<<count_duplicates[1]<<" duplicates\n";
+      cout<<count_mapped[0]<<" + "<<count_mapped[1]<<" mapped ( "<<(count_mapped[0]*100.0)/(count_mapped[0] + count_mapped[1])<<"% : "<<(count_mapped[1]*100.0)/(count_mapped[0] + count_mapped[1]) <<"% )\n";
+      cout<<count_paired[0]<<" + "<<count_paired[1]<<" paired in sequencing\n";
+      cout<<count_first[0]<<" + "<<count_first[1]<<" first\n";
+      cout<<count_last[0]<<" + "<<count_last[1]<<" last\n";
+      cout<<count_properly_paired[0]<<" + "<<count_properly_paired[1]<<" properly paired ( "<<(count_properly_paired[0]*100.0)/(count_properly_paired[0] + count_properly_paired[1])<<"% : "<<(count_properly_paired[1]*100.0)/(count_properly_paired[0] + count_properly_paired[1]) <<"% )\n";
+      cout<<count_with_itself_and_mate_mapped[0]<<" + "<<count_with_itself_and_mate_mapped[1]<<" with itself and mate mapped\n";
+      cout<<count_singletons[0]<<" + "<<count_singletons[1]<<" singletons ( "<<(count_singletons[0]*100.0)/(count_singletons[0] + count_singletons[1])<<"% : "<<(count_singletons[1]*100.0)/(count_singletons[0] + count_singletons[1]) <<"% )\n";
+      cout<<count_mate_mapped_to_diff_chr[0]<<" + "<<count_mate_mapped_to_diff_chr[1]<<" with mate mapped to different chr\n";
+      cout<<count_mate_mapped_to_diff_chr_mapq[0]<<" + "<<count_mate_mapped_to_diff_chr_mapq[1]<<" with mate mapped to different chr (mapQ>=5)\n";
+
       // core::ScopedUnref unref_listpool(bufferpair_pool_);
     }
 
@@ -165,7 +211,7 @@ namespace tensorflow {
       //   OP_REQUIRES_OK(ctx, InitHandles(ctx));
       // }
 
-      LOG(INFO) << "Starting flagstat";
+      // LOG(INFO) << "Starting flagstat";
       const Tensor* results_t, *num_results_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_results_t));
       OP_REQUIRES_OK(ctx, ctx->input("results_handle", &results_t));
@@ -189,36 +235,8 @@ namespace tensorflow {
       Alignment mate;
       Status s = results_reader.GetNextResult(result);
 
-      int64 count_total_reads[2]; 
-      int64 count_secondary[2]; 
-      int64 count_supplementary[2]; 
-      int64 count_duplicates[2]; 
-      int64 count_mapped[2]; 
-      int64 count_paired[2]; 
-      int64 count_first[2]; 
-      int64 count_last[2]; 
-      int64 count_properly_paired[2]; 
-      int64 count_with_itself_and_mate_mapped[2];
-      int64 count_singletons[2]; 
-      int64 count_mate_mapped_to_diff_chr[2]; 
-      int64 count_mate_mapped_to_diff_chr_mapq[2]; 
-
-      for(int64 i = 0 ; i < 2 ; i++ )
-      {
-        count_total_reads[i] = 0;
-        count_secondary[i] = 0; 
-        count_supplementary[i] = 0; 
-        count_duplicates[i] = 0; 
-        count_mapped[i] = 0; 
-        count_paired[i] = 0; 
-        count_first[i] = 0; 
-        count_last[i] = 0; 
-        count_properly_paired[i] = 0; 
-        count_with_itself_and_mate_mapped[i] = 0;
-        count_singletons[i] = 0; 
-        count_mate_mapped_to_diff_chr[i] = 0; 
-        count_mate_mapped_to_diff_chr_mapq[i] = 0;
-      }
+      
+      
 
       while (s.ok()) {
 
@@ -273,22 +291,8 @@ namespace tensorflow {
         s = results_reader.GetNextResult(result);
       } // while s is ok()
 
-      cout<<"Out of while loop, Printing stats\n";
-      cout<<count_total_reads[0]<<" + "<<count_total_reads[1]<<" (QC-passed + QC-failed reads)\n";
-      cout<<count_secondary[0]<<" + "<<count_secondary[1]<<" secondaries\n";
-      cout<<count_supplementary[0]<<" + "<<count_supplementary[1]<<" supplementaries\n";
-      cout<<count_duplicates[0]<<" + "<<count_duplicates[1]<<" duplicates\n";
-      cout<<count_mapped[0]<<" + "<<count_mapped[1]<<" mapped ( "<<(count_mapped[0]*100.0)/(count_mapped[0] + count_mapped[1])<<"% : "<<(count_mapped[1]*100.0)/(count_mapped[0] + count_mapped[1]) <<"% )\n";
-      cout<<count_paired[0]<<" + "<<count_paired[1]<<" paired in sequencing\n";
-      cout<<count_first[0]<<" + "<<count_first[1]<<" first\n";
-      cout<<count_last[0]<<" + "<<count_last[1]<<" last\n";
-      cout<<count_properly_paired[0]<<" + "<<count_properly_paired[1]<<" properly paired ( "<<(count_properly_paired[0]*100.0)/(count_properly_paired[0] + count_properly_paired[1])<<"% : "<<(count_properly_paired[1]*100.0)/(count_properly_paired[0] + count_properly_paired[1]) <<"% )\n";
-      cout<<count_with_itself_and_mate_mapped[0]<<" + "<<count_with_itself_and_mate_mapped[1]<<" with itself and mate mapped\n";
-      cout<<count_singletons[0]<<" + "<<count_singletons[1]<<" singletons ( "<<(count_singletons[0]*100.0)/(count_singletons[0] + count_singletons[1])<<"% : "<<(count_singletons[1]*100.0)/(count_singletons[0] + count_singletons[1]) <<"% )\n";
-      cout<<count_mate_mapped_to_diff_chr[0]<<" + "<<count_mate_mapped_to_diff_chr[1]<<" with mate mapped to different chr\n";
-      cout<<count_mate_mapped_to_diff_chr_mapq[0]<<" + "<<count_mate_mapped_to_diff_chr_mapq[1]<<" with mate mapped to different chr (mapQ>=5)\n";
-
-
+      // cout<<"Out of while loop, Printing stats\n";
+      
 
 
         // if (!IsPrimary(result.flag()))
@@ -344,24 +348,24 @@ namespace tensorflow {
         //     }
         //   }
         // }
-      cout<<"grabbing input tensor";
+      // cout<<"grabbing input tensor";
       // Grab the input tensor
       const Tensor& input_tensor = ctx->input(1);
       auto input = input_tensor.flat<int32>();
-      cout<<"creating output tensor";
+      // cout<<"creating output tensor";
       // Create an output tensor
       Tensor* output_tensor = NULL;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, input_tensor.shape(),&output_tensor));
       auto output = output_tensor->flat<int32>();
-      cout<<"Filling values";
+      // cout<<"Filling values";
       const int N = input.size();
       for (int i = 0; i < N; i++) {
         output(i) = 0;
       }
-      cout<<"done\n";
+      // cout<<"done\n";
       // done
       resource_releaser(results_container);
-      LOG(INFO) << "DONE Printing stats";
+      // LOG(INFO) << "DONE Printing stats";
 
     }
 

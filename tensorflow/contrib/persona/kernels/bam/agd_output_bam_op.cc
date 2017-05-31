@@ -62,6 +62,12 @@ namespace tensorflow {
         }
         // open the file, we dont write yet
         bam_fp_ = fopen(path.c_str(), "w");
+
+        if(bam_fp_ == NULL)
+        {
+          cout<<"Couldn't open file\n";
+        }
+
         header_ = header_ss.str();
 
         buffer_queue_.reset(new ConcurrentQueue<BufferRef>(num_threads_*2));
@@ -220,7 +226,7 @@ namespace tensorflow {
           if (occ) 
             meta_len = occ - meta;
 
-          LOG(INFO) << "processing record " << string(meta, meta_len);
+          // LOG(INFO) << "processing record " << string(meta, meta_len);
           // write an entry for each result, skip empty secondaries
           for (uint32 i = 0; i < result_readers.size(); i++) {
             //OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));

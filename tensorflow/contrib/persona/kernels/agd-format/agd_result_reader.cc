@@ -29,8 +29,7 @@ namespace tensorflow {
     end_position_ = result.position();
     if (metadata_)
       metadata_->Reset();
-    LOG(INFO) << "AGDResult reader has chunk with first: " << start_position_.DebugString() << " and last: "
-              << end_position_.DebugString();
+    // LOG(INFO) << "AGDResult reader has chunk with first: " << start_position_.DebugString() << " and last: "<< end_position_.DebugString();
   }
 
   inline bool operator<(const Position& lhs, const Position& rhs) {
