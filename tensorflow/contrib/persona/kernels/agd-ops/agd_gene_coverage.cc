@@ -48,6 +48,7 @@ namespace tensorflow {
         OP_REQUIRES_OK(context, context->GetAttr("bg", &bg_));
         OP_REQUIRES_OK(context, context->GetAttr("d", &d_));
         OP_REQUIRES_OK(context, context->GetAttr("strand", &strand_));
+                OP_REQUIRES_OK(context, context->GetAttr("bga", &bga_));
         OP_REQUIRES(context, ref_seqs_.size() == ref_sizes_.size(), Internal("ref seqs was not same size as ref seq sizes lists"));
 
         for(int i=0;i<ref_seqs_.size();i++)
@@ -72,141 +73,152 @@ namespace tensorflow {
       //   arr_size+=ref_sizes[i];
       // }
     }
-
-    ~AGDGeneCoverageOp()
+    void print_res_d()
     {
-
-      if(d_)
+      for(int i=0;i<ref_sizes_.size();i++)
       {
-        for(int i=0;i<ref_sizes_.size();i++)
+        if(flag[i]==0)
         {
-          if(flag[i]==0)
+          for(int j=0 ; j<ref_sizes_[i];j++)
           {
-            for(int j=0 ; j<ref_sizes_[i];j++)
+            if(output[i][j]!=0)
             {
-              if(output[i][j]!=0)
-              {
-                cout << ref_seqs_[i] << " " << j << " "<< output[i][j] << endl;
-              }
+              cout << ref_seqs_[i] << " " << j << " "<< output[i][j] << endl;
             }
           }
         }
       }
-      else
-      {
+    }
 
-
-      if(!bg_)
+    void print_res_bg()
+    {
+      for(int i=0;i<ref_seqs_.size();i++)
       {
-        for(int k=0;k<ref_sizes_.size();k++)
+        if(flag[i]==0)
         {
-          if(flag[k]==0)
+          int lastindex = 0;
+          int lastoutput = output[i][0];
+          for(int j=1;j<ref_sizes_[i];j++)
           {
-
-
-            int maxcov = -1;
-            for(int i=0;i<ref_sizes_[k];i++)
+            if(output[i][j]==lastoutput)
             {
-              if(output[k][i]>maxcov)
+              continue;
+            }
+            else
+            {
+
+              if(lastoutput!=0)
               {
-                maxcov = output[k][i];
+                cout << ref_seqs_[i]<<" "<< lastindex << " "<< j-1 << " "<< lastoutput * scale_ << endl;
               }
+              lastindex = j ;
+              lastoutput = output[i][j];
             }
-
-            long long int histogram[maxcov+1];
-            for(int i=0;i<=maxcov;i++)
-            {
-              histogram[i] = 0;
-            }
-            for(int i=0;i<ref_sizes_[k];i++)
-            {
-              int val = output[k][i];
-              if(val>maxcov)
-                val = maxcov;
-              histogram[val]= histogram[val]+(long long int)1;
-            }
-
-
-            //int histogram[100];//max coverage 100X
-            //cout << outputsize<<"total no of counters made"<< endl;
-
-            for(int i=0;i<=maxcov;i++)
-            {
-              if(histogram[i]!=0)
-              {            //cout << results_handle << " " << i<<" "<< histogram[i] << " "<<num_results << " " << (1.0 *  histogram[i])/(1.0 * num_results) << endl ;
-                cout << ref_seqs_[k]<<" "<< i * scale_ <<" "<< histogram[i]   << " "<<ref_sizes_[k] << " " << (1.0 *  histogram[i])/(1.0 * ref_sizes_[k]) << endl ;
-              }
-              //cout << "No of base pairs with " << i << " coverage " << histogram[i]/scale<< endl ;
-              fflush(stdout);
-            }
-
-
-
           }
+          if(lastoutput!=0)
+          {
+            cout << ref_seqs_[i]<<" "<< lastindex << " "<< ref_sizes_[i]-1 << " "<< lastoutput * scale_ << endl;
+          }
+        }
+      }
+
+    }
+    void print_res_bga()
+    {
+      for(int i=0;i<ref_seqs_.size();i++)
+      {
+        if(flag[i]==0)
+        {
+          int lastindex = 0;
+          int lastoutput = output[i][0];
+          for(int j=1;j<ref_sizes_[i];j++)
+          {
+            if(output[i][j]==lastoutput)
+            {
+              continue;
+            }
+            else
+            {
+
+
+
+              cout << ref_seqs_[i]<<" "<< lastindex << " "<< j-1 << " "<< lastoutput * scale_ << endl;
+
+              lastindex = j ;
+              lastoutput = output[i][j];
+            }
+          }
+
+
+          cout << ref_seqs_[i]<<" "<< lastindex << " "<< ref_sizes_[i]-1 << " "<< lastoutput * scale_ << endl;
 
         }
       }
-      else
+
+    }
+    void print_res_hist()
+    {
+      for(int k=0;k<ref_sizes_.size();k++)
       {
-        for(int i=0;i<ref_seqs_.size();i++)
+        if(flag[k]==0)
         {
-          if(flag[i]==0)
+
+
+          int maxcov = -1;
+          for(int i=0;i<ref_sizes_[k];i++)
           {
-            int lastindex = 0;
-            int lastoutput = output[i][0];
-            for(int j=1;j<ref_sizes_[i];j++)
+            if(output[k][i]>maxcov)
             {
-              if(output[i][j]==lastoutput)
-              {
-                continue;
-              }
-              else
-              {
-                if(lastoutput!=0)
-                {
-                  cout << ref_seqs_[i]<<" "<< lastindex << " "<< j-1 << " "<< lastoutput * scale_ << endl;
-                }
-                lastindex = j ;
-                lastoutput = output[i][j];
-              }
-            }
-            if(lastoutput!=0)
-            {
-              cout << ref_seqs_[i]<<" "<< lastindex << " "<< ref_sizes_[i]-1 << " "<< lastoutput * scale_ << endl;
+              maxcov = output[k][i];
             }
           }
+
+          long long int histogram[maxcov+1];
+          for(int i=0;i<=maxcov;i++)
+          {
+            histogram[i] = 0;
+          }
+          for(int i=0;i<ref_sizes_[k];i++)
+          {
+            int val = output[k][i];
+            if(val>maxcov)
+              val = maxcov;
+            histogram[val]= histogram[val]+(long long int)1;
+          }
+
+
+          //int histogram[100];//max coverage 100X
+          //cout << outputsize<<"total no of counters made"<< endl;
+
+          for(int i=0;i<=maxcov;i++)
+          {
+            if(histogram[i]!=0)
+            {            //cout << results_handle << " " << i<<" "<< histogram[i] << " "<<num_results << " " << (1.0 *  histogram[i])/(1.0 * num_results) << endl ;
+              cout << ref_seqs_[k]<<" "<< i * scale_ <<" "<< histogram[i]   << " "<<ref_sizes_[k] << " " << (1.0 *  histogram[i])/(1.0 * ref_sizes_[k]) << endl ;
+            }
+            //cout << "No of base pairs with " << i << " coverage " << histogram[i]/scale<< endl ;
+            fflush(stdout);
+          }
+
+
+
         }
-
-
-
       }
+
     }
 
 
 
-
-        // int last_output = output[0];
-        // int lastindex = 0;
-        // for(int i=1;i<outputsize;i++)
-        // {
-        //   if(output[i]==last_output)
-        //   {
-        //     continue;
-        //   }
-        //   else
-        //   {
-        //     if(output[i-1]!=0)
-        //       //cout << lastindex << " "<< i << " " << output[i-1]<< endl;
-        //     lastindex = i+1;
-        //     last_output = output[i+1];
-        //   }
-        // }
-        // if(lastindex<=outputsize)
-        // {
-        //   cout << lastindex << " "<< outputsize << " "<<output[outputsize-1]<< endl;
-        // }
-
-
+    ~AGDGeneCoverageOp()
+    {
+      if(d_)
+        print_res_d();
+      if(bg_)
+        print_res_bg();
+      if(bga_)
+        print_res_bga();
+      if(!d_ && !bg_ && !bga_)
+        print_res_hist();
 
       LOG(INFO) << "Done Finding Coverage " ;
     }
@@ -422,6 +434,7 @@ namespace tensorflow {
     bool bg_;
     bool d_;
     string strand_;
+    bool bga_;
 
   };
 
