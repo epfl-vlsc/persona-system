@@ -751,18 +751,15 @@ containing the alignment candidates.
 )doc");
 
   REGISTER_OP("SnapAlignPaired")
-  .Attr("num_threads: int >= 1")
   .Attr("subchunk_size: int >= 1")
-  .Attr("work_queue_size: int = 3")
   .Attr("max_secondary: int >= 0")
-  .Input("genome_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
   .Input("buffer_list_pool: Ref(string)")
   .Input("read: string")
+  .Input("executor_handle: Ref(string)")
   .Output("result_buf_handle: string")
   .SetIsStateful()
   .SetShapeFn([](InferenceContext *c) {
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < 3; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
       }
       int max_secondary = 0;
@@ -780,6 +777,26 @@ containing the alignment candidates.
 Subchunk Size is the size in paired records. The actual chunk size will be 2x because of the pairing.
 )doc");
 
+  REGISTER_OP("SnapPairedExecutor")
+  .Attr("num_threads: int >= 0")
+  .Attr("work_queue_size: int >= 0")
+  .Attr("container: string = ''")
+  .Attr("shared_name: string = ''")
+  .Input("options_handle: Ref(string)")
+  .Input("genome_handle: Ref(string)")
+  .Output("executor_handle: Ref(string)")
+  .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+    for (int i = 0; i < 2; i++) {
+      TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+    }
+    c->set_output(0, c->Vector(2));
+    return Status::OK();
+  })
+  .Doc(R"doc(Provides a multithreaded execution context
+to align paired reads using the SNAP algorithm.
+  )doc");
+
   REGISTER_OP("SnapAlignSingle")
   .Attr("subchunk_size: int >= 1")
   .Attr("max_secondary: int >= 0")
@@ -787,7 +804,7 @@ Subchunk Size is the size in paired records. The actual chunk size will be 2x be
   .Input("read: string")
   .Input("executor_handle: Ref(string)")
   .Output("result_buf_handle: string")
-  .SetIsStateful() // TODO not sure if needed
+  .SetIsStateful()
   .SetShapeFn([](InferenceContext *c) {
       for (int i = 0; i < 3; i++) {
         TF_RETURN_IF_ERROR(check_vector(c, i, 2));
@@ -1062,6 +1079,44 @@ Converts from an ASCII base buffer to a 2-bit output buffer, for BWA conversion.
 This uses the same buffer, and can handle any Data type that exposes mutable access (e.g. Buffer)
 )doc");
 
+  REGISTER_OP("AgdImportBam")
+  .Attr("path: string")
+  .Attr("num_threads: int >= 1")
+  .Attr("ref_seq_lens: list(int)")
+  .Attr("chunk_size: int = 100000")
+  .Attr("unaligned: bool = false")
+  .Input("bufpair_pool: Ref(string)")
+  .Output("chunk_out: string")
+  .Output("num_records: int32")
+          .Output("first_ordinal: int64")
+  .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
+      bool unaligned;
+      TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
+      int dim;
+      if (unaligned) dim = 3;
+      else dim = 4;
+      c->set_output(0, c->Matrix(dim, 2));
+      c->set_output(1, c->Scalar());
+      c->set_output(2, c->Scalar());
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Import AGD chunks from a BAM file. The BAM can be aligned or unaligned. 
+If paired, sort order MUST be by ID (metadata).
+This op (currently) will skip secondary or supplemental alignments.
+
+path: the full path of the BAM file
+num_threads: number of threads to give BAM reader
+ref_seq_lens: vector of reference sequence lengths
+chunk_size: the output dataset chunk size (default 100K)
+unaligned: set to true if the bam file is unaligned (or you don't want to import results)
+bufpair_pool: reference to buffer pair pool
+chunk_out: a 3 or 4 x 2 matrix containing handles to chunks in buffer pairs
+num_records: number of records in output. Usually `chunk_size` except for the last one
+)doc");
+
   REGISTER_OP("AgdOutputBam")
   .Attr("path: string")
   .Attr("pg_id: string")
@@ -1075,8 +1130,13 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   .Input("qualities_handle: string")
   .Input("metadata_handle: string")
   .Input("num_records: int32")
+          .Output("chunk: int32")
   .SetShapeFn([](InferenceContext* c) {
-    return NoOutputs(c);
+      for (size_t i = 1; i < 3; i++)
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+      TF_RETURN_IF_ERROR(check_scalar(c, 4));
+      c->set_output(0, c->Scalar());
+      return Status::OK();
     })
   .SetIsStateful()
   .Doc(R"doc(

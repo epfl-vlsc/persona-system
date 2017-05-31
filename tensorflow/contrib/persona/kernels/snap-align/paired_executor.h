@@ -26,13 +26,13 @@
 namespace tensorflow {
 
 
-  class SnapSingleExecutor {
+  class SnapPairedExecutor {
 
 
   public:
 
-    SnapSingleExecutor(Env *env, GenomeIndex *index, AlignerOptions *options, int num_threads, int capacity);
-    ~SnapSingleExecutor();
+    SnapPairedExecutor(Env *env, GenomeIndex *index, PairedAlignerOptions *options, int num_threads, int capacity);
+    ~SnapPairedExecutor();
 
     // shared ptr is assumed to have deleter that notifies caller of completion
     // should be thread safe
@@ -42,11 +42,11 @@ namespace tensorflow {
 
   private:
     GenomeIndex *index_ = nullptr;
-    AlignerOptions *options_ = nullptr;
+    PairedAlignerOptions *options_ = nullptr;
     const Genome *genome_ = nullptr;
     volatile bool run_ = true;
 
-    std::atomic_uint_fast32_t num_active_threads_, id_{0};
+    std::atomic_uint_fast32_t num_active_threads_;
     mutex mu_;
 
     int num_threads_;
