@@ -41,7 +41,8 @@ namespace tensorflow {
   void ColumnBuilder::AppendRecord(const char* data, const size_t size) {
     if (size > UINT8_MAX)
       LOG(ERROR) << "WARNING: Appending data larger than " << UINT8_MAX << " bytes not supported by AGD.";
-    data_->AppendBuffer(data, size);
+    if (size > 0) // could be a zero record
+      data_->AppendBuffer(data, size);
     char cSize = static_cast<char>(size);
     index_->AppendBuffer(&cSize, sizeof(cSize));
   }
