@@ -29,6 +29,7 @@ namespace tensorflow {
     static AGDRecordReader fromUncompressed(ResourceContainer<Data> *resource, bool *success);
 
     void Reset();
+    int NumRecords() { return num_records_; }
 
     Status GetNextRecord(const char** data, size_t* size);
     Status PeekNextRecord(const char** data, size_t* size);
