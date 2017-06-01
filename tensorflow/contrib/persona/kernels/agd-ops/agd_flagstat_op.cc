@@ -71,17 +71,17 @@ namespace tensorflow {
 
     ~AGDFlagstatOp() {
       cout<<"Done flagstat destructor \n";
-      cout<<count_total_reads[0]<<" + "<<count_total_reads[1]<<" (QC-passed + QC-failed reads)\n";
+      cout<<count_total_reads[0]<<" + "<<count_total_reads[1]<<" in total (QC-passed reads + QC-failed reads)\n";
       cout<<count_secondary[0]<<" + "<<count_secondary[1]<<" secondaries\n";
       cout<<count_supplementary[0]<<" + "<<count_supplementary[1]<<" supplementaries\n";
       cout<<count_duplicates[0]<<" + "<<count_duplicates[1]<<" duplicates\n";
-      cout<<count_mapped[0]<<" + "<<count_mapped[1]<<" mapped ( "<<(count_mapped[0]*100.0)/(count_mapped[0] + count_mapped[1])<<"% : "<<(count_mapped[1]*100.0)/(count_mapped[0] + count_mapped[1]) <<"% )\n";
+      cout<<count_mapped[0]<<" + "<<count_mapped[1]<<" mapped ( "<<(count_mapped[0]*100.0)/count_total_reads[0]<<"% : "<<(count_mapped[1]*100.0)/count_total_reads[1] <<"% )\n";
       cout<<count_paired[0]<<" + "<<count_paired[1]<<" paired in sequencing\n";
       cout<<count_first[0]<<" + "<<count_first[1]<<" first\n";
       cout<<count_last[0]<<" + "<<count_last[1]<<" last\n";
-      cout<<count_properly_paired[0]<<" + "<<count_properly_paired[1]<<" properly paired ( "<<(count_properly_paired[0]*100.0)/(count_properly_paired[0] + count_properly_paired[1])<<"% : "<<(count_properly_paired[1]*100.0)/(count_properly_paired[0] + count_properly_paired[1]) <<"% )\n";
+      cout<<count_properly_paired[0]<<" + "<<count_properly_paired[1]<<" properly paired ( "<<(count_properly_paired[0]*100.0)/count_total_reads[0]<<"% : "<<(count_properly_paired[1]*100.0)/count_total_reads[1] <<"% )\n";
       cout<<count_with_itself_and_mate_mapped[0]<<" + "<<count_with_itself_and_mate_mapped[1]<<" with itself and mate mapped\n";
-      cout<<count_singletons[0]<<" + "<<count_singletons[1]<<" singletons ( "<<(count_singletons[0]*100.0)/(count_singletons[0] + count_singletons[1])<<"% : "<<(count_singletons[1]*100.0)/(count_singletons[0] + count_singletons[1]) <<"% )\n";
+      cout<<count_singletons[0]<<" + "<<count_singletons[1]<<" singletons ( "<<(count_singletons[0]*100.0)/count_total_reads[0]<<"% : "<<(count_singletons[1]*100.0)/count_total_reads[1] <<"% )\n";
       cout<<count_mate_mapped_to_diff_chr[0]<<" + "<<count_mate_mapped_to_diff_chr[1]<<" with mate mapped to different chr\n";
       cout<<count_mate_mapped_to_diff_chr_mapq[0]<<" + "<<count_mate_mapped_to_diff_chr_mapq[1]<<" with mate mapped to different chr (mapQ>=5)\n";
 
@@ -250,13 +250,9 @@ namespace tensorflow {
         // cout<<";";
         if (IsSecondary(result.flag()))
           count_secondary[idx]++;
-        if (IsSupplemental(result.flag()))
+        else if (IsSupplemental(result.flag()))
           count_supplementary[idx]++;
-        if (IsDuplicate(result.flag()))
-          count_duplicates[idx]++;
-        if (IsMapped(result.flag()))
-          count_mapped[idx]++;
-        if (IsPaired(result.flag()))
+        else if (IsPaired(result.flag()))
         {
           // cout<<"zxc";
           count_paired[idx]++;
@@ -272,19 +268,32 @@ namespace tensorflow {
           {
             count_with_itself_and_mate_mapped[idx]++;
             // OP_REQUIRES_OK(ctx, results_reader.GetNextResult(mate));
-
-            // s = results_reader.GetNextResult(mate);
-            // cout<<"_";
-            // if(mate.position().ref_index() != result.position().ref_index())  // MRNM != RNAME
+            // if(IsFirstRead(result.flag()))
             // {
-            //   count_mate_mapped_to_diff_chr[idx]++;
-            //   if(result.mapping_quality() >= 5)
-            //     count_mate_mapped_to_diff_chr_mapq[idx]++;
+            //   s = results_reader.GetNextResult(mate);
+            //   // cout<<"_";
+            //   if(mate.position().ref_index() != result.position().ref_index())  // MRNM != RNAME
+            //   {
+            //     count_mate_mapped_to_diff_chr[idx]+=2;
+            //     if(result.mapping_quality() >= 5)
+            //       count_mate_mapped_to_diff_chr_mapq[idx]+=2;
+            //   }
+            //   result = mate;
+            //   continue;
             // }
-            // result = mate;
-            // continue;
+            if(result.next_position().ref_index() != result.position().ref_index())  // MRNM != RNAME
+            {
+              count_mate_mapped_to_diff_chr[idx]++;
+              if(result.mapping_quality() >= 5)
+                count_mate_mapped_to_diff_chr_mapq[idx]++;
+            }
+
           }
-          
+        if (IsDuplicate(result.flag()))
+          count_duplicates[idx]++;
+        if (IsMapped(result.flag()))
+          count_mapped[idx]++;
+      
         }
 
         // cout<<"qwe";
