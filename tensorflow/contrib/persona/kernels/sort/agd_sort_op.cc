@@ -207,6 +207,7 @@ namespace tensorflow {
       metadata_builder.SetBufferPair(bufpair_containers[2]->get());
       results_builder.SetBufferPair(bufpair_containers[3]->get());*/
 
+      // column ordering will be [ results, <everything else> ]
       for (size_t i = 0; i < sort_index_.size(); i++) {
         auto& entry = sort_index_[i];
         auto& result_reader = results_vec[entry.chunk];
@@ -214,10 +215,10 @@ namespace tensorflow {
         builders[0].AppendRecord(data, size);
 
 
-        for (size_t j = 1; j < num_columns+1; j++) {
+        for (size_t j = 0; j < num_columns; j++) {
           auto& reader = columns_matrix[j][entry.chunk];
           reader.GetRecordAt(entry.index, &data, &size);
-          builders[j].AppendRecord(data, size);
+          builders[j+1].AppendRecord(data, size);
         }
 
         /*auto& bases_reader = bases_vec[entry.chunk];
