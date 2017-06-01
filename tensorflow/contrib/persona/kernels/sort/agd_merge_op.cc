@@ -145,6 +145,7 @@ namespace tensorflow {
                                              chunk_group_handles(super_chunk, column, 1), &data));
         AGDRecordReader results_column { AGDRecordReader::fromUncompressed(data, &success) };
         OP_REQUIRES(ctx, success, Internal("Unable to parse results column fromUncompressed for Merge"));
+        //LOG(INFO) << "chunk has " << results_column.NumRecords() << " records";
         releasers.push_back(move(decltype(releasers)::value_type(data, DataResourceReleaser)));
 
         // Then we look up the rest of the columns

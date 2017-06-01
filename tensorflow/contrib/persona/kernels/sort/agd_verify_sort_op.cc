@@ -51,10 +51,10 @@ namespace tensorflow {
       const Tensor *chunk_names_t, *path_t, *chunk_size_t;
       OP_REQUIRES_OK(ctx, ctx->input("chunk_names", &chunk_names_t));
       OP_REQUIRES_OK(ctx, ctx->input("path", &path_t));
-      OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
+      OP_REQUIRES_OK(ctx, ctx->input("chunk_sizes", &chunk_size_t));
       auto chunk_names = chunk_names_t->vec<string>();
       path_ = path_t->scalar<string>()();
-      auto chunksize = chunk_size_t->scalar<int>()();
+      auto chunksizes = chunk_size_t->vec<int>();
 
       Status status;
       Position prev_position;
@@ -66,7 +66,7 @@ namespace tensorflow {
       for (int i = 0; i < chunk_names.size(); i++) {
 
         OP_REQUIRES_OK(ctx, LoadChunk(ctx, chunk_names(i)));
-        AGDResultReader results_reader(results_buf_.data(), (size_t)chunksize);
+        AGDResultReader results_reader(results_buf_.data(), (size_t)chunksizes(i));
         index = 0;
 
 

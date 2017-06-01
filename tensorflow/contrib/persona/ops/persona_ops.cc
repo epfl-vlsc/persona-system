@@ -380,7 +380,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   REGISTER_OP("AGDVerifySort")
   .Input("path: string")
   .Input("chunk_names: string")
-  .Input("chunk_size: int32")
+  .Input("chunk_sizes: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Verifies that the dataset referred to by `chunk_names` is sorted.
