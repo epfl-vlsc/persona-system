@@ -65,7 +65,7 @@ namespace tensorflow {
 
         if(bam_fp_ == NULL)
         {
-          cout<<"Couldn't open file\n";
+          cout<<"Couldn't open file : errno "<<errno<<" \n";
         }
 
         header_ = header_ss.str();
