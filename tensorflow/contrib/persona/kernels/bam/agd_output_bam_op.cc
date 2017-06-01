@@ -62,7 +62,7 @@ namespace tensorflow {
         }
         // open the file, we dont write yet
         bam_fp_ = fopen(path.c_str(), "w");
-        OP_REQUIRES(ctx, bam_fp_ != NULL );
+        OP_REQUIRES(ctx, bam_fp_ != NULL , Internal("Couldn't open file : errno ",errno) );
         header_ = header_ss.str();
 
         buffer_queue_.reset(new ConcurrentQueue<BufferRef>(num_threads_*2));
