@@ -42,14 +42,14 @@ namespace tensorflow {
       core::ScopedUnref unref_listpool(bufferpair_pool_);
     }
 
-    Status GetOutputBufferPairs(OpKernelContext* ctx, vector<ResourceContainer<BufferPair>*>& ctrs)
+    Status GetOutputBufferPairs(OpKernelContext* ctx, int num, vector<ResourceContainer<BufferPair>*>& ctrs)
     {
       Tensor* bufs_out_t;
-      TF_RETURN_IF_ERROR(ctx->allocate_output("partial_handle", TensorShape({4, 2}), &bufs_out_t));
+      TF_RETURN_IF_ERROR(ctx->allocate_output("partial_handle", TensorShape({num, 2}), &bufs_out_t));
       auto bufs_out = bufs_out_t->matrix<string>();
 
-      ctrs.resize(4);
-      for (size_t i = 0; i < 4; i++) {
+      ctrs.resize(num);
+      for (size_t i = 0; i < num; i++) {
 
         TF_RETURN_IF_ERROR(bufferpair_pool_->GetResource(&ctrs[i]));
         ctrs[i]->get()->reset();
@@ -57,6 +57,25 @@ namespace tensorflow {
         bufs_out(i, 1) = ctrs[i]->name();
       }
       //TF_RETURN_IF_ERROR((*ctr)->allocate_output("partial_handle", ctx));
+      return Status::OK();
+    }
+
+    Status LoadDataResources(OpKernelContext* ctx, const Tensor* handles_t,
+                             vector<vector<AGDRecordReader>> &matrix, const Tensor* num_records_t,
+                             vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>> &releasers) {
+      auto rmgr = ctx->resource_manager();
+      auto handles_tensor = handles_t->tensor<string, 3>();
+      auto num_records = num_records_t->vec<int32>();
+      ResourceContainer<Data> *input;
+
+      for (int i = 0; i < handles_t->dim_size(0); i++) {
+        for (int j = 0; j < handles_t->dim_size(1); j++) {
+          TF_RETURN_IF_ERROR(rmgr->Lookup(handles_tensor(i, j, 0), handles_tensor(i, j, 1), &input));
+          matrix[i].push_back(AGDRecordReader(input, num_records(i)));
+          releasers.push_back(move(vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>>::value_type(input, resource_releaser)));
+
+        }
+      }
       return Status::OK();
     }
 
@@ -85,14 +104,17 @@ namespace tensorflow {
 
       sort_index_.clear();
 
-      const Tensor *results_in, *bases_in, *qualities_in, *metadata_in, *num_records_t;
+      const Tensor *results_in, *columns_in, *num_records_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_records_t));
       auto num_records = num_records_t->vec<int32>();
       OP_REQUIRES_OK(ctx, ctx->input("results_handles", &results_in));
-      OP_REQUIRES_OK(ctx, ctx->input("bases_handles", &bases_in));
-      OP_REQUIRES_OK(ctx, ctx->input("qualities_handles", &qualities_in));
-      OP_REQUIRES_OK(ctx, ctx->input("metadata_handles", &metadata_in));
-      
+
+      //OP_REQUIRES_OK(ctx, ctx->input("bases_handles", &bases_in));
+      //OP_REQUIRES_OK(ctx, ctx->input("qualities_handles", &qualities_in));
+      //OP_REQUIRES_OK(ctx, ctx->input("metadata_handles", &metadata_in));
+      OP_REQUIRES_OK(ctx, ctx->input("column_handles", &columns_in));
+      int64 num_columns = columns_in->dim_size(0);
+
       vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>> releasers;
 
       int superchunk_records = 0;
@@ -153,31 +175,52 @@ namespace tensorflow {
       // order
 
       // now we need all the chunk data
-      vector<AGDRecordReader> bases_vec;
+      vector<vector<AGDRecordReader>> columns_matrix;
+      columns_matrix.resize(num_columns);
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, columns_in, columns_matrix, num_records_t, releasers));
+
+      /*vector<AGDRecordReader> bases_vec;
       OP_REQUIRES_OK(ctx, LoadDataResources(ctx, bases_in, bases_vec, num_records_t, releasers));
       vector<AGDRecordReader> qualities_vec;
       OP_REQUIRES_OK(ctx, LoadDataResources(ctx, qualities_in, qualities_vec, num_records_t, releasers));
       vector<AGDRecordReader> metadata_vec;
-      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, metadata_in, metadata_vec, num_records_t, releasers));
+      OP_REQUIRES_OK(ctx, LoadDataResources(ctx, metadata_in, metadata_vec, num_records_t, releasers));*/
 
       // get output buffer pairs (pair holds [index, data] to construct
       // AGD format temp output file in next dataflow stage)
       vector<ResourceContainer<BufferPair>*> bufpair_containers;
-      OP_REQUIRES_OK(ctx, GetOutputBufferPairs(ctx, bufpair_containers));
-      
-      ColumnBuilder bases_builder;
+      OP_REQUIRES_OK(ctx, GetOutputBufferPairs(ctx, num_columns+1, bufpair_containers));
+
+      vector<ColumnBuilder> builders;
+      // +1 for results
+      builders.resize(num_columns+1);
+      for (int i = 0; i < num_columns+1; i++) {
+        builders[i].SetBufferPair(bufpair_containers[i]->get());
+      }
+
+      /*ColumnBuilder bases_builder;
       ColumnBuilder qualities_builder;
       ColumnBuilder metadata_builder;
       ColumnBuilder results_builder;
       bases_builder.SetBufferPair(bufpair_containers[0]->get());
       qualities_builder.SetBufferPair(bufpair_containers[1]->get());
       metadata_builder.SetBufferPair(bufpair_containers[2]->get());
-      results_builder.SetBufferPair(bufpair_containers[3]->get());
+      results_builder.SetBufferPair(bufpair_containers[3]->get());*/
 
       for (size_t i = 0; i < sort_index_.size(); i++) {
         auto& entry = sort_index_[i];
         auto& result_reader = results_vec[entry.chunk];
-        auto& bases_reader = bases_vec[entry.chunk];
+        result_reader.GetRecordAt(entry.index, &data, &size);
+        builders[0].AppendRecord(data, size);
+
+
+        for (size_t j = 1; j < num_columns+1; j++) {
+          auto& reader = columns_matrix[j][entry.chunk];
+          reader.GetRecordAt(entry.index, &data, &size);
+          builders[j].AppendRecord(data, size);
+        }
+
+        /*auto& bases_reader = bases_vec[entry.chunk];
         auto& qualities_reader = qualities_vec[entry.chunk];
         auto& metadata_reader = metadata_vec[entry.chunk];
 
@@ -186,9 +229,7 @@ namespace tensorflow {
         qualities_reader.GetRecordAt(entry.index, &data, &size);
         qualities_builder.AppendRecord(data, size);
         metadata_reader.GetRecordAt(entry.index, &data, &size);
-        metadata_builder.AppendRecord(data, size);
-        result_reader.GetRecordAt(entry.index, &data, &size);
-        results_builder.AppendRecord(data, size);
+        metadata_builder.AppendRecord(data, size);*/
       }
 
       // done
