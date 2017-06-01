@@ -34,6 +34,7 @@ namespace bwa_wrapper {
     bseq1_t read;
     mem_aln_t alignments[2];
     int num_alignments;
+    int total_supp = 0;
     while (s.ok()) {
 
       auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), (void*)aux_);
@@ -61,7 +62,7 @@ namespace bwa_wrapper {
         result_sup.set_cigar(cigar_sup);
         result_builders[1].AppendAlignmentResult(result_sup);
       } else {
-        LOG(INFO) << "appending an empty";
+        //LOG(INFO) << "appending an empty";
         result_builders[1].AppendEmpty();
 
       }
