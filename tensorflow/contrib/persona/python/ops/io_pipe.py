@@ -40,7 +40,7 @@ def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     if tensor_dtype != expected_dtype:
         raise Exception("Tensor {t} doesn't have expected dtype {d}. Has {a}".format(t=tensor, d=expected_dtype, a=tensor_dtype))
 
-valid_columns = {"base", "qual", "metadata", "results"} # TODO add for other columns
+valid_columns = {"base", "qual", "metadata", "results", "secondary"} # TODO add for other columns
 def validate_columns(columns):
     """
     Validates the columns based on their validity, returning a set
@@ -48,12 +48,15 @@ def validate_columns(columns):
     :return: a set of columns, constructed from the iterable passed in as the param
     """
     if len(columns) == 0:
-        raise Exception("Ceph Read Pipeline must read >0 columns")
-    new_columns = set(columns)
+        raise Exception("Pipeline must read >0 columns")
+    cols = []
+    for c in columns:
+      cols.append(''.join([i for i in c if not i.isdigit()]))
+    new_columns = set(cols)
 
     invalid_columns = new_columns - valid_columns
     if len(invalid_columns) != 0:
-        raise Exception("Can't instantiate Ceph Read Pipeline with invalid columns: {}".format(invalid_columns))
+        raise Exception("Can't instantiate Pipeline with invalid columns: {}".format(invalid_columns))
 
     return columns
 
