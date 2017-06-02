@@ -358,14 +358,15 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   REGISTER_OP("AGDSort")
   .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handles: string")
-  .Input("bases_handles: string")
-  .Input("qualities_handles: string")
-  .Input("metadata_handles: string")
+  .Input("column_handles: string")
   .Input("num_records: int32")
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
   .SetShapeFn([](InferenceContext *c) {
-      c->set_output(0, c->Matrix(4, 2));
+
+      auto dim = c->Dim(c->input(2), 0);
+      auto dimval = c->Value(dim);
+      c->set_output(0, c->Matrix(dimval + 1, 2));
       c->set_output(1, c->Scalar());
 
       return Status::OK();
