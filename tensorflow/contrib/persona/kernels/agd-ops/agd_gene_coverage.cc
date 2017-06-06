@@ -47,8 +47,9 @@ namespace tensorflow {
         OP_REQUIRES_OK(context, context->GetAttr("max", &max_));
         OP_REQUIRES_OK(context, context->GetAttr("bg", &bg_));
         OP_REQUIRES_OK(context, context->GetAttr("d", &d_));
+        OP_REQUIRES_OK(context, context->GetAttr("dz", &dz_));
         OP_REQUIRES_OK(context, context->GetAttr("strand", &strand_));
-                OP_REQUIRES_OK(context, context->GetAttr("bga", &bga_));
+        OP_REQUIRES_OK(context, context->GetAttr("bga", &bga_));
         OP_REQUIRES(context, ref_seqs_.size() == ref_sizes_.size(), Internal("ref seqs was not same size as ref seq sizes lists"));
 
         for(int i=0;i<ref_seqs_.size();i++)
@@ -56,22 +57,10 @@ namespace tensorflow {
           flag.push_back(-1);
         }
         output = new int*[ref_seqs_.size()];
-        //cout << ref_seqs_.size() << endl;
-        fflush(stdout);
+        //cout << "Dsd" << endl;
+        //fflush(stdout);
 
 
-
-
-
-
-
-
-      // OP_REQUIRES_OK(context,context->GetAttr("ref_seq_sizes",&ref_sizes));
-      // arr_size = 0;
-      // for(int i=0;i<ref_sizes.size();i++)
-      // {
-      //   arr_size+=ref_sizes[i];
-      // }
     }
     void print_res_d()
     {
@@ -81,9 +70,29 @@ namespace tensorflow {
         {
           for(int j=0 ; j<ref_sizes_[i];j++)
           {
+            cout << ref_seqs_[i] << "\t" << j+1 << "\t"<< output[i][j] << endl;
+          }
+        }
+        else
+        {
+          for(int j=0 ; j<ref_sizes_[i];j++)
+          {
+            cout << ref_seqs_[i] << "\t" << j+1 << "\t"<< 0 << endl;
+          }
+        }
+      }
+    }
+    void print_res_dz()
+    {
+      for(int i=0;i<ref_sizes_.size();i++)
+      {
+        if(flag[i]==0)
+        {
+          for(int j=0 ; j<ref_sizes_[i];j++)
+          {
             if(output[i][j]!=0)
             {
-              cout << ref_seqs_[i] << " " << j << " "<< output[i][j] << endl;
+              cout << ref_seqs_[i] << "\t" << j << "\t"<< output[i][j] << endl;
             }
           }
         }
@@ -109,7 +118,7 @@ namespace tensorflow {
 
               if(lastoutput!=0)
               {
-                cout << ref_seqs_[i]<<" "<< lastindex << " "<< j-1 << " "<< lastoutput * scale_ << endl;
+                cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< j << "\t"<< lastoutput * scale_ << endl;
               }
               lastindex = j ;
               lastoutput = output[i][j];
@@ -117,7 +126,7 @@ namespace tensorflow {
           }
           if(lastoutput!=0)
           {
-            cout << ref_seqs_[i]<<" "<< lastindex << " "<< ref_sizes_[i]-1 << " "<< lastoutput * scale_ << endl;
+            cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< ref_sizes_[i] << "\t"<< lastoutput * scale_ << endl;
           }
         }
       }
@@ -140,9 +149,7 @@ namespace tensorflow {
             else
             {
 
-
-
-              cout << ref_seqs_[i]<<" "<< lastindex << " "<< j-1 << " "<< lastoutput * scale_ << endl;
+              cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< j << "\t"<< lastoutput * scale_ << endl;
 
               lastindex = j ;
               lastoutput = output[i][j];
@@ -150,16 +157,23 @@ namespace tensorflow {
           }
 
 
-          cout << ref_seqs_[i]<<" "<< lastindex << " "<< ref_sizes_[i]-1 << " "<< lastoutput * scale_ << endl;
+          cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< ref_sizes_[i] << "\t"<< lastoutput * scale_ << endl;
 
+        }
+        else
+        {
+          cout << ref_seqs_[i]<<"\t"<< 0 << "\t"<< ref_sizes_[i] << "\t"<< 0 * scale_ << endl;
         }
       }
 
     }
     void print_res_hist()
     {
+      long long int size_it=0;
+      int maxofmaxcov = -1;
       for(int k=0;k<ref_sizes_.size();k++)
       {
+        size_it+=ref_sizes_[k];
         if(flag[k]==0)
         {
 
@@ -172,12 +186,37 @@ namespace tensorflow {
               maxcov = output[k][i];
             }
           }
+          if(maxcov > maxofmaxcov)
+            maxofmaxcov = maxcov;
+        }
+      }
+
+
+      long long int totalhistogram[maxofmaxcov+1];
+      memset(totalhistogram,0,(maxofmaxcov+1)*sizeof(long long int));
+      for(int k=0;k<ref_sizes_.size();k++)
+      {
+
+
+
+        if(flag[k]==0)
+        {
+
+
+          int maxcov = -1;
+          for(int i=0;i<ref_sizes_[k];i++)
+          {
+            if(output[k][i]>maxcov)
+            {
+              maxcov = output[k][i];
+            }
+          }
+          if(max_!=-1 && maxcov>max_)
+            maxcov = max_;
+
 
           long long int histogram[maxcov+1];
-          for(int i=0;i<=maxcov;i++)
-          {
-            histogram[i] = 0;
-          }
+          memset(histogram,0,(maxcov+1)*(sizeof(long long int)));
           for(int i=0;i<ref_sizes_[k];i++)
           {
             int val = output[k][i];
@@ -193,17 +232,28 @@ namespace tensorflow {
           for(int i=0;i<=maxcov;i++)
           {
             if(histogram[i]!=0)
-            {            //cout << results_handle << " " << i<<" "<< histogram[i] << " "<<num_results << " " << (1.0 *  histogram[i])/(1.0 * num_results) << endl ;
-              cout << ref_seqs_[k]<<" "<< i * scale_ <<" "<< histogram[i]   << " "<<ref_sizes_[k] << " " << (1.0 *  histogram[i])/(1.0 * ref_sizes_[k]) << endl ;
+            {
+              totalhistogram[i]+=histogram[i];            //cout << results_handle << " " << i<<" "<< histogram[i] << " "<<num_results << " " << (1.0 *  histogram[i])/(1.0 * num_results) << endl ;
+              cout << ref_seqs_[k]<<"\t"<< i * scale_ <<"\t"<< histogram[i]   << "\t"<<ref_sizes_[k] << "\t" << (1.0 *  histogram[i])/(1.0 * ref_sizes_[k]) << endl ;
             }
             //cout << "No of base pairs with " << i << " coverage " << histogram[i]/scale<< endl ;
             fflush(stdout);
           }
 
-
-
         }
+        else
+        {
+          totalhistogram[0]+=ref_sizes_[k];
+          cout << ref_seqs_[k]<<"\t"<< 0 * scale_ <<"\t"<< ref_sizes_[k]   << "\t"<<ref_sizes_[k] << "\t" << 1 << endl ;
+        }
+
       }
+      for(int i=0;i<=maxofmaxcov;i++)
+      {
+        if(totalhistogram[i]!=0)
+        cout << "genome\t"<<i<<"\t"<<totalhistogram[i]<<"\t"<<size_it<<"\t"<<(1.0*totalhistogram[i])/(1.0*size_it)<<endl;
+      }
+
 
     }
 
@@ -211,13 +261,15 @@ namespace tensorflow {
 
     ~AGDGeneCoverageOp()
     {
+      if(dz_)
+        print_res_dz();
       if(d_)
         print_res_d();
       if(bg_)
         print_res_bg();
       if(bga_)
         print_res_bga();
-      if(!d_ && !bg_ && !bga_)
+      if(!d_ && !bg_ && !bga_ && !dz_)
         print_res_hist();
 
       LOG(INFO) << "Done Finding Coverage " ;
@@ -240,10 +292,7 @@ namespace tensorflow {
     }
 
     Status CalculateCoverage(const Alignment *result,uint32 flagf) {
-      // figure out the 5' position
-      // the result->location is already genome relative, we shouldn't have to worry
-      // about negative index after clipping, but double check anyway
-      // cigar parsing adapted from samblaster
+
       const char* cigar;
       size_t cigar_len;
       cigar = result->cigar().c_str();
@@ -253,99 +302,47 @@ namespace tensorflow {
       char op;
       int op_len;
       int index = result->position().ref_index();
+
       if(flag[index]==-1)
       {
+        //print_res_hist();
+        //print_res_bg();
         output[index] = new int[ref_sizes_[index]];
-        memset(output[index],0,sizeof(output[index]));
-        for(int j=0;j<ref_sizes_[index];j++)
-        {
-          output[index][j]=0;
-        }
+        memset(output[index],0,ref_sizes_[index] * sizeof(int));
         flag[index]=0;
-
       }
       int start = result->position().position();
+      //cout << start<<" "<<cigar<<endl;
+
+
+
       while(cigar_len > 0)
       {
         size_t len = parseNextOp(cigar, op, op_len);
         cigar += len;
         cigar_len -= len;
-        //LOG(INFO) << "cigar was " << op_len << " " << op;
-        //LOG(INFO) << "cigar len is now: " << cigar_len;
-        //cout << start <<"-"<<op_len << endl;
-        // fflush(stdout);
-        if (op == 'M')
+
+        if(op == 'M' || op=='X' || op=='=')
         {
           for(int i=0;i<op_len;i++)
           {
             if(strand_=="B" || (strand_=="+" && IsForwardStrand(flagf)) || (strand_=="-" && IsReverseStrand(flagf)))
-            { if(max_==-1)
-                output[index][start+i]++;
-              else if(max_!=-1 && output[index][start+i]<max_)
+            {
                 output[index][start+i]++;
             }
           }
+          //cout << start<<" "<<start+op_len-1<<endl;
+          //cout << endl;
         }
-        start+=op_len;
+
+        if(op=='D' || op=='M' || op=='N' || op=='X' || op=='=')
+          start+=op_len;
+        // if(op!='I')
+        //   start+=op_len;
       }
+
       return Status::OK();
     }
-
-    Status CalculateCoverage2(const Alignment *result,uint32 flagf)
-    {
-      // figure out the 5' position
-      // the result->location is already genome relative, we shouldn't have to worry
-      // about negative index after clipping, but double check anyway
-      // cigar parsing adapted from samblaster
-      const char* cigar;
-      size_t cigar_len;
-      cigar = result->cigar().c_str();
-      cigar_len = result->cigar().length();
-      //cout << cigar << endl;
-
-      char op;
-      int op_len;
-      int index = result->position().ref_index();
-      if(flag[index]==-1)
-      {
-        output[index] = new int[ref_sizes_[index]];
-        memset(output[index],0,sizeof(output[index]));
-        for(int j=0;j<ref_sizes_[index];j++)
-        {
-          output[index][j]=0;
-        }
-        flag[index]=0;
-
-      }
-      int start = result->position().position();
-      while(cigar_len > 0)
-      {
-        size_t len = parseNextOp(cigar, op, op_len);
-        cigar += len;
-        cigar_len -= len;
-        //LOG(INFO) << "cigar was " << op_len << " " << op;
-        //LOG(INFO) << "cigar len is now: " << cigar_len;
-        //cout << start <<"-"<<op_len << endl;
-        // fflush(stdout);
-        if (op == 'M')
-        {
-          for(int i=0;i<op_len;i++)
-          {
-            if(strand_=="B" || (strand_=="+" && IsForwardStrand(flagf)) || (strand_=="-" && IsReverseStrand(flagf)))
-            { if(max_==-1)
-                output[index][start+i]++;
-              else if(max_!=-1 && output[index][start+i]<max_)
-                output[index][start+i]++;
-            }
-          }
-        }
-        start+=op_len;
-      }
-      return Status::OK();
-    }
-
-
-
 
     void Compute(OpKernelContext* ctx) override {
 
@@ -359,16 +356,6 @@ namespace tensorflow {
       ResourceContainer<Data> *results_container;
       OP_REQUIRES_OK(ctx, rmgr->Lookup(results_handle(0), results_handle(1), &results_container));
       AGDResultReader results_reader(results_container, num_results);
-      //cout << results_handle << " fg "<< num_results << endl;
-      // get output buffer pairs (pair holds [index, data] to construct
-      // the results builder for output
-      // ResourceContainer<BufferPair> *output_bufferpair_container;
-      // OP_REQUIRES_OK(ctx, GetOutputBufferPair(ctx, &output_bufferpair_container));
-      // auto output_bufferpair = output_bufferpair_container->get();
-      // AlignmentResultBuilder results_builder;
-      // results_builder.SetBufferPair(output_bufferpair);
-      LOG(INFO) << "reading result file " ;
-
       // Create an output tensor
       const Tensor& input_tensor = ctx->input(1);
       auto input = input_tensor.flat<int32>();
@@ -387,9 +374,7 @@ namespace tensorflow {
 
 
 
-    //auto output = output_tensor->flat<int32>();
 
-    // Set all but the first element of the output tensor to 0.
 
       Alignment result;
       Status s = results_reader.GetNextResult(result);
@@ -402,13 +387,14 @@ namespace tensorflow {
 
           // we have a single alignment
           if (IsUnmapped(result.flag())) {
+            //cout << "isUnmapped";
+            fflush(stdout);
             s = results_reader.GetNextResult(result);
             continue;
           }
-
-          //LOG(INFO) << "processing mapped orphan at " << result->location_;
           OP_REQUIRES_OK(ctx, CalculateCoverage(&result,result.flag()));
         s = results_reader.GetNextResult(result);
+
         //cout << "reading a chunk of file" << endl;
         fflush(stdout);
       } // while s is ok()
@@ -433,6 +419,7 @@ namespace tensorflow {
     int max_;
     bool bg_;
     bool d_;
+    bool dz_;
     string strand_;
     bool bga_;
 
