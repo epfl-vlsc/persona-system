@@ -24,6 +24,11 @@ namespace tensorflow {
   public:
     explicit StageBarrierOp(OpKernelConstruction *ctx) : AsyncOpKernel(ctx) { }
 
+    ~StageBarrierOp() {
+      core::ScopedUnref a1(input_queue_);
+      core::ScopedUnref a2(output_queue_);
+    }
+
     void ComputeAsync(OpKernelContext* ctx, DoneCallback done) override {
       if (!input_queue_) {
         OP_REQUIRES_OK_ASYNC(ctx, Init(ctx), done);

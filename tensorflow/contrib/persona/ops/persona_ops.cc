@@ -223,6 +223,18 @@ same location. Our implementation uses google::dense_hash_table,
 trading memory for faster execution.
   )doc");
 
+  REGISTER_OP("AGDFlagstat")
+  .Input("results_handle: string")
+  .Input("num_records: int32")
+  .Output("result: int32")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->input(1));
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Flagstat module that gathers and displays stats on a dataset
+  )doc");
+
   REGISTER_OP("AGDMergeMetadata")
   .Attr("chunk_size: int >= 1")
   .Input("buffer_pair_pool: Ref(string)")
@@ -1189,7 +1201,33 @@ num_records: number of records in output. Usually `chunk_size` except for the la
   })
   .Doc(R"doc(
   )doc");
-  
+
+  REGISTER_OP("Batcher")
+  .Attr("batch_size: int >= 1")
+  .Attr("T: type")
+  .Attr("shape: shape")
+  .Input("input_queue_ref: resource")
+  .Output("batched_tensor: T")
+  .Output("request_id: string")
+  .SetShapeFn([](InferenceContext* c) {
+    TensorShapeProto input_proto;
+    TF_RETURN_IF_ERROR(c->GetAttr("shape", &input_proto));
+    ShapeHandle input_shape;
+    TF_RETURN_IF_ERROR(c->MakeShapeFromShapeProto(input_proto, &input_shape));
+    if (!c->FullyDefined(input_shape)) {
+      return Internal("attr shape must be fully defined");
+    }
+    PartialTensorShape unknown({-1});
+    PartialTensorShape pt = unknown.Concatenate(PartialTensorShape(input_proto));
+    ShapeHandle batch_shape;
+    TF_RETURN_IF_ERROR(c->MakeShapeFromPartialTensorShape(pt, &batch_shape));
+
+    c->set_output(0, batch_shape);
+    c->set_output(1, c->Scalar());
+    return Status::OK();
+  })
+  .SetIsStateful();
+
   REGISTER_OP("BufferPairCompressor")
   .Attr("pack: bool = false")
   .Input("buffer_pool: Ref(string)")
