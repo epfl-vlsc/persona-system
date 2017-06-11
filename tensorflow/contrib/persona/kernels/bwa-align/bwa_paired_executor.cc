@@ -117,8 +117,10 @@ namespace tensorflow {
           return;
         }
 
-        if (request_queue_->drop_if_equal(reads_container))
-          finalize_queue_->push(reads_container);
+        if (request_queue_->drop_if_equal(reads_container)) {
+          //LOG(INFO) << my_id << " pushing to pe stat";
+          pe_stat_queue_->push(reads_container);
+        }
 
       }
 
@@ -133,23 +135,25 @@ namespace tensorflow {
         my_id = id_.fetch_add(1, memory_order_relaxed);
       }
       
-      shared_ptr<ResourceContainer<BWAReadResource>> reads_container;
       while (run_pe_stat_) {
         // reads must be in this scope for the custom releaser to work!
+        shared_ptr<ResourceContainer<BWAReadResource>> reads_container;
         if (!pe_stat_queue_->pop(reads_container)) {
           continue;
         }
 
         auto *bwareads = reads_container->get();
-        LOG(INFO) << "pe stat waiting for ready";
+        //LOG(INFO) << "pe stat waiting for ready";
         bwareads->wait_for_ready();
-        LOG(INFO) << "pe stat got ready";
+        //LOG(INFO) << "pe stat got ready";
         std::vector<mem_alnreg_v>& regs = bwareads->get_regs();
         mem_pestat_t* pes = bwareads->get_pes();
-        LOG(INFO) << "pestat op calculating over " << regs.size() << " regs.";
+        //LOG(INFO) << "pestat op calculating over " << regs.size() << " regs.";
         // set the pestat
         mem_pestat(options_, index_->bns->l_pac, regs.size(), &regs[0], pes);
 
+        //LOG(INFO) << my_id << " pushing to finalize";
+        bwareads->reset_subchunks(); 
         finalize_queue_->push(reads_container);
       }
       
@@ -163,11 +167,10 @@ namespace tensorflow {
         my_id = id_.fetch_add(1, memory_order_relaxed);
       }
       
-      shared_ptr<ResourceContainer<BWAReadResource>> reads_container;
       bwa_wrapper::BWAAligner aligner(options_, index_, max_read_size_);
       Status io_chunk_status, subchunk_status;
       vector<AlignmentResultBuilder> result_builders;
-      result_builders.reserve(max_secondary_+1);
+      result_builders.resize(max_secondary_+1);
 
       vector<BufferPair*> result_bufs;
       result_bufs.reserve(max_secondary_+1);
@@ -175,6 +178,7 @@ namespace tensorflow {
 
       while (run_finalize_) {
         // reads must be in this scope for the custom releaser to work!
+        shared_ptr<ResourceContainer<BWAReadResource>> reads_container;
         if (!finalize_queue_->pop(reads_container)) {
           continue;
         }
@@ -183,15 +187,18 @@ namespace tensorflow {
 
         size_t interval;
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, result_bufs, &interval);
+        if (result_bufs.size() != result_builders.size())
+          LOG(INFO) << "mismatch in result buf and builder size!!!";
         vector<mem_alnreg_v>& regs = reads->get_regs();
         mem_pestat_t* pes = reads->get_pes();
         while (io_chunk_status.ok()) {
           //LOG(INFO) << "finalizer thread " << my_id << " got  interval: " << interval;
 
-
           for (int i = 0; i < result_builders.size(); i++)
             result_builders[i].SetBufferPair(result_bufs[i]);
 
+          subchunk_resource->reset_iter(); // need to reset since we did not re-split
+          //LOG(INFO) << "finalizing " << subchunk_resource->num_records();
           Status s = aligner.FinalizeSubchunk(subchunk_resource, interval, regs, pes,
               result_builders);
 
@@ -209,7 +216,9 @@ namespace tensorflow {
           return;
         }
 
-        request_queue_->drop_if_equal(reads_container);
+        //if (finalize_queue_->drop_if_equal(reads_container))
+          //LOG(INFO) << my_id << " dropping equal in finalize";
+        finalize_queue_->drop_if_equal(reads_container);
 
       }
 
