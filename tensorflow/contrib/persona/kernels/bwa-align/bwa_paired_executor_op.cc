@@ -73,7 +73,7 @@ namespace tensorflow {
       ExecutorContainer* new_executor;
 
       auto creator = [this, ctx](ExecutorContainer** executor) {
-        LOG(INFO) << "creating snap single executor";
+        LOG(INFO) << "creating bwa paired executor";
         unique_ptr<BWAPairedExecutor> value(new BWAPairedExecutor(ctx->env(), index_resource_->get(),
                                                                     options_resource_->get(), max_secondary_,
                                                                     num_threads_, capacity_, max_read_size_,
