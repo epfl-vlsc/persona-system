@@ -30,7 +30,7 @@ namespace tensorflow {
       auto ret = fwrite(data, size, 1, f);
       if (ret != 1) {
           fclose(f);
-          return Internal("Unable to write file, fwrite return value was ", ret);
+          return Internal("Unable to write file, fwrite return value was ", ret, " with errno: ", errno);
       }
       return Status::OK();
   }

@@ -253,14 +253,14 @@ namespace bwa_wrapper {
       result_builders[0].AppendAlignmentResult(result);
       result_builders[0].AppendAlignmentResult(result_mate);
       if (num_results[0] > 1) {  // a supplemental for first 
-        LOG(INFO) << "first had a supplemental!";
+        //LOG(INFO) << "first had a supplemental!";
         ProcessResult(&results[0][1], nullptr, result_sup, cigar);
         result_sup.set_cigar(cigar);
         result_builders[1].AppendAlignmentResult(result_sup);
       } else
         result_builders[1].AppendEmpty();
       if (num_results[1] > 1) {  // a supplemental for second 
-        LOG(INFO) << "second had a supplemental!";
+        //LOG(INFO) << "second had a supplemental!";
         ProcessResult(&results[1][1], nullptr, result_sup_mate, cigar);
         result_sup_mate.set_cigar(cigar);
         result_builders[1].AppendAlignmentResult(result_sup_mate);
