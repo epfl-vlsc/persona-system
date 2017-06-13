@@ -39,12 +39,12 @@ namespace tensorflow {
   }
 
   void ColumnBuilder::AppendRecord(const char* data, const size_t size) {
-    if (size > UINT8_MAX)
+    if (size > format::MAX_INDEX_SIZE)
       LOG(ERROR) << "WARNING: Appending data larger than " << UINT8_MAX << " bytes not supported by AGD.";
     if (size > 0) // could be a zero record
       data_->AppendBuffer(data, size);
-    char cSize = static_cast<char>(size);
-    index_->AppendBuffer(&cSize, sizeof(cSize));
+    format::RelativeIndex cSize = static_cast<uint16_t>(size);
+    index_->AppendBuffer(reinterpret_cast<const char *>(&cSize), sizeof(cSize));
   }
 
 } // namespace tensorflow {
