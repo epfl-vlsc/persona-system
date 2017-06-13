@@ -29,7 +29,7 @@ namespace tensorflow {
 
     Status LoadChunk(OpKernelContext* ctx, string chunk_path) {
 
-      LOG(INFO) << "chunk path is " << chunk_path;
+      VLOG(INFO) << "chunk path is " << chunk_path;
       for (int i = 0; i < columns_.size(); i++) {
 
         TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + 
@@ -82,7 +82,7 @@ namespace tensorflow {
             printf("\n");
           } else if (columns_[i] == "results" ) {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
-            LOG(INFO) << "length is " << length;
+            VLOG(INFO) << "length is " << length;
             agd_result.ParseFromArray(data, length);
             printf("Loc: %lld contig: %d Flag: %04x MAPQ: %d Nextloc: %lld Nextcontig: %d\n", agd_result.position().position(),
                    agd_result.position().ref_index(), agd_result.flag(),
