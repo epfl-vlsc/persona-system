@@ -89,7 +89,7 @@ namespace tensorflow {
 
   Status AGDRecordReader::GetRecordAt(size_t index, const char** data, size_t* size) {
     if (index < num_records_) {
-      *size = index_[index];
+      *size = (size_t) index_[index];
       *data = data_ + absolute_index_[index];
     } else {
       return OutOfRange("agd record random access out of range");
