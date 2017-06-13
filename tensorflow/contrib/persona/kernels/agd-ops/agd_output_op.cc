@@ -37,7 +37,7 @@ namespace tensorflow {
         buffers_[i].reset();
         auto unpack = columns_[i] == "base" && unpack_;
         TF_RETURN_IF_ERROR(rec_parser_.ParseNew((const char*)mmaps_[i]->data(), mmaps_[i]->length(),
-            false, &buffers_[i], &ordinals_[i], &num_records_[i], record_id_, unpack));
+            true, &buffers_[i], &ordinals_[i], &num_records_[i], record_id_, unpack));
         readers_[i].reset(new AGDRecordReader(buffers_[i].data(), num_records_[i]));
       }
       return Status::OK();
