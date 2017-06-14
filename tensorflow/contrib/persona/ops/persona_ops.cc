@@ -272,14 +272,13 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
   REGISTER_OP("AGDOutput")
   .Attr("unpack: bool = true")
   .Attr("columns: list(string)")
-  .Input("path: string")
   .Input("chunk_names: string")
   .Input("chunk_size: int32")
   .Input("start: int32")
   .Input("finish: int32")
   .SetIsStateful()
   .Doc(R"doc(
-Takes a vector of string keys for AGD chunks, prefixed by `path`.
+Takes a vector of string keys for AGD chunks (full paths)
 
 Prints records to stdout from record indices `start` to `finish`.
   )doc");
