@@ -14,6 +14,7 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
         "//tensorflow/contrib/persona/kernels/agd-ops:agd_ops",
         "//tensorflow/contrib/persona/kernels/bam:agdbam",
+        "//tensorflow/contrib/persona/kernels/sra:agdsra",
         "//tensorflow/contrib/persona/kernels/barrier:barrier",
         "//tensorflow/contrib/persona/kernels/bwa-align:bwa_align",
         "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
