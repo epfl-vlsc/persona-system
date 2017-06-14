@@ -32,7 +32,7 @@ namespace tensorflow {
       VLOG(INFO) << "chunk path is " << chunk_path;
       for (int i = 0; i < columns_.size(); i++) {
 
-        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(path_ + 
+        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile( 
               chunk_path + "." + columns_[i], &mmaps_[i]));
         buffers_[i].reset();
         auto unpack = columns_[i] == "base" && unpack_;
@@ -45,14 +45,12 @@ namespace tensorflow {
 
     void Compute(OpKernelContext* ctx) override {
 
-      const Tensor *chunk_names_t, *path_t, *start_t, *end_t, *chunk_size_t;
+      const Tensor *chunk_names_t, *start_t, *end_t, *chunk_size_t;
       OP_REQUIRES_OK(ctx, ctx->input("chunk_names", &chunk_names_t));
-      OP_REQUIRES_OK(ctx, ctx->input("path", &path_t));
       OP_REQUIRES_OK(ctx, ctx->input("start", &start_t));
       OP_REQUIRES_OK(ctx, ctx->input("finish", &end_t));
       OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
       auto chunk_names = chunk_names_t->vec<string>();
-      path_ = path_t->scalar<string>()();
       auto start = start_t->scalar<int>()();
       auto end = end_t->scalar<int>()();
       auto chunksize = chunk_size_t->scalar<int>()();
@@ -125,7 +123,7 @@ namespace tensorflow {
     vector<unique_ptr<AGDRecordReader>> readers_;
 
     RecordParser rec_parser_;
-    string path_, record_id_;
+    string record_id_;
     bool unpack_;
     vector<string> columns_;
 
