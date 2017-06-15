@@ -69,7 +69,6 @@ namespace tensorflow {
   void BWAPairedExecutor::init_workers() {
 
     auto aligner_func = [this]() {
-      //std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
       int my_id = 0;
       {
         mutex_lock l(mu_);
@@ -88,7 +87,6 @@ namespace tensorflow {
         if (!request_queue_->peek(reads_container)) {
           continue;
         }
-        //timeLog.peek = std::chrono::high_resolution_clock::now();
 
         auto *reads = reads_container->get();
 
@@ -96,9 +94,6 @@ namespace tensorflow {
         io_chunk_status = reads->get_next_subchunk(&subchunk_resource, &interval);
         vector<mem_alnreg_v>& regs = reads->get_regs();
         while (io_chunk_status.ok()) {
-          //LOG(INFO) << "aligner thread " << my_id << " got interval " << interval;
-
-
           Status s = aligner.AlignSubchunk(subchunk_resource, interval, regs);
 
           if (!s.ok()){
@@ -118,7 +113,7 @@ namespace tensorflow {
         }
 
         if (request_queue_->drop_if_equal(reads_container)) {
-          //LOG(INFO) << my_id << " pushing to pe stat";
+          LOG(INFO) << my_id << " pushing to pe stat";
           pe_stat_queue_->push(reads_container);
         }
 
