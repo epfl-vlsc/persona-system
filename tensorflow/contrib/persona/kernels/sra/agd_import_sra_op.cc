@@ -170,48 +170,20 @@ namespace tensorflow {
       vector<BinaryBases> bases_;
 
       Status Process(ColumnBuilder& bases, ColumnBuilder& qual, ColumnBuilder& meta, int& num_recs) {
-//	ReadIterator iterator = reader.getReadRange(1, numReads);
         num_recs = 0;
-     //   cout << "num recs before is " << num_recs;
-	
         for (size_t i = 0; i < chunk_size_; i++) {
 	   if (!iterator->nextRead()) {
    	      return OutOfRange("No more reads in the SRA file");	
 	   }
-	  // char base[251];
-	   //char quality[251];
-	   if (iterator->getReadBases().size() > 250) {
-             /// base = base.substr(0,250);
-	      //char* base;
-	      //char* quality;
-	      //strncpy(base, iterator->getReadBases().data(), 250);
-	      //strncpy(quality, iterator->getReadQualities().data(), 250);
-	      //base[250] = '\0';
-	      //quality[250] = '\0';
-	      if (i % 1000000 == 0){
-//                 cout << "default size should only print i = " << i <<" since chunk size is" << chunk_size_;   
-              }
-	      TF_RETURN_IF_ERROR(IntoBases(iterator->getReadBases().data(), 250, bases_));
-
-              bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
-              qual.AppendRecord(iterator->getReadQualities().data(), 250);
-
-		 //   quality = quality.substr(0,250); 
-	   } else {
-             TF_RETURN_IF_ERROR(IntoBases(iterator->getReadBases().data(), iterator->getReadBases().size(), bases_));
-
-             bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
-             qual.AppendRecord(iterator->getReadQualities().data(), iterator->getReadQualities().size());
-	   }
-          //TF_RETURN_IF_ERROR(IntoBases(base, base.size(), bases_));
-
-           //bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
-           //qual.AppendRecord(quality, quality.size());
+	   if (iterator->getReadBases().size() > UINT16_MAX) {
+              return Internal("An error occured"); 
+	   } 
+           TF_RETURN_IF_ERROR(IntoBases(iterator->getReadBases().data(), iterator->getReadBases().size(), bases_));
+           bases.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
+           qual.AppendRecord(iterator->getReadQualities().data(), iterator->getReadQualities().size());
 	   meta.AppendRecord(iterator->getReadName().data(), iterator->getReadName().size());
            num_recs++;
-
 	}
-//	cout << "num recs after is " << num_recs;
 	return Status::OK();
       }
 
