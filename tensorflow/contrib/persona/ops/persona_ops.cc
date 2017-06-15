@@ -1056,6 +1056,35 @@ chunk_out: a 3 or 4 x 2 matrix containing handles to chunks in buffer pairs
 num_records: number of records in output. Usually `chunk_size` except for the last one
 )doc");
 
+REGISTER_OP("AgdImportSra")
+  .Attr("path: string")
+  .Attr("num_threads: int >= 1")
+  .Attr("chunk_size: int = 100000")
+  .Input("bufpair_pool: Ref(string)")
+  .Output("chunk_out: string")
+  .Output("num_records: int32")
+  .Output("first_ordinal: int64")
+  .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
+      int dim = 3;
+      c->set_output(0, c->Matrix(dim, 2));
+      c->set_output(1, c->Scalar());
+      c->set_output(2, c->Scalar());
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Import AGD chunks from a SRA file. 
+
+path: the full path of the SRA file
+num_threads: number of threads to give SRA reader
+chunk_size: the output dataset chunk size (default 100K)
+bufpair_pool: reference to buffer pair pool
+chunk_out: a 3 x 2 matrix containing handles to chunks in buffer pairs
+num_records: number of records in output. Usually `chunk_size` except for the last one
+first_ordinal: ranges from 0 to the number of reads in the SRA file
+)doc");
+
   REGISTER_OP("AgdOutputBam")
   .Attr("path: string")
   .Attr("pg_id: string")
