@@ -58,7 +58,7 @@ namespace tensorflow {
 
     Status CompactBases(BufferPair& bufpair) {
       const format::RelativeIndex* index = reinterpret_cast<const format::RelativeIndex*>(bufpair.index().data());
-      auto index_size = bufpair.index().size();
+      auto index_size = bufpair.index().size() / sizeof(format::RelativeIndex);
       const auto data = bufpair.data().data();
 
       // resetting just changes the size to 0,
@@ -72,7 +72,7 @@ namespace tensorflow {
         Status s = format::IntoBases(base_data, entry_size, compact_);
         if (!s.ok()) {
           string test(base_data, entry_size);
-          LOG(INFO) << "compacting: " << test;
+          LOG(INFO) << "compacting: " << test << ", size is " << entry_size;
         }
         TF_RETURN_IF_ERROR(s);
         TF_RETURN_IF_ERROR(AppendRecord(&compact_[0], compact_.size(), bufpair));

@@ -83,8 +83,8 @@ namespace tensorflow {
         auto &data = bp->data();
 
         TF_RETURN_IF_ERROR(r.GetNextRecord(&record_data, &record_size));
-        auto char_sz = static_cast<char>(record_size);
-        TF_RETURN_IF_ERROR(index.AppendBuffer(&char_sz, sizeof(char_sz)));
+        RelativeIndex idx_sz = static_cast<RelativeIndex>(record_size);
+        TF_RETURN_IF_ERROR(index.AppendBuffer(reinterpret_cast<const char*>(&idx_sz), sizeof(idx_sz)));
         TF_RETURN_IF_ERROR(data.AppendBuffer(record_data, record_size));
 
         return Status::OK();
