@@ -50,7 +50,7 @@ namespace tensorflow {
       // We assume that we get a valid buffer from the converter
       // Turn on verify in the AGDReader op if you want this
       auto index = reinterpret_cast<const format::RelativeIndex*>(data);
-      auto record_data = data + num_records;
+      auto record_data = data + num_records * sizeof(format::RelativeIndex);
       size_t offset = 0, record_size;
       char result, ascii_base;
 

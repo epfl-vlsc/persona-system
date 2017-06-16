@@ -5,13 +5,12 @@
 namespace tensorflow {
 
   using namespace std;
-
+  using namespace format;
 
   void AlignmentResultBuilder::AppendEmpty() {
-    char val = 0;
-    index_->AppendBuffer(&val, 1);
+    format::RelativeIndex val = 0;
+    index_->AppendBuffer(reinterpret_cast<const char*>(&val), sizeof(RelativeIndex));
   }
-
 
   void AlignmentResultBuilder::AppendAlignmentResult(const Alignment &result)
   {
@@ -22,15 +21,6 @@ namespace tensorflow {
     result.SerializeToArray(&scratch_[0], size);
     ColumnBuilder::AppendRecord(&scratch_[0], size);
   }
-
-  /*void AlignmentResultBuilder::AppendAlignmentResult(const PairedAlignmentResult &result, const size_t result_idx) {
-    converted_result.convertFromSNAP(result, result_idx, 0); // TODO is 0 the correct flag to write in this case?
-    data_->AppendBuffer(reinterpret_cast<const char*>(&result), sizeof(result));
-    size_t index_entry = sizeof(result);
-    char size = static_cast<char>(index_entry);
-    index_->AppendBuffer(&size, 1);
-  }*/
-
   
   void ColumnBuilder::SetBufferPair(BufferPair* data) {
     data->reset();
