@@ -40,7 +40,7 @@ prep_dirs() {
         set +e
         sudo apt-get -y install python3-pip python3-dev python-virtualenv
         set -e
-        sudo pip3 install --upgrade pip setuptools wheel
+        sudo pip3 install --upgrade pip setuptools wheel pysam
     fi
     [ ! -e $build_virtualenv_dir ] || rm -rf $build_virtualenv_dir
     [ ! -e $dev_dir ] || rm -rf $dev_dir
