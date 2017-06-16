@@ -45,12 +45,13 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, ctx->GetAttr("path", &path));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("num_threads", &num_threads));
         OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
-	
+        OP_REQUIRES_OK(ctx, ctx->GetAttr("start", &start));
+        OP_REQUIRES_OK(ctx, ctx->GetAttr("count", &count));	
         // initialize the Sra Reader
 	ReadCollection reader = ncbi::NGS::openReadCollection ( path.c_str() );
 	numReads = reader.getReadCount();
-	cout << "Number of reads: " << numReads << "\n";
-	iterator = new ReadIterator(reader.getReadRange(1, numReads));
+        first_ordinal_ = start - 1;
+	iterator = new ReadIterator(reader.getReadRange(start, count));//1 numReads
       }
     
       Status GetOutputBufferPair(OpKernelContext* ctx, ResourceContainer<BufferPair> **ctr)
@@ -137,10 +138,11 @@ namespace tensorflow {
       }
 
       ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
-
+      int start;
+      int count;
       int chunk_size_;
       ReadIterator* iterator = nullptr;
-      int64 first_ordinal_ = 0;
+      int64 first_ordinal_;
       TF_DISALLOW_COPY_AND_ASSIGN(AgdImportSraOp);
   };
 
