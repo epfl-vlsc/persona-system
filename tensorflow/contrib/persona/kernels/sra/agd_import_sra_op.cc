@@ -121,10 +121,19 @@ namespace tensorflow {
 
       Status Process(ColumnBuilder& bases, ColumnBuilder& qual, ColumnBuilder& meta, int& num_recs) {
         num_recs = 0;
+        cout << chunk_size_ << "chunk size \n";
         for (size_t i = 0; i < chunk_size_; i++) {
+           
 	   if (!iterator->nextRead()) {
-   	      return OutOfRange("No more reads in the SRA file");	
-	   }
+   	      cout <<"End of file: " << i << "\n";
+              if (i == 0) 
+                  return OutOfRange("No more reads in the SRA file");	
+              else 
+                  break;
+	     // cout <<"End of file" << "\n";
+             // break;
+           }
+           
 	   if (iterator->getReadBases().size() > UINT16_MAX) {
               return Internal("An error occured"); 
 	   } 
