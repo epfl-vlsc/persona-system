@@ -190,20 +190,9 @@ REGISTER_OP("AGDGeneCoverage")
       return Status::OK();
     })
 
-
-
-// .SetShapeFn([](InferenceContext *c) {
-//     ShapeHandle input_data;
-//     int arr_size;
-//     TF_RETURN_IF_ERROR(c->GetAttr("ref_size",&arr_size));
-//     // TODO give shape to inputhandle ie int32 of size equi to ref_size
-//     c->set_output(0, input_data);
-//
-//     return Status::OK();
-//   })
 .SetIsStateful()
 .Doc(R"doc(
-Gives coverage of each of the base-pair in reference genome.
+Gives coverage values of each of the base-pair in reference genome.
 )doc");
 
 

@@ -52,17 +52,20 @@ namespace tensorflow {
         OP_REQUIRES_OK(context, context->GetAttr("bga", &bga_));
         OP_REQUIRES(context, ref_seqs_.size() == ref_sizes_.size(), Internal("ref seqs was not same size as ref seq sizes lists"));
 
+        // flag is used to generate output array only for those references which have some alignment in the read chunks
         for(int i=0;i<ref_seqs_.size();i++)
         {
           flag.push_back(-1);
         }
+
+        //a 2-d array to store number of alignments
         output = new int*[ref_seqs_.size()];
-        //cout << "Dsd" << endl;
-        //fflush(stdout);
+
 
 
     }
-    void print_res_d()
+    // reporting per-base genome coverage
+    void print_res_d_or_dz(bool z_)
     {
       for(int i=0;i<ref_sizes_.size();i++)
       {
@@ -70,10 +73,11 @@ namespace tensorflow {
         {
           for(int j=0 ; j<ref_sizes_[i];j++)
           {
-            cout << ref_seqs_[i] << "\t" << j+1 << "\t"<< output[i][j] << endl;
+            if(output[i][j]!=0 || z_)
+              cout << ref_seqs_[i] << "\t" << j+1 << "\t"<< output[i][j] << endl;
           }
         }
-        else
+        else if(z_)
         {
           for(int j=0 ; j<ref_sizes_[i];j++)
           {
@@ -82,24 +86,62 @@ namespace tensorflow {
         }
       }
     }
-    void print_res_dz()
-    {
-      for(int i=0;i<ref_sizes_.size();i++)
-      {
-        if(flag[i]==0)
-        {
-          for(int j=0 ; j<ref_sizes_[i];j++)
-          {
-            if(output[i][j]!=0)
-            {
-              cout << ref_seqs_[i] << "\t" << j << "\t"<< output[i][j] << endl;
-            }
-          }
-        }
-      }
-    }
+    // reporting per-base genome coverage
+    // void print_res_dz()
+    // {
+    //   for(int i=0;i<ref_sizes_.size();i++)
+    //   {
+    //     if(flag[i]==0)
+    //     {
+    //       for(int j=0 ; j<ref_sizes_[i];j++)
+    //       {
+    //         if(output[i][j]!=0)
+    //         {
+    //           cout << ref_seqs_[i] << "\t" << j << "\t"<< output[i][j] << endl;
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
+    //output in bedgraph format
+    // void print_res_bg()
+    // {
+    //   for(int i=0;i<ref_seqs_.size();i++)
+    //   {
+    //     if(flag[i]==0)
+    //     {
+    //       int lastindex = 0;
+    //       int lastoutput = output[i][0];
+    //       for(int j=1;j<ref_sizes_[i];j++)
+    //       {
+    //         if(output[i][j]==lastoutput)
+    //         {
+    //           continue;
+    //         }
+    //         else
+    //         {
+    //
+    //           if(lastoutput!=0)
+    //           {
+    //             cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< j << "\t"<< lastoutput * scale_ << endl;
+    //           }
+    //           lastindex = j ;
+    //           lastoutput = output[i][j];
+    //         }
+    //       }
+    //       if(lastoutput!=0)
+    //       {
+    //         cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< ref_sizes_[i] << "\t"<< lastoutput * scale_ << endl;
+    //       }
+    //     }
+    //   }
+    //
+    // }
 
-    void print_res_bg()
+
+
+    // output in bedgraph format(zeroes as well)
+    void print_res_bg_or_bga(bool z_)
     {
       for(int i=0;i<ref_seqs_.size();i++)
       {
@@ -115,40 +157,7 @@ namespace tensorflow {
             }
             else
             {
-
-              if(lastoutput!=0)
-              {
-                cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< j << "\t"<< lastoutput * scale_ << endl;
-              }
-              lastindex = j ;
-              lastoutput = output[i][j];
-            }
-          }
-          if(lastoutput!=0)
-          {
-            cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< ref_sizes_[i] << "\t"<< lastoutput * scale_ << endl;
-          }
-        }
-      }
-
-    }
-    void print_res_bga()
-    {
-      for(int i=0;i<ref_seqs_.size();i++)
-      {
-        if(flag[i]==0)
-        {
-          int lastindex = 0;
-          int lastoutput = output[i][0];
-          for(int j=1;j<ref_sizes_[i];j++)
-          {
-            if(output[i][j]==lastoutput)
-            {
-              continue;
-            }
-            else
-            {
-
+              if(lastoutput!=0 || z_)
               cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< j << "\t"<< lastoutput * scale_ << endl;
 
               lastindex = j ;
@@ -160,13 +169,15 @@ namespace tensorflow {
           cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< ref_sizes_[i] << "\t"<< lastoutput * scale_ << endl;
 
         }
-        else
+        else if(z_)
         {
           cout << ref_seqs_[i]<<"\t"<< 0 << "\t"<< ref_sizes_[i] << "\t"<< 0 * scale_ << endl;
         }
       }
 
     }
+
+    // print output in default format ie through histogram
     void print_res_hist()
     {
       long long int size_it=0;
@@ -248,6 +259,8 @@ namespace tensorflow {
         }
 
       }
+
+      // output for a genome which contain many reference sequencies
       for(int i=0;i<=maxofmaxcov;i++)
       {
         if(totalhistogram[i]!=0)
@@ -262,13 +275,13 @@ namespace tensorflow {
     ~AGDGeneCoverageOp()
     {
       if(dz_)
-        print_res_dz();
+        print_res_d_or_dz(false);
       if(d_)
-        print_res_d();
+        print_res_d_or_dz(true);
       if(bg_)
-        print_res_bg();
+        print_res_bg_or_bga(false);
       if(bga_)
-        print_res_bga();
+        print_res_bg_or_bga(true);
       if(!d_ && !bg_ && !bga_ && !dz_)
         print_res_hist();
 
@@ -276,7 +289,7 @@ namespace tensorflow {
     }
 
 
-
+    //for the cigar string find the op name and number
     inline int parseNextOp(const char *ptr, char &op, int &num)
     {
       num = 0;
@@ -291,6 +304,8 @@ namespace tensorflow {
       return ptr - begin;
     }
 
+
+    // main function to increment the counter for each result in the agd column
     Status CalculateCoverage(const Alignment *result,uint32 flagf) {
 
       const char* cigar;
@@ -322,7 +337,7 @@ namespace tensorflow {
         cigar += len;
         cigar_len -= len;
 
-        if(op == 'M' || op=='X' || op=='=')
+        if(op == 'M' || op=='X' || op=='=')  // TODO verify it with examples possibly different from standard
         {
           for(int i=0;i<op_len;i++)
           {
@@ -335,7 +350,7 @@ namespace tensorflow {
           //cout << endl;
         }
 
-        if(op=='D' || op=='M' || op=='N' || op=='X' || op=='=')
+        if(op=='D' || op=='M' || op=='N' || op=='X' || op=='=') // TODO verify it with examples possibly different from standard
           start+=op_len;
         // if(op!='I')
         //   start+=op_len;
@@ -356,11 +371,13 @@ namespace tensorflow {
       ResourceContainer<Data> *results_container;
       OP_REQUIRES_OK(ctx, rmgr->Lookup(results_handle(0), results_handle(1), &results_container));
       AGDResultReader results_reader(results_container, num_results);
-      // Create an output tensor
       const Tensor& input_tensor = ctx->input(1);
       auto input = input_tensor.flat<int32>();
 
+
       // Create an output tensor
+      // no need for output tensor , its a dummy tensor
+      // TODO can remove this output tensor but something must be fed into queue it gives output to
       Tensor* output_tensor = NULL;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, input_tensor.shape(),
                                                        &output_tensor));
@@ -401,18 +418,12 @@ namespace tensorflow {
 
       // done
       resource_releaser(results_container);
-
-
-
-
-
-      //LOG(INFO) << "DONE running mark duplicates!! Found so far: " << num_dups_found_;
-
     }
 
   private:
     vector<string> ref_seqs_;
     vector<int32> ref_sizes_;
+    // for various command line arguments
     int scale_;
     int **output;
     vector<int> flag;
