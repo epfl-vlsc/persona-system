@@ -60,9 +60,17 @@ namespace tensorflow {
           total += ref_sizes_[i];
           ref_size_totals_.push_back(total);
         }
+
+        file_exists = true;
         // open the file, we dont write yet
         bam_fp_ = fopen(path.c_str(), "w");
         header_ = header_ss.str();
+
+        if(bam_fp_ == nullptr)
+        {
+          LOG(INFO) << "bam fp is " << bam_fp_ << " errno is " << errno;
+          file_exists = false;
+        }
 
         buffer_queue_.reset(new ConcurrentQueue<BufferRef>(num_threads_*2));
         compress_queue_.reset(new ConcurrentQueue<CompressItem>(num_threads_*2));
@@ -105,6 +113,7 @@ namespace tensorflow {
           this_thread::sleep_for(chrono::milliseconds(10));
         }
 
+        if (file_exists) {
         // if we have a partial buffer, compress and write it out
 
         if (scratch_pos_ != 0) {
@@ -137,15 +146,17 @@ namespace tensorflow {
         if (status == EOF) 
           LOG(INFO) << "WARNING: Failed to close BAM file pointer: " << status;
 
-        LOG(INFO) << "compress queue push wait: " << compress_queue_->num_push_waits();
+        /*LOG(INFO) << "compress queue push wait: " << compress_queue_->num_push_waits();
         LOG(INFO) << "write queue push wait: " << write_queue_->num_push_waits();
         LOG(INFO) << "compress queue pop wait: " << compress_queue_->num_pop_waits();
         LOG(INFO) << "write queue pop wait: " << write_queue_->num_pop_waits();
         LOG(INFO) << "buffer queue push wait: " << buffer_queue_->num_push_waits();
-        LOG(INFO) << "buffer queue pop wait: " << buffer_queue_->num_pop_waits();
+        LOG(INFO) << "buffer queue pop wait: " << buffer_queue_->num_pop_waits();*/
+        }
       }
 
       void Compute(OpKernelContext* ctx) override {
+        OP_REQUIRES(ctx, bam_fp_ != nullptr ,Internal("Couldn't open file"));
         if (first_) {
           Init(ctx);
           //LOG(INFO) << "getting buffer";
@@ -220,7 +231,7 @@ namespace tensorflow {
           if (occ) 
             meta_len = occ - meta;
 
-          LOG(INFO) << "processing record " << string(meta, meta_len);
+          //LOG(INFO) << "processing record " << string(meta, meta_len);
           // write an entry for each result, skip empty secondaries
           for (uint32 i = 0; i < result_readers.size(); i++) {
             //OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));
@@ -316,7 +327,7 @@ namespace tensorflow {
       }
 
     private:
-
+      bool file_exists;
       Status CompressToBuffer(char* in_buf, uint32_t in_size, char* out_buf, uint32_t out_size,
           size_t &compressed_size) {
         if (in_size == 0)

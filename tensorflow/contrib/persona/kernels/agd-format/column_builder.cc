@@ -5,13 +5,12 @@
 namespace tensorflow {
 
   using namespace std;
-
+  using namespace format;
 
   void AlignmentResultBuilder::AppendEmpty() {
-    char val = 0;
-    index_->AppendBuffer(&val, 1);
+    format::RelativeIndex val = 0;
+    index_->AppendBuffer(reinterpret_cast<const char*>(&val), sizeof(RelativeIndex));
   }
-
 
   void AlignmentResultBuilder::AppendAlignmentResult(const Alignment &result)
   {
@@ -22,15 +21,6 @@ namespace tensorflow {
     result.SerializeToArray(&scratch_[0], size);
     ColumnBuilder::AppendRecord(&scratch_[0], size);
   }
-
-  /*void AlignmentResultBuilder::AppendAlignmentResult(const PairedAlignmentResult &result, const size_t result_idx) {
-    converted_result.convertFromSNAP(result, result_idx, 0); // TODO is 0 the correct flag to write in this case?
-    data_->AppendBuffer(reinterpret_cast<const char*>(&result), sizeof(result));
-    size_t index_entry = sizeof(result);
-    char size = static_cast<char>(index_entry);
-    index_->AppendBuffer(&size, 1);
-  }*/
-
   
   void ColumnBuilder::SetBufferPair(BufferPair* data) {
     data->reset();
@@ -39,11 +29,12 @@ namespace tensorflow {
   }
 
   void ColumnBuilder::AppendRecord(const char* data, const size_t size) {
-    if (size > UINT8_MAX)
+    if (size > format::MAX_INDEX_SIZE)
       LOG(ERROR) << "WARNING: Appending data larger than " << UINT8_MAX << " bytes not supported by AGD.";
-    data_->AppendBuffer(data, size);
-    char cSize = static_cast<char>(size);
-    index_->AppendBuffer(&cSize, sizeof(cSize));
+    if (size > 0) // could be a zero record
+      data_->AppendBuffer(data, size);
+    format::RelativeIndex cSize = static_cast<uint16_t>(size);
+    index_->AppendBuffer(reinterpret_cast<const char *>(&cSize), sizeof(cSize));
   }
 
 } // namespace tensorflow {

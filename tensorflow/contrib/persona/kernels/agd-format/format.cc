@@ -40,17 +40,15 @@ Status append(const BinaryBases* bases, const std::size_t record_size_in_bytes, 
     auto const base = &bases[i];
     TF_RETURN_IF_ERROR(base->append(data, &length));
   }
-  char char_len = static_cast<char>(length);
-  lengths.AppendBuffer(&char_len, 1);
+  RelativeIndex char_len = static_cast<RelativeIndex>(length);
+  lengths.AppendBuffer(reinterpret_cast<const char*>(&char_len), sizeof(char_len));
   return Status::OK();
 }
 
 Status BinaryBases::append(Buffer &data, size_t *num_bases) const
 {
   using namespace errors;
-  BaseAlphabet base;
   auto bases_copy = bases;
-  uint64_t base_i;
   size_t length = 0;
   //TODO this is the method to fix
   for (size_t i = 0; i < compression;) {

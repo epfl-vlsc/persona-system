@@ -26,7 +26,7 @@ class ConcurrentQueue {
     // return true if success and item is valid, false otherwise
     bool pop(T& item);
 
-    void drop_if_equal(T& item);
+    bool drop_if_equal(T& item);
 
     bool peek(T& item);
 
@@ -96,14 +96,17 @@ bool ConcurrentQueue<T>::peek(T& item) {
 }
 
 template <typename T>
-void ConcurrentQueue<T>::drop_if_equal(T& item) {
+bool ConcurrentQueue<T>::drop_if_equal(T& item) {
+  bool ret = false;
   {
     mutex_lock l(mu_);
     if (!queue_.empty() && queue_.front() == item) {
       queue_.pop();
+      ret = true;
     }
   }
   queue_push_cv_.notify_one();
+  return ret;
 }
 
 template <typename T>

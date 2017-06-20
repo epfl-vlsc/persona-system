@@ -85,6 +85,10 @@ namespace tensorflow {
         intervals_.clear();
         outstanding_subchunks_.store(0, std::memory_order_relaxed);
       }
+
+      void reset_subchunks() {
+        sub_resource_index_.store(0, std::memory_order_relaxed);
+      }
       
       std::vector<mem_alnreg_v>& get_regs() { return regs_; }
       mem_pestat_t* get_pes() { return pes; }

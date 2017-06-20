@@ -91,7 +91,7 @@ namespace tensorflow {
 
       //auto dr = bwa_reads->get();
 
-      LOG(INFO) << "assembler outputting read resource!";
+      //LOG(INFO) << "assembler outputting read resource!";
       bwa_reads->assign(new BWAReadResource(num_records, base_data, qual_data));
       OP_REQUIRES_OK(ctx, bwa_reads->allocate_output("bwa_read_handle", ctx));
     }

@@ -156,6 +156,7 @@ namespace tensorflow {
       break;
     }
     const size_t index_size = file_header->last_ordinal - file_header->first_ordinal;
+    const size_t index_size_bytes = index_size * sizeof(RelativeIndex);
     TF_RETURN_IF_ERROR(status);
 
     /*if (result_buffer->size() < index_size * 2) {
@@ -171,7 +172,7 @@ namespace tensorflow {
         data_size += records[i];
       }
 
-      const size_t expected_size = result_buffer->size() - index_size;
+      const size_t expected_size = result_buffer->size() - index_size_bytes;
       if (data_size != expected_size) {
         if (data_size < expected_size) {
           return OutOfRange("Expected a file size of ", expected_size, " bytes, but only found ",
@@ -186,8 +187,8 @@ namespace tensorflow {
     if (unpack && record_type == RecordType::COMPACTED_BASES) {
       conversion_scratch_.reset(); index_scratch_.reset();
 
-      uint8_t current_record_length;
-      const char* start_ptr = &(*result_buffer)[index_size];
+      RelativeIndex current_record_length;
+      const char* start_ptr = &(*result_buffer)[index_size_bytes];
       const BinaryBases *bases;
 
       for (uint64_t i = 0; i < index_size; ++i) {
@@ -195,7 +196,7 @@ namespace tensorflow {
         bases = reinterpret_cast<const BinaryBases*>(start_ptr);
         start_ptr += current_record_length;
 
-        TF_RETURN_IF_ERROR(append(bases, current_record_length, conversion_scratch_, index_scratch_));
+        TF_RETURN_IF_ERROR(append(bases, static_cast<size_t>(current_record_length), conversion_scratch_, index_scratch_));
       }
 
       // append everything in converted_records to the index

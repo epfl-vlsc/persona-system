@@ -283,6 +283,19 @@ trading memory for faster execution.
   )doc");
 
 
+  REGISTER_OP("AGDFlagstat")
+  .Input("results_handle: string")
+  .Input("num_records: int32")
+  .Output("result: int32")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->input(1));
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Flagstat module that gathers and displays stats on a dataset
+  )doc");
+
+
   REGISTER_OP("AGDMergeMetadata")
   .Attr("chunk_size: int >= 1")
   .Input("buffer_pair_pool: Ref(string)")
@@ -320,14 +333,13 @@ output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferL
   REGISTER_OP("AGDOutput")
   .Attr("unpack: bool = true")
   .Attr("columns: list(string)")
-  .Input("path: string")
   .Input("chunk_names: string")
   .Input("chunk_size: int32")
   .Input("start: int32")
   .Input("finish: int32")
   .SetIsStateful()
   .Doc(R"doc(
-Takes a vector of string keys for AGD chunks, prefixed by `path`.
+Takes a vector of string keys for AGD chunks (full paths)
 
 Prints records to stdout from record indices `start` to `finish`.
   )doc");
@@ -406,14 +418,15 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   REGISTER_OP("AGDSort")
   .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handles: string")
-  .Input("bases_handles: string")
-  .Input("qualities_handles: string")
-  .Input("metadata_handles: string")
+  .Input("column_handles: string")
   .Input("num_records: int32")
   .Output("partial_handle: string")
   .Output("superchunk_records: int32")
   .SetShapeFn([](InferenceContext *c) {
-      c->set_output(0, c->Matrix(4, 2));
+
+      auto dim = c->Dim(c->input(2), 0);
+      auto dimval = c->Value(dim);
+      c->set_output(0, c->Matrix(dimval + 1, 2));
       c->set_output(1, c->Scalar());
 
       return Status::OK();
@@ -440,7 +453,7 @@ The column order (for passing into AGDWriteColumns) is [bases, qualities, metada
   REGISTER_OP("AGDVerifySort")
   .Input("path: string")
   .Input("chunk_names: string")
-  .Input("chunk_size: int32")
+  .Input("chunk_sizes: int32")
   .SetIsStateful()
   .Doc(R"doc(
 Verifies that the dataset referred to by `chunk_names` is sorted.
@@ -843,15 +856,16 @@ to align single reads using the SNAP algorithm.
     )doc");
 
   REGISTER_OP("BWASingleExecutor")
-          .Attr("max_secondary: int >= 0")
-          .Attr("num_threads: int >= 0")
-          .Attr("work_queue_size: int >= 0")
-          .Attr("max_read_size: int = 400")
-          .Attr("container: string = ''")
-          .Attr("shared_name: string = ''")
-          .Input("options_handle: Ref(string)")
-          .Input("index_handle: Ref(string)")
-          .Output("executor_handle: Ref(string)")
+    .Attr("max_secondary: int >= 0")
+    .Attr("num_threads: int >= 0")
+    .Attr("work_queue_size: int >= 0")
+    .Attr("max_read_size: int = 400")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .Input("options_handle: Ref(string)")
+    .Input("index_handle: Ref(string)")
+    .Output("executor_handle: Ref(string)")
+    .SetIsStateful()
           .SetShapeFn([](InferenceContext *c) {
             for (int i = 0; i < 2; i++) {
               TF_RETURN_IF_ERROR(check_vector(c, i, 2));
@@ -864,12 +878,36 @@ that aligns single reads using BWA. Pass to > 1 BWAAlignSingle nodes
 for optimal performance.
             )doc");
 
+  REGISTER_OP("BWAPairedExecutor")
+    .Attr("max_secondary: int >= 0")
+    .Attr("num_threads: int >= 0")
+    .Attr("work_queue_size: int >= 0")
+    .Attr("max_read_size: int = 400")
+    .Attr("thread_ratio: float = 0.66")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .Input("options_handle: Ref(string)")
+    .Input("index_handle: Ref(string)")
+    .Output("executor_handle: Ref(string)")
+    .SetIsStateful()
+    .SetShapeFn([](InferenceContext *c) {
+        for (int i = 0; i < 2; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+        }
+        c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
+  .Doc(R"doc(Provides a multithreaded execution context
+that aligns paired reads using BWA. Pass to > 1 BWAAlignPaired nodes
+for optimal performance.
+            )doc");
+
   REGISTER_OP("BWAAlignSingle")
   .Attr("subchunk_size: int")
   .Attr("max_read_size: int = 400")
   .Attr("max_secondary: int >= 1")
   .Input("buffer_list_pool: Ref(string)")
-          .Input("executor_handle: Ref(string)")
+  .Input("executor_handle: Ref(string)")
   .Input("read: string")
   .SetShapeFn([](InferenceContext* c) {
       int max_secondary = 0;
@@ -885,24 +923,26 @@ for optimal performance.
   max_secondary must be at least 1 for chimeric reads that BWA may output.
 )doc");
 
-  REGISTER_OP("BWAAligner")
-  .Attr("num_threads: int")
+  REGISTER_OP("BWAAlignPaired")
   .Attr("subchunk_size: int")
-  .Attr("work_queue_size: int = 3")
   .Attr("max_read_size: int = 400")
-  .Input("index_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
+  .Attr("max_secondary: int >= 1")
+  .Input("buffer_list_pool: Ref(string)")
+  .Input("executor_handle: Ref(string)")
   .Input("read: string")
   .SetShapeFn([](InferenceContext* c) {
-      c->set_output(0, c->Vector(2));
+      int max_secondary = 0;
+      TF_RETURN_IF_ERROR(c->GetAttr("max_secondary", &max_secondary));
+
+      c->set_output(0, c->Matrix(1+max_secondary, 2));
       return Status::OK();
       })
-  .Output("read_handle: string")
+  .Output("result_buf_handle: string")
   .SetIsStateful()
   .Doc(R"doc(
-  Using a number of threads, generates candidate alignments for
-  the reads in `read`. Outputs the results in a BWACandidate
-  object resource that should be passed to the BWAPairedEndStatOp node.
+  Run single-ended alignment with BWA MEM.
+  max_secondary must be at least 1 for chimeric reads that BWA may output.
+  Must use the BWA paired executor for `executor_handle`.
 )doc");
 
   REGISTER_OP("BWAAssembler")
@@ -949,29 +989,6 @@ If we need to only process a subset in the future, we must make a separate op.
 A pool specifically for bwa read resources.
 
 Intended to be used for BWAAssembler
-)doc");
-
-  REGISTER_OP("BWAFinalize")
-  .Attr("num_threads: int")
-  .Attr("subchunk_size: int")
-  .Attr("work_queue_size: int = 3")
-  .Attr("max_read_size: int = 400")
-  .Attr("max_secondary: int >= 1")
-  .Input("index_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
-  .Input("buffer_list_pool: Ref(string)")
-  .Input("read: string")
-  .SetShapeFn([](InferenceContext* c) {
-      int max_secondary = 0;
-      TF_RETURN_IF_ERROR(c->GetAttr("max_secondary", &max_secondary));
-      c->set_output(0, c->Matrix(1+max_secondary, 2));
-      return Status::OK();
-      })
-  .Output("result_buf_handle: string")
-  .SetIsStateful()
-  .Doc(R"doc(
-  Complete the alignment process for candidates generated by BWAAligner.
-  max_secondary must be at least 1 in case BWA outputs chimeric alignments of single reads.
 )doc");
 
   REGISTER_OP("BWAIndex")
@@ -1030,24 +1047,6 @@ Intended to be used for BWAAssembler
   across multiple sessions.
   )doc");
 
-  REGISTER_OP("BWAPairedEndStat")
-  .Input("index_handle: Ref(string)")
-  .Input("options_handle: Ref(string)")
-  .Input("read: string")
-  .SetShapeFn([](InferenceContext* c) {
-      c->set_output(0, c->Vector(2));
-      return Status::OK();
-      })
-  .Output("read_handle: string")
-  .SetIsStateful()
-  .Doc(R"doc(
-  Using the mem_alnreg_v data generated by BWAAlignerOp,
-  this op generates the pestat data, that being the insert size
-  inferred from the read data in the chunk.
-
-  This is the single threaded stage of processing a chunk.
-)doc");
-
   REGISTER_OP("TwoBitConverter")
   .Input("num_records: int32")
   .Input("input: string")
@@ -1062,6 +1061,76 @@ Intended to be used for BWAAssembler
 Converts from an ASCII base buffer to a 2-bit output buffer, for BWA conversion.
 This uses the same buffer, and can handle any Data type that exposes mutable access (e.g. Buffer)
 )doc");
+
+  REGISTER_OP("AgdImportBam")
+  .Attr("path: string")
+  .Attr("num_threads: int >= 1")
+  .Attr("ref_seq_lens: list(int)")
+  .Attr("chunk_size: int = 100000")
+  .Attr("unaligned: bool = false")
+  .Input("bufpair_pool: Ref(string)")
+  .Output("chunk_out: string")
+  .Output("num_records: int32")
+          .Output("first_ordinal: int64")
+  .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
+      bool unaligned;
+      TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
+      int dim;
+      if (unaligned) dim = 3;
+      else dim = 4;
+      c->set_output(0, c->Matrix(dim, 2));
+      c->set_output(1, c->Scalar());
+      c->set_output(2, c->Scalar());
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Import AGD chunks from a BAM file. The BAM can be aligned or unaligned.
+If paired, sort order MUST be by ID (metadata).
+This op (currently) will skip secondary or supplemental alignments.
+
+path: the full path of the BAM file
+num_threads: number of threads to give BAM reader
+ref_seq_lens: vector of reference sequence lengths
+chunk_size: the output dataset chunk size (default 100K)
+unaligned: set to true if the bam file is unaligned (or you don't want to import results)
+bufpair_pool: reference to buffer pair pool
+chunk_out: a 3 or 4 x 2 matrix containing handles to chunks in buffer pairs
+num_records: number of records in output. Usually `chunk_size` except for the last one
+)doc");
+
+REGISTER_OP("AgdImportSra")
+  .Attr("path: string")
+  .Attr("num_threads: int >= 1")
+  .Attr("chunk_size: int = 100000")
+  .Attr("start: int = 0")
+  .Attr("count: int >= 0")
+  .Input("bufpair_pool: Ref(string)")
+  .Output("chunk_out: string")
+  .Output("num_records: int32")
+  .Output("first_ordinal: int64")
+  .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      TF_RETURN_IF_ERROR(check_vector(c, 0, 2));
+      int dim = 3;
+      c->set_output(0, c->Matrix(dim, 2));
+      c->set_output(1, c->Scalar());
+      c->set_output(2, c->Scalar());
+      return Status::OK();
+    })
+  .Doc(R"doc(
+Import AGD chunks from a SRA file.
+
+path: the full path of the SRA file
+num_threads: number of threads to give SRA reader
+chunk_size: the output dataset chunk size (default 100K)
+bufpair_pool: reference to buffer pair pool
+chunk_out: a 3 x 2 matrix containing handles to chunks in buffer pairs
+num_records: number of records in output. Usually `chunk_size` except for the last one
+first_ordinal: ranges from 0 to the number of reads in the SRA file
+)doc");
+
 
   REGISTER_OP("AgdOutputBam")
   .Attr("path: string")
@@ -1188,6 +1257,34 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   })
   .Doc(R"doc(
   )doc");
+
+
+  REGISTER_OP("Batcher")
+  .Attr("batch_size: int >= 1")
+  .Attr("T: type")
+  .Attr("shape: shape")
+  .Input("input_queue_ref: resource")
+  .Output("batched_tensor: T")
+  .Output("request_id: string")
+  .SetShapeFn([](InferenceContext* c) {
+    TensorShapeProto input_proto;
+    TF_RETURN_IF_ERROR(c->GetAttr("shape", &input_proto));
+    ShapeHandle input_shape;
+    TF_RETURN_IF_ERROR(c->MakeShapeFromShapeProto(input_proto, &input_shape));
+    if (!c->FullyDefined(input_shape)) {
+      return Internal("attr shape must be fully defined");
+    }
+    PartialTensorShape unknown({-1});
+    PartialTensorShape pt = unknown.Concatenate(PartialTensorShape(input_proto));
+    ShapeHandle batch_shape;
+    TF_RETURN_IF_ERROR(c->MakeShapeFromPartialTensorShape(pt, &batch_shape));
+
+    c->set_output(0, batch_shape);
+    c->set_output(1, c->Scalar());
+    return Status::OK();
+  })
+  .SetIsStateful();
+
 
   REGISTER_OP("BufferPairCompressor")
   .Attr("pack: bool = false")

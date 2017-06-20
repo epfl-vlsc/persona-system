@@ -34,6 +34,7 @@ namespace bwa_wrapper {
     bseq1_t read;
     mem_aln_t alignments[2];
     int num_alignments;
+    int total_supp = 0;
     while (s.ok()) {
 
       auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), (void*)aux_);
@@ -61,7 +62,7 @@ namespace bwa_wrapper {
         result_sup.set_cigar(cigar_sup);
         result_builders[1].AppendAlignmentResult(result_sup);
       } else {
-        LOG(INFO) << "appending an empty";
+        //LOG(INFO) << "appending an empty";
         result_builders[1].AppendEmpty();
 
       }
@@ -88,13 +89,6 @@ namespace bwa_wrapper {
     const char* quals, *quals_mate;
     size_t bases_len, mate_len;
     auto num_recs = subchunk->num_records();
-    // this should only happen once
-    /*if (two_bit_seqs_.size() < num_recs) {
-      two_bit_seqs_.resize(num_recs);
-      for (int i = 0; i < num_recs; i++) {
-        two_bit_seqs_[i].resize(max_read_len_);
-      }
-    }*/
 
     Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
     while (s.ok()) {
@@ -103,19 +97,9 @@ namespace bwa_wrapper {
         return Internal("subchunk was missing a read mate!");
 
 
-      //LOG(INFO) << "bases len is " << bases_len;
-      //memcpy(seq, bases, bases_len);
-      /*for (int i  =0; i < bases_len; i++)
-        if (seq[i] > 4)
-          printf("seq is fucked\n");
-        else
-          printf("%u", (uint8_t)(seq[i]));
-      printf("\n");*/
       auto reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, bases_len, const_cast<char*>(bases), (void*)aux_);
       regs[index++] = reg;
 
-
-     // memcpy(seqmate, bases_mate, mate_len);
       reg = mem_align1_core(options_, index_->bwt, index_->bns, index_->pac, mate_len, const_cast<char*>(bases_mate), (void*)aux_);
       regs[index++] = reg;
 
@@ -201,14 +185,7 @@ namespace bwa_wrapper {
     Status s = subchunk->get_next_record(&bases, &bases_len, &quals);
 
     auto num_recs = subchunk->num_records();
-    // this should only happen once
-    /*if (two_bit_seqs_.size() < num_recs) {
-      two_bit_seqs_.resize(num_recs);
-      for (int i = 0; i < num_recs; i++) {
-        two_bit_seqs_[i].resize(max_read_len_);
-      }
-    }*/
-      
+
     bseq1_t reads[2];
     uint64_t id = 0; // num pairs
     while (s.ok()) {
@@ -216,19 +193,11 @@ namespace bwa_wrapper {
       if (!s.ok())
         return Internal("subchunk was missing a read mate!");
 
-      // BWA requires modifiable c-str buffers, so we have to copy :-(
-      //memcpy(seq, bases, bases_len);
-      //memcpy(seqmate, bases_mate, mate_len);
       reads[0].comment = 0; reads[1].comment = 0;
       reads[0].qual = const_cast<char*>(quals); reads[1].qual = const_cast<char*>(quals_mate);
-      // we use the remembered two bit seqs
       reads[0].seq = const_cast<char*>(bases); reads[1].seq = const_cast<char*>(bases_mate);
       reads[0].name = const_cast<char*>(placeholder.c_str()); reads[1].name = const_cast<char*>(placeholder.c_str());
       reads[0].l_seq = bases_len; reads[1].l_seq = mate_len;
-
-      //LOG(INFO) << "regs index: " << regs_index;
-      //LOG(INFO) << "read0: " << reads[0].seq << " : " << reads[0].qual << " : " << reads[0].l_seq;
-      //LOG(INFO) << "read1: " << reads[1].seq << " : " << reads[1].qual << " : " << reads[1].l_seq;
 
       mem_aln_t results[2][2];
       int num_results[2];
@@ -244,22 +213,20 @@ namespace bwa_wrapper {
       Alignment result, result_mate, result_sup, result_sup_mate;
       string cigar, cigar_mate;
       ProcessResult(&results[0][0], &results[1][0], result, cigar);
-      //LOG(INFO) << "cigar is: " << cigar;
       ProcessResult(&results[1][0], &results[0][0], result_mate, cigar_mate);
-      //LOG(INFO) << "cigarmate is: " << cigar_mate;
       result.set_cigar(cigar);
       result_mate.set_cigar(cigar_mate);
       result_builders[0].AppendAlignmentResult(result);
       result_builders[0].AppendAlignmentResult(result_mate);
       if (num_results[0] > 1) {  // a supplemental for first 
-        LOG(INFO) << "first had a supplemental!";
+        //LOG(INFO) << "first had a supplemental!";
         ProcessResult(&results[0][1], nullptr, result_sup, cigar);
         result_sup.set_cigar(cigar);
         result_builders[1].AppendAlignmentResult(result_sup);
       } else
         result_builders[1].AppendEmpty();
       if (num_results[1] > 1) {  // a supplemental for second 
-        LOG(INFO) << "second had a supplemental!";
+        //LOG(INFO) << "second had a supplemental!";
         ProcessResult(&results[1][1], nullptr, result_sup_mate, cigar);
         result_sup_mate.set_cigar(cigar);
         result_builders[1].AppendAlignmentResult(result_sup_mate);

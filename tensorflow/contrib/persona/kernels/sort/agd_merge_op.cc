@@ -83,8 +83,8 @@ namespace tensorflow {
         auto &data = bp->data();
 
         TF_RETURN_IF_ERROR(r.GetNextRecord(&record_data, &record_size));
-        auto char_sz = static_cast<char>(record_size);
-        TF_RETURN_IF_ERROR(index.AppendBuffer(&char_sz, sizeof(char_sz)));
+        RelativeIndex idx_sz = static_cast<RelativeIndex>(record_size);
+        TF_RETURN_IF_ERROR(index.AppendBuffer(reinterpret_cast<const char*>(&idx_sz), sizeof(idx_sz)));
         TF_RETURN_IF_ERROR(data.AppendBuffer(record_data, record_size));
 
         return Status::OK();
@@ -137,6 +137,7 @@ namespace tensorflow {
       ResourceContainer<Data> *data;
 
       decltype(num_columns) column;
+      LOG(INFO) << "AGD Merge: merging " << num_super_chunks << " intermediate files ...";
       for (decltype(num_super_chunks) super_chunk = 0; super_chunk < num_super_chunks; ++super_chunk) {
         column = 0;
         // First, we look up the results column
@@ -144,6 +145,7 @@ namespace tensorflow {
                                              chunk_group_handles(super_chunk, column, 1), &data));
         AGDRecordReader results_column { AGDRecordReader::fromUncompressed(data, &success) };
         OP_REQUIRES(ctx, success, Internal("Unable to parse results column fromUncompressed for Merge"));
+        //LOG(INFO) << "chunk has " << results_column.NumRecords() << " records";
         releasers.push_back(move(decltype(releasers)::value_type(data, DataResourceReleaser)));
 
         // Then we look up the rest of the columns

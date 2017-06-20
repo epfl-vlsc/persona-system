@@ -22,7 +22,10 @@ namespace tensorflow {
         auto &index = buf_pair.index();
         auto &data = buf_pair.data();
         TF_RETURN_IF_ERROR(WriteData(f, &index[0], index.size()));
-        TF_RETURN_IF_ERROR(WriteData(f, &data[0], data.size()));
+        if (data.size() != 0) {// an emtpy column
+          TF_RETURN_IF_ERROR(WriteData(f, &data[0], data.size()));
+        } else
+          LOG(INFO) << "buffer pair data size was 0!!";
         buf_pair.reset();
       }
       return Status::OK();
