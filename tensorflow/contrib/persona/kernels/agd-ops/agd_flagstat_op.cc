@@ -135,12 +135,12 @@ namespace tensorflow {
             }
 
           }
+        }
         if (IsDuplicate(result.flag()))
           count_duplicates[idx]++;
         if (IsMapped(result.flag()))
           count_mapped[idx]++;
       
-        }
 
         s = results_reader.GetNextResult(result);
       } // while s is ok()
