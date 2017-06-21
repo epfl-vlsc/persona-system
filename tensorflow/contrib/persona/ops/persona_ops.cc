@@ -145,6 +145,28 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
 )doc");
 
+    REGISTER_OP("AGDGeneCoverage")
+    .Attr("ref_sequences: list(string)")
+    .Attr("ref_seq_sizes: list(int)")
+    .Attr("scale: int")
+    .Attr("max: int")
+    .Attr("bg: bool")
+    .Attr("d: bool")
+    .Attr("dz: bool")
+    .Attr("strand: string")
+    .Attr("bga: bool")
+    .Input("results_handle: string")
+    .Input("num_records: int32")
+    .Output("zeroed: int32")
+    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+        c->set_output(0, c->input(1));
+        return Status::OK();
+        })
+    .SetIsStateful()
+    .Doc(R"doc(
+    Gives coverage values of each of the base-pair in reference genome.
+    )doc");
+
     REGISTER_OP("AGDConverter")
     .Input("buffer_pair_pool: Ref(string)")
     .Input("input_data: string")
