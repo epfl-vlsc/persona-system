@@ -1243,9 +1243,9 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
         c->set_output(1, c->Scalar());
         return Status::OK();
         })
-    .SetIsStateful();
+    .SetIsStateful()
     .Doc(R"doc(
-    Experimental.
+    Experimental
     )doc");
 
   REGISTER_OP("BufferPairCompressor")
