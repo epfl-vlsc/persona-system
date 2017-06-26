@@ -46,6 +46,7 @@ namespace tensorflow {
       OP_REQUIRES_OK(context, context->GetAttr("ref_sequences", &ref_seqs_));
         OP_REQUIRES_OK(context, context->GetAttr("ref_seq_sizes", &ref_sizes_));
         LOG(INFO) << "Started printing " ;
+        //count_=0;
 
         // flag is used to generate output array only for those references which have some alignment in the read chunks
     }
@@ -73,35 +74,19 @@ namespace tensorflow {
 
       while(s.ok()){
 
-        cout << "dequeuing chunk" << ++no << endl;
+        cout << "dequeued chunk" << ++no << endl;
         fflush(stdout);
         s = DequeueElement(ctx);
 
       }
 
 
-      // Create an output tensor
-      // no need for output tensor , its a dummy tensor
-      // TODO can remove this output tensor but something must be fed into queue it gives output to
-      const Tensor& input_tensor = ctx->input(1);
-        auto input = input_tensor.flat<int32>();
+      Tensor *out_t;
+      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({3, 2}), &out_t));
 
-
-        // Create an output tensor
-        // no need for output tensor , its a dummy tensor
-        // TODO can remove this output tensor but something must be fed into queue it gives output to
-        Tensor* output_tensor = NULL;
-        OP_REQUIRES_OK(ctx, ctx->allocate_output(0, input_tensor.shape(),
-                                                         &output_tensor));
-        auto outputa = output_tensor->flat<int32>();
-
-        // Set all but the first element of the output tensor to 0.
-        const int N = input.size();
-        for (int i = 0; i < N; i++) {
-          outputa(i) = 0;
-        }
       // done
     }
+
     Status Init(OpKernelContext *ctx) {
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 0), &input_queue_));
 
@@ -122,18 +107,20 @@ namespace tensorflow {
 
     Status DequeueElement(OpKernelContext *ctx) {
       Notification n;
-      Status s;
+      int sf = -1;
+      //Status s;
       input_queue_->TryDequeue(ctx, [&](const QueueInterface::Tuple &tuple) {
           //out << input_queue_->size();
 
         //cout << tuple.size() << endl;
         if(tuple.size()==0)
         {
-          exit(0);
+          sf = 2;
+          n.Notify();
         }
         else
         {
-          const Tensor *result_t, *base_t, *quality_t, *num_records_t;
+
           base_t = &tuple[0];
           // auto &base = base_t.scalar<string>()();
           quality_t = &tuple[1];
@@ -157,19 +144,23 @@ namespace tensorflow {
           //newQualReader = &qual_reader;
           //*newResultReader = results_reader;
 
-          s = Status::OK();
+
           n.Notify();
         }
 
       });
       n.WaitForNotification();
-      return s;
+      if(sf==2)
+      {
+        return NotFound("reached end of file");
+      }
+      return Status :: OK();
     }
 
     void print_alignment(AGDResultReader *results_reader){
       Alignment result;
       Status s = results_reader->GetNextResult(result);
-      cout << result.position().position()<<endl;
+      //cout << result.position().position()<<endl;
       int recs =0;
       // this detection logic adapted from SamBlaster
       while (s.ok()) {
@@ -199,6 +190,7 @@ namespace tensorflow {
     vector<string> ref_seqs_;
     vector<int32> ref_sizes_;
     QueueInterface *input_queue_ = nullptr;
+    const Tensor *result_t, *base_t, *quality_t, *num_records_t;
     // for various command line arguments
 
 
