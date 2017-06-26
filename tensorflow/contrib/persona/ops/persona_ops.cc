@@ -1192,16 +1192,16 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   
   
 
+
   REGISTER_OP("AGDPrintMulti")
   .Attr("ref_sequences: list(string)")
   .Attr("ref_seq_sizes: list(int)")
-  .Input("tensor_queue: resource") 
-  .Input("num_records: int32")
+  .Input("tensor_queue: resource")
   .Output("zeroed: int32")
-  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-      c->set_output(0, c->input(1));
-      return Status::OK();
-    }) 
+  .SetShapeFn([](InferenceContext *c) {
+       c->set_output(0, c->Vector(2));
+       return Status::OK();
+})
   .SetIsStateful()
   .Doc(R"doc(
   Prints results from a queue of chunk
