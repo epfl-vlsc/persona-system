@@ -14,6 +14,8 @@ export TF_NEED_HDFS=0
 export TF_NEED_OPENCL=0
 export TF_ENABLE_XLA=0
 export TF_NEED_CUDA=0
+export TF_NEED_MKL=0
+export TF_NEED_VERBS=0
 export PYTHON_LIB_PATH=/usr/lib/python3/dist-packages
 
 # if you configure from within a docker container, and then outside it again
