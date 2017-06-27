@@ -1218,6 +1218,18 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .Doc(R"doc(
   )doc");
 
+  REGISTER_OP("AGDFiltering")
+  .Input("tensor_queue: resource")
+  .Output("chunk_out: int32")
+  .SetShapeFn([](InferenceContext* c) {
+      c->set_output(0, c->Vector(2));
+      return Status::OK();
+    })
+  .SetIsStateful()
+  .Doc(R"doc(
+  Op to filter a dataset based on given predicate.
+  )doc");
+
   REGISTER_OP("Batcher")
   .Attr("batch_size: int >= 1")
   .Attr("T: type")
