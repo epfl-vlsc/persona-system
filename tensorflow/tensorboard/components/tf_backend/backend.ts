@@ -38,6 +38,9 @@ module TF.Backend {
   export type ScalarDatum = Datum & Scalar;
   export interface Scalar { scalar: number; }
 
+  export interface Text { text: string; }
+  export type TextDatum = Datum & Text;
+
   export type HistogramDatum = Datum & Histogram;
   export interface Histogram {
     min: number;
@@ -86,7 +89,7 @@ module TF.Backend {
 
   export var TYPES = [
     'scalar', 'histogram', 'compressedHistogram', 'graph', 'image', 'audio',
-    'runMetadata'
+    'runMetadata', 'text'
   ];
   /**
    * The Backend class provides a convenient and typed interface to the backend.
@@ -177,6 +180,27 @@ module TF.Backend {
       return this.runs().then((x) => _.mapValues(x, 'run_metadata'));
     }
 
+
+    /**
+     * Returns a promise showing the Run-to-Tag mapping for text data.
+     */
+    public textRuns(): Promise<RunToTag> {
+      return this.requestManager.request(this.router.textRuns());
+    }
+
+
+    /**
+     * Returns a promise containing TextDatums for given run and tag.
+     */
+    public text(tag: string, run: string): Promise<TextDatum[]> {
+      let url = this.router.text(tag, run);
+      // tslint:disable-next-line:no-any it's convenient and harmless here
+      return this.requestManager.request(url).then(map(function(x: any) {
+        x.wall_time = timeToDate(x.wall_time);
+        return x;
+      }));
+    }
+
     /**
      * Return a promise of a graph string from the backend.
      */
@@ -202,7 +226,12 @@ module TF.Backend {
      */
     public healthPills(nodeNames: string[], step?: number):
         Promise<HealthPillsResponse> {
-      let postData = {'node_names': JSON.stringify(nodeNames)};
+      const postData = {
+        'node_names': JSON.stringify(nodeNames),
+
+        // Events files with debugger data fall under this special run.
+        'run': '__debugger_data__',
+      };
       if (step !== undefined) {
         // The user requested health pills for a specific step. This request
         // might be slow since the backend reads events sequentially from disk.

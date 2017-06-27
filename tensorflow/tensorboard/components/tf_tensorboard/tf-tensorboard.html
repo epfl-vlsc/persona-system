@@ -31,6 +31,7 @@ limitations under the License.
 <link rel="import" href="../tf-image-dashboard/tf-image-dashboard.html">
 <link rel="import" href="../tf-audio-dashboard/tf-audio-dashboard.html">
 <link rel="import" href="../tf-graph-dashboard/tf-graph-dashboard.html">
+<link rel="import" href="../tf-text-dashboard/tf-text-dashboard.html">
 <link rel="import" href="../tf-dashboard-common/tensorboard-color.html">
 <link rel="import" href="../tf-backend/tf-backend.html">
 <link rel="import" href="../tf-storage/tf-storage.html">
@@ -134,6 +135,13 @@ allows the user to toggle between various dashboards.
             route-prefix="/data/plugin/projector">
           </vz-projector-dashboard>
         </template>
+
+        <template is="dom-if" if="[[_modeIsText(mode)]]">
+          <tf-text-dashboard
+            id="text"
+            backend="[[_backend]]">
+          </tf-text-dashboard>
+        </template>
       </div>
     </paper-header-panel>
 
@@ -202,6 +210,8 @@ allows the user to toggle between various dashboards.
     </style>
   </template>
   <script>
+    "use strict";
+
     Polymer({
       is: "tf-tensorboard",
       behaviors: [TF.TensorBoard.AutoReloadBehavior],
@@ -293,6 +303,9 @@ allows the user to toggle between various dashboards.
       },
       _modeIsHistograms: function(mode) {
         return mode === "histograms";
+      },
+      _modeIsText: function(mode) {
+        return mode === "text";
       },
       selectedDashboard: function() {
         var dashboard = this.$$("#" + this.mode);
