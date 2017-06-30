@@ -40,7 +40,7 @@ namespace tensorflow {
   class AGDGeneCoverageOp : public OpKernel {
   public:
     AGDGeneCoverageOp(OpKernelConstruction *context) : OpKernel(context) {
-        LOG(INFO) << "Started Finding Coverage " ;
+
         OP_REQUIRES_OK(context, context->GetAttr("ref_sequences", &ref_seqs_));
         OP_REQUIRES_OK(context, context->GetAttr("ref_seq_sizes", &ref_sizes_));
         OP_REQUIRES_OK(context, context->GetAttr("scale", &scale_));
@@ -86,59 +86,6 @@ namespace tensorflow {
         }
       }
     }
-    // reporting per-base genome coverage
-    // void print_res_dz()
-    // {
-    //   for(int i=0;i<ref_sizes_.size();i++)
-    //   {
-    //     if(flag[i]==0)
-    //     {
-    //       for(int j=0 ; j<ref_sizes_[i];j++)
-    //       {
-    //         if(output[i][j]!=0)
-    //         {
-    //           cout << ref_seqs_[i] << "\t" << j << "\t"<< output[i][j] << endl;
-    //         }
-    //       }
-    //     }
-    //   }
-    // }
-    //output in bedgraph format
-    // void print_res_bg()
-    // {
-    //   for(int i=0;i<ref_seqs_.size();i++)
-    //   {
-    //     if(flag[i]==0)
-    //     {
-    //       int lastindex = 0;
-    //       int lastoutput = output[i][0];
-    //       for(int j=1;j<ref_sizes_[i];j++)
-    //       {
-    //         if(output[i][j]==lastoutput)
-    //         {
-    //           continue;
-    //         }
-    //         else
-    //         {
-    //
-    //           if(lastoutput!=0)
-    //           {
-    //             cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< j << "\t"<< lastoutput * scale_ << endl;
-    //           }
-    //           lastindex = j ;
-    //           lastoutput = output[i][j];
-    //         }
-    //       }
-    //       if(lastoutput!=0)
-    //       {
-    //         cout << ref_seqs_[i]<<"\t"<< lastindex << "\t"<< ref_sizes_[i] << "\t"<< lastoutput * scale_ << endl;
-    //       }
-    //     }
-    //   }
-    //
-    // }
-
-
 
     // output in bedgraph format(zeroes as well)
     void print_res_bg_or_bga(bool z_)
@@ -236,18 +183,14 @@ namespace tensorflow {
             histogram[val]= histogram[val]+(long long int)1;
           }
 
-
-          //int histogram[100];//max coverage 100X
-          //cout << outputsize<<"total no of counters made"<< endl;
-
           for(int i=0;i<=maxcov;i++)
           {
             if(histogram[i]!=0)
             {
-              totalhistogram[i]+=histogram[i];            //cout << results_handle << " " << i<<" "<< histogram[i] << " "<<num_results << " " << (1.0 *  histogram[i])/(1.0 * num_results) << endl ;
+              totalhistogram[i]+=histogram[i];
               cout << ref_seqs_[k]<<"\t"<< i * scale_ <<"\t"<< histogram[i]   << "\t"<<ref_sizes_[k] << "\t" << (1.0 *  histogram[i])/(1.0 * ref_sizes_[k]) << endl ;
             }
-            //cout << "No of base pairs with " << i << " coverage " << histogram[i]/scale<< endl ;
+
             fflush(stdout);
           }
 
@@ -285,7 +228,7 @@ namespace tensorflow {
       if(!d_ && !bg_ && !bga_ && !dz_)
         print_res_hist();
 
-      LOG(INFO) << "Done Finding Coverage " ;
+
     }
 
 
@@ -312,7 +255,7 @@ namespace tensorflow {
       size_t cigar_len;
       cigar = result->cigar().c_str();
       cigar_len = result->cigar().length();
-      //cout << cigar << endl;
+
 
       char op;
       int op_len;
@@ -320,14 +263,12 @@ namespace tensorflow {
 
       if(flag[index]==-1)
       {
-        //print_res_hist();
-        //print_res_bg();
+
         output[index] = new int[ref_sizes_[index]];
         memset(output[index],0,ref_sizes_[index] * sizeof(int));
         flag[index]=0;
       }
       int start = result->position().position();
-      //cout << start<<" "<<cigar<<endl;
 
 
 
@@ -346,14 +287,12 @@ namespace tensorflow {
                 output[index][start+i]++;
             }
           }
-          //cout << start<<" "<<start+op_len-1<<endl;
-          //cout << endl;
+
         }
 
         if(op=='D' || op=='M' || op=='N' || op=='X' || op=='=') // TODO verify it with examples possibly different from standard
           start+=op_len;
-        // if(op!='I')
-        //   start+=op_len;
+
       }
 
       return Status::OK();
@@ -396,7 +335,6 @@ namespace tensorflow {
       Alignment result;
       Status s = results_reader.GetNextResult(result);
 
-      // this detection logic adapted from SamBlaster
       while (s.ok()) {
         if (!IsPrimary(result.flag()))
           OP_REQUIRES_OK(ctx, Internal("Non-primary result detected in primary result column at location ",
@@ -404,7 +342,7 @@ namespace tensorflow {
 
           // we have a single alignment
           if (IsUnmapped(result.flag())) {
-            //cout << "isUnmapped";
+
             fflush(stdout);
             s = results_reader.GetNextResult(result);
             continue;
@@ -412,7 +350,7 @@ namespace tensorflow {
           OP_REQUIRES_OK(ctx, CalculateCoverage(&result,result.flag()));
         s = results_reader.GetNextResult(result);
 
-        //cout << "reading a chunk of file" << endl;
+
         fflush(stdout);
       } // while s is ok()
 
