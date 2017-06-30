@@ -1219,13 +1219,26 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   )doc");
 
   REGISTER_OP("AGDFiltering")
+  .Input("chunk_size: int = 100000")
+  .Input("unaligned: bool = false")
+  .Input("query: string")
   .Input("tensor_queue: resource")
-  .Output("chunk_out: int32")
-  .SetShapeFn([](InferenceContext* c) {
-      c->set_output(0, c->Vector(2));
+  .Input("bufpair_pool: Ref(string)")
+  .Output("chunk_out: string")
+  .Output("num_records: int32")
+  .Output("first_ordinal: int64")
+  .SetIsStateful()
+  .SetShapeFn([](InferenceContext *c) {
+      bool unaligned;
+      TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
+      int dim;
+      if (unaligned) dim = 3;
+      else dim = 4;
+      c->set_output(0, c->Matrix(dim, 2));
+      c->set_output(1, c->Scalar());
+      c->set_output(2, c->Scalar());
       return Status::OK();
     })
-  .SetIsStateful()
   .Doc(R"doc(
   Op to filter a dataset based on given predicate.
   )doc");

@@ -27,6 +27,11 @@
 #include <thread>
 #include "tensorflow/contrib/persona/kernels/snap-align/snap/SNAPLib/Bam.h"
 #include "zlib.h"
+#include <stdlib.h>
+#include <time.h>
+
+#include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
+
 
 
 namespace tensorflow {
@@ -52,12 +57,19 @@ namespace tensorflow {
     AGDFilteringOp(OpKernelConstruction *context) : OpKernel(context) {
       cout<<"Starting filtering constructor \n";
       count_total_reads = 0;
+      stored_base_reader = nullptr;
+      stored_qual_reader = nullptr;
+      stored_meta_reader = nullptr;
+      stored_results_reader = nullptr;
+
+    
     }
 
     ~AGDFilteringOp() {
       core::ScopedUnref a1(input_queue_);
+      core::ScopedUnref unref_listpool(bufpair_pool_);
       cout<<"Done filtering destructor \n";
-      cout<<"\nTotal : "<<count_total_reads<<endl;
+      cout<<"Total : "<<count_total_reads<<endl;
     }
 
     void Compute(OpKernelContext* ctx) override {
@@ -75,30 +87,142 @@ namespace tensorflow {
       // Alignment result;
       // Alignment mate;
       // Status s = results_reader.GetNextResult(result);
+
       cout<<"called compute"<<endl;
-      if (!input_queue_) {
+      if (!input_queue_ && !bufpair_pool_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
-      int i = 0;
-      // cout<<"Dequeuing chunk "<<++i<<endl;
-      // fflush(stdout);
-      Status s = DequeueElement(ctx);
-      
-      while(s.ok())
-      {
-        cout<<"Dequeuing chunk "<<++i<<endl;
-        fflush(stdout);
-        s = DequeueElement(ctx);
-        cout<<"a"<<i<<"a";
+      const Tensor *chunk_size_t,*unaligned_t,*predicate_t;
+      OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
+      OP_REQUIRES_OK(ctx, ctx->input("unaligned", &unaligned_t));
+      OP_REQUIRES_OK(ctx, ctx->input("query", &predicate_t));
+
+      chunk_size_ = chunk_size_t->scalar<int>()();
+      unaligned_ = unaligned_t->scalar<bool>()();
+      predicate_ = predicate_t->scalar<string>()();
+
+      Tensor* out_t, *num_recs_t, *first_ord_t;
+      if (unaligned_) {
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk_out", TensorShape({3, 2}), &out_t));
+      } else {
+        OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk_out", TensorShape({4, 2}), &out_t));
       }
 
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records", TensorShape({}), &num_recs_t));
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("first_ordinal", TensorShape({}), &first_ord_t));
+           
+      auto& num_recs = num_recs_t->scalar<int>()();
+      auto& first_ord = first_ord_t->scalar<int64>()();
+      first_ord = first_ordinal_;
+
+      ColumnBuilder base_builder;
+      OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, base_builder, out_t, 0));
+      ColumnBuilder qual_builder;
+      OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, qual_builder, out_t, 1));
+      ColumnBuilder meta_builder;
+      OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, meta_builder, out_t, 2));
+      AlignmentResultBuilder results_builder;
+      OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, results_builder, out_t, 3));
+
+      current_chunk_size = 0;
+      Status s;
+      Alignment result;
+      const char *data_base,*data_qual,*data_meta;
+      size_t len_base,len_qual,len_meta;
+
+      srand(time(NULL));
+
+      if(stored_results_reader != nullptr)
+      {
+        OP_REQUIRES_OK(ctx,stored_base_reader->GetNextRecord(&data_base,&len_base));
+        OP_REQUIRES_OK(ctx,stored_qual_reader->GetNextRecord(&data_qual,&len_qual));
+        OP_REQUIRES_OK(ctx,stored_meta_reader->GetNextRecord(&data_meta,&len_meta));
+        s = stored_results_reader->GetNextResult(result);
+
+        while( s.ok() && current_chunk_size < chunk_size_)
+        {
+          if(RandomQueryResult())
+          {
+            base_builder.AppendRecord(data_base,len_base);
+            qual_builder.AppendRecord(data_qual,len_qual);
+            meta_builder.AppendRecord(data_meta,len_meta);
+            results_builder.AppendAlignmentResult(result);
+            current_chunk_size++;
+          }
+
+          OP_REQUIRES_OK(ctx,stored_base_reader->GetNextRecord(&data_base,&len_base));
+          OP_REQUIRES_OK(ctx,stored_qual_reader->GetNextRecord(&data_qual,&len_qual));
+          OP_REQUIRES_OK(ctx,stored_meta_reader->GetNextRecord(&data_meta,&len_meta));
+          s = stored_results_reader->GetNextResult(result);
+
+        }
+
+        resource_releaser(bases_data);
+        resource_releaser(qual_data);
+        resource_releaser(meta_data);
+        resource_releaser(results_data);        
+
+      }
+
+      Status dequeue_status;
+      
+      while(current_chunk_size < chunk_size_)
+      {
+        dequeue_status = DequeueElement(ctx);
+        if(dequeue_status.ok())
+        {
+          while( s.ok() && current_chunk_size < chunk_size_)
+          {
+            if(RandomQueryResult())
+            {
+              base_builder.AppendRecord(data_base,len_base);
+              qual_builder.AppendRecord(data_qual,len_qual);
+              meta_builder.AppendRecord(data_meta,len_meta);
+              results_builder.AppendAlignmentResult(result);
+              current_chunk_size++;
+            }
+
+            OP_REQUIRES_OK(ctx,stored_base_reader->GetNextRecord(&data_base,&len_base));
+            OP_REQUIRES_OK(ctx,stored_qual_reader->GetNextRecord(&data_qual,&len_qual));
+            OP_REQUIRES_OK(ctx,stored_meta_reader->GetNextRecord(&data_meta,&len_meta));
+            s = stored_results_reader->GetNextResult(result);
+
+          }
+        }
+        else
+        {
+          //last chunk dequeued and filtered. Now exit and end compute
+          break;
+        }
+      }
+
+      num_recs = current_chunk_size;
+      first_ordinal_ += current_chunk_size;
 
 
 
 
 
-      Tensor *out_t;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk_out", TensorShape({4, 2}), &out_t));
+
+      // int i = 0;
+      // cout<<"Dequeuing chunk "<<++i<<endl;
+      // fflush(stdout);
+      // Status s = DequeueElement(ctx);
+      
+      // while(s.ok())
+      // {
+      //   cout<<"Dequeuing chunk "<<++i<<endl;
+      //   fflush(stdout);
+      //   s = DequeueElement(ctx);
+      //   cout<<"a"<<i<<"a";
+      // }
+
+
+
+
+
+      // Tensor *out_t;
+      // OP_REQUIRES_OK(ctx, ctx->allocate_output("chunk_out", TensorShape({2}), &out_t));
 
       // // Grab the input tensor
       // const Tensor& input_tensor = ctx->input(1);
@@ -118,6 +242,7 @@ namespace tensorflow {
 
     Status Init(OpKernelContext *ctx) {
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 0), &input_queue_));
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "bufpair_pool", &bufpair_pool_));
       // auto &dtypes = input_queue_->component_dtypes();
       // if (dtypes.size() != 2) {
       //   return Internal("queue must have 2 elements, the first being the string id and latter being the desired id");
@@ -155,12 +280,12 @@ namespace tensorflow {
       Notification n;
       auto s = Status::OK();
       int invalid = -1;
-      cout<<"b";
+      // cout<<"b";
       input_queue_->TryDequeue(ctx, [&](const QueueInterface::Tuple &tuple) {
         // auto &results_t = tuple[0];
         // auto &record_id = record_id_t.scalar<string>()();
         // cout<<"Dequeuing\n";
-        cout<<tuple.size()<<endl;
+        // cout<<tuple.size()<<endl;
         fflush(stdout);
         if(tuple.size() == 0)
         {
@@ -177,7 +302,6 @@ namespace tensorflow {
 
           auto num_records = num_records_t->scalar<int32>()();
 
-          ResourceContainer<Data> *bases_data, *qual_data, *meta_data, *results_data;
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, bases_t, &bases_data));
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, quality_t, &qual_data));
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, metadata_t, &meta_data));
@@ -187,6 +311,11 @@ namespace tensorflow {
           AGDRecordReader qual_reader(qual_data, num_records);
           AGDRecordReader meta_reader(meta_data, num_records);
           AGDResultReader results_reader(results_data, num_records);
+
+          stored_base_reader = &base_reader;
+          stored_qual_reader = &qual_reader;
+          stored_meta_reader = &meta_reader;
+          stored_results_reader = &results_reader;
 
 
           // if (current_record_id_.empty()) {
@@ -205,12 +334,12 @@ namespace tensorflow {
           // emitted = false;
           
           // count_reads(&results_reader);
-          OP_REQUIRES_OK(ctx, count_reads(&results_reader));
+          // OP_REQUIRES_OK(ctx, count_reads(&results_reader));
           
-          resource_releaser(bases_data);
-          resource_releaser(qual_data);
-          resource_releaser(meta_data);
-          resource_releaser(results_data);
+          // resource_releaser(bases_data);
+          // resource_releaser(qual_data);
+          // resource_releaser(meta_data);
+          // resource_releaser(results_data);
           
           n.Notify();
           
@@ -228,6 +357,24 @@ namespace tensorflow {
       return s;
     }
 
+    Status GetOutputBufferPair(OpKernelContext* ctx, ResourceContainer<BufferPair> **ctr)
+    {
+      TF_RETURN_IF_ERROR(bufpair_pool_->GetResource(ctr));
+      (*ctr)->get()->reset();
+      return Status::OK();
+    }
+
+    Status GetBufferForBuilder(OpKernelContext* ctx, ColumnBuilder& builder, Tensor* out, int index) {
+      ResourceContainer<BufferPair> *output_bufpair_ctr;
+      TF_RETURN_IF_ERROR(GetOutputBufferPair(ctx, &output_bufpair_ctr));
+      auto output_bufferpair = output_bufpair_ctr->get();
+      builder.SetBufferPair(output_bufferpair);
+      auto out_mat = out->matrix<string>();
+      out_mat(index, 0) = output_bufpair_ctr->container();
+      out_mat(index, 1) = output_bufpair_ctr->name();
+      return Status::OK();
+    }
+
     Status count_reads(AGDResultReader* results_reader)
     {
       Alignment result;
@@ -242,10 +389,25 @@ namespace tensorflow {
       return Status::OK();
     }
 
+    bool RandomQueryResult()
+    {
+      int n = rand()%2;
+      if(n==0) return false;
+      else return true;
+    }
 
   private:
     QueueInterface *input_queue_ = nullptr;
     const Tensor *results_t,*bases_t,*quality_t,*metadata_t,*num_records_t;
+    ResourceContainer<Data> *bases_data, *qual_data, *meta_data, *results_data;
+    int chunk_size_;
+    bool unaligned_;
+    string predicate_;
+    int current_chunk_size;
+    int64 first_ordinal_ = 0;
+    AGDRecordReader *stored_base_reader, *stored_qual_reader, *stored_meta_reader;
+    AGDResultReader *stored_results_reader;
+    ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
 
   };
 
