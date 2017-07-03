@@ -27,24 +27,7 @@ from tensorflow.python.platform import test
 
 class Convolution1DTest(test.TestCase):
 
-  def test_causal_dilated_conv1d(self):
-    # Causal:
-    with self.test_session():
-      testing_utils.layer_test(
-          keras.layers.Conv1D,
-          input_data=np.reshape(np.arange(4, dtype='float32'), (1, 4, 1)),
-          kwargs={
-              'filters': 1,
-              'kernel_size': 2,
-              'dilation_rate': 1,
-              'padding': 'causal',
-              'kernel_initializer': 'ones',
-              'use_bias': False,
-          },
-          expected_output=[[[0], [1], [3], [5]]])
-
   def test_dilated_conv1d(self):
-    # Non-causal:
     with self.test_session():
       testing_utils.layer_test(
           keras.layers.Conv1D,
@@ -130,17 +113,20 @@ class Conv2DTest(test.TestCase):
         if padding == 'same' and strides != (1, 1):
           continue
 
-        with self.test_session():
-          testing_utils.layer_test(
-              keras.layers.Conv2D,
-              kwargs={
-                  'filters': filters,
-                  'kernel_size': kernel_size,
-                  'padding': padding,
-                  'strides': strides,
-                  'data_format': 'channels_first'
-              },
-              input_shape=(num_samples, stack_size, num_row, num_col))
+        with self.test_session(use_gpu=True):
+          # Only runs on GPU with CUDA, channels_first is not supported on CPU.
+          # TODO(b/62340061): Support channels_first on CPU.
+          if test.is_gpu_available(cuda_only=True):
+            testing_utils.layer_test(
+                keras.layers.Conv2D,
+                kwargs={
+                    'filters': filters,
+                    'kernel_size': kernel_size,
+                    'padding': padding,
+                    'strides': strides,
+                    'data_format': 'channels_first'
+                },
+                input_shape=(num_samples, stack_size, num_row, num_col))
 
   def test_convolution_2d_regularization(self):
     # regularizers

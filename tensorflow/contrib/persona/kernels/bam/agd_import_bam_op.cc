@@ -165,7 +165,10 @@ namespace tensorflow {
         for (size_t i = 0; i < chunk_size_; i++) {
           if (!reader_->getNextRead(&bam_read, &result, &location, &isRC, &mapq, &flag, 
                 &cigar)) {
-            return OutOfRange("No more reads in BAM file");
+            if (i == 0)
+              return OutOfRange("No more reads in BAM file");
+            else
+              return Status::OK();
           }
 
           TF_RETURN_IF_ERROR(IntoBases(bam_read.getUnclippedData(), bam_read.getUnclippedLength(), bases_));
@@ -196,7 +199,10 @@ namespace tensorflow {
         for (size_t i = 0; i < chunk_size_; i++) {
           if (!reader_->getNextRead(&bam_read, &result, &location, &isRC, &mapq, &flag, 
                 &cigar)) {
-            return OutOfRange("No more reads in BAM file");
+            if (i == 0)
+              return OutOfRange("No more reads in BAM file");
+            else
+              return Status::OK();
           }
           if (IsSecondary(flag) || IsSupplemental(flag)) {// skip secondary/supplemental
             i--;

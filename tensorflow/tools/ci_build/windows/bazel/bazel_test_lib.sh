@@ -175,6 +175,9 @@ function run_configure_for_cpu_build {
   if [ -z "$CC_OPT_FLAGS" ]; then
     export CC_OPT_FLAGS="-march=native"
   fi
+  if [ -z "$TF_NEED_MKL" ]; then
+    export TF_NEED_MKL=0
+  fi
   echo "" | ./configure
 }
 
@@ -205,5 +208,5 @@ function create_python_test_dir() {
 
 function reinstall_tensorflow_pip() {
   echo "y" | pip uninstall tensorflow -q || true
-  pip install ${1}
+  pip install ${1} --no-deps
 }

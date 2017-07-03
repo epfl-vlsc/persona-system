@@ -126,7 +126,6 @@ namespace tensorflow {
         read_buf.clear();*/
       }
 
-      VLOG(INFO) << "reader read " << data_read << " bytes from ceph object " << file_key;
       return Status::OK();
     }
   };

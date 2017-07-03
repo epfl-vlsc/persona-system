@@ -1,7 +1,5 @@
 licenses(["notice"])  # Apache 2.0
 
-exports_files(["LICENSE"])
-
 filegroup(
     name = "all_files",
     srcs = glob(
@@ -9,16 +7,6 @@ filegroup(
         exclude = [
             "**/METADATA",
             "**/OWNERS",
-        ],
-    ),
-    visibility = ["//tensorflow:__subpackages__"],
-)
-
-filegroup(
-    name = "android_srcs",
-    srcs = glob(
-        [
-            "utils.*",
         ],
     ),
     visibility = ["//tensorflow:__subpackages__"],
