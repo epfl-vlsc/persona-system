@@ -186,6 +186,30 @@ Converts an input file into three files of bases, qualities, and metadata
 Converts two input files into three files of interleaved bases, qualities, and metadata
 )doc");
 
+ REGISTER_OP("AGDQualBin")
+  .Input("buffer_pair_pool: Ref(string)")
+  .Input("results_handle: string")
+  .Input("num_records: int32")
+  .Output("marked_results: string")
+  .SetShapeFn([](InferenceContext *c) {
+      ShapeHandle input_data;
+      for (int i = 0; i < 2; i++) {
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &input_data));
+        auto dim_handle = c->Dim(input_data, 0);
+        auto dim_value = c->Value(dim_handle);
+        if (dim_value != 2) {
+          return Internal("AGDConverter input ", i, " must be a vector(2)");
+        }
+      }
+      c->set_output(0, input_data);
+
+      return Status::OK();
+    })
+  .SetIsStateful()
+  .Doc(R"doc(
+hello world riya)doc");
+
+
   REGISTER_OP("AGDMarkDuplicates")
   .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handle: string")
