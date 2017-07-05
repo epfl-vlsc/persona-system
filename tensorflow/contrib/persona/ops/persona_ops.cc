@@ -1241,10 +1241,9 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     Experimental.
     )doc");
 
-<<<<<<< HEAD
   REGISTER_OP("AGDFiltering")
-  .Input("chunk_size: int = 100000")
-  .Input("unaligned: bool = false")
+  .Input("chunk_size: int32")
+  .Input("unaligned: bool")
   .Input("query: string")
   .Input("tensor_queue: resource")
   .Input("bufpair_pool: Ref(string)")
@@ -1253,8 +1252,8 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .Output("first_ordinal: int64")
   .SetIsStateful()
   .SetShapeFn([](InferenceContext *c) {
-      bool unaligned;
-      TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
+      bool unaligned = false;
+      // TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
       int dim;
       if (unaligned) dim = 3;
       else dim = 4;
@@ -1326,12 +1325,6 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
         return Status::OK();
         })
   .Doc(R"doc(
-<<<<<<< HEAD
-Compresses the prepared buffer_list records and into individual buffers, and then outputs them
-)doc");
-}
-=======
   Compresses the prepared buffer_list records and into individual buffers, and then outputs them
   )doc");
 }
->>>>>>> master

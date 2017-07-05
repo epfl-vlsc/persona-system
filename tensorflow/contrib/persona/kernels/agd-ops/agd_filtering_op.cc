@@ -92,11 +92,11 @@ namespace tensorflow {
       if (!input_queue_ && !bufpair_pool_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
-      const Tensor *chunk_size_t,*unaligned_t,*predicate_t;
+
       OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
       OP_REQUIRES_OK(ctx, ctx->input("unaligned", &unaligned_t));
       OP_REQUIRES_OK(ctx, ctx->input("query", &predicate_t));
-
+      
       chunk_size_ = chunk_size_t->scalar<int>()();
       unaligned_ = unaligned_t->scalar<bool>()();
       predicate_ = predicate_t->scalar<string>()();
@@ -134,9 +134,9 @@ namespace tensorflow {
 
       if(stored_results_reader != nullptr)
       {
-        OP_REQUIRES_OK(ctx,stored_base_reader->GetNextRecord(&data_base,&len_base));
-        OP_REQUIRES_OK(ctx,stored_qual_reader->GetNextRecord(&data_qual,&len_qual));
-        OP_REQUIRES_OK(ctx,stored_meta_reader->GetNextRecord(&data_meta,&len_meta));
+        s = stored_base_reader->GetNextRecord(&data_base,&len_base);
+        s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
+        s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
         s = stored_results_reader->GetNextResult(result);
 
         while( s.ok() && current_chunk_size < chunk_size_)
@@ -150,9 +150,9 @@ namespace tensorflow {
             current_chunk_size++;
           }
 
-          OP_REQUIRES_OK(ctx,stored_base_reader->GetNextRecord(&data_base,&len_base));
-          OP_REQUIRES_OK(ctx,stored_qual_reader->GetNextRecord(&data_qual,&len_qual));
-          OP_REQUIRES_OK(ctx,stored_meta_reader->GetNextRecord(&data_meta,&len_meta));
+          s = stored_base_reader->GetNextRecord(&data_base,&len_base);
+          s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
+          s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
           s = stored_results_reader->GetNextResult(result);
 
         }
@@ -182,9 +182,9 @@ namespace tensorflow {
               current_chunk_size++;
             }
 
-            OP_REQUIRES_OK(ctx,stored_base_reader->GetNextRecord(&data_base,&len_base));
-            OP_REQUIRES_OK(ctx,stored_qual_reader->GetNextRecord(&data_qual,&len_qual));
-            OP_REQUIRES_OK(ctx,stored_meta_reader->GetNextRecord(&data_meta,&len_meta));
+            s = stored_base_reader->GetNextRecord(&data_base,&len_base);
+            s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
+            s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
             s = stored_results_reader->GetNextResult(result);
 
           }
@@ -398,6 +398,7 @@ namespace tensorflow {
 
   private:
     QueueInterface *input_queue_ = nullptr;
+    const Tensor *chunk_size_t,*unaligned_t,*predicate_t;
     const Tensor *results_t,*bases_t,*quality_t,*metadata_t,*num_records_t;
     ResourceContainer<Data> *bases_data, *qual_data, *meta_data, *results_data;
     int chunk_size_;
