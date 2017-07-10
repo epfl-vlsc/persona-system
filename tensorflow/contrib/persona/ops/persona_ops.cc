@@ -1242,9 +1242,9 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     )doc");
 
   REGISTER_OP("AGDFiltering")
-  .Input("chunk_size: int32")
-  .Input("unaligned: bool")
-  .Input("query: string")
+  .Attr("chunk_size: int")
+  .Attr("unaligned: bool")
+  .Attr("query: string")
   .Input("tensor_queue: resource")
   .Input("bufpair_pool: Ref(string)")
   .Output("chunk_out: string")
@@ -1253,7 +1253,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .SetIsStateful()
   .SetShapeFn([](InferenceContext *c) {
       bool unaligned = false;
-      // TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
+      TF_RETURN_IF_ERROR(c->GetAttr("unaligned", &unaligned));
       int dim;
       if (unaligned) dim = 3;
       else dim = 4;

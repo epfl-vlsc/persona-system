@@ -29,7 +29,7 @@
 #include "zlib.h"
 #include <stdlib.h>
 #include <time.h>
-
+#include <string.h>
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 
 
@@ -51,17 +51,21 @@ namespace tensorflow {
   class AGDFilteringOp : public OpKernel {
   public:
 
-    int64 count_total_reads;
+    int64 count_chunk_reads;
 
 
-    AGDFilteringOp(OpKernelConstruction *context) : OpKernel(context) {
+    AGDFilteringOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       cout<<"Starting filtering constructor \n";
-      count_total_reads = 0;
+      count_chunk_reads = 0;
       stored_base_reader = nullptr;
       stored_qual_reader = nullptr;
       stored_meta_reader = nullptr;
       stored_results_reader = nullptr;
+      first_run = true;
 
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("unaligned", &unaligned_));
+      OP_REQUIRES_OK(ctx, ctx->GetAttr("query", &predicate_));
     
     }
 
@@ -69,7 +73,7 @@ namespace tensorflow {
       core::ScopedUnref a1(input_queue_);
       core::ScopedUnref unref_listpool(bufpair_pool_);
       cout<<"Done filtering destructor \n";
-      cout<<"Total : "<<count_total_reads<<endl;
+      cout<<"Total : "<<count_chunk_reads<<endl;
     }
 
     void Compute(OpKernelContext* ctx) override {
@@ -92,14 +96,15 @@ namespace tensorflow {
       if (!input_queue_ && !bufpair_pool_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
-
-      OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
-      OP_REQUIRES_OK(ctx, ctx->input("unaligned", &unaligned_t));
-      OP_REQUIRES_OK(ctx, ctx->input("query", &predicate_t));
+      cout<<"Done init\n";
+      fflush(stdout);
+      // OP_REQUIRES_OK(ctx, ctx->GetAttr("chunk_size", &chunk_size_t));
+      // OP_REQUIRES_OK(ctx, ctx->GetAttr("unaligned", &unaligned_t));
+      // OP_REQUIRES_OK(ctx, ctx->GetAttr("query", &predicate_t));
       
-      chunk_size_ = chunk_size_t->scalar<int>()();
-      unaligned_ = unaligned_t->scalar<bool>()();
-      predicate_ = predicate_t->scalar<string>()();
+      // chunk_size_ = chunk_size_t->scalar<int>()();
+      // unaligned_ = unaligned_t->scalar<bool>()();
+      // predicate_ = predicate_t->scalar<string>()();
 
       Tensor* out_t, *num_recs_t, *first_ord_t;
       if (unaligned_) {
@@ -111,9 +116,15 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->allocate_output("num_records", TensorShape({}), &num_recs_t));
       OP_REQUIRES_OK(ctx, ctx->allocate_output("first_ordinal", TensorShape({}), &first_ord_t));
            
+      cout<<"done allocating output\n";
+      fflush(stdout);
+
       auto& num_recs = num_recs_t->scalar<int>()();
       auto& first_ord = first_ord_t->scalar<int64>()();
       first_ord = first_ordinal_;
+
+      cout<<"starting column builder allocation\n";
+      fflush(stdout);
 
       ColumnBuilder base_builder;
       OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, base_builder, out_t, 0));
@@ -124,74 +135,190 @@ namespace tensorflow {
       AlignmentResultBuilder results_builder;
       OP_REQUIRES_OK(ctx, GetBufferForBuilder(ctx, results_builder, out_t, 3));
 
+      cout<<"dONE column builder allocation\n";
+      fflush(stdout);
+
       current_chunk_size = 0;
-      Status s;
+      Status s = Status::OK();
       Alignment result;
       const char *data_base,*data_qual,*data_meta;
       size_t len_base,len_qual,len_meta;
 
-      srand(time(NULL));
+      cout<<"count_chunk_reads : "<<count_chunk_reads<<endl;
 
-      if(stored_results_reader != nullptr)
+      if(!first_run)
       {
+
+      // srand(time(NULL));
+          AGDRecordReader base_reader(bases_data, num_records);
+          AGDRecordReader qual_reader(qual_data, num_records);
+          AGDRecordReader meta_reader(meta_data, num_records);
+          AGDResultReader results_reader(results_data, num_records);
+
+          stored_base_reader = &base_reader;
+          stored_qual_reader = &qual_reader;
+          stored_meta_reader = &meta_reader;
+          stored_results_reader = &results_reader;
+
+      cout<<"bringing pointer to last read \n";
+      int i = 0;
+      while(i < count_chunk_reads && s.ok())
+      {
+          s = stored_base_reader->GetNextRecord(&data_base,&len_base);
+          s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
+          s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
+          s = stored_results_reader->GetNextResult(result);
+          i++;
+      }
+
+      cout<<"count_chunk_reads : "<<count_chunk_reads<<endl;
+
+
+      // if(stored_results_reader != nullptr)
+      // {
+        cout<<"resuming last chunk read\n";
+        fflush(stdout);
         s = stored_base_reader->GetNextRecord(&data_base,&len_base);
         s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
         s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
+              cout<<"data_base ";
+              fflush(stdout);
+              cout<<data_base;
+              cout<<"\nlen_base "<<len_base<<endl;
+              cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
+              cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
+              fflush(stdout);
+        if(s.ok())
+          cout<<"ok\n";
+        else
+          cout<<"notok\n";
         s = stored_results_reader->GetNextResult(result);
+        if(s.ok())
+          cout<<"ok\n";
+        else
+          cout<<"notok\n";
 
         while( s.ok() && current_chunk_size < chunk_size_)
         {
+          count_chunk_reads++;
+          cout<<"Scanning results of last chunk\n";
           if(RandomQueryResult())
           {
+            cout<<"Appending records\n";
             base_builder.AppendRecord(data_base,len_base);
             qual_builder.AppendRecord(data_qual,len_qual);
             meta_builder.AppendRecord(data_meta,len_meta);
             results_builder.AppendAlignmentResult(result);
             current_chunk_size++;
           }
-
+          cout<<"Reading next record\n";
           s = stored_base_reader->GetNextRecord(&data_base,&len_base);
           s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
           s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
+          cout<<"data_base ";
+              fflush(stdout);
+              cout<<data_base;
+              cout<<"\nlen_base "<<len_base<<endl;
+              cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
+              cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
+              fflush(stdout);
           s = stored_results_reader->GetNextResult(result);
-
+          cout<<"done reading\n";
         }
+
+      cout<<"count_chunk_reads : "<<count_chunk_reads<<endl;
+
 
         resource_releaser(bases_data);
         resource_releaser(qual_data);
         resource_releaser(meta_data);
         resource_releaser(results_data);        
 
+      // }
       }
+      first_run = false;
 
       Status dequeue_status;
+      cout<<"will dequeue new chunks from now\n";
+      fflush(stdout);
       
       while(current_chunk_size < chunk_size_)
       {
+        cout<<"about to dequeue\n";
+        fflush(stdout);
         dequeue_status = DequeueElement(ctx);
+        cout<<"dequeued\n";
         if(dequeue_status.ok())
         {
+          AGDRecordReader base_reader(bases_data, num_records);
+          AGDRecordReader qual_reader(qual_data, num_records);
+          AGDRecordReader meta_reader(meta_data, num_records);
+          AGDResultReader results_reader(results_data, num_records);
+
+          stored_base_reader = &base_reader;
+          stored_qual_reader = &qual_reader;
+          stored_meta_reader = &meta_reader;
+          stored_results_reader = &results_reader;
+          count_chunk_reads = 0;
+          cout<<"count_chunk_reads : "<<count_chunk_reads<<endl;
+          fflush(stdout);
+          cout<<"ok deq status\n";
+          fflush(stdout);
+          s = Status::OK();
           while( s.ok() && current_chunk_size < chunk_size_)
           {
-            if(RandomQueryResult())
+            // cout<<"\nlen_base "<<len_base<<endl;
+            cout<<"Reading next result\n";
+            fflush(stdout);
+            count_chunk_reads++;
+            s = stored_base_reader->GetNextRecord(&data_base,&len_base);
+            s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
+            s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
+            s = stored_results_reader->GetNextResult(result);
+            cout<<"Done reading next result..\n";
+            fflush(stdout);
+            if(RandomQueryResult() && s.ok())
             {
+              cout<<"passed filter, appending record\n";
+              if(data_base == NULL)
+              {
+                cout<<"data base is null\n";
+                fflush(stdout);
+              }
+              cout<<"jc\n";
+              // cout<<"length is ";
+              // fflush(stdout);
+              // cout<<strlen(data_base);
+              cout<<"data_base ";
+              fflush(stdout);
+              cout<<data_base;
+              cout<<"\nlen_base "<<len_base<<endl;
+              cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
+              cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
+              fflush(stdout);
               base_builder.AppendRecord(data_base,len_base);
               qual_builder.AppendRecord(data_qual,len_qual);
               meta_builder.AppendRecord(data_meta,len_meta);
               results_builder.AppendAlignmentResult(result);
               current_chunk_size++;
+              cout<<"Done appending\n";
+              fflush(stdout);
             }
-
-            s = stored_base_reader->GetNextRecord(&data_base,&len_base);
-            s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
-            s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
-            s = stored_results_reader->GetNextResult(result);
-
+            else
+            {
+              cout<<"didn't pass filter or s not ok\n";
+            }
+            cout<<"in loop after dequeuing and filtering\n";
+            fflush(stdout);
+            if(!s.ok())
+              count_chunk_reads--;
           }
+        cout<<"count_chunk_reads : "<<count_chunk_reads<<endl;
         }
         else
         {
           //last chunk dequeued and filtered. Now exit and end compute
+          cout<<"Last chunk dequeued\n";
           break;
         }
       }
@@ -200,7 +327,8 @@ namespace tensorflow {
       first_ordinal_ += current_chunk_size;
 
 
-
+      cout<<"Done compute\n";
+      fflush(stdout);
 
 
 
@@ -284,7 +412,7 @@ namespace tensorflow {
       input_queue_->TryDequeue(ctx, [&](const QueueInterface::Tuple &tuple) {
         // auto &results_t = tuple[0];
         // auto &record_id = record_id_t.scalar<string>()();
-        // cout<<"Dequeuing\n";
+        cout<<"Dequeuing\n";
         // cout<<tuple.size()<<endl;
         fflush(stdout);
         if(tuple.size() == 0)
@@ -300,22 +428,24 @@ namespace tensorflow {
           quality_t = &tuple[3];
           metadata_t = &tuple[4];
 
-          auto num_records = num_records_t->scalar<int32>()();
+          num_records = num_records_t->scalar<int32>()();
 
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, bases_t, &bases_data));
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, quality_t, &qual_data));
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, metadata_t, &meta_data));
           OP_REQUIRES_OK(ctx, LoadDataResource(ctx, results_t, &results_data));
 
-          AGDRecordReader base_reader(bases_data, num_records);
-          AGDRecordReader qual_reader(qual_data, num_records);
-          AGDRecordReader meta_reader(meta_data, num_records);
-          AGDResultReader results_reader(results_data, num_records);
 
-          stored_base_reader = &base_reader;
-          stored_qual_reader = &qual_reader;
-          stored_meta_reader = &meta_reader;
-          stored_results_reader = &results_reader;
+          // const char *data;
+          // size_t len;
+          // cout<<"len is "<<len<<endl;
+          // fflush(stdout);
+          // s = base_reader.GetNextRecord(&data,&len);
+          // cout<<"len after reading is "<<len<<endl;
+          // fflush(stdout);
+          // s = stored_base_reader->GetNextRecord(&data,&len);
+          // cout<<"len after second reading is "<<len<<endl;
+          // fflush(stdout);
 
 
           // if (current_record_id_.empty()) {
@@ -354,6 +484,9 @@ namespace tensorflow {
         return Internal("End of file reached");
       }
 
+      // cout<<"Done Dequeuing\n";
+      fflush(stdout);
+
       return s;
     }
 
@@ -382,8 +515,8 @@ namespace tensorflow {
       fflush(stdout);
       Status s = results_reader->GetNextResult(result);
       while (s.ok()) {
-        count_total_reads++;
-        // cout<<"Reads till now : "<<count_total_reads<<"\n";
+        count_chunk_reads++;
+        // cout<<"Reads till now : "<<count_chunk_reads<<"\n";
         s = results_reader->GetNextResult(result);
       } // while s is ok()
       return Status::OK();
@@ -391,9 +524,10 @@ namespace tensorflow {
 
     bool RandomQueryResult()
     {
-      int n = rand()%2;
-      if(n==0) return false;
-      else return true;
+      // int n = (++random)%2;
+      // if(n==0) return false;
+      // else return true;
+      return true;
     }
 
   private:
@@ -408,8 +542,10 @@ namespace tensorflow {
     int64 first_ordinal_ = 0;
     AGDRecordReader *stored_base_reader, *stored_qual_reader, *stored_meta_reader;
     AGDResultReader *stored_results_reader;
+    int32 num_records;
     ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
-
+    int random = 0;
+    bool first_run;
   };
 
   REGISTER_KERNEL_BUILDER(Name("AGDFiltering").Device(DEVICE_CPU), AGDFilteringOp);
