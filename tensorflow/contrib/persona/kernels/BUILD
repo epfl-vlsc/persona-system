@@ -20,6 +20,7 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
         "//tensorflow/contrib/persona/kernels/snap-align:snap_align",
         "//tensorflow/contrib/persona/kernels/sort:agd_sort",
+        "//tensorflow/contrib/persona/kernels/filtering:filter",
         "//third_party/eigen3",
     ],
     alwayslink = 1,

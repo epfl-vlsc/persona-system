@@ -32,7 +32,12 @@
 #include <string.h>
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 
+#include <fstream>
+#include "antlr4-runtime.h"
+#include "FilteringLexer.h"
+#include "FilteringParser.h"
 
+using namespace antlr4;
 
 namespace tensorflow {
 
@@ -67,6 +72,9 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("unaligned", &unaligned_));
       OP_REQUIRES_OK(ctx, ctx->GetAttr("query", &predicate_));
     
+      cout<<"chunk size : "<<chunk_size_<<endl;
+      cout<<"query : "<<predicate_<<endl;
+
     }
 
     ~AGDFilteringOp() {
@@ -181,13 +189,13 @@ namespace tensorflow {
         s = stored_base_reader->GetNextRecord(&data_base,&len_base);
         s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
         s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
-              cout<<"data_base ";
-              fflush(stdout);
-              cout<<data_base;
-              cout<<"\nlen_base "<<len_base<<endl;
-              cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
-              cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
-              fflush(stdout);
+              // cout<<"data_base ";
+              // fflush(stdout);
+              // cout<<data_base;
+              // cout<<"\nlen_base "<<len_base<<endl;
+              // cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
+              // cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
+              // fflush(stdout);
         if(s.ok())
           cout<<"ok\n";
         else
@@ -202,7 +210,7 @@ namespace tensorflow {
         {
           count_chunk_reads++;
           cout<<"Scanning results of last chunk\n";
-          if(RandomQueryResult())
+          if(ParseQuery(result))
           {
             cout<<"Appending records\n";
             base_builder.AppendRecord(data_base,len_base);
@@ -215,13 +223,13 @@ namespace tensorflow {
           s = stored_base_reader->GetNextRecord(&data_base,&len_base);
           s = stored_qual_reader->GetNextRecord(&data_qual,&len_qual);
           s = stored_meta_reader->GetNextRecord(&data_meta,&len_meta);
-          cout<<"data_base ";
-              fflush(stdout);
-              cout<<data_base;
-              cout<<"\nlen_base "<<len_base<<endl;
-              cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
-              cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
-              fflush(stdout);
+          // cout<<"data_base ";
+          //     fflush(stdout);
+          //     cout<<data_base;
+          //     cout<<"\nlen_base "<<len_base<<endl;
+          //     cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
+          //     cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
+          //     fflush(stdout);
           s = stored_results_reader->GetNextResult(result);
           cout<<"done reading\n";
         }
@@ -241,7 +249,8 @@ namespace tensorflow {
       Status dequeue_status;
       cout<<"will dequeue new chunks from now\n";
       fflush(stdout);
-      
+      cout<<"current_chunk_size : "<<current_chunk_size<<endl;
+
       while(current_chunk_size < chunk_size_)
       {
         cout<<"about to dequeue\n";
@@ -267,6 +276,7 @@ namespace tensorflow {
           s = Status::OK();
           while( s.ok() && current_chunk_size < chunk_size_)
           {
+            cout<<"current_chunk_size : "<<current_chunk_size;
             // cout<<"\nlen_base "<<len_base<<endl;
             cout<<"Reading next result\n";
             fflush(stdout);
@@ -277,15 +287,15 @@ namespace tensorflow {
             s = stored_results_reader->GetNextResult(result);
             cout<<"Done reading next result..\n";
             fflush(stdout);
-            if(RandomQueryResult() && s.ok())
+            if(ParseQuery(result) && s.ok())
             {
               cout<<"passed filter, appending record\n";
               if(data_base == NULL)
               {
-                cout<<"data base is null\n";
+                // cout<<"data base is null\n";
                 fflush(stdout);
               }
-              cout<<"jc\n";
+              // cout<<"jc\n";
               // cout<<"length is ";
               // fflush(stdout);
               // cout<<strlen(data_base);
@@ -528,6 +538,32 @@ namespace tensorflow {
       // if(n==0) return false;
       // else return true;
       return true;
+    }
+
+    bool ParseQuery(Alignment &result)
+    {
+      ANTLRInputStream input(predicate_);
+      FilteringLexer lexer(&input);
+      CommonTokenStream tokens(&lexer);
+
+      // TODO : Move these to constructor
+      
+      tokens.fill();
+      for (auto token : tokens.getTokens()) {
+        cout << token->toString() << endl;
+      }
+
+      FilteringParser parser(&tokens, result); 
+      
+      // parser.setBuildParseTree(false); // don't waste time bulding a tree
+      
+      // tree::ParseTree* tree = parser.prog(); // parse
+
+      parser.prog();
+      
+      return parser.answer;
+      // cout << tree->toStringTree(&parser) << endl ;
+
     }
 
   private:
