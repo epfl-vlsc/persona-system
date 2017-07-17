@@ -24,17 +24,21 @@ namespace tensorflow {
         int num_contigs = genome_->getNumContigs();
 
         Tensor* refs_t = NULL, *sizes_t = NULL;
-        OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({num_contigs}),
+        OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}),
               &refs_t));
-        OP_REQUIRES_OK(ctx, ctx->allocate_output(1, TensorShape({num_contigs}),
+        OP_REQUIRES_OK(ctx, ctx->allocate_output(1, TensorShape({}),
               &sizes_t));
 
-        auto refs = refs_t->flat<string>();
-        auto sizes = sizes_t->flat<int32>();
+        auto& refs = refs_t->scalar<string>()();
+        auto& sizes = sizes_t->scalar<string>()();
+        refs = string(contigs[0].name, contigs[0].nameLength);
+        sizes = to_string(contigs[0].length);
 
-        for (int i = 0; i < num_contigs; i++) {
-          refs(i) = string(contigs[i].name, contigs[i].nameLength);
-          sizes(i) = static_cast<uint32>(contigs[i].length);
+        for (int i = 1; i < num_contigs; i++) {
+          refs += ",";
+          sizes += ",";
+          refs += string(contigs[i].name, contigs[i].nameLength);
+          sizes += to_string(contigs[i].length);
         }
 
       }

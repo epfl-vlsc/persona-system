@@ -821,16 +821,16 @@ to align single reads using the SNAP algorithm.
     REGISTER_OP("SnapIndexReferenceSequences")
     .Input("genome_handle: Ref(string)")
     .Output("ref_seqs: string")
-    .Output("ref_lens: int32")
+    .Output("ref_lens: string")
     .SetIsStateful()
     .SetShapeFn([](InferenceContext* c) {
-        c->set_output(0, c->Vector(InferenceContext::kUnknownDim));
-        c->set_output(1, c->Vector(InferenceContext::kUnknownDim));
+        c->set_output(0, c->Scalar());
+        c->set_output(1, c->Scalar());
         return Status::OK();
         })
     .Doc(R"doc(
-    Given a SNAP genome index, produce a string matrix containing the contigs
-    (ref sequences).
+    Given a SNAP genome index, produce a string containing the contigs
+    (ref sequences) values comma separated.
     )doc");
 
     REGISTER_OP("BWASingleExecutor")
@@ -993,16 +993,15 @@ Intended to be used for BWAAssembler
     REGISTER_OP("BwaIndexReferenceSequences")
     .Input("index_handle: Ref(string)")
     .Output("ref_seqs: string")
-    .Output("ref_lens: int32")
+    .Output("ref_lens: string")
     .SetShapeFn([](InferenceContext* c) {
-        c->set_output(0, c->Vector(InferenceContext::kUnknownDim));
-        c->set_output(1, c->Vector(InferenceContext::kUnknownDim));
+        c->set_output(0, c->Scalar());
+        c->set_output(1, c->Scalar());
         return Status::OK();
         })
     .SetIsStateful()
     .Doc(R"doc(
-    Given a BWA genome index, produce two vectors containing the contigs
-    (ref sequences) and their sizes.
+    Produces ref sequences and lengths in comma separated strings.
     )doc");
 
     REGISTER_OP("BWAOptions")
