@@ -73,10 +73,15 @@ namespace tensorflow {
 
       auto creator = [this, ctx](ExecutorContainer** executor) {
         LOG(INFO) << "creating snap single executor";
+	assert(!ctx);
+	assert(!index_resource_);
+	assert(!options_resource_);
+	LOG(INFO) << "This works: Threads:" << num_threads_ << ":Capacity: " << capacity_ << ":ctx:" << ctx->env() << ":index resource:" << index_resource_->get() << ":options_resource:" << options_resource_->get();
         unique_ptr<SnapSingleExecutor> value(new SnapSingleExecutor(ctx->env(), index_resource_->get(),
                                                                     options_resource_->get(),
                                                                     num_threads_, capacity_));
-        *executor = new ExecutorContainer(move(value));
+        LOG(INFO) << "I like to seg fault before this";
+	*executor = new ExecutorContainer(move(value));
         return Status::OK();
       };
 
