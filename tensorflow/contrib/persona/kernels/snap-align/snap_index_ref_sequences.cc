@@ -35,8 +35,8 @@ namespace tensorflow {
         sizes = to_string(contigs[0].length);
 
         for (int i = 1; i < num_contigs; i++) {
-          refs += ",";
-          sizes += ",";
+          refs += "|";
+          sizes += "|";
           refs += string(contigs[i].name, contigs[i].nameLength);
           sizes += to_string(contigs[i].length);
         }
