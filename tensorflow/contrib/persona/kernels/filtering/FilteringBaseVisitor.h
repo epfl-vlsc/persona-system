@@ -1,6 +1,8 @@
 
 	#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 	#include <iostream>
+	#include <stdlib.h>
+	#include <string.h>
 	using namespace std;
 
 

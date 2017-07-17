@@ -213,7 +213,9 @@ namespace tensorflow {
           if(ParseQuery(result))
           {
             cout<<"Appending records\n";
-            base_builder.AppendRecord(data_base,len_base);
+            OP_REQUIRES_OK(ctx,IntoBases(data_base, len_base, bases_));
+            base_builder.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
+            // base_builder.AppendRecord(data_base,len_base);
             qual_builder.AppendRecord(data_qual,len_qual);
             meta_builder.AppendRecord(data_meta,len_meta);
             results_builder.AppendAlignmentResult(result);
@@ -247,6 +249,7 @@ namespace tensorflow {
       first_run = false;
 
       Status dequeue_status;
+      Status last_chunk_read = Status::OK();
       cout<<"will dequeue new chunks from now\n";
       fflush(stdout);
       cout<<"current_chunk_size : "<<current_chunk_size<<endl;
@@ -306,7 +309,9 @@ namespace tensorflow {
               cout<<"data_qual "<<data_qual<<"\nlen_qual "<<len_qual<<endl;
               cout<<"data_meta "<<data_meta<<"\nlen_meta "<<len_meta<<endl;
               fflush(stdout);
-              base_builder.AppendRecord(data_base,len_base);
+              // base_builder.AppendRecord(data_base,len_base);
+              OP_REQUIRES_OK(ctx,IntoBases(data_base, len_base, bases_));
+              base_builder.AppendRecord(reinterpret_cast<const char*>(&bases_[0]), sizeof(BinaryBases)*bases_.size());
               qual_builder.AppendRecord(data_qual,len_qual);
               meta_builder.AppendRecord(data_meta,len_meta);
               results_builder.AppendAlignmentResult(result);
@@ -329,18 +334,19 @@ namespace tensorflow {
         {
           //last chunk dequeued and filtered. Now exit and end compute
           cout<<"Last chunk dequeued\n";
+          last_chunk_read = OutOfRange("No more chunks in dataset");
           break;
         }
       }
 
       num_recs = current_chunk_size;
       first_ordinal_ += current_chunk_size;
-
+      cout<<"writing chunk with num_recs : "<<num_recs<<"and chunk size : "<<current_chunk_size<<endl;
 
       cout<<"Done compute\n";
       fflush(stdout);
 
-
+      OP_REQUIRES_OK(ctx,last_chunk_read);
 
       // int i = 0;
       // cout<<"Dequeuing chunk "<<++i<<endl;
@@ -548,10 +554,10 @@ namespace tensorflow {
 
       // TODO : Move these to constructor
       
-      tokens.fill();
-      for (auto token : tokens.getTokens()) {
-        cout << token->toString() << endl;
-      }
+      // tokens.fill();
+      // for (auto token : tokens.getTokens()) {
+      //   cout << token->toString() << endl;
+      // }
 
       FilteringParser parser(&tokens, result); 
       
@@ -561,9 +567,9 @@ namespace tensorflow {
 
       parser.prog();
       
-      return parser.answer;
       // cout << tree->toStringTree(&parser) << endl ;
 
+      return parser.answer;
     }
 
   private:
@@ -582,6 +588,7 @@ namespace tensorflow {
     ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
     int random = 0;
     bool first_run;
+    vector<BinaryBases> bases_;
   };
 
   REGISTER_KERNEL_BUILDER(Name("AGDFiltering").Device(DEVICE_CPU), AGDFilteringOp);

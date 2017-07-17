@@ -3,7 +3,7 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 
 cc_library(
     name = "filter",
-    srcs = glob(["*.cc"] + ["*.h"] + ["Filtering*.cpp"]),
+    srcs = glob(["*.cc"] + ["*.h"] + ["FilteringLexer.cpp"] + ["FilteringVisitor.cpp"] + ["FilteringBaseVisitor.cpp"] + ["FilteringListener.cpp"] + ["FilteringBaseListener.cpp"] + ["FilteringParser.cpp"]),
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = [
@@ -18,3 +18,4 @@ cc_library(
     includes = ["antlr/local/include/antlr4-runtime"],
     alwayslink=1,
 )
+

@@ -1,6 +1,8 @@
 
 	#include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 	#include <iostream>
+	#include <stdlib.h>
+	#include <string.h>
 	using namespace std;
 
 
@@ -17,10 +19,10 @@
 class  FilteringParser : public antlr4::Parser {
 public:
   enum {
-    RESULT = 1, MATE = 2, FLAG = 3, MAPQ = 4, POSITION = 5, LPAREN = 6, 
-    RPAREN = 7, AND = 8, OR = 9, NOT = 10, TRUE = 11, FALSE = 12, GT = 13, 
-    GE = 14, LT = 15, LE = 16, EQ = 17, NE = 18, DOT = 19, Number = 20, 
-    WS = 21
+    RESULT = 1, MATE = 2, FLAG = 3, MAPQ = 4, POSITION = 5, REF_INDEX = 6, 
+    LPAREN = 7, RPAREN = 8, AND = 9, OR = 10, NOT = 11, TRUE = 12, FALSE = 13, 
+    GT = 14, GE = 15, LT = 16, LE = 17, EQ = 18, NE = 19, BITAND = 20, DOT = 21, 
+    Dec_Number = 22, Hex_Number = 23, WS = 24
   };
 
   enum {
@@ -113,12 +115,23 @@ public:
   class  ValueContext : public antlr4::ParserRuleContext {
   public:
     int n;
-    antlr4::Token *numberToken = nullptr;;
+    FilteringParser::ValueContext *a = nullptr;;
+    FilteringParser::ValueContext *d = nullptr;;
+    antlr4::Token *dec_numberToken = nullptr;;
+    antlr4::Token *hex_numberToken = nullptr;;
     FilteringParser::IdentifierContext *identifierContext = nullptr;;
+    antlr4::Token *c = nullptr;;
+    FilteringParser::ValueContext *b = nullptr;;
     ValueContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *Number();
+    antlr4::tree::TerminalNode *LPAREN();
+    antlr4::tree::TerminalNode *RPAREN();
+    std::vector<ValueContext *> value();
+    ValueContext* value(size_t i);
+    antlr4::tree::TerminalNode *Dec_Number();
+    antlr4::tree::TerminalNode *Hex_Number();
     IdentifierContext *identifier();
+    antlr4::tree::TerminalNode *BITAND();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -128,7 +141,7 @@ public:
   };
 
   ValueContext* value();
-
+  ValueContext* value(int precedence);
   class  IdentifierContext : public antlr4::ParserRuleContext {
   public:
     int n;
@@ -137,6 +150,10 @@ public:
     antlr4::tree::TerminalNode *RESULT();
     antlr4::tree::TerminalNode *DOT();
     antlr4::tree::TerminalNode *FLAG();
+    antlr4::tree::TerminalNode *MAPQ();
+    antlr4::tree::TerminalNode *POSITION();
+    antlr4::tree::TerminalNode *REF_INDEX();
+    antlr4::tree::TerminalNode *MATE();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -150,6 +167,7 @@ public:
 
   virtual bool sempred(antlr4::RuleContext *_localctx, size_t ruleIndex, size_t predicateIndex) override;
   bool expressionSempred(ExpressionContext *_localctx, size_t predicateIndex);
+  bool valueSempred(ValueContext *_localctx, size_t predicateIndex);
 
 private:
   static std::vector<antlr4::dfa::DFA> _decisionToDFA;
