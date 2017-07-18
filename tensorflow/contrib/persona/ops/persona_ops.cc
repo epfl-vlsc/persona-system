@@ -1189,6 +1189,26 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   .Doc(R"doc(
   )doc");
 
+  
+  
+
+
+  REGISTER_OP("AGDPrintMulti")
+  .Attr("ref_sequences: list(string)")
+  .Attr("ref_seq_sizes: list(int)")
+  .Input("tensor_queue: resource")
+  .Output("zeroed: int32")
+  .SetShapeFn([](InferenceContext *c) {
+       c->set_output(0, c->Vector(2));
+       return Status::OK();
+})
+  .SetIsStateful()
+  .Doc(R"doc(
+  Prints results from a queue of chunk
+  )doc");
+
+
+  
   REGISTER_OP("BufferPairCompressor")
   .Attr("pack: bool = false")
   .Input("buffer_pool: Ref(string)")
