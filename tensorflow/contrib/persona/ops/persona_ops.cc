@@ -190,6 +190,8 @@ Converts two input files into three files of interleaved bases, qualities, and m
   .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handle: string")
   .Input("num_records: int32")
+  .Input("upper_bounds: Ref(int32)")
+  .Input("bin_values: Ref(int32)")
   .Output("marked_results: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle input_data;
@@ -201,6 +203,7 @@ Converts two input files into three files of interleaved bases, qualities, and m
           return Internal("AGDConverter input ", i, " must be a vector(2)");
         }
       }
+	//TO DO: check vectors of the same size upper_bounds and bin_values
       c->set_output(0, input_data);
 
       return Status::OK();
