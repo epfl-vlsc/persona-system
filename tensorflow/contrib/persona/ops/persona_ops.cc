@@ -1193,10 +1193,13 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
   
 
 
-  REGISTER_OP("AGDPrintMulti")
+  REGISTER_OP("VariantCalling")
   .Attr("ref_sequences: list(string)")
   .Attr("ref_seq_sizes: list(int)")
-  .Input("tensor_queue: resource")
+  .Attr("cmd_line : list(string)")
+  .Attr("T: list({resource})" )
+  .Attr("num_datasets: int")
+  .Input("tensor_queue: T")
   .Output("zeroed: int32")
   .SetShapeFn([](InferenceContext *c) {
        c->set_output(0, c->Vector(2));
@@ -1204,10 +1207,10 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
 })
   .SetIsStateful()
   .Doc(R"doc(
-  Prints results from a queue of chunk
+  Variant Calling feature for AGD DATASET
   )doc");
 
-
+  
   
   REGISTER_OP("BufferPairCompressor")
   .Attr("pack: bool = false")
