@@ -91,8 +91,7 @@ FilteringParser::ProgContext* FilteringParser::prog() {
     dynamic_cast<ProgContext *>(_localctx)->e = expression(0);
     setState(9);
     match(FilteringParser::EOF);
-     //cout<<dynamic_cast<ProgContext *>(_localctx)->e->v<<endl ;
-    							answer = dynamic_cast<ProgContext *>(_localctx)->e->v ; 
+     answer = dynamic_cast<ProgContext *>(_localctx)->e->v ; 
    
   }
   catch (RecognitionException &e) {

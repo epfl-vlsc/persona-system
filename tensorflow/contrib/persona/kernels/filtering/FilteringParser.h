@@ -41,13 +41,6 @@ public:
 
   	Alignment result;
   	bool answer;
-  	/*
-  	FilteringParser(antlr4::TokenStream *input, int result)	: Parser(input) {
-    		//_interpreter = new atn::ParserATNSimulator(this, _atn, _decisionToDFA, _sharedContextCache);
-    		this->FilteringParser(input);
-  		this->res_flag = result;
-  	}
-  	*/
   	FilteringParser(antlr4::TokenStream *input, Alignment res)	: FilteringParser(input) {	// Calling the default constructor from my constructor (constructor-constructor calls allowed in C++11)
   		this->result = res;
   	}

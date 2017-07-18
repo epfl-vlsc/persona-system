@@ -13,21 +13,13 @@ grammar Filtering;
 {
 	Alignment result;
 	bool answer;
-	/*
-	FilteringParser(antlr4::TokenStream *input, int result)	: Parser(input) {
-  		//_interpreter = new atn::ParserATNSimulator(this, _atn, _decisionToDFA, _sharedContextCache);
-  		this->FilteringParser(input);
-		this->res_flag = result;
-	}
-	*/
 	FilteringParser(antlr4::TokenStream *input, Alignment res)	: FilteringParser(input) {	// Calling the default constructor from my constructor (constructor-constructor calls allowed in C++11)
 		this->result = res;
 	}
 }
 
 
-prog: e=expression EOF 	{ //cout<<$e.v<<endl ;
-							answer = $e.v ; }
+prog: e=expression EOF 	{ answer = $e.v ; }
 	; 
 
 expression returns [bool v]
@@ -70,30 +62,8 @@ identifier returns [int n]
 	| MATE DOT POSITION { $n = result.next_position().position() ; }
 	| MATE DOT REF_INDEX { $n = result.next_position().ref_index() ; }
 	;
-/*	
-comparator
-	: GT | GE | LT | LE | EQ | NE 
-	;
 
-binary_op 
-	: AND | OR 
-	;
-*/
-/*
-identifier: read DOT parameter
-	;
 
-read
-	: RESULT 
-	| MATE
-	;
-
-parameter
-	: FLAG
-	| MAPQ
-	| POSITION
-	;
-*/
 RESULT: 'result' ;
 MATE: 'mate' ;
 FLAG: 'flag' ;
