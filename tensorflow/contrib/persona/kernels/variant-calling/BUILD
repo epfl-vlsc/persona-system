@@ -2,8 +2,7 @@ load("//tensorflow:tensorflow.bzl", "tf_copts")
 
 cc_library(
     name = "bamtools",
-    srcs = glob(["freebayes/bamtools/src/api/*.cpp"]),
-    hdrs = glob(["freebayes/bamtools/src/api/*.h"]),
+    srcs = glob(["freebayes/bamtools/lib/libbamtools.a"]),
     includes = ["freebayes/bamtools/src/api/" , "freebayes/bamtools/src/"] ,
     copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format", "-std=c++11"],
     linkopts = ["-lrados"],
@@ -37,21 +36,37 @@ cc_library(
 
 cc_library(
     name = "seqlib",
-    srcs = glob(["freebayes/SeqLib/SeqLib/*.cpp","freebayes/SeqLib/htslib/*.cpp"]),
-    hdrs = glob(["freebayes/SeqLib/SeqLib/*.h","freebayes/SeqLib/htslib/*.h"]),
-    includes = ["freebayes/SeqLib/SeqLib/","freebayes/SeqLib/htslib/","freebayes/SeqLib/"] ,
-    copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format", "-std=c++11"],
+    srcs = glob(["freebayes/SeqLib/src/libseqlib.a"]),
+    includes = ["freebayes/SeqLib/SeqLib/","freebayes/SeqLib/" , "freebayes/SeqLib/src/"] ,
+    copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format"],
     linkopts = ["-lrados"],
     linkstatic = 1,
     nocopts = "-fno-exceptions",
-    visibility = ["//visibility:public"]
+    visibility = ["//visibility:public"],
+    deps = [":htslib" , ":bamtools"]
 )
+
+cc_library(
+    name = "fermi_lite",
+    srcs = glob(["freebayes/SeqLib/fermi-lite/*.c"] , exclude = ["freebayes/SeqLib/fermi-lite/example.c"]),
+    hdrs = glob(["freebayes/SeqLib/fermilite/*.h"]),
+    includes = ["freebayes/SeqLib/fermi-lite/"] ,
+    copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format"],
+    linkopts = ["-lrados"],
+    linkstatic = 1,
+    nocopts = "-fno-exceptions",
+    visibility = ["//visibility:public"],
+    deps = ["//tensorflow/contrib/persona/kernels/bwa-align:bwa_align"]
+)
+
+
 cc_library(
     name = "htslib",
-    srcs = glob(["freebayes/vcflib/tabixpp/htslib/htslib/*.cpp"]),
-    hdrs = glob(["freebayes/vcflib/tabixpp/htslib/htslib/*.h" ]),
-    includes = ["freebayes/vcflib/tabixpp/htslib/htslib/" ] ,
-    copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format", "-std=c++11"],
+    srcs = glob(["freebayes/SeqLib/htslib/*.a"]),
+    #srcs = glob(["freebayes/vcflib/tabixpp/htslib/htslib/*.cpp","freebayes/vcflib/tabixpp/htslib/*.c" ,"freebayes/vcflib/tabixpp/htslib/*.cpp" ]),
+    #hdrs = glob(["freebayes/vcflib/tabixpp/htslib/htslib/*.h" , "freebayes/vcflib/tabixpp/htslib/*.h"]),
+    includes = ["freebayes/vcflib/tabixpp/htslib/htslib/" ,"freebayes/vcflib/tabixpp/htslib/" ] ,
+    copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format"],
     linkopts = ["-lrados"],
     linkstatic = 1,
     nocopts = "-fno-exceptions",
@@ -132,6 +147,20 @@ cc_library(
     deps = [":tabixpp",":smithwaterman", ":fastahack",":multichoose", ":intervaltree" , ":fsom"]
 )
 
+cc_library(
+    name = "AGDMultiReader",
+    srcs = glob(["AGDMultiReader.cc"]),
+    hdrs = glob(["AGDMultiReader.h"]),
+    copts = tf_copts() + ["-fexceptions"],
+    linkstatic = 1,
+    nocopts = "-fno-exceptions",
+    visibility = ["//visibility:public"],
+    deps = ["//tensorflow/contrib/persona/kernels/agd-format:agd_format", ":bamtools",":seqlib"],
+    alwayslink=1,
+    linkopts = [
+             "-lboost_system", "-lboost_timer" , "-lrados"
+    ]
+)
 
 # Compilation fo the freebayes library
 cc_library(
@@ -143,7 +172,7 @@ cc_library(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     copts = ["-pthread", "-MMD", "-msse", "-mssse3", "-msse4.2", "-Wno-format", "-std=c++11"],
-    deps = [":bamtools" , ":intervaltree" , ":seqlib" , ":ttmath", ":vcflib" ]
+    deps = [":AGDMultiReader",":bamtools" , ":intervaltree" , ":seqlib" , ":ttmath", ":vcflib"  , "//tensorflow/contrib/persona/kernels/bwa-align:bwa_align", ":fermi_lite"]
 
 )
 
@@ -151,13 +180,13 @@ cc_library(
 
 cc_library(
     name = "variant_calling",
-    srcs = glob(["*.cc"]),
-    hdrs = glob(["*.h"]),
+    srcs = glob(["variant_calling.cc"]),
+    #hdrs = glob(["*.h"]),
     copts = tf_copts() + ["-fexceptions"],
     linkstatic = 1,
     nocopts = "-fno-exceptions",
     visibility = ["//visibility:public"],
-    deps = ["//tensorflow/contrib/persona/kernels/agd-format:agd_format", ":freebayes"],
+    deps = ["//tensorflow/contrib/persona/kernels/agd-format:agd_format", ":freebayes" , ":AGDMultiReader"],
     alwayslink=1,
     linkopts = [
              "-lboost_system", "-lboost_timer" , "-lrados"
