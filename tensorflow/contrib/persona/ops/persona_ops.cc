@@ -180,7 +180,7 @@ Converts an input file into three files of bases, qualities, and metadata
       c->set_output(1, c->Vector(2));
       c->set_output(2, c->Vector(2));
 
-      return Status::OK();
+    return Status::OK();
       })
   .Doc(R"doc(
 Converts two input files into three files of interleaved bases, qualities, and metadata
@@ -190,8 +190,8 @@ Converts two input files into three files of interleaved bases, qualities, and m
   .Input("buffer_pair_pool: Ref(string)")
   .Input("results_handle: string")
   .Input("num_records: int32")
-  .Input("upper_bounds: Ref(int32)")
-  .Input("bin_values: Ref(int32)")
+  .Attr("upper_bounds: list(int)")
+  .Attr("bin_values: list(int)")
   .Output("marked_results: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle input_data;
@@ -203,7 +203,6 @@ Converts two input files into three files of interleaved bases, qualities, and m
           return Internal("AGDConverter input ", i, " must be a vector(2)");
         }
       }
-	//TO DO: check vectors of the same size upper_bounds and bin_values
       c->set_output(0, input_data);
 
       return Status::OK();

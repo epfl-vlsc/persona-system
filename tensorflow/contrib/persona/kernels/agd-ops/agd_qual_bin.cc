@@ -40,6 +40,8 @@ namespace tensorflow {
   class AGDQualBinOp : public OpKernel {
   public:
     AGDQualBinOp(OpKernelConstruction *context) : OpKernel(context) {
+	 OP_REQUIRES_OK(context, context->GetAttr("upper_bounds", &upper_bounds));
+	 OP_REQUIRES_OK(context, context->GetAttr("bin_values", &bin_values));
 
     }
 
@@ -68,15 +70,11 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, InitHandles(ctx));
       }
       //read input Tensors
-      const Tensor* results_t, *num_results_t, *upper_bounds_t, *bin_values_t;
+      const Tensor* results_t, *num_results_t;
       OP_REQUIRES_OK(ctx, ctx->input("num_records", &num_results_t));
       OP_REQUIRES_OK(ctx, ctx->input("results_handle", &results_t));
-      OP_REQUIRES_OK(ctx, ctx->input("upper_bounds", &upper_bounds_t));
-      OP_REQUIRES_OK(ctx, ctx->input("bin_values", &bin_values_t));
       auto results_handle = results_t->vec<string>();
       auto num_results = num_results_t->scalar<int32>()();
-      auto upper_bounds = upper_bounds_t->vec<int32>();
-      auto bin_values = bin_values_t->vec<int32>();
       auto rmgr = ctx->resource_manager();
 	
       //setup output container and AlignmentResultBuilder
@@ -95,11 +93,17 @@ namespace tensorflow {
       size_t chunksize;
       
       Status s = record_reader.GetNextRecord(&record, &chunksize);
+      int num_bins = upper_bounds.size();
+      /*
+	for (int i=0; i<num_bins; i++){
+	cout << "upper bound: " << upper_bounds[i] << "bin value: " << bin_values[i] << "\n"; 
+	}      
+	*/
 
       while (s.ok()) {
 	agd_record.ParseFromArray(record, chunksize);
 	int mapping_quality = agd_record.mapping_quality();
-	int num_bins = upper_bounds.size();
+
 	
 	int i = 0;	
 	//find corresponding bin and change quality value
@@ -114,7 +118,7 @@ namespace tensorflow {
 	if (i==num_bins){
 		agd_record.set_mapping_quality(bin_values[num_bins-1]);
 	}
-	
+	cout << "old value: "<< mapping_quality << "new value: " << agd_record.mapping_quality() << "\n"; 
 	results_builder.AppendAlignmentResult(agd_record);
 	s = record_reader.GetNextRecord(&record, &chunksize);
 	
@@ -127,7 +131,9 @@ namespace tensorflow {
 
   private:
     ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
-  };
+    vector<int> upper_bounds;
+    vector<int> bin_values;	  
+};
 
   REGISTER_KERNEL_BUILDER(Name("AGDQualBin").Device(DEVICE_CPU), AGDQualBinOp);
 } //  namespace tensorflow {
