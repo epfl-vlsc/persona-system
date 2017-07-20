@@ -192,6 +192,7 @@ Converts two input files into three files of interleaved bases, qualities, and m
   .Input("num_records: int32")
   .Attr("upper_bounds: list(int)")
   .Attr("bin_values: list(int)")
+  .Attr("encoding_offset: int")
   .Output("marked_results: string")
   .SetShapeFn([](InferenceContext *c) {
       ShapeHandle input_data;

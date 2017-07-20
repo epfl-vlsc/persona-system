@@ -42,6 +42,7 @@ namespace tensorflow {
     AGDQualBinOp(OpKernelConstruction *context) : OpKernel(context) {
 	 OP_REQUIRES_OK(context, context->GetAttr("upper_bounds", &upper_bounds));
 	 OP_REQUIRES_OK(context, context->GetAttr("bin_values", &bin_values));
+	 OP_REQUIRES_OK(context, context->GetAttr("encoding_offset", &encoding_offset));
 
     }
 
@@ -81,45 +82,43 @@ namespace tensorflow {
       ResourceContainer<BufferPair> *output_bufferpair_container;
       OP_REQUIRES_OK(ctx, GetOutputBufferPair(ctx, &output_bufferpair_container));
       auto output_bufferpair = output_bufferpair_container->get();
-      AlignmentResultBuilder results_builder;
-      results_builder.SetBufferPair(output_bufferpair);
+      ColumnBuilder column_builder;
+      column_builder.SetBufferPair(output_bufferpair);
      
       //setup Record Reader
       ResourceContainer<Data> *record_container;
       OP_REQUIRES_OK(ctx, rmgr->Lookup(results_handle(0), results_handle(1), &record_container));
-      AGDRecordReader record_reader(record_container, num_results); 
-      Alignment agd_record; 
+      AGDRecordReader record_reader(record_container, num_results);  
       const char* record;
       size_t chunksize;
       
       Status s = record_reader.GetNextRecord(&record, &chunksize);
       int num_bins = upper_bounds.size();
-      /*
-	for (int i=0; i<num_bins; i++){
-	cout << "upper bound: " << upper_bounds[i] << "bin value: " << bin_values[i] << "\n"; 
-	}      
-	*/
 
       while (s.ok()) {
-	agd_record.ParseFromArray(record, chunksize);
-	int mapping_quality = agd_record.mapping_quality();
-
-	
-	int i = 0;	
-	//find corresponding bin and change quality value
-	while (i<num_bins){
-		if (mapping_quality<=upper_bounds[i]){
-			agd_record.set_mapping_quality(bin_values[i]);
-			break;
+	int record_len = strlen(record);
+	cout <<"old: "<<record<<"\n";
+	char* adjusted_quality_values = new char[record_len];
+	//look at every quality value
+	for (int i=0; i<record_len; i++){
+		int quality_value = (int) record[i] - encoding_offset;
+		int new_quality_value = bin_values[num_bins-1] + encoding_offset;
+		
+		int j = 0;	
+		//find corresponding bin and change quality value
+		
+		while (j<num_bins){
+			if (quality_value<=upper_bounds[j]){
+				new_quality_value = bin_values[j]+encoding_offset;
+				break;
+			}
+			j++;
 		}
-		i++;
+	 
+		adjusted_quality_values[i] = new_quality_value;	
 	}
-	//handle edge case
-	if (i==num_bins){
-		agd_record.set_mapping_quality(bin_values[num_bins-1]);
-	}
-	cout << "old value: "<< mapping_quality << "new value: " << agd_record.mapping_quality() << "\n"; 
-	results_builder.AppendAlignmentResult(agd_record);
+	cout<<"new qual string"<<adjusted_quality_values<<"\n";
+	column_builder.AppendRecord(adjusted_quality_values, chunksize);
 	s = record_reader.GetNextRecord(&record, &chunksize);
 	
       } // while s is ok()
@@ -132,7 +131,8 @@ namespace tensorflow {
   private:
     ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
     vector<int> upper_bounds;
-    vector<int> bin_values;	  
+    vector<int> bin_values;
+    int encoding_offset;	  
 };
 
   REGISTER_KERNEL_BUILDER(Name("AGDQualBin").Device(DEVICE_CPU), AGDQualBinOp);
