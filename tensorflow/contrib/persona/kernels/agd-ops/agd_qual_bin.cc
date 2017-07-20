@@ -90,17 +90,17 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, rmgr->Lookup(results_handle(0), results_handle(1), &record_container));
       AGDRecordReader record_reader(record_container, num_results);  
       const char* record;
-      size_t chunksize;
+      size_t length;
       
-      Status s = record_reader.GetNextRecord(&record, &chunksize);
+      Status s = record_reader.GetNextRecord(&record, &length);
       int num_bins = upper_bounds.size();
 
       while (s.ok()) {
-	int record_len = strlen(record);
-	cout <<"old: "<<record<<"\n";
-	char* adjusted_quality_values = new char[record_len];
+	string to_print(record,length);
+	cout <<"old: "<<to_print<<"\n";
+	adjusted_values.resize(length);
 	//look at every quality value
-	for (int i=0; i<record_len; i++){
+	for (int i=0; i<length; i++){
 		int quality_value = (int) record[i] - encoding_offset;
 		int new_quality_value = bin_values[num_bins-1] + encoding_offset;
 		
@@ -115,11 +115,12 @@ namespace tensorflow {
 			j++;
 		}
 	 
-		adjusted_quality_values[i] = new_quality_value;	
+		adjusted_values[i] = new_quality_value;	
 	}
-	cout<<"new qual string"<<adjusted_quality_values<<"\n";
-	column_builder.AppendRecord(adjusted_quality_values, chunksize);
-	s = record_reader.GetNextRecord(&record, &chunksize);
+	string to_print_new(&adjusted_values[0],length);
+	cout << "new: " <<to_print_new<<"\n";
+	column_builder.AppendRecord(&adjusted_values[0], length);
+	s = record_reader.GetNextRecord(&record, &length);
 	
       } // while s is ok()
 
@@ -132,7 +133,8 @@ namespace tensorflow {
     ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
     vector<int> upper_bounds;
     vector<int> bin_values;
-    int encoding_offset;	  
+    int encoding_offset;
+    vector<char> adjusted_values;	  
 };
 
   REGISTER_KERNEL_BUILDER(Name("AGDQualBin").Device(DEVICE_CPU), AGDQualBinOp);
