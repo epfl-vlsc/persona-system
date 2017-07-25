@@ -167,16 +167,16 @@ and is thus passed as an Attr instead of an input (for efficiency);
     Gives coverage values of each of the base-pair in reference genome.
     )doc");
 
-    REGISTER_OP("AGDPeakDetection")
+    REGISTER_OP("ImportSGA")
     .Attr("ref_sequences: list(string)")
     .Attr("ref_seq_sizes: list(int)")
-    .Attr("scale: int")
-    .Attr("max: int")
-    .Attr("bg: bool")
-    .Attr("d: bool")
-    .Attr("dz: bool")
-    .Attr("strand: string")
-    .Attr("bga: bool")
+   // .Attr("scale: int")
+   // .Attr("max: int")
+   // .Attr("bg: bool")
+   // .Attr("d: bool")
+   // .Attr("dz: bool")
+    .Attr("feature: string")
+    //.Attr("bga: bool")
     .Input("results_handle: string")
     .Input("num_records: int32")
     .Output("zeroed: int32")
@@ -186,7 +186,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
         })
     .SetIsStateful()
     .Doc(R"doc(
-    Detects areas of high number of detected reads in the genome. 
+    Converts aligned AGD to SGA 
     )doc");
 
     REGISTER_OP("AGDConverter")

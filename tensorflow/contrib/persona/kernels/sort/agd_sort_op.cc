@@ -165,12 +165,12 @@ namespace tensorflow {
       }
 
       // phase 2: sort the vector by genome_location
-      LOG(INFO) << "running std sort on " << sort_index_.size() << " SortEntry's";
+      //LOG(INFO) << "running std sort on " << sort_index_.size() << " SortEntry's";
       std::sort(sort_index_.begin(), sort_index_.end(), [](const SortEntry& a, const SortEntry& b) {
           return a.position < b.position;
           });
 
-      LOG(INFO) << "Sort finished.";
+      //LOG(INFO) << "Sort finished.";
       // phase 3: using the sort vector, merge the chunks into superchunks in sorted
       // order
 
@@ -234,7 +234,7 @@ namespace tensorflow {
       }
 
       // done
-      LOG(INFO) << "DONE running sort!!";
+//      LOG(INFO) << "DONE running sort!!";
 
     }
 
