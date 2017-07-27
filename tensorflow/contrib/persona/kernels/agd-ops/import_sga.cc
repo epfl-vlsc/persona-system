@@ -58,7 +58,7 @@ namespace tensorflow {
         strandRead = "";
 
         fp = fopen( "/scratch/azhir/bowtieFile/fasterOutput.sga", "w" );
-
+ 
 
     }
 
