@@ -96,8 +96,8 @@ namespace tensorflow {
       int num_bins = upper_bounds.size();
 
       while (s.ok()) {
-	string to_print(record,length);
-	cout <<"old: "<<to_print<<"\n";
+	//string to_print(record,length);
+	//cout <<"old: "<<to_print<<"\n";
 	adjusted_values.resize(length);
 	//look at every quality value
 	for (int i=0; i<length; i++){
@@ -117,8 +117,8 @@ namespace tensorflow {
 	 
 		adjusted_values[i] = new_quality_value;	
 	}
-	string to_print_new(&adjusted_values[0],length);
-	cout << "new: " <<to_print_new<<"\n";
+	//string to_print_new(&adjusted_values[0],length);
+	//cout << "new: " <<to_print_new<<"\n";
 	column_builder.AppendRecord(&adjusted_values[0], length);
 	s = record_reader.GetNextRecord(&record, &length);
 	
