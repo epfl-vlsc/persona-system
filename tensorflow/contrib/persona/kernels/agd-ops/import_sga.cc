@@ -10,6 +10,7 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/util.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
 #include <vector>
+#include <string>
 #include <cstdint>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
@@ -40,7 +41,8 @@ namespace tensorflow {
   class ImportSGAOp : public OpKernel {
   public:
     ImportSGAOp(OpKernelConstruction *context) : OpKernel(context) {
-
+	string path;
+	OP_REQUIRES_OK(context, context->GetAttr("path", &path));
         OP_REQUIRES_OK(context, context->GetAttr("ref_sequences", &ref_seqs_));
         OP_REQUIRES_OK(context, context->GetAttr("ref_seq_sizes", &ref_sizes_));
         OP_REQUIRES_OK(context, context->GetAttr("feature", &feature_));
@@ -56,8 +58,13 @@ namespace tensorflow {
         startRead = -1;
         lenRead = -1;
         strandRead = "";
-
-        fp = fopen( "/scratch/azhir/bowtieFile/fasterOutput.sga", "w" );
+	
+	if(path.back() == '/'){
+           path=path+"output.sga";
+        }else{
+	   path = path+"/output.sga";
+        }
+        fp = fopen( path.c_str(), "w" );
  
 
     }

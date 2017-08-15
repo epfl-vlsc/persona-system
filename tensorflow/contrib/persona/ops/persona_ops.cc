@@ -143,6 +143,7 @@ pool_name, and ceph_conf_path`.
 Assumes that the record_id for a given set does not change for the runtime of the graph
 and is thus passed as an Attr instead of an input (for efficiency);
 
+
 )doc");
 
     REGISTER_OP("AGDGeneCoverage")
@@ -175,6 +176,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
    // .Attr("bg: bool")
    // .Attr("d: bool")
    // .Attr("dz: bool")
+    .Attr("path: string")
     .Attr("feature: string")
     //.Attr("bga: bool")
     .Input("results_handle: string")
@@ -187,6 +189,29 @@ and is thus passed as an Attr instead of an input (for efficiency);
     .SetIsStateful()
     .Doc(R"doc(
     Converts aligned AGD to SGA 
+    )doc");
+
+ REGISTER_OP("Compression")
+    .Attr("ref_sequences: list(string)")
+    .Attr("ref_seq_sizes: list(int)")
+   // .Attr("scale: int")
+   // .Attr("max: int")
+   // .Attr("bg: bool")
+   // .Attr("d: bool")
+   // .Attr("dz: bool")
+    .Attr("feature: string")
+    //.Attr("bga: bool")
+    .Input("results_handle: string")
+    .Input("bases_handle: string")
+    .Input("num_records: int32")
+    .Output("zeroed: int32")
+    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+        c->set_output(0, c->input(1));
+        return Status::OK();
+        })
+    .SetIsStateful()
+    .Doc(R"doc(
+    Compresses the bases 
     )doc");
 
     REGISTER_OP("AGDConverter")
