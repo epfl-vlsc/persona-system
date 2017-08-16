@@ -55,7 +55,7 @@ namespace snap_wrapper {
     };
   
     Status WriteSingleResult(Read &snap_read, SingleAlignmentResult &result, AlignmentResultBuilder &result_column, 
-      const Genome* genome, LandauVishkinWithCigar* lvc, bool is_secondary);
+      const Genome* genome, LandauVishkinWithCigar* lvc, bool is_secondary, bool use_m);
   
     Status PostProcess(
       const Genome* genome,

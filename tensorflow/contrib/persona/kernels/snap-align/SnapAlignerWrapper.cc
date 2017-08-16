@@ -247,7 +247,7 @@ namespace snap_wrapper {
 
 
   Status WriteSingleResult(Read &snap_read, SingleAlignmentResult &result, AlignmentResultBuilder &result_column, 
-      const Genome* genome, LandauVishkinWithCigar* lvc, bool is_secondary) {
+      const Genome* genome, LandauVishkinWithCigar* lvc, bool is_secondary, bool use_m) {
     string cigar;
     Alignment format_result;
     snap_read.setAdditionalFrontClipping(0);
@@ -269,7 +269,7 @@ namespace snap_wrapper {
                                        format_result,
                                        cigar,
                                        &addFrontClipping,
-                                       true));
+                                       use_m));
       // redo if read modified (e.g. to add soft clipping, or move alignment for a leading I.
       if (addFrontClipping != 0) {
                 

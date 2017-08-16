@@ -147,7 +147,7 @@ namespace tensorflow {
               primaryResult.mapq = 0;
               primaryResult.direction = FORWARD;
               auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc,
-                                                       false);
+                                                       false, options_->useM);
 
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
@@ -171,7 +171,7 @@ namespace tensorflow {
 
             // First, write the primary results
             auto s = snap_wrapper::WriteSingleResult(snap_read, primaryResult, result_builders[0], genome_, &lvc,
-                                                     false);
+                                                     false, options_->useM);
 
             if (!s.ok()) {
               LOG(ERROR) << "adjustResults did not return OK!!!";
@@ -182,7 +182,7 @@ namespace tensorflow {
             // Then write the secondary results if we specified them
             for (decltype(num_secondary_results) i = 0; i < num_secondary_results; i++) {
               s = snap_wrapper::WriteSingleResult(snap_read, secondaryResults[i], result_builders[i + 1], genome_,
-                                                  &lvc, true);
+                                                  &lvc, true, options_->useM);
               if (!s.ok()) {
                 LOG(ERROR) << "adjustResults did not return OK!!!";
                 break;

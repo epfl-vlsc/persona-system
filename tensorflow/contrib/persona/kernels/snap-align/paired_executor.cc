@@ -148,7 +148,7 @@ namespace tensorflow {
             } else if (num_secondary_single_results_first > 0 || num_secondary_single_results_second > 0) {
               while (subchunk_status.ok() && i < num_secondary_single_results_first) {
                 subchunk_status = snap_wrapper::WriteSingleResult(snap_read[0], secondary_single_results[i],
-                                                                  result_builders[i+1], index_->getGenome(), &lvc, true);
+                                                                  result_builders[i+1], index_->getGenome(), &lvc, true, options_->useM);
                 i++;
               }
               // fill in blanks
@@ -162,7 +162,7 @@ namespace tensorflow {
               while (subchunk_status.ok() && i < num_secondary_single_results_second) {
                 subchunk_status = snap_wrapper::WriteSingleResult(snap_read[1],
                                                                   secondary_single_results[i+num_secondary_single_results_first],
-                                                                  result_builders[i+1], index_->getGenome(), &lvc, true);
+                                                                  result_builders[i+1], index_->getGenome(), &lvc, true, options_->useM);
                 i++;
               }
               // fill in the gaps
