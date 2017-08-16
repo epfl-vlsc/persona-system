@@ -113,7 +113,7 @@ namespace tensorflow {
 		 read += cigar[i];
                }
             }
-            compressBase = compressBase + "|" + to_string(agd_result.position().position());
+            compressBase = compressBase + "|" + to_string(agd_result.position().position()) + "|" + to_string(agd_result.position().ref_index());
             cout <<"compressbase: " << compressBase << "\n";
           }
      
