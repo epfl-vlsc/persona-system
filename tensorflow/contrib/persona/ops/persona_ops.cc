@@ -352,6 +352,20 @@ Takes a vector of string keys for AGD chunks (full paths)
 Prints records to stdout from record indices `start` to `finish`.
   )doc");
 
+    REGISTER_OP("AGDBaseCompression")
+    .Attr("unpack: bool = true")
+    .Attr("columns: list(string)")
+    .Input("chunk_names: string")
+    .Input("chunk_size: int32")
+    .Input("start: int32")
+    .Input("finish: int32")
+    .SetIsStateful()
+    .Doc(R"doc(
+Takes a vector of string keys for AGD chunks (full paths)
+
+Prints records to stdout from record indices `start` to `finish`.
+  )doc");
+
     REGISTER_OP("AGDReader")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
