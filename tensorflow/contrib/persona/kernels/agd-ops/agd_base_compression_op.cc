@@ -74,6 +74,7 @@ namespace tensorflow {
           continue;
         }
         string base;
+        string strand =  to_string(agd_result.flag());
         string compressBase = "";
         for (int i = 0; i < columns_.size(); i++) {
           
@@ -97,7 +98,11 @@ namespace tensorflow {
                if(cigar[i] == 'X' || cigar[i] == 'I') {
                  compressBase += cigar[i];
                  for(int j=0; j<atoi(read.c_str()); j++) {
-                   compressBase += base.at(sum);
+                   if(strand.compare("16") == 0) {
+                     compressBase += base.at(base.length()-1-sum);
+                   } else {
+                     compressBase += base.at(sum);
+                   }
                    sum++; 
                  }
                  read = "";
@@ -113,7 +118,7 @@ namespace tensorflow {
 		 read += cigar[i];
                }
             }
-            compressBase = compressBase + "|" + to_string(agd_result.position().position()) + "|" + to_string(agd_result.position().ref_index());
+            compressBase = compressBase + "|" + to_string(agd_result.position().position()) + "|" + to_string(agd_result.position().ref_index()) + "|" + to_string(agd_result.flag());
             cout <<"compressbase: " << compressBase << "\n";
           }
      
