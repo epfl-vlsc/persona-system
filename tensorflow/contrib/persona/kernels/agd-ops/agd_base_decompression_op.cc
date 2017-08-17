@@ -90,23 +90,22 @@ namespace tensorflow {
         string compressBase = "";
         for (int i = 0; i < columns_.size(); i++) {
           
-	  if(columns_[i] == "base"){
+	  if(columns_[i] == "base"){//or compressed base, however it is named
 	    OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
-            //fwrite(data, length, 1, stdout);
             base = data;
             compressBase = base.substr(0, length);
             cout << "compressed base: " << compressBase << "\n";
-            //compressBase = 96=XC4=|99755945|6|16	  
 
 	    string delimiter = "|";
+            //go to the beginning of the file
             fseek(fp, 0, SEEK_SET);
             size_t pos = compressBase.find(delimiter);
             if (pos == -1) cout << "Wrong format, make sure the compressBase is in the correct format. Eg: 96=XC4=|99755945|6|16" << "\n";
+            //retrieve the modified cigar, location, contig (reference index), and flag (specifying the strand)
             string modifiedCigar, location, contig, flag;
             modifiedCigar = compressBase.substr(0, pos);
             compressBase.erase(0, pos + delimiter.length());
             pos = compressBase.find(delimiter);
-           // cout << "compress base now is" << compressBase;
             location = compressBase.substr(0, pos);
             compressBase.erase(0, pos + delimiter.length());
             pos = compressBase.find(delimiter);            
@@ -118,14 +117,16 @@ namespace tensorflow {
             char * line = NULL;
             size_t linelen = 0;
             string decodedBase;
+            
+            //loop through the file
             while(getline(&line, &linelen , fp)){
+               // when the chromosome name is reached, check to see if that is equal to the reference contig specified above 
                if (line[0] == '>') {
     		  string str(line);
 		  str = str.substr(1,strlen(line) -2); 
-                  if (str.compare(ref_seqs_[atoi(contig.c_str())]) == 0){
-                   // cout << "length" << linelen;
+                  if (str.compare(ref_seqs_[atoi(contig.c_str())]) == 0) { //when the correct chromosome is reached
                     pos = atoi(location.c_str());
-                    while(pos > 50){
+                    while(pos > 50){ //loop through the sequence until the location is reached
                       getline(&line, &linelen , fp);
                       pos = pos-50;
                     }
@@ -136,18 +137,18 @@ namespace tensorflow {
                     int lineChar = 0, cigarChar = 0;
                     string cigarRead = "";
                     int total = 0;
-                    while (cigarChar != modifiedCigar.length()) {
-                      if(currentR == '\n' || currentR == NULL){
+                    while (cigarChar != modifiedCigar.length()) { // once the position is reached, go through the cigar
+                      if(currentR == '\n' || currentR == NULL){ // once at a new line continue to the next line until finishing reading the cigar
                         getline(&line, &linelen , fp);
                         start.assign(line);
 	                start = start.substr(0,strlen(line) - 1);
                         currentR = start[0];
                       }
-                      if (modifiedCigar[cigarChar] == '=' || modifiedCigar[cigarChar] == 'D') {
+                      if (modifiedCigar[cigarChar] == '=' || modifiedCigar[cigarChar] == 'D') { // if a perfect match or deletion
                         bool skip = false;
                         if(modifiedCigar[cigarChar] == 'D') skip = true;
                         for(int j=0; j<atoi(cigarRead.c_str()); j++) {
-                          if (!skip){
+                          if (!skip){ // if a perfect match
                             if ( flag.compare("16") == 0) {
                               if(toupper(currentR) == 'A') {decodedBase += 'T';}
                               else if(toupper(currentR) == 'C') {decodedBase += 'G';}
@@ -174,13 +175,13 @@ namespace tensorflow {
                         }
                         cigarRead = "";
                         cigarChar++;
-                      } else if (modifiedCigar[cigarChar] == 'X' || modifiedCigar[cigarChar] == 'I'){
+                      } else if (modifiedCigar[cigarChar] == 'X' || modifiedCigar[cigarChar] == 'I'){ // if a mismatch or insertion
                         bool skip = false;
                         if(modifiedCigar[cigarChar] == 'X') skip = true;
                         cigarChar++;
                         while(cigarChar != modifiedCigar.length() && !isdigit(modifiedCigar[cigarChar])) {
                            decodedBase += modifiedCigar[cigarChar];
-                           if (skip) {
+                           if (skip) { // if mismatch, skip the indices in the reference
                              lineChar++;
                              currentR = start[lineChar];
                              if(currentR == '\n' || currentR == NULL){
@@ -200,9 +201,9 @@ namespace tensorflow {
                         cigarChar++;
                       }
                     }
-                    for(auto& x: decodedBase)
+                    for(auto& x: decodedBase) //convert to upper case
                       x = toupper(x);
-                    if ( flag.compare("16") == 0) 
+                    if ( flag.compare("16") == 0) // if it's a negative strand, reverse the decoded sequence
                        reverse(decodedBase.begin(), decodedBase.end());
                     cout << "decoded" << decodedBase << "\n";
                     break;
