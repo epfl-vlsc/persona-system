@@ -28,6 +28,7 @@ from __future__ import division
 from __future__ import print_function
 
 import itertools
+import textwrap
 
 
 def build_md_page(page_info):
@@ -58,12 +59,11 @@ def build_md_page(page_info):
 def _build_function_page(page_info):
   """Given a FunctionPageInfo object Return the page as an md string."""
   parts = [_Metadata(page_info.full_name).build_html()]
-
   parts.append('# %s\n\n' % page_info.full_name)
 
-  if page_info.aliases:
-    parts.extend('### `%s`\n' % name
-                 for name in page_info.aliases)
+  if len(page_info.aliases) > 1:
+    parts.append('### Aliases:\n\n')
+    parts.extend('* `%s`\n' % name for name in page_info.aliases)
     parts.append('\n')
 
   if page_info.signature is not None:
@@ -95,8 +95,19 @@ def _build_class_page(page_info):
 
   parts.append('# {page_info.full_name}\n\n'.format(page_info=page_info))
 
-  if page_info.aliases:
-    parts.extend('### `class %s`\n' % name for name in page_info.aliases)
+  parts.append('## Class `%s`\n\n' % page_info.full_name.split('.')[-1])
+  if page_info.bases:
+    parts.append('Inherits From: ')
+
+    link_template = '[`{short_name}`]({url})'
+    parts.append(', '.join(
+        link_template.format(**base.__dict__) for base in page_info.bases))
+
+  parts.append('\n\n')
+
+  if len(page_info.aliases) > 1:
+    parts.append('### Aliases:\n\n')
+    parts.extend('* Class `%s`\n' % name for name in page_info.aliases)
     parts.append('\n')
 
   if page_info.defined_in is not None:
@@ -185,8 +196,9 @@ def _build_module_page(page_info):
   parts.append(
       '# Module: {full_name}\n\n'.format(full_name=page_info.full_name))
 
-  if page_info.aliases:
-    parts.extend('### Module `%s`\n' % name for name in page_info.aliases)
+  if len(page_info.aliases) > 1:
+    parts.append('### Aliases:\n\n')
+    parts.extend('* Module `%s`\n' % name for name in page_info.aliases)
     parts.append('\n')
 
   if page_info.defined_in is not None:
@@ -253,10 +265,9 @@ def _build_signature(obj_info):
         "range(start, limit, delta=1, dtype=None, name='range')\n"
         '```\n\n')
 
-  signature_template = '\n'.join([
-      '``` python',
-      '{name}({sig})',
-      '```\n\n'])
+  parts = ['``` python']
+  parts.extend(['@' + dec for dec in obj_info.decorators])
+  signature_template = '{name}({sig})'
 
   if not obj_info.signature:
     sig = ''
@@ -266,7 +277,10 @@ def _build_signature(obj_info):
     sig = ',\n'.join('    %s' % sig_item for sig_item in obj_info.signature)
     sig = '\n'+sig+'\n'
 
-  return signature_template.format(name=obj_info.short_name, sig=sig)
+  parts.append(signature_template.format(name=obj_info.short_name, sig=sig))
+  parts.append('```\n\n')
+
+  return '\n'.join(parts)
 
 
 def _build_compatibility(compatibility):
@@ -287,9 +301,9 @@ def _build_function_details(function_details):
   for detail in function_details:
     sub = []
     sub.append('#### ' + detail.keyword + ':\n\n')
-    sub.append(detail.header)
+    sub.append(textwrap.dedent(detail.header))
     for key, value in detail.items:
-      sub.append('* <b>`%s`</b>:%s' % (key, value))
+      sub.append('* <b>`%s`</b>: %s' % (key, value))
     parts.append(''.join(sub))
 
   return '\n'.join(parts)

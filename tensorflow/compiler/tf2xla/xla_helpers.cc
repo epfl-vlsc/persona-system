@@ -30,28 +30,41 @@ xla::ComputationDataHandle XlaHelpers::MinValue(xla::ComputationBuilder* b,
                                                 DataType data_type) {
   xla::PrimitiveType type;
   TF_CHECK_OK(DataTypeToPrimitiveType(data_type, &type));
-  return b->ConstantLiteral(xla::LiteralUtil::MinValue(type));
+  return b->ConstantLiteral(xla::Literal::MinValue(type));
 }
 
 xla::ComputationDataHandle XlaHelpers::MaxValue(xla::ComputationBuilder* b,
                                                 DataType data_type) {
   xla::PrimitiveType type;
   TF_CHECK_OK(DataTypeToPrimitiveType(data_type, &type));
-  return b->ConstantLiteral(xla::LiteralUtil::MaxValue(type));
+  return b->ConstantLiteral(xla::Literal::MaxValue(type));
 }
 
 xla::ComputationDataHandle XlaHelpers::Zero(xla::ComputationBuilder* b,
                                             DataType data_type) {
   xla::PrimitiveType type;
   TF_CHECK_OK(DataTypeToPrimitiveType(data_type, &type));
-  return b->ConstantLiteral(xla::LiteralUtil::Zero(type));
+  return b->ConstantLiteral(xla::Literal::Zero(type));
 }
 
 xla::ComputationDataHandle XlaHelpers::One(xla::ComputationBuilder* b,
                                            DataType data_type) {
   xla::PrimitiveType type;
   TF_CHECK_OK(DataTypeToPrimitiveType(data_type, &type));
-  return b->ConstantLiteral(xla::LiteralUtil::One(type));
+  return b->ConstantLiteral(xla::Literal::One(type));
+}
+
+xla::ComputationDataHandle XlaHelpers::Epsilon(xla::ComputationBuilder* b,
+                                               DataType data_type) {
+  switch (data_type) {
+    case DT_FLOAT:
+      return b->ConstantR0<float>(std::numeric_limits<float>::epsilon());
+    case DT_DOUBLE:
+      return b->ConstantR0<double>(std::numeric_limits<double>::epsilon());
+    default:
+      LOG(FATAL) << "Unsupported type in XlaHelpers::Epsilon: "
+                 << DataTypeString(data_type);
+  }
 }
 
 xla::ComputationDataHandle XlaHelpers::IntegerLiteral(
@@ -61,28 +74,28 @@ xla::ComputationDataHandle XlaHelpers::IntegerLiteral(
   TF_CHECK_OK(DataTypeToPrimitiveType(data_type, &type));
   switch (type) {
     case xla::U8:
-      literal = *xla::LiteralUtil::CreateR0<uint8>(value);
+      literal = *xla::Literal::CreateR0<uint8>(value);
       break;
     case xla::U32:
-      literal = *xla::LiteralUtil::CreateR0<uint32>(value);
+      literal = *xla::Literal::CreateR0<uint32>(value);
       break;
     case xla::U64:
-      literal = *xla::LiteralUtil::CreateR0<uint64>(value);
+      literal = *xla::Literal::CreateR0<uint64>(value);
       break;
     case xla::S8:
-      literal = *xla::LiteralUtil::CreateR0<int8>(value);
+      literal = *xla::Literal::CreateR0<int8>(value);
       break;
     case xla::S32:
-      literal = *xla::LiteralUtil::CreateR0<int32>(value);
+      literal = *xla::Literal::CreateR0<int32>(value);
       break;
     case xla::S64:
-      literal = *xla::LiteralUtil::CreateR0<int64>(value);
+      literal = *xla::Literal::CreateR0<int64>(value);
       break;
     case xla::F32:
-      literal = *xla::LiteralUtil::CreateR0<float>(value);
+      literal = *xla::Literal::CreateR0<float>(value);
       break;
     case xla::F64:
-      literal = *xla::LiteralUtil::CreateR0<double>(value);
+      literal = *xla::Literal::CreateR0<double>(value);
       break;
     case xla::PRED:
       LOG(FATAL) << "pred element type is not integral";
@@ -90,8 +103,8 @@ xla::ComputationDataHandle XlaHelpers::IntegerLiteral(
     case xla::U16:
       LOG(FATAL) << "u16/s16 literals not yet implemented";
     case xla::F16:
-      literal = *xla::LiteralUtil::CreateR0<xla::half>(
-              static_cast<xla::half>(value));
+      literal =
+          *xla::Literal::CreateR0<xla::half>(static_cast<xla::half>(value));
       break;
     case xla::TUPLE:
       LOG(FATAL) << "tuple element type is not integral";
@@ -153,6 +166,30 @@ static Tensor MakeLinspaceTensor(const TensorShape& shape, int64 depth) {
     linspace_flat(i) = i;
   }
   return linspace;
+}
+
+Status XlaHelpers::Iota(xla::ComputationBuilder* builder, DataType dtype,
+                        int64 size, xla::ComputationDataHandle* iota) {
+  TensorShape linspace_shape({size});
+  Tensor linspace;
+  switch (dtype) {
+    case DT_UINT8:
+      linspace = MakeLinspaceTensor<uint8>(linspace_shape, size);
+      break;
+    case DT_INT32:
+      linspace = MakeLinspaceTensor<int32>(linspace_shape, size);
+      break;
+    case DT_INT64:
+      linspace = MakeLinspaceTensor<int64>(linspace_shape, size);
+      break;
+    default:
+      return errors::InvalidArgument("Invalid argument type ",
+                                     DataTypeString(dtype));
+  }
+  xla::Literal linspace_literal;
+  TF_RETURN_IF_ERROR(HostTensorToLiteral(linspace, &linspace_literal));
+  *iota = builder->ConstantLiteral(linspace_literal);
+  return Status::OK();
 }
 
 Status XlaHelpers::OneHot(xla::ComputationBuilder* builder, int64 depth,

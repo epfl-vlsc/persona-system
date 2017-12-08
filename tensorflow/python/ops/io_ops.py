@@ -26,6 +26,7 @@ See the @{$python/io_ops} guide.
 @@WholeFileReader
 @@IdentityReader
 @@TFRecordReader
+@@LMDBReader
 @@FixedLengthRecordReader
 @@decode_csv
 @@decode_raw
@@ -36,6 +37,7 @@ See the @{$python/io_ops} guide.
 @@parse_example
 @@parse_single_example
 @@parse_tensor
+@@serialize_tensor
 @@decode_json_example
 @@QueueBase
 @@FIFOQueue
@@ -169,7 +171,7 @@ class ReaderBase(object):
     return self._reader_ref
 
   def read(self, queue, name=None):
-    """Returns the next record (key, value pair) produced by a reader.
+    """Returns the next record (key, value) pair produced by a reader.
 
     Will dequeue a work unit from queue if necessary (e.g. when the
     Reader needs to start reading from a new file since it has
@@ -199,7 +201,7 @@ class ReaderBase(object):
 
   def read_up_to(self, queue, num_records,  # pylint: disable=invalid-name
                  name=None):
-    """Returns up to num_records (key, value pairs) produced by a reader.
+    """Returns up to num_records (key, value) pairs produced by a reader.
 
     Will dequeue a work unit from queue if necessary (e.g., when the
     Reader needs to start reading from a new file since it has
@@ -396,7 +398,8 @@ class FixedLengthRecordReader(ReaderBase):
                header_bytes=None,
                footer_bytes=None,
                hop_bytes=None,
-               name=None):
+               name=None,
+               encoding=None):
     """Create a FixedLengthRecordReader.
 
     Args:
@@ -405,12 +408,14 @@ class FixedLengthRecordReader(ReaderBase):
       footer_bytes: An optional int. Defaults to 0.
       hop_bytes: An optional int. Defaults to 0.
       name: A name for the operation (optional).
+      encoding: The type of encoding for the file. Defaults to none.
     """
     rr = gen_io_ops._fixed_length_record_reader_v2(
         record_bytes=record_bytes,
         header_bytes=header_bytes,
         footer_bytes=footer_bytes,
         hop_bytes=hop_bytes,
+        encoding=encoding,
         name=name)
     super(FixedLengthRecordReader, self).__init__(rr)
 
@@ -441,6 +446,25 @@ class TFRecordReader(ReaderBase):
 
 
 ops.NotDifferentiable("TFRecordReader")
+
+
+class LMDBReader(ReaderBase):
+  """A Reader that outputs the records from a LMDB file.
+
+  See ReaderBase for supported methods.
+  """
+  def __init__(self, name=None, options=None):
+    """Create a LMDBReader.
+
+    Args:
+      name: A name for the operation (optional).
+      options: A LMDBRecordOptions object (optional).
+    """
+    rr = gen_io_ops._lmdb_reader(name=name)
+    super(LMDBReader, self).__init__(rr)
+
+
+ops.NotDifferentiable("LMDBReader")
 
 
 class IdentityReader(ReaderBase):

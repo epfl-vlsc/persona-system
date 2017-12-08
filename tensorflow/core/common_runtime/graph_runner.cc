@@ -23,6 +23,7 @@ limitations under the License.
 #include "tensorflow/core/framework/log_memory.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor_util.h"
+#include "tensorflow/core/framework/versions.pb.h"
 #include "tensorflow/core/graph/algorithm.h"
 #include "tensorflow/core/graph/graph_constructor.h"
 #include "tensorflow/core/graph/node_builder.h"
@@ -122,8 +123,8 @@ Status GraphRunner::Run(Graph* graph, FunctionLibraryRuntime* function_library,
   for (const auto& in : inputs) {
     const string& tensor_name = in.first;
     input_names.emplace_back(tensor_name);
-    string full_key = Rendezvous::CreateKey("/cpu:0", 1, "/cpu:1", tensor_name,
-                                            FrameAndIter(0, 0));
+    string full_key = Rendezvous::CreateKey("/device:CPU:0", 1, "/device:CPU:1",
+                                            tensor_name, FrameAndIter(0, 0));
     Rendezvous::ParsedKey parsed;
     TF_RETURN_IF_ERROR(Rendezvous::ParseKey(full_key, &parsed));
     TF_RETURN_IF_ERROR(rendez->Send(parsed, Rendezvous::Args(), in.second,
@@ -174,8 +175,9 @@ Status GraphRunner::Run(Graph* graph, FunctionLibraryRuntime* function_library,
 
   outputs->resize(output_names.size());
   for (size_t i = 0; i < output_names.size(); ++i) {
-    const string& output_key = Rendezvous::CreateKey(
-        "/cpu:0", 1, "/cpu:1", output_names[i], FrameAndIter(0, 0));
+    const string& output_key =
+        Rendezvous::CreateKey("/device:CPU:0", 1, "/device:CPU:1",
+                              output_names[i], FrameAndIter(0, 0));
     Rendezvous::ParsedKey parsed;
     TF_RETURN_IF_ERROR(Rendezvous::ParseKey(output_key, &parsed));
     bool is_dead;

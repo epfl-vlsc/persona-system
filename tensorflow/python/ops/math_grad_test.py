@@ -113,6 +113,29 @@ class MinOrMaxGradientTest(test.TestCase):
       self.assertLess(error, 1e-4)
 
 
+class ProdGradientTest(test.TestCase):
+
+  def testProdGradient(self):
+    inputs = constant_op.constant([[1., 2.], [3., 4.]],
+                                  dtype=dtypes.float32)
+    outputs = math_ops.reduce_prod(inputs)
+    with self.test_session():
+      error = gradient_checker.compute_gradient_error(
+          inputs, inputs.get_shape().as_list(),
+          outputs, outputs.get_shape().as_list())
+      self.assertLess(error, 1e-4)
+
+  def testProdGradientForNegativeAxis(self):
+    inputs = constant_op.constant([[1., 2.], [3., 4.]],
+                                  dtype=dtypes.float32)
+    outputs = math_ops.reduce_prod(inputs, -1)
+    with self.test_session():
+      error = gradient_checker.compute_gradient_error(
+          inputs, inputs.get_shape().as_list(),
+          outputs, outputs.get_shape().as_list())
+      self.assertLess(error, 1e-4)
+
+
 class SegmentMinOrMaxGradientTest(test.TestCase):
 
   def testSegmentMinGradient(self):
@@ -151,6 +174,20 @@ class SegmentMinOrMaxGradientTest(test.TestCase):
     with self.test_session():
       error = gradient_checker.compute_gradient_error(inputs, [1], segment_max,
                                                       [1])
+      self.assertLess(error, 1e-4)
+
+
+class FloorModGradientTest(test.TestCase):
+
+  def testFloorModGradient(self):
+    # Making sure the input is not near the discontinuity point where
+    # x/y == floor(x/y)
+    ns = constant_op.constant([17.], dtype=dtypes.float32)
+    inputs = constant_op.constant([131.], dtype=dtypes.float32)
+    floor_mod = math_ops.floormod(inputs, ns)
+    with self.test_session():
+      error = gradient_checker.compute_gradient_error(inputs, [1],
+                                                      floor_mod, [1])
       self.assertLess(error, 1e-4)
 
 

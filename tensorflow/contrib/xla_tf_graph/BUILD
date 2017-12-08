@@ -9,6 +9,8 @@ licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE"])
 
+load("//tensorflow:tensorflow.bzl", "tf_cc_test")
+
 filegroup(
     name = "all_files",
     srcs = glob(
@@ -39,10 +41,11 @@ cc_library(
     ],
 )
 
-cc_test(
+tf_cc_test(
     name = "xla_tf_graph_util_test",
     srcs = ["xla_tf_graph_util_test.cc"],
     linkstatic = 1,
+    tags = ["nomac"],  # b/63908145
     deps = [
         ":xla_tf_graph_util",
         "//tensorflow/cc:cc_ops",
@@ -50,8 +53,9 @@ cc_test(
         "//tensorflow/cc:scope",
         "//tensorflow/compiler/jit:xla_cpu_jit",
         "//tensorflow/compiler/tf2xla:xla_compiler",
-        "//tensorflow/compiler/xla:status_macros",
+        "//tensorflow/compiler/xla:shape_util",
         "//tensorflow/compiler/xla/client:client_library",
+        "//tensorflow/compiler/xla/service:hlo_module_config",
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:framework_internal",
         "//tensorflow/core:ops",

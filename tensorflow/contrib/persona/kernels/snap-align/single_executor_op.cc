@@ -100,7 +100,7 @@ namespace tensorflow {
     BasicContainer<GenomeIndex> *index_resource_ = nullptr;
     BasicContainer<AlignerOptions>* options_resource_ = nullptr;
     PersistentTensor executor_handle_ GUARDED_BY(mu_);
-    volatile bool executor_handle_set_ = false GUARDED_BY(mu_);
+    volatile bool executor_handle_set_ GUARDED_BY(mu_) = false;
     TF_DISALLOW_COPY_AND_ASSIGN(SnapSingleExecutorOp);
   };
 

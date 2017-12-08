@@ -77,6 +77,7 @@ See the @{$python/train} guide.
 @@GlobalStepWaiterHook
 @@FinalOpsHook
 @@FeedFnHook
+@@ProfilerHook
 @@SecondOrStepTimer
 @@global_step
 @@basic_train_loop
@@ -85,6 +86,10 @@ See the @{$python/train} guide.
 @@create_global_step
 @@assert_global_step
 @@write_graph
+@@load_checkpoint
+@@load_variable
+@@list_variables
+@@init_from_checkpoint
 """
 
 # Optimizers.
@@ -141,7 +146,13 @@ from tensorflow.python.training.basic_session_run_hooks import SummarySaverHook
 from tensorflow.python.training.basic_session_run_hooks import GlobalStepWaiterHook
 from tensorflow.python.training.basic_session_run_hooks import FinalOpsHook
 from tensorflow.python.training.basic_session_run_hooks import FeedFnHook
+from tensorflow.python.training.basic_session_run_hooks import ProfilerHook
 from tensorflow.python.training.basic_loops import basic_train_loop
+from tensorflow.python.training.checkpoint_utils import init_from_checkpoint
+from tensorflow.python.training.checkpoint_utils import list_variables
+from tensorflow.python.training.checkpoint_utils import load_checkpoint
+from tensorflow.python.training.checkpoint_utils import load_variable
+
 from tensorflow.python.training.device_setter import replica_device_setter
 from tensorflow.python.training.monitored_session import Scaffold
 from tensorflow.python.training.monitored_session import MonitoredTrainingSession

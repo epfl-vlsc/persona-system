@@ -25,9 +25,12 @@ from __future__ import print_function
 
 import json
 
+from tensorflow.core.framework import summary_pb2
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops.summary_ops import tensor_summary
 from tensorflow.python.summary import plugin_asset
+
+PLUGIN_NAME = "text"
 
 
 def text_summary(name, tensor, collections=None):
@@ -49,7 +52,7 @@ def text_summary(name, tensor, collections=None):
       summary to.  Defaults to [_ops.GraphKeys.SUMMARIES]
 
   Returns:
-    A  TensorSummary op that is configured so that TensorBoard will recognize
+    A TensorSummary op that is configured so that TensorBoard will recognize
     that it contains textual data. The TensorSummary is a scalar `Tensor` of
     type `string` which contains `Summary` protobufs.
 
@@ -60,9 +63,14 @@ def text_summary(name, tensor, collections=None):
     raise ValueError("Expected tensor %s to have dtype string, got %s" %
                      (tensor.name, tensor.dtype))
 
-  t_summary = tensor_summary(name, tensor, collections=collections)
-  text_assets = plugin_asset.get_plugin_asset(TextSummaryPluginAsset)
-  text_assets.register_tensor(t_summary.op.name)
+  summary_metadata = summary_pb2.SummaryMetadata(
+      plugin_data=summary_pb2.SummaryMetadata.PluginData(
+          plugin_name=PLUGIN_NAME))
+  t_summary = tensor_summary(
+      name=name,
+      tensor=tensor,
+      summary_metadata=summary_metadata,
+      collections=collections)
   return t_summary
 
 

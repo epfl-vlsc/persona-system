@@ -40,10 +40,9 @@ from tensorflow.python.training import gradient_descent
 
 
 class GRUBlockCellTest(test.TestCase):
-  _use_gpu = False
 
   def testNoneDimsWithDynamicRNN(self):
-    with self.test_session(use_gpu=self._use_gpu, graph=ops.Graph()) as sess:
+    with self.test_session(use_gpu=True, graph=ops.Graph()) as sess:
       batch_size = 4
       cell_size = 5
       input_size = 6
@@ -60,7 +59,7 @@ class GRUBlockCellTest(test.TestCase):
       sess.run(output, feed)
 
   def testBlockGRUToGRUCellSingleStep(self):
-    with self.test_session(use_gpu=self._use_gpu, graph=ops.Graph()) as sess:
+    with self.test_session(use_gpu=True, graph=ops.Graph()) as sess:
       batch_size = 4
       cell_size = 5
       input_size = 6
@@ -93,7 +92,7 @@ class GRUBlockCellTest(test.TestCase):
         self.assertAllClose(block, basic)
 
   def testBlockGRUToGRUCellMultiStep(self):
-    with self.test_session(use_gpu=self._use_gpu, graph=ops.Graph()) as sess:
+    with self.test_session(use_gpu=True, graph=ops.Graph()) as sess:
       batch_size = 2
       cell_size = 3
       input_size = 3
@@ -152,7 +151,7 @@ class GRUBlockCellTest(test.TestCase):
       self.assertAllClose(block_res[1], block_res[1])
 
   def testDerivativeOfBlockGRUToGRUCellSingleStep(self):
-    with self.test_session(use_gpu=self._use_gpu, graph=ops.Graph()) as sess:
+    with self.test_session(use_gpu=True, graph=ops.Graph()) as sess:
       batch_size = 2
       cell_size = 3
       input_size = 4
@@ -222,7 +221,7 @@ class GRUBlockCellTest(test.TestCase):
     cell_size = 3
     input_size = 4
     time_steps = 2
-    with self.test_session(use_gpu=self._use_gpu, graph=ops.Graph()) as sess:
+    with self.test_session(use_gpu=True, graph=ops.Graph()) as sess:
       # Random initializers.
       seed = 1994
       initializer = init_ops.random_uniform_initializer(-0.01, 0.01, seed=seed)
@@ -289,7 +288,7 @@ class GRUBlockCellTest(test.TestCase):
       self.assertAllClose(block, basic)
 
   def testGradient(self):
-    with self.test_session(use_gpu=self._use_gpu, graph=ops.Graph()) as sess:
+    with self.test_session(use_gpu=True, graph=ops.Graph()) as sess:
       batch_size = 1
       cell_size = 3
       input_size = 2
@@ -331,10 +330,6 @@ class GRUBlockCellTest(test.TestCase):
     self.assertLess(error_b_c, eps)
 
 
-class GRUBlockCellGpuTest(GRUBlockCellTest):
-  _use_gpu = True
-
-
 #### Benchmarking GRUBlockCell vs GRUCell.
 
 
@@ -362,7 +357,7 @@ def training_gru_block_vs_gru_cell(batch_size,
   ops.reset_default_graph()
   with session.Session(graph=ops.Graph()) as sess:
     # Specify the device which is been used.
-    with ops.device("/cpu:0" if not use_gpu else "/gpu:0"):
+    with ops.device("/cpu:0" if not use_gpu else "/device:GPU:0"):
 
       # Random initializers.
       seed = 1994
@@ -434,7 +429,7 @@ def inference_gru_block_vs_gru_cell(batch_size,
   """Benchmark inference speed between GRUBlockCell vs GRUCell."""
   ops.reset_default_graph()
   with session.Session(graph=ops.Graph()) as sess:
-    with ops.device("/cpu:0" if not use_gpu else "/gpu:0"):
+    with ops.device("/cpu:0" if not use_gpu else "/device:GPU:0"):
 
       # Random initializers.
       seed = 1994
@@ -489,7 +484,7 @@ def single_bprop_step_gru_block_vs_gru_cell(batch_size,
   """Benchmark single bprop step speed between GRUBlockCell vs GRUCell."""
   ops.reset_default_graph()
   with session.Session(graph=ops.Graph()) as sess:
-    with ops.device("/cpu:0" if not use_gpu else "/gpu:0"):
+    with ops.device("/cpu:0" if not use_gpu else "/device:GPU:0"):
       initializer = init_ops.random_uniform_initializer(-1, 1, seed=1989)
       # Inputs
       x = vs.get_variable("x", [batch_size, input_size])

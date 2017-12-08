@@ -20,9 +20,11 @@ from __future__ import print_function
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 
+from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import gen_random_ops
 from tensorflow.python.ops import random_ops
 from tensorflow.python.platform import test
 from tensorflow.python.platform import tf_logging
@@ -131,8 +133,14 @@ class RandomPoissonTest(test.TestCase):
         # be at least 1 if they are different.
         self.assertGreaterEqual(np.linalg.norm(diff.eval()), 1)
 
+  def testZeroShape(self):
+    with self.test_session():
+      rnd = random_ops.random_poisson([], [], seed=12345)
+      self.assertEqual([0], rnd.get_shape().as_list())
+      self.assertAllClose(np.array([], dtype=np.float32), rnd.eval())
+
   def testShape(self):
-    # Fully known shape.
+    # Fully known shape
     rnd = random_ops.random_poisson(2.0, [150], seed=12345)
     self.assertEqual([150], rnd.get_shape().as_list())
     rnd = random_ops.random_poisson(
@@ -172,6 +180,23 @@ class RandomPoissonTest(test.TestCase):
         shape=[50],
         seed=12345)
     self.assertIs(None, rnd.get_shape().ndims)
+
+  def testDTypeCombinationsV2(self):
+    """Tests random_poisson_v2() for all supported dtype combinations."""
+    # All supported dtypes by random_poisson_v2().
+    supported_dtypes = [
+        dtypes.float16, dtypes.float32, dtypes.float64, dtypes.int32,
+        dtypes.int64
+    ]
+
+    with self.test_session():
+      for lam_dt in supported_dtypes:
+        for out_dt in supported_dtypes:
+          # TODO(dhananjayn): Change this to use random_poisson() after
+          # switching it to RandomPoissonV2.
+          gen_random_ops.random_poisson_v2(
+              [10], constant_op.constant([1], dtype=lam_dt),
+              dtype=out_dt).eval()
 
 
 if __name__ == "__main__":

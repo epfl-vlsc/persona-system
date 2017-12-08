@@ -135,7 +135,10 @@ class BoundingBox(ItemHandler):
     """
     sides = []
     for key in self._full_keys:
-      side = array_ops.expand_dims(keys_to_tensors[key].values, 0)
+      side = keys_to_tensors[key]
+      if isinstance(side, sparse_tensor.SparseTensor):
+        side = side.values
+      side = array_ops.expand_dims(side, 0)
       sides.append(side)
 
     bounding_box = array_ops.concat(sides, 0)
@@ -407,8 +410,9 @@ class TFExampleDecoder(data_decoder.DataDecoder):
     example = parsing_ops.parse_single_example(serialized_example,
                                                self._keys_to_features)
 
-    # Reshape non-sparse elements just once:
-    for k in self._keys_to_features:
+    # Reshape non-sparse elements just once, adding the reshape ops in
+    # deterministic order.
+    for k in sorted(self._keys_to_features):
       v = self._keys_to_features[k]
       if isinstance(v, parsing_ops.FixedLenFeature):
         example[k] = array_ops.reshape(example[k], v.shape)

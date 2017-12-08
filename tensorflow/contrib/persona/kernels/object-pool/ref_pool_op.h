@@ -32,7 +32,7 @@ public:
   ~ReferencePoolOp() override {
     mutex_lock l(mu_);
     if (pool_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
-      TF_CHECK_OK(cinfo_.resource_manager()->Delete<ReferencePool<T>>(cinfo_.container(), cinfo_.name()));
+      TF_CHECK_OK(cinfo_.resource_manager()->template Delete<ReferencePool<T>>(cinfo_.container(), cinfo_.name()));
     }
   }
 
@@ -68,8 +68,8 @@ protected:
     }
 
     // put ref_pool into the shared resource
-    TF_RETURN_IF_ERROR(rmgr->Create<ReferencePool<T>>(cinfo_.container(), cinfo_.name(), ref_pool.release()));
-    auto h = pool_handle_.AccessTensor(ctx)->vec<string>();
+    TF_RETURN_IF_ERROR(rmgr->template Create<ReferencePool<T>>(cinfo_.container(), cinfo_.name(), ref_pool.release()));
+    auto h = pool_handle_.AccessTensor(ctx)->template vec<string>();
     h(0) = cinfo_.container();
     h(1) = cinfo_.name();
     pool_handle_set_ = true;
@@ -86,7 +86,7 @@ protected:
     std::unique_ptr<ResourceContainer<T>> a(new ResourceContainer<T>(std::move(obj), cinfo_.container(), s, ref_pool));
     // This cast is correct because of the is_base_of check above,
     // and the fact that resource container is just a smart pointer
-    TF_RETURN_IF_ERROR(cinfo_.resource_manager()->Create<ResourceContainer<U>>(cinfo_.container(), s, reinterpret_cast<ResourceContainer<U>*>(a.get())));
+    TF_RETURN_IF_ERROR(cinfo_.resource_manager()->template Create<ResourceContainer<U>>(cinfo_.container(), s, reinterpret_cast<ResourceContainer<U>*>(a.get())));
     ref_pool->AddResource(std::move(a));
     return Status::OK();
   }

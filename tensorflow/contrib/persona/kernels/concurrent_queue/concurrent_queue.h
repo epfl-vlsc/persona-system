@@ -47,8 +47,8 @@ class ConcurrentQueue {
     // mutex to protect the queue
     mutable mutex mu_;
     // cond vars for block/wait/notify on queue push/pop
-    mutable std::condition_variable queue_pop_cv_;
-    mutable std::condition_variable queue_push_cv_;
+    mutable condition_variable queue_pop_cv_;
+    mutable condition_variable queue_push_cv_;
     std::queue<T> queue_;
     size_t capacity_;
     // block on calls to push, pop
@@ -80,9 +80,9 @@ bool ConcurrentQueue<T>::peek(T& item) {
 
     if (queue_.empty() && block_) {
       num_peek_waits_++;
-      queue_pop_cv_.wait(l, [this]() {
-          return !queue_.empty() || !block_;
-        });
+      while (queue_.empty() && block_) {
+        queue_pop_cv_.wait(l);
+      }
     }
 
     if (!queue_.empty()) {
@@ -117,9 +117,9 @@ bool ConcurrentQueue<T>::pop(T& item) {
     mutex_lock l(mu_);
     if (queue_.empty() && block_) {
       num_pop_waits_++;
-      queue_pop_cv_.wait(l, [this]() {
-          return !queue_.empty() || !block_;
-          });
+      while (queue_.empty() && block_) {
+        queue_pop_cv_.wait(l);
+      }
     }
 
     if (!queue_.empty()) {
@@ -146,9 +146,9 @@ bool ConcurrentQueue<T>::push(const T& item) {
     // unless blocking is set to false
     if (queue_.size() == capacity_ && block_) {
       num_push_waits_++;
-      queue_push_cv_.wait(l, [this]() {
-          return (queue_.size() < capacity_) || !block_;
-        });
+      while (queue_.size() == capacity_ && block_) {
+        queue_push_cv_.wait(l);
+      }
     }
 
     if (queue_.size() < capacity_) {

@@ -106,7 +106,7 @@ namespace tensorflow {
     string filename_; // ceph object full path within `io_ctx_`
 
     mutable mutex mu_;
-    mutable std::condition_variable ready_cv_;
+    mutable condition_variable ready_cv_;
     bool init = false;
   };
 

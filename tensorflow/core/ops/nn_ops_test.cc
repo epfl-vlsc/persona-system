@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/core/framework/fake_input.h"
-#include "tensorflow/core/framework/graph.pb.h"
 #include "tensorflow/core/framework/node_def_builder.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference_testutil.h"
@@ -80,55 +79,6 @@ TEST(NNOpsTest, TopKV2_ShapeFn) {
   INFER_ERROR(
       "Dimension size, given by scalar input 1, must be non-negative but is -1",
       op, "[1,2,3,4];[]");
-}
-
-TEST(NNOpsTest, InputTensorShapeOrUnknown2D_ShapeFn) {
-  typedef std::pair<const char*, int> NameAndInputIndex;
-  for (const auto& p :
-       {NameAndInputIndex("AvgPoolGrad", 0),
-        NameAndInputIndex("Conv2DBackpropInput", 0),
-        NameAndInputIndex("Conv2DBackpropFilter", 1),
-        NameAndInputIndex("DepthwiseConv2dNativeBackpropInput", 0),
-        NameAndInputIndex("DepthwiseConv2dNativeBackpropFilter", 1)}) {
-    ShapeInferenceTestOp op(p.first);
-    op.input_tensors.resize(2);
-
-    // Conv and Depthwise conv have three inputs.
-    string extra_shapes = (op.name == "AvgPoolGrad" ? "" : ";?");
-
-    // When the input tensor is not known, the output is 4 unknown dims.
-    INFER_OK(op, "?;?" + extra_shapes, "[?,?,?,?]");
-    INFER_OK(op, "[4];?" + extra_shapes, "[?,?,?,?]");
-
-    // When input tensor is known, its values determine output shape.
-    std::vector<int32> shape{1, 2, 3, 4};
-    Tensor shape_t = test::AsTensor<int32>(shape);
-    op.input_tensors[p.second] = &shape_t;
-    INFER_OK(op, "[4];?" + extra_shapes, "[1,2,3,4]");
-  }
-}
-
-TEST(NNOpsTest, InputTensorShapeOrUnknown3D_ShapeFn) {
-  typedef std::pair<const char*, int> NameAndInputIndex;
-  for (const auto& p : {NameAndInputIndex("AvgPool3DGrad", 0),
-                        NameAndInputIndex("Conv3DBackpropInputV2", 0),
-                        NameAndInputIndex("Conv3DBackpropFilterV2", 1)}) {
-    ShapeInferenceTestOp op(p.first);
-    op.input_tensors.resize(2);
-
-    // Conv3D has an extra shape.
-    string extra_shapes = (op.name == "AvgPool3DGrad" ? "" : ";?");
-
-    // When the input tensor is not known, the output is 4 unknown dims.
-    INFER_OK(op, "?;?" + extra_shapes, "[?,?,?,?,?]");
-    INFER_OK(op, "[5];?" + extra_shapes, "[?,?,?,?,?]");
-
-    // When input tensor is known, its values determine output shape.
-    std::vector<int32> shape{1, 2, 3, 4, 5};
-    Tensor shape_t = test::AsTensor<int32>(shape);
-    op.input_tensors[p.second] = &shape_t;
-    INFER_OK(op, "[5];?" + extra_shapes, "[1,2,3,4,5]");
-  }
 }
 
 TEST(NNOpsTest, BatchNormWithGlobalNormalization_ShapeFn) {
@@ -413,7 +363,8 @@ TEST(NNOpsTest, Dilation2DBackpropFilter_ShapeFn) {
 
 TEST(NNOpsTest, MergeBothInputs_ShapeFn) {
   for (const char* op_name :
-       {"ReluGrad", "Relu6Grad", "EluGrad", "SoftplusGrad", "SoftsignGrad"}) {
+       {"ReluGrad", "Relu6Grad", "EluGrad", "SeluGrad", "SoftplusGrad",
+        "SoftsignGrad"}) {
     ShapeInferenceTestOp op(op_name);
 
     INFER_OK(op, "?;?", "in0|in1");

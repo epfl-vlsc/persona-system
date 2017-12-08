@@ -44,14 +44,14 @@ namespace tensorflow {
 //
 // The XlaCompiler requires one Argument struct for each _Arg index, that
 // describes each argument. Arguments can be compile-time constants
-// (kind kConstant), run-time parameters (kind kParameter), or resource
-// variables (kinds kVariable and kUninitializedVariable).
+// (kind kConstant), run-time parameters (kind kParameter), or resources
+// (kind kResource).
 //
-// Only kParameter and kVariable arguments become runtime parameters to the
-// generated XLA computation. The XLA computation will have run-time parameters
-// in the following order:
+// Only kParameter and initialized kResource arguments become runtime parameters
+// to the generated XLA computation. The XLA computation will have run-time
+// parameters in the following order:
 //   +---------------------+-----------------------------------------+
-//   |  kParameter values  |  Initial values of kVariable arguments  |
+//   |  kParameter values  |  Initial values of kResource arguments  |
 //   +---------------------+-----------------------------------------+
 // Within each block, the arguments are arranged by the _Arg index from which
 // they were derived.
@@ -61,18 +61,26 @@ namespace tensorflow {
 // The run-time outputs of the XLA computation are arranged in the following
 // order:
 //   +------------------+-----------------------------------------+
-//   |  _Retval values  |  Updated values of kVariable arguments  |
+//   |  _Retval values  |  Updated values of kResource arguments  |
 //   +------------------+-----------------------------------------+
-// _Retval values are ordered by _Retval index, whereas kVariable values are
+// _Retval values are ordered by _Retval index, whereas kResource values are
 // ordered by the original _Arg position of the variable.
 //
-// In both inputs and outputs, kVariable values are placed the end. When
+// In both inputs and outputs, kResource values are placed the end. When
 // emitting While loop bodies, we must ensure that the loop body has
 // identical input and output signatures. By moving variable values
 // to the end of the argument list and using the
 // `return_updated_values_for_all_variables` option, we can ensure that the
-// input and output values of variables appear at the same positions.
-
+// input and output values of resources appear at the same positions.
+//
+// Resources are passed as parameters or returned as resource updates in
+// "packed" form.
+// kStack resources are packed as (array, size of stack) XLA tuples.
+// kTensorArray resources without gradients are packed as the array that
+// backs the TensorArray. If gradients are present (`tensor_array_gradients`),
+// the packed representation is a (array, gradient0, gradient1, ...) tuple,
+// where gradient_k is the value of the k-th gradient in the
+// `tensor_array_gradients` ordered set.
 class XlaCompiler {
  public:
   // Describes how to derive the value of each _Arg node in the graph/function
@@ -85,13 +93,9 @@ class XlaCompiler {
       // Argument is a compile-time constant. No associated runtime parameter.
       kConstant,
 
-      // Argument is a variable that has not been initialized yet. No associated
-      // runtime parameter.
-      kUninitializedVariable,
-
-      // Argument is a variable that already has a value set. Expects a runtime
-      // parameter containing the current value.
-      kVariable,
+      // Argument is a Variable, TensorArray, or Stack resource. Has an
+      // associated runtime parameter iff `initialized` is true.
+      kResource,
 
       // Argument is a run-time parameter.
       kParameter,
@@ -99,13 +103,13 @@ class XlaCompiler {
 
     Kind kind = kInvalid;
 
-    // The type of the argument. If the argument is a resource variable, this
+    // The type of the argument. If the argument is a resource, this
     // is the type of the variable's value, not DT_RESOURCE.
     DataType type;
 
-    // The shape of the argument. If the argument is a resource variable, this
-    // is the shape of the variable's value.
-    TensorShape shape;
+    // The shape of the argument. If the argument is a resource, this is the
+    // shape of the resource's value.
+    xla::Shape shape;
 
     // The value of the argument, if it is a compile-time constant. Must be a
     // host-memory tensor.
@@ -113,6 +117,21 @@ class XlaCompiler {
 
     // The name of this argument, used for debugging.
     string name;
+
+    // For a kResource, what kind of resource is it?
+    XlaResource::Kind resource_kind = XlaResource::kInvalid;
+
+    // For a kResource, has this resource been initialized?
+    bool initialized = false;
+
+    // For a TensorArray or Stack resource, what is the array's declared size?
+    // (Used for lazy initialization.)
+    int64 tensor_array_size = -1;
+
+    // TensorArray resource parameters are passed as (array, gradient array 0,
+    // ..., gradient array k), where the gradient arrays are in the same order
+    // as `tensor_array_gradients`.
+    std::set<string> tensor_array_gradients;
 
     bool operator==(const Argument& other) const;
   };
@@ -129,23 +148,26 @@ class XlaCompiler {
   };
 
   // Describes a variable write side effect of the computation.
-  struct VariableUpdate {
+  struct ResourceUpdate {
     // Index of the input that contains the variable resource to write to.
     int input_index;
 
     // Type and shape of the tensor to be written back.
     DataType type;
-    TensorShape shape;
+    xla::Shape shape;
 
     // Was the value of the variable modified by the computation?
-    // (Always true, unless `return_updated_values_for_all_variables` is true.)
+    // (Always true, unless `return_updated_values_for_all_resources` is true.)
     bool modified;
+
+    // If the resource is a TensorArray, the set of gradients read or written.
+    std::set<string> tensor_array_gradients_accessed;
   };
 
   struct CompilationResult {
     // Vector that maps from the parameters of the XLA computation to their
     // original argument positions. To handle compile-time constant inputs and
-    // variables, the parameters to the XLA computation may be a subset of the
+    // resources, the parameters to the XLA computation may be a subset of the
     // original arguments, and are not necessarily in the same order.)
     std::vector<int> input_mapping;
 
@@ -159,8 +181,7 @@ class XlaCompiler {
     // Should the arguments be packed into a single tuple?
     bool tuple_arg;
 
-    // Output shape in XLA format. The output shape is a tuple if and only if
-    // the number of non-constant outputs is not equal to 1.
+    // Output shape in XLA format. The output shape is always a tuple.
     xla::Shape xla_output_shape;
 
     // TensorFlow shapes of outputs, together with the values of any
@@ -168,13 +189,12 @@ class XlaCompiler {
     // containing both constant and non-constant results.
     std::vector<OutputDescription> outputs;
 
-    // Variables whose values were updated by the computation, ordered
-    // by return value position. Variable updates follow the non-constant
+    // Resources whose values were updated by the computation, ordered
+    // by return value position. Resource updates follow the non-constant
     // results in the outputs of XLA computation.
-    std::vector<VariableUpdate> variable_updates;
+    std::vector<ResourceUpdate> resource_updates;
 
-    // The XLA computation built from the tensorflow subgraph. May be null
-    // if the output consists solely of compile-time constants.
+    // The XLA computation built from the tensorflow subgraph.
     std::shared_ptr<xla::Computation> computation;
   };
 
@@ -202,12 +222,6 @@ class XlaCompiler {
     // stored in device memory.
     bool local_executable_has_hybrid_result = false;
 
-    // If 'resolve_compile_time_constants' is true, then outputs of a
-    // computation that are known to be compile-time constants will be returned
-    // as Tensors at compile-time, rather than as run-time outputs of the
-    // computation.
-    bool resolve_compile_time_constants = true;
-
     // If not nullptr, populate_resource_manager is called with the
     // compilation device's resource manager when the compilation
     // device is created, and can be used to create metadata objects
@@ -225,12 +239,18 @@ class XlaCompiler {
     // arguments; if false, each argument gets its own parameter.
     bool use_tuple_arg = false;
 
-    // If 'return_updated_values_for_all_variables' is true, then updated
-    // values of all resource variables arguments will be included in the
-    // 'variable_updates' of the computation, even if the variable was not
+    // If 'return_updated_values_for_all_resources' is true, then updated
+    // values of all resource resources arguments will be included in the
+    // 'resource_updates' of the computation, even if the resource was not
     // modified by the computation. Used when compiling loop bodies to ensure
     // the input and output signatures match.
-    bool return_updated_values_for_all_variables = false;
+    bool return_updated_values_for_all_resources = false;
+
+    // If 'resolve_compile_time_constants' is true, then outputs of a
+    // computation that are known to be compile-time constants will be returned
+    // as Tensors at compile-time, rather than as run-time outputs of the
+    // computation.
+    bool resolve_compile_time_constants = true;
   };
 
   // Compiles a Tensorflow function `fn_name_attrs` into an XLA computation.
@@ -256,22 +276,15 @@ class XlaCompiler {
                       const std::vector<Argument>& args,
                       CompilationResult* result);
 
-  // Takes `result` which has been compiled from a Tensorflow subgraph to a
-  // XLA computation already, and generates an XLA LocalExecutable `executable`.
-  Status BuildExecutable(const CompilationResult& result,
-                         std::unique_ptr<xla::LocalExecutable>* executable);
-
-  const Options& options() const { return options_; }
-  xla::Client* client() const { return options_.client; }
-  XlaCompilationDevice* device() const { return device_; }
-  const DeviceMgr* device_mgr() const { return &device_mgr_; }
-  FunctionLibraryRuntime* flib_runtime() const { return flib_runtime_.get(); }
-
   // Retrieves the channel handle associated with `key`. Allocates
   // a new channel handle if none exists.
   // Channel handles can be used to communicate between different computations.
   // Computations that communicate should be compiled with the same XlaCompiler.
   Status GetChannelHandle(const string& key, xla::ChannelHandle* channel);
+
+  const Options& options() const { return options_; }
+  xla::Client* client() const { return options_.client; }
+  FunctionLibraryRuntime* flib_runtime() const { return flib_runtime_; }
 
  private:
   Options options_;
@@ -282,15 +295,21 @@ class XlaCompiler {
   // Returns the next step sequence number.
   int64 NextStepId();
 
-  mutex mu_;
-
   // Internal sequence number for steps executed on the compilation device.
-  int64 next_step_id_ GUARDED_BY(mu_);
+  int64 next_step_id_;
 
   XlaCompilationDevice* device_;  // Owned by device_mgr_
   DeviceMgr device_mgr_;
 
-  std::unique_ptr<FunctionLibraryRuntime> flib_runtime_;
+  // To avoid copying the client's function library, use a local function
+  // library and runtime for functions created as part of the functionalize
+  // control flow transformation.
+  std::unique_ptr<FunctionLibraryDefinition> local_flib_def_;
+  std::unique_ptr<ProcessFunctionLibraryRuntime> pflr_;
+  std::unique_ptr<ProcessFunctionLibraryRuntime> local_pflr_;
+
+  FunctionLibraryRuntime* local_flib_runtime_;  // owned by local_pflr_.
+  FunctionLibraryRuntime* flib_runtime_;        // owned by pflr_.
 
   struct SignatureHash {
     uint64 operator()(
@@ -301,7 +320,7 @@ class XlaCompiler {
                      CompilationResult, SignatureHash>
       cache_;
 
-  std::unordered_map<string, xla::ChannelHandle> channels_ GUARDED_BY(mu_);
+  std::unordered_map<string, xla::ChannelHandle> channels_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(XlaCompiler);
 };

@@ -67,10 +67,9 @@ namespace tensorflow {
       void wait_for_ready() const {
         if (outstanding_subchunks_.load(std::memory_order_relaxed) != 0) {
           mutex_lock l(mu_);
-          ready_cv_.wait(l, [this]() {
-              size_t a = outstanding_subchunks_.load(std::memory_order_relaxed);
-              return a == 0;
-              });
+          while (outstanding_subchunks_.load(std::memory_order_relaxed) != 0) {
+            ready_cv_.wait(l);
+          }
         }
       }
       
@@ -99,7 +98,7 @@ namespace tensorflow {
       std::vector<size_t> intervals_;
       mutable std::atomic_size_t outstanding_subchunks_;;
       mutable mutex mu_;
-      mutable std::condition_variable ready_cv_;
+      mutable condition_variable ready_cv_;
   };
 
 

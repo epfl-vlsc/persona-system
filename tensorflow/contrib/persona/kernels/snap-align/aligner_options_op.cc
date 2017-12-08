@@ -44,7 +44,7 @@ namespace tensorflow {
         ~AlignerOptionsOp() override {
             // If the options object was not shared, delete it.
             if (options_handle_set_ && cinfo_.resource_is_private_to_kernel()) {
-                TF_CHECK_OK(cinfo_.resource_manager()->Delete<OptionsContainer>(
+                TF_CHECK_OK(cinfo_.resource_manager()->template Delete<OptionsContainer>(
                     cinfo_.container(), cinfo_.name()));
             }
         }
@@ -82,10 +82,10 @@ namespace tensorflow {
             };
 
             TF_RETURN_IF_ERROR(
-                cinfo_.resource_manager()->LookupOrCreate<OptionsContainer>(
+                cinfo_.resource_manager()->template LookupOrCreate<OptionsContainer>(
                     cinfo_.container(), cinfo_.name(), &options, creator));
 
-            auto h = options_handle_.AccessTensor(ctx)->flat<string>();
+            auto h = options_handle_.AccessTensor(ctx)->template flat<string>();
             h(0) = cinfo_.container();
             h(1) = cinfo_.name();
             options_handle_set_ = true;

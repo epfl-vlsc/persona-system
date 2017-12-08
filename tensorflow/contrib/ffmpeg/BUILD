@@ -86,6 +86,8 @@ tf_py_test(
     srcs = ["decode_audio_op_test.py"],
     additional_deps = [
         ":ffmpeg_ops_py",
+        "@six_archive//:six",
+        "//tensorflow/python:array_ops",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:platform",
     ],
@@ -100,6 +102,8 @@ tf_py_test(
     srcs = ["encode_audio_op_test.py"],
     additional_deps = [
         ":ffmpeg_ops_py",
+        "@six_archive//:six",
+        "//tensorflow/python:array_ops",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:platform",
     ],
@@ -122,10 +126,9 @@ py_library(
         ":decode_audio_op_py",
         ":encode_audio_op_py",
         "//tensorflow/contrib/util:util_py",
-        "//tensorflow/python:errors",
-        "//tensorflow/python:framework",
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python:platform",
+        "//tensorflow/python:util",
     ],
 )
 

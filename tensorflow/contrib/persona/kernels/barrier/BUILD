@@ -8,7 +8,8 @@ cc_library(
     linkstatic = 1,
     visibility = ["//visibility:public"],
     deps = [
-        "@protobuf//:protobuf",
+        #"@protobuf//:protobuf",
+        "@protobuf_archive//:protobuf",
         "//tensorflow/core:framework_headers_lib",
         "//third_party/eigen3",
     ],

@@ -25,23 +25,21 @@ namespace tensorflow {
 
 namespace {
 
-// See documentation in ../ops/iterator_ops.cc for a high-level
+// See documentation in ../ops/dataset_ops.cc for a high-level
 // description of the following op.
 
-class MapDatasetOp : public OpKernel {
+class MapDatasetOp : public UnaryDatasetOpKernel {
  public:
   explicit MapDatasetOp(OpKernelConstruction* ctx)
-      : OpKernel(ctx), graph_def_version_(ctx->graph_def_version()) {
+      : UnaryDatasetOpKernel(ctx),
+        graph_def_version_(ctx->graph_def_version()) {
     OP_REQUIRES_OK(ctx, ctx->GetAttr("f", &func_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("output_types", &output_types_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("output_shapes", &output_shapes_));
   }
 
-  void Compute(OpKernelContext* ctx) override {
-    DatasetBase* input;
-    OP_REQUIRES_OK(ctx, LookupResource(ctx, HandleFromInput(ctx, 0), &input));
-    core::ScopedUnref unref_input(input);
-
+  void MakeDataset(OpKernelContext* ctx, DatasetBase* input,
+                   DatasetBase** output) override {
     OpInputList inputs;
     OP_REQUIRES_OK(ctx, ctx->input_list("other_arguments", &inputs));
     std::vector<Tensor> other_arguments;
@@ -55,15 +53,8 @@ class MapDatasetOp : public OpKernel {
                                                  std::move(other_arguments),
                                                  &captured_func));
 
-    DatasetBase* dataset = new Dataset(input, std::move(captured_func),
-                                       output_types_, output_shapes_);
-
-    Tensor* output = nullptr;
-    OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &output));
-    ResourceHandle handle = MakeResourceHandle<DatasetBase>(
-        ctx, ctx->step_container()->name(), name());
-    OP_REQUIRES_OK(ctx, CreateResource(ctx, handle, dataset));
-    output->flat<ResourceHandle>()(0) = handle;
+    *output = new Dataset(input, std::move(captured_func), output_types_,
+                          output_shapes_);
   }
 
  private:
@@ -82,8 +73,10 @@ class MapDatasetOp : public OpKernel {
 
     ~Dataset() override { input_->Unref(); }
 
-    std::unique_ptr<IteratorBase> MakeIterator() const override {
-      return std::unique_ptr<IteratorBase>(new Iterator(this));
+    std::unique_ptr<IteratorBase> MakeIterator(
+        const string& prefix) const override {
+      return std::unique_ptr<IteratorBase>(
+          new Iterator({this, strings::StrCat(prefix, "::Map")}));
     }
 
     const DataTypeVector& output_dtypes() const override {
@@ -98,12 +91,13 @@ class MapDatasetOp : public OpKernel {
    private:
     class Iterator : public DatasetIterator<Dataset> {
      public:
-      explicit Iterator(const Dataset* dataset)
-          : DatasetIterator<Dataset>(dataset),
-            input_impl_(dataset->input_->MakeIterator()) {}
+      explicit Iterator(const Params& params)
+          : DatasetIterator<Dataset>(params),
+            input_impl_(params.dataset->input_->MakeIterator(params.prefix)) {}
 
-      Status GetNext(IteratorContext* ctx, std::vector<Tensor>* out_tensors,
-                     bool* end_of_sequence) override {
+      Status GetNextInternal(IteratorContext* ctx,
+                             std::vector<Tensor>* out_tensors,
+                             bool* end_of_sequence) override {
         // NOTE(mrry): This method is thread-safe as long as
         // `input_impl_` and `f` are thread-safe. However, if multiple
         // threads enter this method, outputs may be observed in a
@@ -116,16 +110,27 @@ class MapDatasetOp : public OpKernel {
         }
 
         FunctionLibraryRuntime::Options opts;
-        // Choose a step ID that is guaranteed not to clash with any
-        // Session-generated step ID. DirectSession only generates
-        // non-negative step IDs (contiguous, starting from 0), and
-        // MasterSession generates 56-bit random step IDs whose MSB is
-        // always 0, so a negative random step ID should suffice.
-        opts.step_id = -std::abs(static_cast<int64>(random::New64()));
+        opts.step_id = CapturedFunction::generate_step_id();
+        ScopedStepContainer step_container(
+            opts.step_id, [this, ctx](const string& name) {
+              dataset()
+                  ->captured_func_->resource_manager()
+                  ->Cleanup(name)
+                  .IgnoreError();
+            });
+        opts.step_container = &step_container;
         opts.runner = ctx->runner();
         // TODO(mrry): Avoid blocking a threadpool thread. We will need to
         // stack-rip the iterators and use async kernels.
-        return dataset()->captured_func_->Run(opts, args, out_tensors);
+        Status s = dataset()->captured_func_->Run(opts, args, out_tensors);
+        if (errors::IsOutOfRange(s)) {
+          // `f` may deliberately raise `errors::OutOfRange` to indicate
+          // that we should terminate the iteration early.
+          *end_of_sequence = true;
+          return Status::OK();
+        } else {
+          return s;
+        }
       }
 
      private:
@@ -141,7 +146,7 @@ class MapDatasetOp : public OpKernel {
   const int graph_def_version_;
   DataTypeVector output_types_;
   std::vector<PartialTensorShape> output_shapes_;
-  const NameAttrList* func_;
+  NameAttrList func_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("MapDataset").Device(DEVICE_CPU), MapDatasetOp);

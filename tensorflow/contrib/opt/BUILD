@@ -28,11 +28,16 @@ py_library(
         "//tensorflow/python:control_flow_ops",
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python:gradients",
+        "//tensorflow/python:init_ops",
         "//tensorflow/python:math_ops",
         "//tensorflow/python:platform",
         "//tensorflow/python:state_ops",
+        "//tensorflow/python:summary",
         "//tensorflow/python:training",
+        "//tensorflow/python:util",
+        "//tensorflow/python:variable_scope",
         "//tensorflow/python:variables",
+        "//third_party/py/numpy",
         "@six_archive//:six",
     ],
 )
@@ -67,7 +72,6 @@ py_test(
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python:training",
         "//tensorflow/python:variables",
-        "//third_party/py/numpy",
         "@six_archive//:six",
     ],
 )
@@ -78,6 +82,7 @@ py_test(
     srcs_version = "PY2AND3",
     tags = [
         "manual",  # Flaky: b/29892493
+        "notap",  # data race due to b/62910646
     ],
     deps = [
         ":opt_py",
@@ -114,11 +119,13 @@ py_test(
     deps = [
         ":opt_py",
         "//tensorflow/python:array_ops",
+        "//tensorflow/python:client",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:constant_op",
         "//tensorflow/python:dtypes",
         "//tensorflow/python:framework_ops",
         "//tensorflow/python:math_ops",
+        "//tensorflow/python:resource_variable_ops",
         "//tensorflow/python:variables",
         "//third_party/py/numpy",
     ],

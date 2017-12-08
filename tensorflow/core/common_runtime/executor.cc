@@ -92,31 +92,28 @@ bool SetTimelineLabel(const Node* node, NodeExecStats* node_stats) {
       }
     }
   }
-  const NodeDef& def = node->def();
-  string text = "";
+  const AttrSlice attrs = node->attrs();
+  string text;
   if (IsSend(node)) {
     string tensor_name;
-    TF_CHECK_OK(GetNodeAttr(def, "tensor_name", &tensor_name));
+    TF_CHECK_OK(GetNodeAttr(attrs, "tensor_name", &tensor_name));
     string recv_device;
-    TF_CHECK_OK(GetNodeAttr(def, "recv_device", &recv_device));
-    text = strings::StrCat(memory, def.name(), " = ", def.op(), "(",
-                           tensor_name, " @", recv_device);
+    TF_CHECK_OK(GetNodeAttr(attrs, "recv_device", &recv_device));
+    text = strings::StrCat(memory, node->name(), " = ", node->type_string(),
+                           "(", tensor_name, " @", recv_device);
     is_transfer_node = true;
   } else if (IsRecv(node)) {
     string tensor_name;
-    TF_CHECK_OK(GetNodeAttr(def, "tensor_name", &tensor_name));
+    TF_CHECK_OK(GetNodeAttr(attrs, "tensor_name", &tensor_name));
     string send_device;
-    TF_CHECK_OK(GetNodeAttr(def, "send_device", &send_device));
-    text = strings::StrCat(memory, def.name(), " = ", def.op(), "(",
-                           tensor_name, " @", send_device);
+    TF_CHECK_OK(GetNodeAttr(attrs, "send_device", &send_device));
+    text = strings::StrCat(memory, node->name(), " = ", node->type_string(),
+                           "(", tensor_name, " @", send_device);
     is_transfer_node = true;
   } else {
-    text = strings::StrCat(
-        memory, def.name(), " = ", def.op(), "(",
-        str_util::Join(
-            std::vector<StringPiece>(def.input().begin(), def.input().end()),
-            ", "),
-        ")");
+    text =
+        strings::StrCat(memory, node->name(), " = ", node->type_string(), "(",
+                        str_util::Join(node->requested_inputs(), ", "), ")");
   }
   node_stats->set_timeline_label(text);
   return is_transfer_node;
@@ -158,13 +155,15 @@ void SetMemory(NodeExecStats* nt, OpKernelContext* ctx) {
     // retrieving the sizes from the wrapped allocator removes the
     // executor's reference to it, so allocator_pair.second must not
     // be dereferenced again after this statement
-    auto sizes = allocator_pair.second->GetSizesAndUnRef();
+    const auto sizes = allocator_pair.second->GetSizesAndUnRef();
     memory->set_allocator_name(allocator_pair.first->Name());
     memory->set_total_bytes(std::get<0>(sizes));
-    if (allocator_pair.first->TracksAllocationSizes()) {
-      memory->set_peak_bytes(std::get<1>(sizes));
-      memory->set_live_bytes(std::get<2>(sizes));
-    }
+    memory->set_peak_bytes(std::get<1>(sizes));
+    memory->set_live_bytes(std::get<2>(sizes));
+
+    AllocatorStats stats;
+    allocator_pair.first->GetStats(&stats);
+    memory->set_allocator_bytes_in_use(stats.bytes_in_use);
   }
   auto* ms = nt->mutable_memory_stats();
   ms->set_host_temp_memory_size(ctx->host_temp_memory_size());
@@ -363,7 +362,7 @@ class ExecutorImpl : public Executor {
   friend class ExecutorState;
 
   struct ControlFlowInfo {
-    gtl::FlatSet<string, HashStr> unique_frame_names;
+    gtl::FlatSet<string> unique_frame_names;
     std::vector<string> frame_names;
   };
 
@@ -423,7 +422,7 @@ class ExecutorImpl : public Executor {
   // Mapping from frame name to static information about the frame.
   // TODO(yuanbyu): We could cache it along with the graph so to avoid
   // the overhead of constructing it for each executor instance.
-  gtl::FlatMap<string, FrameInfo*, HashStr> frame_info_;
+  gtl::FlatMap<string, FrameInfo*> frame_info_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(ExecutorImpl);
 };
@@ -514,7 +513,7 @@ char* GraphView::InitializeNode(char* ptr, const Node* n) {
   item->num_output_edges = num_output_edges;
 
   // Fill output edges.
-  // Keep track of the last EdgeInfo in the EdngeInfo array that references
+  // Keep track of the last EdgeInfo in the EdgeInfo array that references
   // a given output slot.  For all but the last, we need to do a copy of the
   // Tensor when propagating results downstream in the graph, but for the
   // last one, we can just do a move of the Tensor object to propagate it.
@@ -522,7 +521,7 @@ char* GraphView::InitializeNode(char* ptr, const Node* n) {
   EdgeInfo* dst_edge = item->output_edge_base();
   for (auto e : n->out_edges()) {
     dst_edge->dst_id = e->dst()->id();
-    CHECK_LE(e->src_output(), ((int32)0x3FFFFFFF));  // Must fit in 31 bits
+    CHECK_LE(e->src_output(), 0x3FFFFFFF);  // Must fit in 31 bits
     dst_edge->output_slot = e->src_output();
     dst_edge->is_last = false;
     const int output_slot = dst_edge->output_slot;
@@ -640,7 +639,7 @@ Status ExecutorImpl::Initialize() {
     Status s = params_.create_kernel(n->def(), &item->kernel);
     if (!s.ok()) {
       item->kernel = nullptr;
-      s = AttachDef(s, n->def());
+      s = AttachDef(s, *n);
       LOG(ERROR) << "Executor failed to create kernel. " << s;
       return s;
     }
@@ -668,7 +667,7 @@ Status ExecutorImpl::Initialize() {
     frame_info->nodes->push_back(n);
     if (IsEnter(n)) {
       string enter_name;
-      TF_RETURN_IF_ERROR(GetNodeAttr(n->def(), "frame_name", &enter_name));
+      TF_RETURN_IF_ERROR(GetNodeAttr(n->attrs(), "frame_name", &enter_name));
       EnsureFrameInfo(enter_name)->input_count++;
     }
   }
@@ -723,7 +722,7 @@ Status InferAllocAttr(const Node* n, const Node* dst,
   // so these two cases are not mutually exclusive.
   if (IsRecv(n)) {
     string src_name;
-    s = GetNodeAttr(n->def(), "send_device", &src_name);
+    s = GetNodeAttr(n->attrs(), "send_device", &src_name);
     if (!s.ok()) return s;
     DeviceNameUtils::ParsedName parsed_src_name;
     if (!DeviceNameUtils::ParseFullName(src_name, &parsed_src_name)) {
@@ -748,7 +747,7 @@ Status InferAllocAttr(const Node* n, const Node* dst,
   }
   if (IsSend(dst)) {
     string dst_name;
-    s = GetNodeAttr(dst->def(), "recv_device", &dst_name);
+    s = GetNodeAttr(dst->attrs(), "recv_device", &dst_name);
     if (!s.ok()) return s;
     DeviceNameUtils::ParsedName parsed_dst_name;
     if (!DeviceNameUtils::ParseFullName(dst_name, &parsed_dst_name)) {
@@ -1209,8 +1208,7 @@ class ExecutorState {
   // child frame is composed of the name of the parent frame, the iteration
   // number at which the parent frame is creating the new frame, and the
   // name of the new frame from nodedef.
-  gtl::FlatMap<string, FrameState*, HashStr> outstanding_frames_
-      GUARDED_BY(mu_);
+  gtl::FlatMap<string, FrameState*> outstanding_frames_ GUARDED_BY(mu_);
 
   // The unique name of a frame.
   inline string MakeFrameName(FrameState* frame, int64 iter_id,
@@ -1361,7 +1359,7 @@ Status ExecutorImpl::BuildControlFlowInfo(const Graph* g,
     if (IsEnter(curr_node)) {
       // Enter a child frame.
       TF_RETURN_IF_ERROR(
-          GetNodeAttr(curr_node->def(), "frame_name", &frame_name));
+          GetNodeAttr(curr_node->attrs(), "frame_name", &frame_name));
       parent = curr_node;
     } else if (IsExit(curr_node)) {
       // Exit to the parent frame.
@@ -1375,7 +1373,7 @@ Status ExecutorImpl::BuildControlFlowInfo(const Graph* g,
 
     for (const Edge* out_edge : curr_node->out_edges()) {
       Node* out = out_edge->dst();
-      int out_id = out->id();
+      const int out_id = out->id();
 
       // Add to ready queue if not visited.
       bool is_visited = visited[out_id];
@@ -1419,7 +1417,8 @@ void ExecutorState::RunAsync(Executor::DoneCallback done) {
 
   // Ask the device to fill in the device context map.
   Device* device = impl_->params_.device;
-  Status fill_status = device->FillContextMap(graph, &device_context_map_);
+  const Status fill_status =
+      device->FillContextMap(graph, &device_context_map_);
   if (!fill_status.ok()) {
     done(fill_status);
     return;
@@ -1515,6 +1514,7 @@ void ExecutorState::Process(TaggedNode tagged_node, int64 scheduled_usec) {
   params.input_device_contexts = &input_device_contexts;
   params.input_alloc_attrs = &input_alloc_attrs;
   params.runner = &runner_;
+  params.stats_collector = stats_collector_;
 
   Status s;
   NodeExecStats* stats = nullptr;
@@ -1526,7 +1526,7 @@ void ExecutorState::Process(TaggedNode tagged_node, int64 scheduled_usec) {
     inline_ready.pop_front();
     const Node* node = tagged_node.node;
     FrameState* input_frame = tagged_node.input_frame;
-    int64 input_iter = tagged_node.input_iter;
+    const int64 input_iter = tagged_node.input_iter;
     const int id = node->id();
     const NodeItem& item = *gview.node(id);
 
@@ -1555,8 +1555,7 @@ void ExecutorState::Process(TaggedNode tagged_node, int64 scheduled_usec) {
 
     if (vlog_) {
       VLOG(1) << "Process node: " << id << " step " << params.step_id << " "
-              << SummarizeNodeDef(node->def())
-              << " is dead: " << tagged_node.is_dead;
+              << SummarizeNode(*node) << " is dead: " << tagged_node.is_dead;
     }
 
     Entry* input_tensors = GetInputTensors(input_frame, input_iter);
@@ -1610,7 +1609,7 @@ void ExecutorState::Process(TaggedNode tagged_node, int64 scheduled_usec) {
 
           if (vlog_) {
             VLOG(2) << this << " Async kernel done: "
-                    << SummarizeNodeDef(state->item->node->def());
+                    << SummarizeNode(*state->item->node);
           }
           if (stats) nodestats::SetOpEnd(stats);
           EntryVector outputs;
@@ -1639,7 +1638,7 @@ void ExecutorState::Process(TaggedNode tagged_node, int64 scheduled_usec) {
             device->ConsumeListOfAccessedTensors(state->ctx.op_device_context(),
                                                  accessed);
           }
-          bool completed =
+          const bool completed =
               NodeDone(s, state->item->node, ready, stats, nullptr);
           delete state;
           if (completed) Finish();
@@ -1721,8 +1720,8 @@ Status ExecutorState::PrepareInputs(const NodeItem& item, Entry* first_input,
     // Only merge and transfer nodes can have no-value inputs.
     if (!entry->has_value) {
       if (!is_merge) {
-        DCHECK(IsTransferNode(node));
-        DCHECK(!entry->val_field_is_set);
+        DCHECK(IsTransferNode(node)) << node->name() << " - input " << i;
+        DCHECK(!entry->val_field_is_set) << node->name() << " - input " << i;
         entry->has_value = true;
         entry->val_field_is_set = true;
         entry->val.Init(*kEmptyTensor);
@@ -1744,7 +1743,7 @@ Status ExecutorState::PrepareInputs(const NodeItem& item, Entry* first_input,
         if (!entry->ref->IsInitialized() && !IsInitializationOp(item.node)) {
           return AttachDef(errors::FailedPrecondition(
                                "Attempting to use uninitialized value ",
-                               item.kernel->def().input(i)),
+                               item.kernel->requested_input(i)),
                            item.kernel->def());
         }
       }
@@ -1805,13 +1804,13 @@ Status ExecutorState::ProcessOutputs(const NodeItem& item, OpKernelContext* ctx,
   }
 
   for (int i = 0; i < item.num_outputs; ++i) {
-    TensorValue val = ctx->release_output(i);
+    const TensorValue val = ctx->release_output(i);
     if (*ctx->is_output_dead() || val.tensor == nullptr) {
       // Unless it's a Switch or a Recv, the node must produce a
       // tensor value at i-th output.
       if (!IsSwitch(node) && !IsRecv(node)) {
         s.Update(errors::Internal("Missing ", i, "-th output from ",
-                                  SummarizeNodeDef(node->def())));
+                                  SummarizeNode(*node)));
       }
     } else {
       Entry* out = &((*outputs)[i]);
@@ -1878,7 +1877,7 @@ Status ExecutorState::ProcessOutputs(const NodeItem& item, OpKernelContext* ctx,
                                   DataTypeString(dtype),
                                   " does not match declared output type ",
                                   DataTypeString(item.output_type(i)),
-                                  " for node ", SummarizeNodeDef(node->def())));
+                                  " for node ", SummarizeNode(*node)));
       }
     }
     if (!val.is_ref()) {
@@ -1895,7 +1894,7 @@ void ExecutorState::PropagateOutputs(const TaggedNode& tagged_node,
                                      TaggedNodeSeq* ready) {
   const Node* node = tagged_node.node;
   FrameState* input_frame = tagged_node.input_frame;
-  int64 input_iter = tagged_node.input_iter;
+  const int64 input_iter = tagged_node.input_iter;
   const bool is_dead = tagged_node.is_dead;
 
   // Propagates outputs along out edges, and puts newly ready nodes
@@ -1915,7 +1914,7 @@ void ExecutorState::PropagateOutputs(const TaggedNode& tagged_node,
         &impl_->gview_, input_iter, ready);
   } else if (item->is_enter) {
     bool is_constant;
-    Status s = GetNodeAttr(node->def(), "is_constant", &is_constant);
+    const Status s = GetNodeAttr(node->attrs(), "is_constant", &is_constant);
     DCHECK(s.ok()) << s;
     FindOrCreateChildFrame(input_frame, input_iter, node, &output_frame);
     output_iter = 0;
@@ -1985,7 +1984,7 @@ void ExecutorState::PropagateOutputs(const TaggedNode& tagged_node,
   // completion of this node makes its frame completed.
   if (is_frame_done) {
     FrameState* parent_frame = input_frame->parent_frame;
-    int64 parent_iter = input_frame->parent_iter;
+    const int64 parent_iter = input_frame->parent_iter;
     DeleteFrame(input_frame, ready);
     if (parent_frame != nullptr) {
       // The completion of frame may cause completions in its parent frame.
@@ -2028,7 +2027,7 @@ bool ExecutorState::NodeDone(const Status& s, const Node* node,
   }
 
   bool completed = false;
-  size_t ready_size = ready.size();
+  const size_t ready_size = ready.size();
   if (ready_size == 0 || !s.ok()) {
     completed = (num_outstanding_ops_.fetch_sub(1) == 1);
   } else if (ready_size > 1) {
@@ -2168,7 +2167,7 @@ void ExecutorState::DumpIterationState(const FrameState* frame,
   const std::vector<const Node*>* nodes = frame->nodes;
   // Dump any waiting nodes that are holding on to tensors.
   for (const Node* node : *nodes) {
-    int node_id = node->id();
+    const int node_id = node->id();
     PendingCounts::Handle pending_id = impl_->gview_.node(node_id)->pending_id;
     if (iteration->node_state(pending_id) == PendingCounts::PENDING_NOTREADY ||
         iteration->node_state(pending_id) == PendingCounts::PENDING_READY) {
@@ -2177,14 +2176,14 @@ void ExecutorState::DumpIterationState(const FrameState* frame,
   }
   // Then the active nodes.
   for (const Node* node : *nodes) {
-    int node_id = node->id();
+    const int node_id = node->id();
     PendingCounts::Handle pending_id = impl_->gview_.node(node_id)->pending_id;
     if (iteration->node_state(pending_id) == PendingCounts::STARTED) {
       DumpActiveNodeState(node_id, iteration->input_tensors);
     }
   }
   // Show all input tensors in use.
-  int total_input_tensors = frame->total_input_tensors;
+  const int total_input_tensors = frame->total_input_tensors;
   size_t total_bytes = 0;
   for (int i = 0; i < total_input_tensors; ++i) {
     const Entry& input = iteration->input_tensors[i];
@@ -2241,7 +2240,7 @@ void ExecutorState::FindOrCreateChildFrame(FrameState* frame, int64 iter,
                                            FrameState** child) {
   // Get the child frame name.
   string enter_name;
-  Status s = GetNodeAttr(node->def(), "frame_name", &enter_name);
+  Status s = GetNodeAttr(node->attrs(), "frame_name", &enter_name);
   DCHECK(s.ok()) << s;
   const string child_name = MakeFrameName(frame, iter, enter_name);
 
@@ -2259,7 +2258,7 @@ void ExecutorState::FindOrCreateChildFrame(FrameState* frame, int64 iter,
   if (vlog_) VLOG(2) << "Create frame: " << child_name;
 
   int parallel_iters;
-  s = GetNodeAttr(node->def(), "parallel_iterations", &parallel_iters);
+  s = GetNodeAttr(node->attrs(), "parallel_iterations", &parallel_iters);
   DCHECK(s.ok()) << s;
   FrameState* temp = new FrameState(impl_, parallel_iters);
   temp->frame_name = child_name;
@@ -2293,7 +2292,7 @@ void ExecutorState::FindOrCreateChildFrame(FrameState* frame, int64 iter,
 void ExecutorState::DeleteFrame(FrameState* frame, TaggedNodeSeq* ready) {
   // First, propagate dead_exits (if any) to the parent frame.
   FrameState* parent_frame = frame->parent_frame;
-  int64 parent_iter = frame->parent_iter;
+  const int64 parent_iter = frame->parent_iter;
   if (parent_frame != nullptr) {
     mutex_lock paranet_frame_lock(parent_frame->mu);
     // Propagate all the dead exits to the parent frame.
@@ -2302,7 +2301,8 @@ void ExecutorState::DeleteFrame(FrameState* frame, TaggedNodeSeq* ready) {
       for (const Edge* e : node->out_edges()) {
         const Node* dst_node = e->dst();
 
-        auto dst_pending_id = impl_->gview_.node(dst_node->id())->pending_id;
+        const auto dst_pending_id =
+            impl_->gview_.node(dst_node->id())->pending_id;
 
         // TODO(yuanbyu): We don't need this if we require the subgraph
         // given to an executor not to contain a sink node.
@@ -2360,7 +2360,7 @@ void ExecutorState::CleanupFramesIterations(FrameState* frame, int64 iter,
   }
   if (is_frame_done) {
     FrameState* parent_frame = frame->parent_frame;
-    int64 parent_iter = frame->parent_iter;
+    const int64 parent_iter = frame->parent_iter;
     DeleteFrame(frame, ready);
     if (parent_frame != nullptr) {
       // The completion of frame may cause completions in its parent frame.
@@ -2435,7 +2435,7 @@ void ExecutorState::FrameState::ActivateNodes(const NodeItem* item,
         }
       }
     } else {
-      bool increment_dead =
+      const bool increment_dead =
           (is_dead || (!is_control_edge && !(*outputs)[src_slot].has_value));
       int pending, dead;
       iter_state->adjust_for_activation(dst_pending_id, increment_dead,
@@ -2499,7 +2499,7 @@ void ExecutorState::FrameState::AddLoopInv(const NodeItem* item,
   inv_values.push_back({item->node, entry});
 
   // Make this value available to all iterations.
-  bool is_dead = !entry.has_value;
+  const bool is_dead = !entry.has_value;
   for (int i = 0; i <= iteration_count; ++i) {
     EntryVector outputs{entry};
     ActivateNodes(item, is_dead, i, &outputs, ready);
@@ -2524,7 +2524,7 @@ bool ExecutorState::FrameState::IsIterationDone(int64 iter) {
 void ExecutorState::FrameState::IncrementIteration(const GraphView* gview,
                                                    TaggedNodeSeq* ready) {
   iteration_count++;
-  int64 next_iter = iteration_count;
+  const int64 next_iter = iteration_count;
 
   // Initialize the next iteration.
   IterationState* iter_state =
@@ -2569,7 +2569,7 @@ void ExecutorImpl::RunAsync(const Args& args, DoneCallback done) {
 Status NewLocalExecutor(const LocalExecutorParams& params, const Graph* graph,
                         Executor** executor) {
   ExecutorImpl* impl = new ExecutorImpl(params, graph);
-  Status s = impl->Initialize();
+  const Status s = impl->Initialize();
   if (s.ok()) {
     *executor = impl;
   } else {
@@ -2581,7 +2581,7 @@ Status NewLocalExecutor(const LocalExecutorParams& params, const Graph* graph,
 Status CreateNonCachedKernel(Device* device, FunctionLibraryRuntime* flib,
                              const NodeDef& ndef, int graph_def_version,
                              OpKernel** kernel) {
-  auto device_type = DeviceType(device->attributes().device_type());
+  const auto device_type = DeviceType(device->attributes().device_type());
   auto allocator = device->GetAllocator(AllocatorAttributes());
   return CreateOpKernel(device_type, device, allocator, flib, ndef,
                         graph_def_version, kernel);

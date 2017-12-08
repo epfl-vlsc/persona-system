@@ -10,7 +10,8 @@ package(default_visibility = ["//tensorflow:__subpackages__"])
 cc_library(
     name = "persona_kernels",
     deps = [
-        "@protobuf//:protobuf",
+        #"@protobuf//:protobuf",
+        "@protobuf_archive//:protobuf",
         "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
         "//tensorflow/contrib/persona/kernels/agd-ops:agd_ops",
         "//tensorflow/contrib/persona/kernels/bam:agdbam",

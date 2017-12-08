@@ -1,8 +1,8 @@
-# Installing TensorFlow on Mac OS X
+# Installing TensorFlow on macOS
 
-This guide explains how to install TensorFlow on Mac OS X.
+This guide explains how to install TensorFlow on macOS.
 
-Note: As of version 1.2, TensorFlow no longer provides GPU support on Mac OS X.
+Note: As of version 1.2, TensorFlow no longer provides GPU support on macOS.
 
 ## Determine how to install TensorFlow
 
@@ -11,11 +11,11 @@ You must pick the mechanism by which you install TensorFlow. The supported choic
   * virtualenv
   * "native" pip
   * Docker
-  * installing from sources, which is for experts and is documented in
-    a separate guide.
+  * installing from sources, which is documented in
+    [a separate guide](https://www.tensorflow.org/install/install_sources).
 
 **We recommend the virtualenv installation.**
-[Virtualenv](https://virtualenv.pypa.io/en/stable/)
+[Virtualenv](https://virtualenv.pypa.io/en/stable)
 is a virtual Python environment isolated from other Python development,
 incapable of interfering with or being affected by other Python programs
 on the same machine.  During the virtualenv installation process,
@@ -33,7 +33,7 @@ to disable System Integrity Protection (SIP) in order to install through native
 pip.  However, if you understand SIP, pip, and your Python environment, a
 native pip installation is relatively easy to perform.
 
-[Docker](http://docker.com/) completely isolates the TensorFlow installation
+[Docker](http://docker.com) completely isolates the TensorFlow installation
 from pre-existing packages on your machine. The Docker container contains
 TensorFlow and all its dependencies. Note that the Docker image can be quite
 large (hundreds of MBs). You might choose the Docker installation if you are
@@ -58,7 +58,7 @@ Take the following steps to install TensorFlow with Virtualenv:
   2. Install pip and virtualenv by issuing the following commands:
 
      <pre> $ <b>sudo easy_install pip</b>
-     $ <b>sudo pip install --upgrade virtualenv</b> </pre>
+     $ <b>pip install --upgrade virtualenv</b> </pre>
 
   3. Create a virtualenv environment by issuing a command of one
      of the following formats:
@@ -81,17 +81,17 @@ Take the following steps to install TensorFlow with Virtualenv:
 
      <pre> (tensorflow)$ </pre>
 
-  5. If pip version 8.1 or later is installed on your system, issue one of
-     the following commands to install TensorFlow and all the packages that
-     TensorFlow requires into the active Virtualenv environment:
+  5. Ensure pip ≥8.1 is installed:
 
-     <pre> $ <b>pip install --upgrade tensorflow</b>      # for Python 2.7
-     $ <b>pip3 install --upgrade tensorflow</b>     # for Python 3.n
+     <pre> (tensorflow)$ <b>easy_install -U pip</b></pre>
 
-     If the preceding command succeed, skip Step 6. If it failed,
-     perform Step 6.
+  6. Issue one of the following commands to install TensorFlow and all the
+     packages that TensorFlow requires into the active Virtualenv environment:
 
-  6. Optional. If Step 5 failed (typically because you invoked a pip version
+     <pre> (tensorflow)$ <b>pip install --upgrade tensorflow</b>      # for Python 2.7
+     (tensorflow)$ <b>pip3 install --upgrade tensorflow</b>     # for Python 3.n
+
+  7. Optional. If Step 6 failed (typically because you invoked a pip version
      lower than 8.1), install TensorFlow in the active
      virtualenv environment by issuing a command of the following format:
 
@@ -104,12 +104,12 @@ Take the following steps to install TensorFlow with Virtualenv:
      Python version. Find the appropriate value for
      <i>tfBinaryURL</i> for your system
      [here](#the_url_of_the_tensorflow_python_package).
-     For example, if you are installing TensorFlow for Mac OS X,
+     For example, if you are installing TensorFlow for macOS,
      Python 2.7, the command to install
      TensorFlow in the active Virtualenv is as follows:
 
      <pre> $ <b>pip3 install --upgrade \
-     https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.2.0-py2-none-any.whl</b></pre>
+     https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.4.0-py2-none-any.whl</b></pre>
 
 If you encounter installation problems, see
 [Common Installation Problems](#common-installation-problems).
@@ -230,7 +230,7 @@ take the following steps:
      issue the following command:
 
      <pre> $ <b>sudo pip3 install --upgrade \
-     https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.2.0-py2-none-any.whl</b> </pre>
+     https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.4.0-py2-none-any.whl</b> </pre>
 
      If the preceding command fails, see
      [installation problems](#common-installation-problems).
@@ -321,7 +321,7 @@ Take the following steps to install TensorFlow in an Anaconda environment:
   2. Create a conda environment named `tensorflow`
      by invoking the following command:
 
-     <pre>$ <b>conda create -n tensorflow</b></pre>
+     <pre>$ <b>conda create -n tensorflow python=2.7 # or python=3.3, etc.</b></pre>
 
   3. Activate the conda environment by issuing the following command:
 
@@ -339,7 +339,7 @@ Take the following steps to install TensorFlow in an Anaconda environment:
      TensorFlow for Python 2.7:
 
      <pre> (tensorflow)$ <b>pip install --ignore-installed --upgrade \
-     https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.2.0-py2-none-any.whl</b></pre>
+     https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.4.0-py2-none-any.whl</b></pre>
 
 
 <a name="ValidateYourInstallation"></a>
@@ -512,7 +512,7 @@ This section documents the relevant values for Mac OS installations.
 
 
 <pre>
-https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.2.0-py2-none-any.whl
+https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.4.0-py2-none-any.whl
 </pre>
 
 
@@ -520,7 +520,7 @@ https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.2.0-py2-none-any.
 
 
 <pre>
-https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.2.0-py3-none-any.whl
+https://storage.googleapis.com/tensorflow/mac/cpu/tensorflow-1.4.0-py3-none-any.whl
 </pre>
 
 

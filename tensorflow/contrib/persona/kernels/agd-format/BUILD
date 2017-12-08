@@ -23,7 +23,8 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/lttng:trace",
         "//tensorflow/contrib/persona/kernels/agd-format/proto:alignment_proto_cc",
         "//third_party/eigen3",
-        "@protobuf//:protobuf",
+        #"@protobuf//:protobuf",
+        "@protobuf_archive//:protobuf",
         #"//tensorflow/core/kernels:ops_util"
     ],
     alwayslink = 1,

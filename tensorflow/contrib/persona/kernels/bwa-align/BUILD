@@ -33,7 +33,8 @@ cc_library(
             "//tensorflow/contrib/persona/kernels/concurrent_queue:concurrent_queue",
             "//tensorflow/contrib/persona/kernels/lttng:trace",
             "//third_party/eigen3",
-            "@protobuf//:protobuf",
+            #"@protobuf//:protobuf",
+            "@protobuf_archive//:protobuf",
             ],
     alwayslink=1,
 )

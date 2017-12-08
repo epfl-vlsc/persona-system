@@ -188,9 +188,9 @@ namespace tensorflow {
           mutex_lock l(mu_);
           // may need to make recs volatile?
           LOG(INFO) << "GetNextRecord is waiting for more data ...";
-          ready_cv_.wait(l, [other_buf]() {
-              return other_buf->recs == 0;
-            });
+          while (other_buf->recs != 0) {
+            ready_cv_.wait(l);
+          }
         }
         active_buf_->recs = 0;
         active_buf_ = other_buf;
