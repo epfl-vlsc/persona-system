@@ -233,6 +233,26 @@ and is thus passed as an Attr instead of an input (for efficiency);
   .Doc(R"doc(
 Converts an input file into three files of bases, qualities, and metadata
 )doc");
+    
+    REGISTER_OP("AGDFastaConverter")
+    .Attr("is_nucleotide: bool = true")
+    .Input("buffer_pair_pool: Ref(string)")
+    .Input("input_data: string")
+    .Output("bases_out: string")
+    .Output("meta_out: string")
+    .SetShapeFn([](InferenceContext *c) {
+        for (int i = 0; i < 2; i++) {
+        TF_RETURN_IF_ERROR(check_vector(c, i, 2));
+        }
+        c->set_output(0, c->Vector(2));
+        c->set_output(1, c->Vector(2));
+
+        return Status::OK();
+        })
+  .Doc(R"doc(
+Converts an input file into two files of bases and metadata from FASTA data.
+If the data is not nucleotides (ATCGN), set is_nucleotide to false.
+)doc");
 
     REGISTER_OP("AGDInterleavedConverter")
     .Input("buffer_pair_pool: Ref(string)")
