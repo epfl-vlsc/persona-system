@@ -10,12 +10,11 @@ package(default_visibility = ["//tensorflow:__subpackages__"])
 cc_library(
     name = "persona_kernels",
     deps = [
-        #"@protobuf//:protobuf",
         "@protobuf_archive//:protobuf",
         "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
         "//tensorflow/contrib/persona/kernels/agd-ops:agd_ops",
         "//tensorflow/contrib/persona/kernels/bam:agdbam",
-        "//tensorflow/contrib/persona/kernels/sra:agdsra",
+        #"//tensorflow/contrib/persona/kernels/sra:agdsra",  # req. ncbi-vdb that is not on 16.04
         "//tensorflow/contrib/persona/kernels/barrier:barrier",
         "//tensorflow/contrib/persona/kernels/bwa-align:bwa_align",
         "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
