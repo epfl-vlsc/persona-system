@@ -42,6 +42,9 @@ namespace tensorflow {
 
     void read_line(const char **line_start, std::size_t *line_length, std::size_t skip_length = 0);
 
+    // FASTA seqs can be over multiple lines
+    void read_lines(const char **line_start, std::size_t *line_length, std::size_t skip_length = 0);
+
     std::shared_ptr<FileResource> fasta_file_; // default constructor = nullptr
 
     // We must use a shared separate atomic because we need to release the file when all are done

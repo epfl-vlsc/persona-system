@@ -47,7 +47,7 @@ namespace tensorflow {
     *quals = nullptr;
 
     read_line(meta, meta_len, 1); // +1 to skip '>'
-    read_line(bases, bases_len); // bases or amino acids
+    read_lines(bases, bases_len); // bases or amino acids
     current_record_idx_++;
 
     return Status::OK();
@@ -65,6 +65,20 @@ namespace tensorflow {
     *line_start = current_record_;
     size_t record_size = 0;
 
+    for (; *current_record_ != '\n' && current_record_ < end_ptr_;
+         record_size++, current_record_++);
+
+    *line_length = record_size;
+    current_record_++; // to skip over the '\n'
+  }
+  
+  void FastaResource::read_lines(const char **line_start, size_t *line_length, size_t skip_length)
+  {
+    current_record_ += skip_length;
+    *line_start = current_record_;
+    size_t record_size = 0;
+
+    // read to the next entry ('>') or end of file
     for (; *current_record_ != '>' && current_record_ < end_ptr_;
          record_size++, current_record_++);
 

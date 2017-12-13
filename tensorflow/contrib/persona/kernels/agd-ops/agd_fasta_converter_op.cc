@@ -17,6 +17,7 @@ namespace tensorflow {
   public:
     AGDFastaConverterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("is_nucleotide", &is_nucleotide_));
+      LOG(INFO) << " nucleotide is " << is_nucleotide_;
     }
 
     ~AGDFastaConverterOp() {
@@ -52,13 +53,19 @@ namespace tensorflow {
           if (qual != nullptr)
             LOG(INFO) << "FASTA converter got non-null qual data, are you sure this is FASTA data?";
 
+          // clean newlines from FASTA data
+
           while (status.ok()) {
 
             OP_REQUIRES_OK(ctx, AppendRecord(meta, meta_len, metadata_buf));
+            LOG(INFO) << "appending seq: " << string(meta, meta_len);
             //LOG(INFO) << "0: meta: " << string(meta, meta_len);
             //LOG(INFO) << "0: base: " << string(bases, bases_len);
-            OP_REQUIRES_OK(ctx, IntoBases(bases, bases_len, bases_));
-            OP_REQUIRES_OK(ctx, AppendRecord(&bases_[0], bases_.size(), bases_buf));
+            if (is_nucleotide_) {
+              OP_REQUIRES_OK(ctx, IntoBases(bases, bases_len, bases_));
+              OP_REQUIRES_OK(ctx, AppendRecord(&bases_[0], bases_.size(), bases_buf));
+            } else
+              OP_REQUIRES_OK(ctx, AppendWithNewlines(bases, bases_len, bases_buf));
 
             status = read_resource->get_next_record(&bases, &bases_len, &qual, &meta, &meta_len);
           }
@@ -91,6 +98,41 @@ namespace tensorflow {
 
       return Status::OK();
     }
+
+    Status AppendWithNewlines(const char* data, unsigned size, BufferPair &bp) {
+      auto &index = bp.index();
+      auto &data_buf = bp.data();
+      LOG(INFO) << "appending with newlines";
+
+      if (size > MAX_INDEX_SIZE) {
+        return Internal("Record size in bytes (", size, ") exceeds the maximum (", MAX_INDEX_SIZE, ")");
+      }
+      
+      auto converted_size = static_cast<RelativeIndex>(size);
+
+      auto ptr = data;
+      auto prev_ptr = data;
+      while (ptr - data < size) {
+        while (*ptr != '\n' && ptr - data < size) {
+          ptr++;
+        }
+        if (*ptr == '\n') {
+          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr - 1)); // exclude newline
+          LOG(INFO) << "appending subsequence: " << string(prev_ptr, ptr - prev_ptr - 1);
+          converted_size--;
+          ptr++;
+          prev_ptr = ptr;
+        } else {
+          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr));
+          LOG(INFO) << "appending sequence: " << string(prev_ptr, ptr - prev_ptr);
+          break;
+        }
+      }
+      TF_RETURN_IF_ERROR(index.AppendBuffer(reinterpret_cast<char*>(&converted_size), sizeof(converted_size)));
+
+      return Status::OK();
+    }
+
 
     Status Init(OpKernelContext* ctx) {
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufpair_pool_));

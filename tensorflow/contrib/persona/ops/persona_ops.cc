@@ -577,6 +577,33 @@ key: key reference to the filename queue
 file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
   )doc");
 
+    REGISTER_OP("FastaChunker")
+    .Attr("chunk_size: int >= 1")
+    .Input("queue_handle: resource")
+    .Input("fasta_file: string") 
+    .Input("fasta_pool: Ref(string)")
+    .SetShapeFn([](InferenceContext *c) {
+        ShapeHandle fastq_file;
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 1, &fastq_file));
+        auto dim_handle = c->Dim(fastq_file, 0);
+        auto fastq_dim = c->Value(dim_handle);
+        if (fastq_dim != 2) {
+        return Internal("fasta_file requires 2-dimensional vector");
+        }
+
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 1, &fastq_file));
+        dim_handle = c->Dim(fastq_file, 0);
+        fastq_dim = c->Value(dim_handle);
+        if (fastq_dim != 2) {
+        return Internal("fasta_pool requires 2-dimensional vector");
+        }
+
+        return Status::OK();
+        })
+  .Doc(R"doc(
+Chunks fasta files for processing into AGD chunks.
+)doc");
+
     REGISTER_OP("FastqChunker")
     .Attr("chunk_size: int >= 1")
     .Input("queue_handle: resource")
@@ -636,6 +663,11 @@ file_handle: a Tensor(2) of strings to access the file resource in downstream no
     })
   .Doc(R"doc(
 
+)doc");
+
+    REGISTER_REFERENCE_POOL("FastaReadPool")
+    .Doc(R"doc(
+A pool to manage FastaReadResource objects
 )doc");
 
     REGISTER_REFERENCE_POOL("FastqReadPool")
