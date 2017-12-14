@@ -74,7 +74,7 @@ namespace tensorflow {
         }
 
         for (int i = 0; i < columns_.size(); i++) {
-          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual") {
+          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual" || columns_[i] == "prot") {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
             fwrite(data, length, 1, stdout);
             printf("\n");

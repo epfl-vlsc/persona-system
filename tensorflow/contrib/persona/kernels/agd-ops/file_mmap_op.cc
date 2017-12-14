@@ -28,7 +28,7 @@ namespace tensorflow {
 
       auto filename = filename_input->scalar<string>()();
 
-      LOG(INFO) << "mapping file: " << filename;
+      //LOG(INFO) << "mapping file: " << filename;
       ResourceContainer<MemoryMappedFile> *mmf;
       OP_REQUIRES_OK(ctx, ref_pool->GetResource(&mmf));
 
