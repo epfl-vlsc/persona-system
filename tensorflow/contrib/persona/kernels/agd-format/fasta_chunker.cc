@@ -41,7 +41,7 @@ namespace tensorflow {
     }
 
     // sequence data can be multiple lines (WHYYYYYYY)
-    while (*current_ptr_ != '>') {
+    while (*current_ptr_ != '>' && current_ptr_ != end_ptr_) {
       if (!advance_line()) {
         return false;
       }

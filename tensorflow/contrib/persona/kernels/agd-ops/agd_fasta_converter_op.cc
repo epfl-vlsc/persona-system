@@ -17,7 +17,6 @@ namespace tensorflow {
   public:
     AGDFastaConverterOp(OpKernelConstruction *ctx) : OpKernel(ctx) {
       OP_REQUIRES_OK(ctx, ctx->GetAttr("is_nucleotide", &is_nucleotide_));
-      LOG(INFO) << " nucleotide is " << is_nucleotide_;
     }
 
     ~AGDFastaConverterOp() {
@@ -58,7 +57,6 @@ namespace tensorflow {
           while (status.ok()) {
 
             OP_REQUIRES_OK(ctx, AppendRecord(meta, meta_len, metadata_buf));
-            LOG(INFO) << "appending seq: " << string(meta, meta_len);
             //LOG(INFO) << "0: meta: " << string(meta, meta_len);
             //LOG(INFO) << "0: base: " << string(bases, bases_len);
             if (is_nucleotide_) {
@@ -102,7 +100,6 @@ namespace tensorflow {
     Status AppendWithNewlines(const char* data, unsigned size, BufferPair &bp) {
       auto &index = bp.index();
       auto &data_buf = bp.data();
-      LOG(INFO) << "appending with newlines";
 
       if (size > MAX_INDEX_SIZE) {
         return Internal("Record size in bytes (", size, ") exceeds the maximum (", MAX_INDEX_SIZE, ")");
@@ -117,14 +114,14 @@ namespace tensorflow {
           ptr++;
         }
         if (*ptr == '\n') {
-          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr - 1)); // exclude newline
-          LOG(INFO) << "appending subsequence: " << string(prev_ptr, ptr - prev_ptr - 1);
+          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr)); // exclude newline
+          LOG(INFO) << "appending subsequence: " << string(prev_ptr, ptr - prev_ptr) << "|";
           converted_size--;
           ptr++;
           prev_ptr = ptr;
         } else {
-          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr));
-          LOG(INFO) << "appending sequence: " << string(prev_ptr, ptr - prev_ptr);
+          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr + 1));
+          LOG(INFO) << "appending sequence: " << string(prev_ptr, ptr - prev_ptr) << "|";
           break;
         }
       }
