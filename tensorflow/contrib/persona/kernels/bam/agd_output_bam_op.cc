@@ -237,7 +237,7 @@ namespace tensorflow {
             //OP_REQUIRES_OK(ctx, result_readers[i]->GetNextResult(result));
             s = result_readers[i]->GetNextResult(result);
             OP_REQUIRES(ctx, i == 0 && s.ok() || i > 0 && (s.ok() || IsUnavailable(s)),
-                        Internal("Output bam received bad alignment result"))
+                        Internal("Output bam received bad alignment result"));
             if (IsUnavailable(s)) {
               // skip emtpy secondary
               continue;

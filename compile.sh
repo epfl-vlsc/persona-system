@@ -29,13 +29,13 @@ process_args "$@"
 
 extra_opts=""
 if [ $build_type == "opt" ]; then
-    extra_opts="--copt -O3"
+    extra_opts="--copt -O3 --copt=-msse4.1 --copt=-msse4.2"
 elif [ $build_type == "vtune" ]; then
     build_type="opt"
-    extra_opts="--copt -g --copt -O3"
+    extra_opts="--copt -g --copt -O3 --copt=-msse4.1 --copt=-msse4.2"
 elif [ $build_type = "perf" ]; then
     build_type="dbg"
-    extra_copts="--copt -pg"
+    extra_copts="--copt -pg --copt=-msse4.1 --copt=-msse4.2"
 fi
 
 # this is the option to build with the old ABI

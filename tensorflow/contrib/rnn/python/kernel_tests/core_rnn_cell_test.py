@@ -22,10 +22,9 @@ import functools
 
 import numpy as np
 
-# TODO(ebrevdo): Remove once _linear is fully deprecated.
-# pylint: disable=protected-access
-
 from tensorflow.contrib import rnn as contrib_rnn
+from tensorflow.contrib.rnn.python.ops import core_rnn_cell
+from tensorflow.contrib.rnn.python.ops import rnn_cell as contrib_rnn_cell
 from tensorflow.core.protobuf import config_pb2
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
@@ -41,10 +40,11 @@ from tensorflow.python.ops import variable_scope
 from tensorflow.python.ops import variables as variables_lib
 from tensorflow.python.platform import test
 from tensorflow.python.framework import test_util
+from tensorflow.contrib.rnn.python.ops import rnn_cell as contrib_rnn_cell
 
 
 # pylint: enable=protected-access
-Linear = rnn_cell_impl._Linear  # pylint: disable=invalid-name
+Linear = core_rnn_cell._Linear  # pylint: disable=invalid-name
 
 
 class RNNCellTest(test.TestCase):
@@ -128,8 +128,8 @@ class RNNCellTest(test.TestCase):
         self.assertAllClose(res[0], [[0.175991, 0.175991]])
       with variable_scope.variable_scope(
           "other", initializer=init_ops.constant_initializer(0.5)):
-        x = array_ops.zeros(
-            [1, 3])  # Test GRUCell with input_size != num_units.
+        # Test GRUCell with input_size != num_units.
+        x = array_ops.zeros([1, 3])
         m = array_ops.zeros([1, 2])
         g, _ = rnn_cell_impl.GRUCell(2)(x, m)
         sess.run([variables_lib.global_variables_initializer()])
@@ -361,6 +361,46 @@ class RNNCellTest(test.TestCase):
       self.assertEquals(variables[2].op.name,
                         "root/lstm_cell/projection/kernel")
 
+  def testLSTMCellLayerNorm(self):
+    with self.test_session() as sess:
+      num_units = 2
+      num_proj = 3
+      batch_size = 1
+      input_size = 4
+      with variable_scope.variable_scope(
+          "root", initializer=init_ops.constant_initializer(0.5)):
+        x = array_ops.zeros([batch_size, input_size])
+        c = array_ops.zeros([batch_size, num_units])
+        h = array_ops.zeros([batch_size, num_proj])
+        state = rnn_cell_impl.LSTMStateTuple(c, h)
+        cell = contrib_rnn_cell.LayerNormLSTMCell(
+            num_units=num_units,
+            num_proj=num_proj,
+            forget_bias=1.0,
+            layer_norm=True,
+            norm_gain=1.0,
+            norm_shift=0.0)
+        g, out_m = cell(x, state)
+        sess.run([variables_lib.global_variables_initializer()])
+        res = sess.run(
+            [g, out_m], {
+                x.name: np.ones((batch_size, input_size)),
+                c.name: 0.1 * np.ones((batch_size, num_units)),
+                h.name: 0.1 * np.ones((batch_size, num_proj))
+            })
+        self.assertEqual(len(res), 2)
+        # The numbers in results were not calculated, this is mostly just a
+        # smoke test.
+        self.assertEqual(res[0].shape, (batch_size, num_proj))
+        self.assertEqual(res[1][0].shape, (batch_size, num_units))
+        self.assertEqual(res[1][1].shape, (batch_size, num_proj))
+        # Different inputs so different outputs and states
+        for i in range(1, batch_size):
+          self.assertTrue(
+              float(np.linalg.norm((res[0][0, :] - res[0][i, :]))) < 1e-6)
+          self.assertTrue(
+              float(np.linalg.norm((res[1][0, :] - res[1][i, :]))) < 1e-6)
+
   def testOutputProjectionWrapper(self):
     with self.test_session() as sess:
       with variable_scope.variable_scope(
@@ -450,6 +490,17 @@ class RNNCellTest(test.TestCase):
       outputs, _ = cell(x, m)
       self.assertTrue("cpu:14159" in outputs.device.lower())
 
+  def _retrieve_cpu_gpu_stats(self, run_metadata):
+    cpu_stats = None
+    gpu_stats = None
+    step_stats = run_metadata.step_stats
+    for ds in step_stats.dev_stats:
+      if "cpu:0" in ds.device[-5:].lower():
+        cpu_stats = ds.node_stats
+      if "gpu:0" == ds.device[-5:].lower():
+        gpu_stats = ds.node_stats
+    return cpu_stats, gpu_stats
+
   def testDeviceWrapperDynamicExecutionNodesAreAllProperlyLocated(self):
     if not test.is_gpu_available():
       # Can't perform this test w/o a GPU
@@ -471,10 +522,7 @@ class RNNCellTest(test.TestCase):
         sess.run([variables_lib.global_variables_initializer()])
         _ = sess.run(outputs, options=opts, run_metadata=run_metadata)
 
-      step_stats = run_metadata.step_stats
-      ix = 0 if gpu_dev in step_stats.dev_stats[0].device else 1
-      gpu_stats = step_stats.dev_stats[ix].node_stats
-      cpu_stats = step_stats.dev_stats[1 - ix].node_stats
+      cpu_stats, gpu_stats = self._retrieve_cpu_gpu_stats(run_metadata)
       self.assertFalse([s for s in cpu_stats if "gru_cell" in s.node_name])
       self.assertTrue([s for s in gpu_stats if "gru_cell" in s.node_name])
 

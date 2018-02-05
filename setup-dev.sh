@@ -26,7 +26,7 @@ build_tensorflow() {
     echo "Building using $max_build_threads threads"
     git submodule update --init # in case you forget, or switched branches
     #PYTHON_BIN_PATH=$(which python3) TF_NEED_GCP=0 TF_NEED_CUDA=0 ./configure
-    bazel build -j $max_build_threads //tensorflow/tools/pip_package:build_pip_package
+    bazel build -j $max_build_threads --copt=-msse4.1 --copt=-msse4.2 //tensorflow/tools/pip_package:build_pip_package
 }
 
 prep_dirs() {
