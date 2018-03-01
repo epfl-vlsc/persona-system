@@ -88,7 +88,7 @@ namespace format {
 
     Status getBase(const std::size_t position, char* base) const;
 
-    Status setBase(const char base, std::size_t position);
+    Status setBase(const char base, std::size_t position, bool warning = false);
 
     Status terminate(std::size_t position);
 
@@ -105,7 +105,8 @@ namespace format {
 
   Status append(const BinaryBases *bases, const std::size_t record_size_in_bytes, Buffer &data, Buffer &lengths);
 
-  Status IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases);
+  // if warning is set true, a warning will be output on non-ACTGN chars and converted to N
+  Status IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases, bool warning = false);
 
 } // namespace format
 } // namespace tensorflow
