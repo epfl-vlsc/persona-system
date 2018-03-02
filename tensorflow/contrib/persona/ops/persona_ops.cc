@@ -1426,4 +1426,25 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .Doc(R"doc(
   Compresses the prepared buffer_list records and into individual buffers, and then outputs them
   )doc");
+    
+    REGISTER_OP("AGDReferenceGenome")
+    .Output("handle: Ref(string)")
+    .Attr("chunk_paths: list(string)")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .SetIsStateful()
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
+  .Doc(R"doc(
+    An op that creates a handle to an object containing an AGD reference genome dataset loaded into memory.
+    handle: The handle to the AGDReferenceGenome resource.
+    chunk_paths: The paths to the chunk files of the dataset storing the reference without extensions [refdata_0, refdata_1, etc] from the AGD metadata file.
+    container: If non-empty, this index is placed in the given container.
+    Otherwise, a default container is used.
+    shared_name: If non-empty, this queue will be shared under the given name
+    across multiple sessions.
+    )doc");
+
 }
