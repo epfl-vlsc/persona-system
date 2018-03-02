@@ -40,6 +40,7 @@ from tensorflow.python.ops import rnn_cell_impl
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.util import nest
+from tensorflow.python.util.tf_export import tf_export
 
 
 # pylint: disable=protected-access
@@ -320,6 +321,7 @@ def _reverse_seq(input_seq, lengths):
   return results
 
 
+@tf_export("nn.bidirectional_dynamic_rnn")
 def bidirectional_dynamic_rnn(cell_fw, cell_bw, inputs, sequence_length=None,
                               initial_state_fw=None, initial_state_bw=None,
                               dtype=None, parallel_iterations=None,
@@ -449,6 +451,7 @@ def bidirectional_dynamic_rnn(cell_fw, cell_bw, inputs, sequence_length=None,
   return (outputs, output_states)
 
 
+@tf_export("nn.dynamic_rnn")
 def dynamic_rnn(cell, inputs, sequence_length=None, initial_state=None,
                 dtype=None, parallel_iterations=None, swap_memory=False,
                 time_major=False, scope=None):
@@ -722,6 +725,8 @@ def _dynamic_rnn_loop(cell,
   if sequence_length is not None:
     min_sequence_length = math_ops.reduce_min(sequence_length)
     max_sequence_length = math_ops.reduce_max(sequence_length)
+  else:
+    max_sequence_length = time_steps
 
   time = array_ops.constant(0, dtype=dtypes.int32, name="time")
 
@@ -806,11 +811,15 @@ def _dynamic_rnn_loop(cell,
 
     return (time + 1, output_ta_t, new_state)
 
-  # TODO(pbar) `loop_bound` can be reduced to `max_sequence_length` once
-  # TensorArray shape inference is working.  When sequence lengths are highly
-  # variable, this will reduce the performance overheads of padding to a fixed
-  # maximum length.
-  loop_bound = time_steps
+  if in_graph_mode:
+    # Make sure that we run at least 1 step, if necessary, to ensure
+    # the TensorArrays pick up the dynamic shape.
+    loop_bound = math_ops.minimum(
+        time_steps, math_ops.maximum(1, max_sequence_length))
+  else:
+    # Using max_sequence_length isn't currently supported in the Eager branch.
+    loop_bound = time_steps
+
   _, output_final_ta, final_state = control_flow_ops.while_loop(
       cond=lambda time, *_: time < loop_bound,
       body=_time_step,
@@ -838,6 +847,7 @@ def _dynamic_rnn_loop(cell,
   return (final_outputs, final_state)
 
 
+@tf_export("nn.raw_rnn")
 def raw_rnn(cell, loop_fn,
             parallel_iterations=None, swap_memory=False, scope=None):
   """Creates an `RNN` specified by RNNCell `cell` and loop function `loop_fn`.
@@ -1115,6 +1125,12 @@ def raw_rnn(cell, loop_fn,
       def _copy_some_through(current, candidate):
         """Copy some tensors through via array_ops.where."""
         def copy_fn(cur_i, cand_i):
+          # TensorArray and scalar get passed through.
+          if isinstance(cur_i, tensor_array_ops.TensorArray):
+            return cand_i
+          if cur_i.shape.ndims == 0:
+            return cand_i
+          # Otherwise propagate the old or the new value.
           with ops.colocate_with(cand_i):
             return array_ops.where(elements_finished, cur_i, cand_i)
         return nest.map_structure(copy_fn, current, candidate)
@@ -1145,6 +1161,7 @@ def raw_rnn(cell, loop_fn,
     return (emit_ta, final_state, final_loop_state)
 
 
+@tf_export("nn.static_rnn")
 def static_rnn(cell,
                inputs,
                initial_state=None,
@@ -1314,6 +1331,7 @@ def static_rnn(cell,
     return (outputs, state)
 
 
+@tf_export("nn.static_state_saving_rnn")
 def static_state_saving_rnn(cell,
                             inputs,
                             state_saver,
@@ -1398,6 +1416,7 @@ def static_state_saving_rnn(cell,
   return (outputs, state)
 
 
+@tf_export("nn.static_bidirectional_rnn")
 def static_bidirectional_rnn(cell_fw,
                              cell_bw,
                              inputs,

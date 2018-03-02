@@ -69,6 +69,13 @@ class ScalarComputationsTest : public ClientLibraryTestBase {
   }
 };
 
+XLA_TEST_F(ScalarComputationsTest, ReturnScalarF32) {
+  ComputationBuilder builder(client_, TestName());
+  builder.ConstantR0<float>(2.1f);
+
+  ComputeAndCompareR0<float>(&builder, 2.1f, {}, error_spec_);
+}
+
 XLA_TEST_F(ScalarComputationsTest, NegateScalarF32) {
   ComputationBuilder builder(client_, TestName());
   builder.Neg(builder.ConstantR0<float>(2.1f));
@@ -843,6 +850,13 @@ XLA_TEST_F(ScalarComputationsTest, SqrtF320) {
   builder.SqrtF32(zero);
 
   ComputeAndCompareR0<float>(&builder, 0.0f, {zero_data.get()}, error_spec_);
+}
+
+XLA_TEST_F(ScalarComputationsTest, RoundScalar) {
+  ComputationBuilder builder(client_, TestName());
+  builder.Round(builder.ConstantR0<float>(1.4f));
+
+  ComputeAndCompareR0<float>(&builder, 1.0f, {}, error_spec_);
 }
 
 }  // namespace
