@@ -33,6 +33,7 @@ option(tensorflow_BUILD_SHARED_LIB "Build TensorFlow as a shared library" OFF)
 option(tensorflow_OPTIMIZE_FOR_NATIVE_ARCH "Enable compiler optimizations for the native processor architecture (if available)" ON)
 option(tensorflow_WIN_CPU_SIMD_OPTIONS "Enables CPU SIMD instructions")
 option(tensorflow_ENABLE_SNAPPY_SUPPORT "Enable SNAPPY compression support" ON)
+option(tensorflow_DISABLE_EIGEN_FORCEINLINE "Disable forceinline, to speed up build on windows." OFF)
 
 # GPU, CUDA and cuDNN options
 option(tensorflow_ENABLE_GPU "Enable GPU support" OFF)
@@ -105,6 +106,13 @@ else()
 	set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
 endif()
 
+# TODO(jart): We should make this only apply to snapfn.cc
+add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION)
+
+if (tensorflow_DISABLE_EIGEN_FORCEINLINE)
+  add_definitions(-DEIGEN_STRONG_INLINE=inline)
+endif()
+
 add_definitions(-DEIGEN_AVOID_STL_ARRAY)
 if(WIN32)
   add_definitions(-DNOMINMAX -D_WIN32_WINNT=0x0A00 -DLANG_CXX11 -DCOMPILER_MSVC)
@@ -126,6 +134,9 @@ if(WIN32)
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /D_ITERATOR_DEBUG_LEVEL=0")
   set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} /D_ITERATOR_DEBUG_LEVEL=0")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /D_ITERATOR_DEBUG_LEVEL=0")
+
+  # Try to avoid flaky failures due to failed generation of generate.stamp files.
+  set(CMAKE_SUPPRESS_REGENERATION ON)
 endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -399,7 +410,9 @@ endif()
 
 # Let's get to work!
 include(tf_core_framework.cmake)
-include(tf_stream_executor.cmake)
+if (tensorflow_ENABLE_GPU)
+  include(tf_stream_executor.cmake)
+endif()
 
 include(tf_core_cpu.cmake)
 include(tf_core_ops.cmake)

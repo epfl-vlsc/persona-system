@@ -42,7 +42,7 @@ bool SupportsQuantization(const Operator& op) {
          type == OperatorType::kL2Normalization || type == OperatorType::kAdd ||
          type == OperatorType::kAveragePool || type == OperatorType::kMaxPool ||
          type == OperatorType::kLogistic || type == OperatorType::kSoftmax ||
-         type == OperatorType::kSqueeze ||
+         type == OperatorType::kSqueeze || type == OperatorType::kPad ||
          type == OperatorType::kTensorFlowReshape ||
          type == OperatorType::kMul || type == OperatorType::kSpaceToDepth ||
          type == OperatorType::kDepthToSpace;
@@ -412,7 +412,7 @@ bool Quantize::Run(Model* model, std::size_t op_index) {
               model->flags.set_output_arrays(i, dequantize_op->inputs[0]);
             }
           }
-          model->arrays.erase(dequantize_op->outputs[0]);
+          model->EraseArray(dequantize_op->outputs[0]);
           model->operators.erase(dequantize_it);
         }
       }
