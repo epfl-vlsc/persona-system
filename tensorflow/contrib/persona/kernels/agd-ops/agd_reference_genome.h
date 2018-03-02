@@ -16,7 +16,7 @@ namespace tensorflow {
 class AGDReferenceGenome {
 
   public:
-    AGDReferenceGenome();
+    AGDReferenceGenome() {}
     ~AGDReferenceGenome() {}
 
     // loads genome from base and meta chunks into `genome`
@@ -30,7 +30,7 @@ class AGDReferenceGenome {
     uint32_t GetContigLength(uint32_t contig);
 
     // return number of contigs
-    uint32_t GetNumContigs() { return contigs_.size(); }
+    uint32_t GetNumContigs();
 
   private:
     AGDReferenceGenome(const AGDReferenceGenome& other); // non construction-copyable

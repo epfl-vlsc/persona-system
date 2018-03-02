@@ -61,4 +61,6 @@ namespace tensorflow {
     return contig_lens_[contig];
   }
 
+  uint32_t AGDReferenceGenome::GetNumContigs() { return contigs_.size(); }
+
 }

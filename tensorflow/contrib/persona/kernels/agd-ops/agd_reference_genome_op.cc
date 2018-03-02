@@ -82,9 +82,9 @@ namespace tensorflow {
                         chunk_paths[i] + ".base", &base_mmaps[i]));
                   base_chunks.push_back((const char *)base_mmaps[i]->data());
                   base_lens.push_back(base_mmaps[i]->length());
-                  LOG(INFO) << "ref genome op loading chunk file: " << (chunk_paths[i] + ".meta");
+                  LOG(INFO) << "ref genome op loading chunk file: " << (chunk_paths[i] + ".metadata");
                   TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile( 
-                        chunk_paths[i] + ".meta", &meta_mmaps[i]));
+                        chunk_paths[i] + ".metadata", &meta_mmaps[i]));
                   meta_chunks.push_back((const char *)meta_mmaps[i]->data());
                   meta_lens.push_back(meta_mmaps[i]->length());
                 }
@@ -124,5 +124,5 @@ namespace tensorflow {
         vector<string> chunk_paths_;
     };
 
-    REGISTER_KERNEL_BUILDER(Name("GenomeIndex").Device(DEVICE_CPU), AGDReferenceGenomeOp);
+    REGISTER_KERNEL_BUILDER(Name("AGDReferenceGenome").Device(DEVICE_CPU), AGDReferenceGenomeOp);
 }  // namespace tensorflow
