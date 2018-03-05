@@ -8,7 +8,15 @@
 #ifndef ESTIMATEPAM_H_
 #define ESTIMATEPAM_H_
 
-#include "Python_extension.h"
+//#include "Python_extension.h"
+#include "matrix.h"
+#include "DynProgr_sse_byte.h"
+#include "DynProgr_sse_short.h"
+
+#define MAXSEQLEN 100010
+#define MINUSINF (-999999999)
+#define MAXMUTDIM 130
+#define MMAX(a,b) ((a)>(b)?(a):(b))
 #include <stdint.h>
 
 #define MAXPOINTS 7
