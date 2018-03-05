@@ -1,6 +1,6 @@
 
-#include "tensorflow/contrib/persona/kernels/protein_clustering/alignment_environment.h"
-#include "tensorflow/core/platform/file_sstem.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_environment.h"
+#include "tensorflow/core/platform/file_system.h"
 
 namespace tensorflow {
 

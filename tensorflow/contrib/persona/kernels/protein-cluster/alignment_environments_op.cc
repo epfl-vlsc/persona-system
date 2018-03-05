@@ -7,8 +7,7 @@
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
-#include "tensorflow/contrib/persona/kernels/agd-ops/agd_reference_genome.h"
-#include "tensorflow/contrib/persona/kernels/protein_clustering/alignment_environment.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_environment.h"
 
 namespace tensorflow {
 using namespace std;
@@ -26,7 +25,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
     // OP_REQUIRES_OK(context, context->GetAttr("genome_location",
     // &genome_location_));
 
-    vector<TensorProto> double_matrices, int8_matrices, int16_matrices;
+    vector<Tensor> double_matrices, int8_matrices, int16_matrices;
     OP_REQUIRES_OK(context, context->GetAttr("double_matrices", &double_matrices));
     OP_REQUIRES_OK(context, context->GetAttr("int8_matrices", &int8_matrices));
     OP_REQUIRES_OK(context, context->GetAttr("int16_matrices", &int16_matrices));
@@ -43,21 +42,21 @@ class AlignmentEnvironmentsOp : public OpKernel {
 
     for (size_t i = 0; i < gaps_.size(); i++) {
       // parse the tensor protos
-      OP_REQUIRES(context, double_matrices_t_[i].FromProto(double_matrices),
+      /*OP_REQUIRES(context, double_matrices_t_[i].FromProto(double_matrices[i]),
                   errors::Internal("failed to parse tensorproto"));
-      OP_REQUIRES(context, int8_matrices_t_[i].FromProto(int8_matrices),
+      OP_REQUIRES(context, int8_matrices_t_[i].FromProto(int8_matrices[i]),
                   errors::Internal("failed to parse tensorproto"));
-      OP_REQUIRES(context, int16_matrices_t_[i].FromProto(int16_matrices),
-                  errors::Internal("failed to parse tensorproto"));
+      OP_REQUIRES(context, int16_matrices_t_[i].FromProto(int16_matrices[i]),
+                  errors::Internal("failed to parse tensorproto"));*/
 
       // this may not be necessary , but the layout MUST be row oriented contiguous
       double_matrices_[i] = new double[MDIM];
       int8_matrices_[i] = new int8[MDIM];
       int16_matrices_[i] = new int16[MDIM];
 
-      auto td = double_matrices_t_[i].matrix<double>();
-      auto ti8 = int8_matrices_t_[i].matrix<int8>();
-      auto ti16 = int16_matrices_t_[i].matrix<int16>();
+      auto td = double_matrices[i].matrix<double>();
+      auto ti8 = int8_matrices[i].matrix<int8>();
+      auto ti16 = int16_matrices[i].matrix<int16>();
 
       for (size_t rows = 0; rows < double_matrices_t_[i].dim_size(0); rows++) {
           for (size_t cols = 0; cols < double_matrices_t_[i].dim_size(1); cols++) {
@@ -105,6 +104,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
 
       AlignmentEnvironments* new_envs = new AlignmentEnvironments();
 
+      std::unique_ptr<AlignmentEnvironments> value(new_envs);
 
       auto end = std::chrono::high_resolution_clock::now();
       LOG(INFO) << "envs load time is: "
@@ -132,8 +132,10 @@ class AlignmentEnvironmentsOp : public OpKernel {
   PersistentTensor object_handle_ GUARDED_BY(mu_);
   bool object_handle_set_ GUARDED_BY(mu_);
   vector<Tensor> double_matrices_t_, int8_matrices_t_, int16_matrices_t_;
-  vector<double> gaps_, thresholds_, gap_extends_;
-  vector<double*> double_matrices_, int8_matrices_, int16_matrices_;
+  vector<float> gaps_, thresholds_, gap_extends_;
+  vector<double*> double_matrices_;
+  vector<int8*> int8_matrices_;
+  vector<int16*> int16_matrices_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("AlignmentEnvironments").Device(DEVICE_CPU),

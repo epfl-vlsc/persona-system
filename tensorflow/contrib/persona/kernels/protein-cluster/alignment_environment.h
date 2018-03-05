@@ -1,6 +1,6 @@
 #pragma once
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/contrib/persona/kernels/protein_clustering/swps3/EstimatePam.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/EstimatePam.h"
 #include <vector>
 
 namespace tensorflow {
@@ -28,7 +28,7 @@ class AlignmentEnvironments {
   std::vector<AlignmentEnvironment> envs_;
   DayMatrix* day_matrices_;
   double* logpam1_matrix_;
-}
+};
 
 }
 

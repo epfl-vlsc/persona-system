@@ -49,12 +49,12 @@ namespace tensorflow {
       OP_REQUIRES_OK(ctx, rmgr->Lookup(chunk_handle(0), chunk_handle(1), &chunk_container));
       //AGDRecordReader seqs_reader(seqs_container, recs);
     
-      auto base_data = resource->get()->data();
+      auto base_data = chunk_container->get()->data();
       Tensor* data_out_t = NULL;
-      OP_REQUIRES_OK(context, context->allocate_output(0, TensorShape(),
+      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape(),
             &data_out_t));
       auto data_out = data_out_t->scalar<string>();
-      data_out() = string(base_data, resource->get()->size());
+      data_out() = string(base_data, chunk_container->get()->size());
 
       resource_releaser(chunk_container);
 

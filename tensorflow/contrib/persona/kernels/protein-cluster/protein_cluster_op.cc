@@ -51,7 +51,6 @@ namespace tensorflow {
     void Compute(OpKernelContext* ctx) override {
       LOG(INFO) << "Starting protein cluster";
       if (!bufferpair_pool_) {
-        OP_REQUIRES_OK(ctx, InitHandles(ctx));
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
 
@@ -92,7 +91,7 @@ namespace tensorflow {
       
       
 
-      LOG(INFO) << "DONE running mark duplicates!! Found so far: " << num_dups_found_;
+      //LOG(INFO) << "DONE running mark duplicates!! Found so far: " << num_dups_found_;
 
     }
 
@@ -100,7 +99,7 @@ namespace tensorflow {
     ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
     QueueInterface *input_queue_ = nullptr;
     QueueInterface *neighbor_queue_ = nullptr;
-    vector<ProteinCluster> clusters_;
+    //vector<ProteinCluster> clusters_;
   
     int ring_size_;
     bool should_seed_ = false;
@@ -108,7 +107,7 @@ namespace tensorflow {
     inline Status DequeueChunk(OpKernelContext* ctx, Tensor& chunk, Tensor& num_recs, Tensor& sequence, Tensor& was_added) {
         Notification n;
           input_queue_->TryDequeue(ctx, [this, &n, &chunk, &num_recs, &sequence, 
-              &was_addedd](const QueueInterface::Tuple &tuple) {
+              &was_added](const QueueInterface::Tuple &tuple) {
               chunk = tuple[0];
               num_recs = tuple[1];
               sequence = tuple[2];
