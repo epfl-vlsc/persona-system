@@ -15,7 +15,6 @@
 #include <cstdint>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 
 namespace tensorflow {
 
@@ -31,25 +30,18 @@ namespace tensorflow {
   using namespace errors;
   using namespace format;
 
-  inline bool operator==(const Position& lhs, const Position& rhs) {
-    return (lhs.ref_index() == rhs.ref_index() && lhs.position() == rhs.position());
-  }
-
   class AGDProteinClusterOp : public OpKernel {
   public:
     AGDProteinClusterOp(OpKernelConstruction *context) : OpKernel(context) {
       // ring ID is compared to sequence ID of incoming chunks to see if we have processed it before
       // indicating it has made a full trip around the ring
       OP_REQUIRES_OK(context, context->GetAttr("ring_size", &ring_size_));
+
+      // should seed allows this node to seed a cluster if it has none
+      // only one op in the ring should_seed to more closely replicate single thread results
+      OP_REQUIRES_OK(context, context->GetAttr("should_seed", &should_seed_));
     }
 
-    Status InitHandles(OpKernelContext* ctx)
-    {
-      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufferpair_pool_));
-
-      return Status::OK();
-    }
-   
     Status Init(OpKernelContext* ctx) {
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 0), &input_queue_));
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 1), &neighbor_queue_));
@@ -63,13 +55,22 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
 
-      Tensor chunk_t, num_recs_t, seq_number_t, was_added_t;
+      /*Tensor chunk_t, num_recs_t, seq_number_t, was_added_t;
       bool done_chunk = false;
       while (!done_chunk) {
 
         OP_REQUIRES_OK(ctx, DequeueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t));
         auto sequence = sequence_t.scalar<int32>();
         int32 new_sequence = sequence + 1;
+        
+        auto chunk = chunk_t.scalar<string>();
+        auto num_seqs = num_seqs_t.scalar<int32>();
+        AGDRecordReader seqs_reader(chunk.data(), num_seqs);
+
+        const char * data;
+        size_t len;
+        Status s = seqs_reader.GetNextRecord(&data, &len);
+        OP_REQUIRES_OK(ctx, s);
 
         if (sequence == ring_size_) {
           // this chunk has been evaluated by all nodes
@@ -77,39 +78,20 @@ namespace tensorflow {
 
         }
         
-        if (clusters_.empty()) {
-          // seed a new cluster
+        if (clusters_.empty() && should_seed_) {
+          // seed a new cluster with first sequence
+        } else {
+          // pass this chunk to neighbor
         }
 
-        auto chunk = chunk_t.scalar<string>();
-        auto num_seqs = num_seqs_t.scalar<int32>();
-        AGDRecordReader seqs_reader(chunk.data(), num_seqs);
-
-        for (auto& cluster : clusters_) {
-          cluster.EvaluateSequence
-      }
-
+        while (s.ok()) {
+          for (auto& cluster : clusters_) {
+            cluster.EvaluateSequence
+        }
+      }*/
       
       
 
-      // get output buffer pairs (pair holds [index, data] to construct
-      // the results builder for output
-      /*ResourceContainer<BufferPair> *output_bufferpair_container;
-      OP_REQUIRES_OK(ctx, GetOutputBufferPair(ctx, &output_bufferpair_container));
-      auto output_bufferpair = output_bufferpair_container->get();
-      AlignmentResultBuilder results_builder;
-      results_builder.SetBufferPair(output_bufferpair);*/
-
-
-      Status s = results_reader.GetNextResult(result);
-
-      // this detection logic adapted from SamBlaster
-      while (s.ok()) {
-        // s = results_reader.GetNextResult(result);
-      } // while s is ok()
-
-      // done
-      resource_releaser(results_container);
       LOG(INFO) << "DONE running mark duplicates!! Found so far: " << num_dups_found_;
 
     }
@@ -118,8 +100,10 @@ namespace tensorflow {
     ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
     QueueInterface *input_queue_ = nullptr;
     QueueInterface *neighbor_queue_ = nullptr;
+    vector<ProteinCluster> clusters_;
   
     int ring_size_;
+    bool should_seed_ = false;
       
     inline Status DequeueChunk(OpKernelContext* ctx, Tensor& chunk, Tensor& num_recs, Tensor& sequence, Tensor& was_added) {
         Notification n;

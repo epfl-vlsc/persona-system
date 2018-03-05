@@ -8,10 +8,14 @@
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "tensorflow/contrib/persona/kernels/agd-ops/agd_reference_genome.h"
+#include "tensorflow/contrib/persona/kernels/protein_clustering/alignment_environment.h"
 
 namespace tensorflow {
 using namespace std;
 using namespace errors;
+
+#define DIMSIZE 26
+#define MDIM DIMSIZE*DIMSIZE
 
 class AlignmentEnvironmentsOp : public OpKernel {
  public:
@@ -22,9 +26,10 @@ class AlignmentEnvironmentsOp : public OpKernel {
     // OP_REQUIRES_OK(context, context->GetAttr("genome_location",
     // &genome_location_));
 
-    OP_REQUIRES_OK(context, context->GetAttr("double_matrices", &double_matrices_));
-    OP_REQUIRES_OK(context, context->GetAttr("int8_matrices", &int8_matrices_));
-    OP_REQUIRES_OK(context, context->GetAttr("int16_matrices", &int16_matrices_));
+    vector<TensorProto> double_matrices, int8_matrices, int16_matrices;
+    OP_REQUIRES_OK(context, context->GetAttr("double_matrices", &double_matrices));
+    OP_REQUIRES_OK(context, context->GetAttr("int8_matrices", &int8_matrices));
+    OP_REQUIRES_OK(context, context->GetAttr("int16_matrices", &int16_matrices));
     OP_REQUIRES_OK(context, context->GetAttr("gaps", &gaps_));
     OP_REQUIRES_OK(context, context->GetAttr("gap_extends", &gap_extends_));
     OP_REQUIRES_OK(context, context->GetAttr("thresholds", &thresholds_));
@@ -32,14 +37,35 @@ class AlignmentEnvironmentsOp : public OpKernel {
     double_matrices_t_.resize(gaps_.size());
     int8_matrices_t_.resize(gaps_.size());
     int16_matrices_t_.resize(gaps_.size());
+    double_matrices_.resize(gaps_.size());
+    int8_matrices_.resize(gaps_.size());
+    int16_matrices_.resize(gaps_.size());
 
     for (size_t i = 0; i < gaps_.size(); i++) {
-      OP_REQUIRES(context, double_matrices_t_[i].FromProto(double_matrices_),
+      // parse the tensor protos
+      OP_REQUIRES(context, double_matrices_t_[i].FromProto(double_matrices),
                   errors::Internal("failed to parse tensorproto"));
-      OP_REQUIRES(context, int8_matrices_t_[i].FromProto(int8_matrices_),
+      OP_REQUIRES(context, int8_matrices_t_[i].FromProto(int8_matrices),
                   errors::Internal("failed to parse tensorproto"));
-      OP_REQUIRES(context, int16_matrices_t_[i].FromProto(int16_matrices_),
+      OP_REQUIRES(context, int16_matrices_t_[i].FromProto(int16_matrices),
                   errors::Internal("failed to parse tensorproto"));
+
+      // this may not be necessary , but the layout MUST be row oriented contiguous
+      double_matrices_[i] = new double[MDIM];
+      int8_matrices_[i] = new int8[MDIM];
+      int16_matrices_[i] = new int16[MDIM];
+
+      auto td = double_matrices_t_[i].matrix<double>();
+      auto ti8 = int8_matrices_t_[i].matrix<int8>();
+      auto ti16 = int16_matrices_t_[i].matrix<int16>();
+
+      for (size_t rows = 0; rows < double_matrices_t_[i].dim_size(0); rows++) {
+          for (size_t cols = 0; cols < double_matrices_t_[i].dim_size(1); cols++) {
+              double_matrices_[i][rows*DIMSIZE + cols] = td(rows, cols);
+              int8_matrices_[i][rows*DIMSIZE + cols] = ti8(rows, cols);
+              int16_matrices_[i][rows*DIMSIZE + cols] = ti16(rows, cols);
+          }
+      }
     }
 
     OP_REQUIRES_OK(context,
@@ -50,7 +76,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
   void Compute(OpKernelContext* ctx) override {
     mutex_lock l(mu_);
     if (!object_handle_set_) {
-      OP_REQUIRES_OK(ctx, SetGenomeHandle(ctx, chunk_paths_));
+      OP_REQUIRES_OK(ctx, SetObjectHandle(ctx));
     }
     ctx->set_output_ref(0, &mu_, object_handle_.AccessTensor(ctx));
   }
@@ -68,14 +94,16 @@ class AlignmentEnvironmentsOp : public OpKernel {
   ContainerInfo cinfo_;
 
  private:
-  Status SetGenomeHandle(OpKernelContext* ctx, vector<string>& chunk_paths)
+  Status SetObjectHandle(OpKernelContext* ctx)
       EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     TF_RETURN_IF_ERROR(cinfo_.Init(ctx->resource_manager(), def()));
-    EnvsContainer* reference_genome;
+    EnvsContainer* object;
 
-    auto creator = [this, chunk_paths, ctx](EnvsContainer** envs) {
+    auto creator = [this, ctx](EnvsContainer** envs) {
       LOG(INFO) << "loading alignment environments ...";
       auto begin = std::chrono::high_resolution_clock::now();
+
+      AlignmentEnvironments* new_envs = new AlignmentEnvironments();
 
 
       auto end = std::chrono::high_resolution_clock::now();
@@ -90,7 +118,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
 
     TF_RETURN_IF_ERROR(
         cinfo_.resource_manager()->LookupOrCreate<EnvsContainer>(
-            cinfo_.container(), cinfo_.name(), &reference_genome, creator));
+            cinfo_.container(), cinfo_.name(), &object, creator));
 
     auto h = object_handle_.AccessTensor(ctx)->flat<string>();
     h(0) = cinfo_.container();
@@ -103,9 +131,9 @@ class AlignmentEnvironmentsOp : public OpKernel {
   // string genome_location_;
   PersistentTensor object_handle_ GUARDED_BY(mu_);
   bool object_handle_set_ GUARDED_BY(mu_);
-  vector<TensorProto> double_matrices_, int8_matrices_, int16_matrices_;
   vector<Tensor> double_matrices_t_, int8_matrices_t_, int16_matrices_t_;
   vector<double> gaps_, thresholds_, gap_extends_;
+  vector<double*> double_matrices_, int8_matrices_, int16_matrices_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("AlignmentEnvironments").Device(DEVICE_CPU),

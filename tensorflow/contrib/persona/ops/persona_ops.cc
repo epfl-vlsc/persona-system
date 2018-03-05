@@ -1446,5 +1446,28 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     shared_name: If non-empty, this queue will be shared under the given name
     across multiple sessions.
     )doc");
+    
+    REGISTER_OP("AlignmentEnvironments")
+    .Output("handle: Ref(string)")
+    .Attr("gaps: list(float)")
+    .Attr("gap_extends: list(float)")
+    .Attr("thresholds: list(float)")
+    .Attr("double_matrices: list(tensor = {dtype = DT_FLOAT64})")
+    .Attr("int8_matrices: list(tensor = {dtype = DT_INT8})")
+    .Attr("int16_matrices: list(tensor = {dtype = DT_INT16})")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .SetIsStateful()
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
+  .Doc(R"doc(
+    Op that creates an AlignmentEnvironments object for protein clustering operations.
+    container: If non-empty, this index is placed in the given container.
+    Otherwise, a default container is used.
+    shared_name: If non-empty, this queue will be shared under the given name
+    across multiple sessions.
+    )doc");
 
 }
