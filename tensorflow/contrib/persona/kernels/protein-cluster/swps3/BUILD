@@ -15,6 +15,7 @@ cc_library(
             "matrix.c",
             "fasta.c",
             "debug.c",
+            "EstimatePam.c",
             ],
     hdrs = ["swps3.h",
             "DynProgr_sse_short.h",
@@ -23,6 +24,7 @@ cc_library(
             "matrix.h",
             "debug.h",
             "fasta.h",
+            "EstimatePam.h",
             ],
     linkopts = [
         "-msse3"
