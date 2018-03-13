@@ -46,6 +46,7 @@ cc_library(
         "//tensorflow/contrib/persona/kernels/agd-format/proto:alignment_proto_cc",
         "//third_party/eigen3",
         "@protobuf_archive//:protobuf",
+        ":agd_remote_reader",
     ],
     alwayslink = 1,
 )

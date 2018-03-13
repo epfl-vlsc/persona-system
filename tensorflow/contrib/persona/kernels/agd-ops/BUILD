@@ -24,5 +24,7 @@ cc_library(
     linkopts = [
         "-lboost_system","-L/usr/local/lib"
     ],
-    deps = ["//tensorflow/contrib/persona/kernels/agd-format:agd_format"],
+    deps = ["//tensorflow/contrib/persona/kernels/agd-format:agd_format",
+            ":agd_ceph_ops"
+            ],
 )
