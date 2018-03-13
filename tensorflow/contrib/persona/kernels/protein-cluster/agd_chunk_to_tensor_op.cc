@@ -15,7 +15,6 @@
 #include <cstdint>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 
 namespace tensorflow {
 

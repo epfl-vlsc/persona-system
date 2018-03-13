@@ -18,7 +18,6 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/agd_record_reader.h"
 
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 
 namespace tensorflow {
   using namespace std;

@@ -7,7 +7,6 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool_op.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include "bwa_reads.h"
 
 namespace tensorflow {

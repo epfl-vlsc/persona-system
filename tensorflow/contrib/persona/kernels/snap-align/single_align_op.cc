@@ -23,7 +23,6 @@
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "SnapAlignerWrapper.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include "tensorflow/contrib/persona/kernels/snap-align/single_executor.h"
 
 namespace tensorflow {

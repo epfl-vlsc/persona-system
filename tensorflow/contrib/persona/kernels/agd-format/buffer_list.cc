@@ -2,7 +2,7 @@
 #include <string.h>
 #include "buffer_list.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
+//#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 
 namespace tensorflow {
 
