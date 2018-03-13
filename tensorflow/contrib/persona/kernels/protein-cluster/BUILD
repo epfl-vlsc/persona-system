@@ -1,6 +1,42 @@
 # sorting operations
 
+load(
+    "//tensorflow/core:platform/default/build_config.bzl",
+    "tf_proto_library_cc",
+)
 load("//tensorflow:tensorflow.bzl", "tf_copts")
+
+
+# compile swps3 into a lib with just the things we need (SSE, scalar)
+cc_library(
+    name = "swps3_lib",
+    srcs = [
+            "swps3/DynProgr_sse_short.c",
+            "swps3/DynProgr_sse_byte.c",
+            "swps3/DynProgr_scalar.c",
+            "swps3/matrix.c",
+            "swps3/fasta.c",
+            "swps3/debug.c",
+            "swps3/EstimatePam.c",
+            ],
+    hdrs = ["swps3/swps3.h",
+            "swps3/DynProgr_sse_short.h",
+            "swps3/DynProgr_sse_byte.h",
+            "swps3/DynProgr_scalar.h",
+            "swps3/matrix.h",
+            "swps3/debug.h",
+            "swps3/fasta.h",
+            "swps3/EstimatePam.h",
+            ],
+    linkopts = [
+        "-msse3"
+    ],
+    linkstatic = 1,
+    alwayslink = 1,
+    visibility = ["//visibility:public"],
+    copts = ["-msse3"]
+)
+
 
 cc_library(
     name = "protein_clustering",
@@ -8,9 +44,10 @@ cc_library(
     hdrs = glob(["*.h"]),
     copts = tf_copts(),
     #linkopts = ["-lrados"],
-    #linkstatic = 1,
+    linkstatic = 1,
+    alwayslink = 1,
     visibility = ["//visibility:public"],
-    deps = ["//tensorflow/contrib/persona/kernels/protein-cluster/swps3:swps3_lib",
+    deps = [":swps3_lib",
             "//tensorflow/core:framework_headers_lib",
             "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
             "//tensorflow/contrib/persona/kernels/agd-format:agd_format",

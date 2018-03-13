@@ -1,6 +1,8 @@
 #pragma once
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/EstimatePam.h"
+extern "C" {
+#include "swps3/EstimatePam.h"
+}
 #include <vector>
 
 namespace tensorflow {
@@ -21,13 +23,18 @@ class AlignmentEnvironment {
 
 class AlignmentEnvironments {
  public:
+  AlignmentEnvironments() {}
   void EstimatePam(char* seq1, char* seq2, int len);
   const AlignmentEnvironment& FindNearest(double pam);
+
+  void CreateDayMatrices(std::vector<double>& gap_open, std::vector<double>& gap_ext,
+      std::vector<double>& pam_dist, std::vector<double*>& matrices);
 
  private:
   std::vector<AlignmentEnvironment> envs_;
   DayMatrix* day_matrices_;
   double* logpam1_matrix_;
+  AlignmentEnvironment logpam_env_;
 };
 
 }

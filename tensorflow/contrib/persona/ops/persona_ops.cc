@@ -1449,12 +1449,18 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     
     REGISTER_OP("AlignmentEnvironments")
     .Output("handle: Ref(string)")
-    .Attr("gaps: list(float)")
-    .Attr("gap_extends: list(float)")
-    .Attr("thresholds: list(float)")
-    .Attr("double_matrices: list(tensor = {dtype = DT_FLOAT64})")
-    .Attr("int8_matrices: list(tensor = {dtype = DT_INT8})")
-    .Attr("int16_matrices: list(tensor = {dtype = DT_INT16})")
+    .Attr("gaps: tensor")
+    .Attr("gap_extends: tensor")
+    .Attr("pam_dists: tensor")
+    .Attr("thresholds: tensor")
+    .Attr("double_matrices: list(tensor)")
+    .Attr("int8_matrices: list(tensor)")
+    .Attr("int16_matrices: list(tensor)")
+    .Attr("logpam_matrix: tensor")
+    .Attr("logpam_gap: tensor")
+    .Attr("logpam_gap_ext: tensor")
+    .Attr("logpam_threshold: tensor")
+    .Attr("logpam_pam_dist: tensor")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
     .SetIsStateful()
@@ -1464,6 +1470,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
         })
   .Doc(R"doc(
     Op that creates an AlignmentEnvironments object for protein clustering operations.
+    gaps, gaps_exts, pam_dists, thresholds are float64 1D tensors of same size
     container: If non-empty, this index is placed in the given container.
     Otherwise, a default container is used.
     shared_name: If non-empty, this queue will be shared under the given name

@@ -26,21 +26,39 @@ class AlignmentEnvironmentsOp : public OpKernel {
     // &genome_location_));
 
     vector<Tensor> double_matrices, int8_matrices, int16_matrices;
+    Tensor logpam_matrix, gaps, gap_exts, pam_dists, thresholds;
     OP_REQUIRES_OK(context, context->GetAttr("double_matrices", &double_matrices));
     OP_REQUIRES_OK(context, context->GetAttr("int8_matrices", &int8_matrices));
     OP_REQUIRES_OK(context, context->GetAttr("int16_matrices", &int16_matrices));
-    OP_REQUIRES_OK(context, context->GetAttr("gaps", &gaps_));
-    OP_REQUIRES_OK(context, context->GetAttr("gap_extends", &gap_extends_));
-    OP_REQUIRES_OK(context, context->GetAttr("thresholds", &thresholds_));
+    OP_REQUIRES_OK(context, context->GetAttr("gaps", &gaps));
+    OP_REQUIRES_OK(context, context->GetAttr("gap_extends", &gap_exts));
+    OP_REQUIRES_OK(context, context->GetAttr("pam_dists", &pam_dists));
+    OP_REQUIRES_OK(context, context->GetAttr("thresholds", &thresholds));
+    //OP_REQUIRES_OK(context, context->GetAttr("logpam_matrix", &logpam_matrix));
 
-    double_matrices_t_.resize(gaps_.size());
-    int8_matrices_t_.resize(gaps_.size());
-    int16_matrices_t_.resize(gaps_.size());
-    double_matrices_.resize(gaps_.size());
-    int8_matrices_.resize(gaps_.size());
-    int16_matrices_.resize(gaps_.size());
+   
+    auto sz = double_matrices.size();
+    LOG(INFO) << "size is " << sz;
+    // we can only pass floats and not doubles as attributes what the fuck 
+    gaps_.reserve(sz);
+    gap_extends_.reserve(sz); 
+    pam_dists_.reserve(sz);
 
-    for (size_t i = 0; i < gaps_.size(); i++) {
+    double_matrices_t_.resize(sz);
+    int8_matrices_t_.resize(sz);
+    int16_matrices_t_.resize(sz);
+    double_matrices_.resize(sz);
+    int8_matrices_.resize(sz);
+    int16_matrices_.resize(sz);
+
+    auto gaps_vec = gaps.vec<double>();
+    auto gap_ext_vec = gap_exts.vec<double>();
+    auto pam_dists_vec = pam_dists.vec<double>();
+
+    for (size_t i = 0; i < sz; i++) {
+      gaps_.push_back(gaps_vec(i));
+      gap_extends_.push_back(gap_ext_vec(i));
+      pam_dists_.push_back(pam_dists_vec(i));
       // parse the tensor protos
       /*OP_REQUIRES(context, double_matrices_t_[i].FromProto(double_matrices[i]),
                   errors::Internal("failed to parse tensorproto"));
@@ -58,8 +76,24 @@ class AlignmentEnvironmentsOp : public OpKernel {
       auto ti8 = int8_matrices[i].matrix<int8>();
       auto ti16 = int16_matrices[i].matrix<int16>();
 
-      for (size_t rows = 0; rows < double_matrices_t_[i].dim_size(0); rows++) {
-          for (size_t cols = 0; cols < double_matrices_t_[i].dim_size(1); cols++) {
+      OP_REQUIRES(context, double_matrices[i].dim_size(0) != double_matrices[i].dim_size(1) != DIMSIZE,
+          errors::Internal("double matrix was not 26 x 26, was ", to_string(double_matrices[i].dim_size(0)), 
+              " x ", to_string(double_matrices[i].dim_size(1))));
+      OP_REQUIRES(context, int8_matrices[i].dim_size(0) != int8_matrices[i].dim_size(1) != DIMSIZE,
+          errors::Internal("int8 matrix was not 26 x 26, was ", to_string(int8_matrices[i].dim_size(0)), 
+              " x ", to_string(int8_matrices[i].dim_size(1))));
+      OP_REQUIRES(context, int16_matrices[i].dim_size(0) != int16_matrices[i].dim_size(1) != DIMSIZE,
+          errors::Internal("int16 matrix was not 26 x 26, was ", to_string(int16_matrices[i].dim_size(0)), 
+              " x ", to_string(int16_matrices[i].dim_size(1))));
+      //LOG(INFO) << double_matrices[i].dim_size(0) << " X " << double_matrices[i].dim_size(1);
+      for (size_t rows = 0; rows < double_matrices[i].dim_size(0); rows++) {
+          for (size_t cols = 0; cols < double_matrices[i].dim_size(1); cols++) {
+              // testing ...
+              if (i == 0) {
+                printf("%f ", td(rows, cols));
+                if (cols == double_matrices[i].dim_size(1) - 1)
+                  printf("\n");
+              }
               double_matrices_[i][rows*DIMSIZE + cols] = td(rows, cols);
               int8_matrices_[i][rows*DIMSIZE + cols] = ti8(rows, cols);
               int16_matrices_[i][rows*DIMSIZE + cols] = ti16(rows, cols);
@@ -104,6 +138,19 @@ class AlignmentEnvironmentsOp : public OpKernel {
 
       AlignmentEnvironments* new_envs = new AlignmentEnvironments();
 
+      // copies here are due to goofiness of dependencies (C source from 1980-something)
+      auto gaps_copy = gaps_;
+      gaps_copy.insert(gaps_copy.begin(), 0);  // some dependency needs a 1 based array wtf
+      auto gap_exs_copy = gap_extends_;
+      gap_exs_copy.insert(gap_exs_copy.begin(), 0);
+      auto pams_copy = pam_dists_;
+      pams_copy.insert(pams_copy.begin(), 0);
+      auto matrix_pointers = double_matrices_;
+      matrix_pointers.insert(matrix_pointers.begin(), 0);
+
+      new_envs->CreateDayMatrices(gaps_copy, gap_exs_copy, pams_copy, matrix_pointers); 
+
+
       std::unique_ptr<AlignmentEnvironments> value(new_envs);
 
       auto end = std::chrono::high_resolution_clock::now();
@@ -132,7 +179,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
   PersistentTensor object_handle_ GUARDED_BY(mu_);
   bool object_handle_set_ GUARDED_BY(mu_);
   vector<Tensor> double_matrices_t_, int8_matrices_t_, int16_matrices_t_;
-  vector<float> gaps_, thresholds_, gap_extends_;
+  vector<double> gaps_, thresholds_, gap_extends_, pam_dists_;
   vector<double*> double_matrices_;
   vector<int8*> int8_matrices_;
   vector<int16*> int16_matrices_;
