@@ -13,6 +13,14 @@ namespace tensorflow {
   const AlignmentEnvironment& AlignmentEnvironments::FindNearest(double pam) {
 
   }
+  
+  void AlignmentEnvironments::Initialize(std::vector<AlignmentEnvironment>& envs, AlignmentEnvironment& logpam_env, 
+      AlignmentEnvironment& just_score_env) {
+
+    envs_ = envs;
+    logpam_env_ = logpam_env;
+    just_score_env_ = just_score_env;
+  }
 
   void AlignmentEnvironments::CreateDayMatrices(vector<double>& gap_open, vector<double>& gap_ext,
       vector<double>& pam_dist, vector<double*>& matrices) {

@@ -7,7 +7,7 @@ extern "C" {
 
 namespace tensorflow {
 
-class AlignmentEnvironment {
+struct AlignmentEnvironment {
     double gap_open;
     double gap_extend;
     double pam_distance;
@@ -19,22 +19,30 @@ class AlignmentEnvironment {
     int16 gap_open_int16;
     int16 gap_ext_int16;
     int16* matrix_int16 = nullptr;
+
 };
 
 class AlignmentEnvironments {
+ // pointers here own no data
  public:
   AlignmentEnvironments() {}
   void EstimatePam(char* seq1, char* seq2, int len);
   const AlignmentEnvironment& FindNearest(double pam);
+  const AlignmentEnvironment& LogPamEnv();
+  const AlignmentEnvironment& JustScoreEnv();
 
+  // init methods
   void CreateDayMatrices(std::vector<double>& gap_open, std::vector<double>& gap_ext,
       std::vector<double>& pam_dist, std::vector<double*>& matrices);
+  void Initialize(std::vector<AlignmentEnvironment>& envs, AlignmentEnvironment& logpam_env, 
+      AlignmentEnvironment& just_score_env);
 
  private:
   std::vector<AlignmentEnvironment> envs_;
   DayMatrix* day_matrices_;
-  double* logpam1_matrix_;
+  //double* logpam1_matrix_;
   AlignmentEnvironment logpam_env_;
+  AlignmentEnvironment just_score_env_;
 };
 
 }

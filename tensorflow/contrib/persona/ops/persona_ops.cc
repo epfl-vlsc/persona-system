@@ -1454,8 +1454,6 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Attr("pam_dists: tensor")
     .Attr("thresholds: tensor")
     .Attr("double_matrices: list(tensor)")
-    .Attr("int8_matrices: list(tensor)")
-    .Attr("int16_matrices: list(tensor)")
     .Attr("logpam_matrix: tensor")
     .Attr("logpam_gap: tensor")
     .Attr("logpam_gap_ext: tensor")
