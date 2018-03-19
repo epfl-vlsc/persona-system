@@ -387,7 +387,6 @@ Prints records to stdout from record indices `start` to `finish`.
 Conpress the given data into a CIGAR with additional information.
 
 Format of a regular cigar with "|" as delimiter.
-
     )doc");
 
     REGISTER_OP("AGDBaseDecompression")

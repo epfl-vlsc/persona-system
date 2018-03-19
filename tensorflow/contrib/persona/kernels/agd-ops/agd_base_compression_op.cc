@@ -33,6 +33,7 @@ namespace tensorflow {
      }
   }//namespace end
 
+
   class AGDBaseCompressionOp : public OpKernel {
   public:
     //Constructor
@@ -164,6 +165,7 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
     bool unpack_;
     vector<string> columns_;
   };//class end
+
 
   REGISTER_KERNEL_BUILDER(Name("AGDBaseCompression").Device(DEVICE_CPU), AGDBaseCompressionOp);
 } //  namespace tensorflow {
