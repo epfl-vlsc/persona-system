@@ -169,7 +169,7 @@ the number of examples in the `Dataset` ensures that the data is completely
 shuffled. The Iris data set only contains 150 examples.
 
 The @{tf.data.Dataset.repeat$`repeat`} method has the `Dataset` restart when
-it reaches the end. To limit the number of epochss, set the `count` argument.
+it reaches the end. To limit the number of epochs, set the `count` argument.
 
 The @{tf.data.Dataset.repeat$`batch`} method collects a number of examples and
 stacks them, to create batches. This adds a dimension to their shape. The new
@@ -282,7 +282,7 @@ produce the necessary `(features, label)` pairs.
 
 We will start by building a function to parse a single line.
 
-The following `iris_data.parse_line` function acomplishes this taks using the
+The following `iris_data.parse_line` function accomplishes this task using the
 @{tf.decode_csv} function, and some simple python code:
 
 We must parse each of the lines in the dataset in order to generate the
@@ -291,7 +291,7 @@ calls @{tf.decode_csv} to parse a single line into its features
 and the label. Since Estimators require that features be represented as a
 dictionary, we rely on Python's built-in `dict` and `zip` functions to build
 that dictionary.  The feature names are the keys of that dictionary.
-We then then call the dictionary's `pop` method to remove the label field from
+We then call the dictionary's `pop` method to remove the label field from
 the features dictionary:
 
 ``` python

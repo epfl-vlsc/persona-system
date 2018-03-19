@@ -153,6 +153,7 @@ if (tensorflow_BUILD_PYTHON_TESTS)
     "${tensorflow_source_dir}/tensorflow/python/profiler/internal/*_test.py"
     "${tensorflow_source_dir}/tensorflow/python/saved_model/*_test.py"
     "${tensorflow_source_dir}/tensorflow/python/training/*_test.py"
+    "${tensorflow_source_dir}/tensorflow/contrib/coder/*_test.py"
     "${tensorflow_source_dir}/tensorflow/contrib/data/*_test.py"
     "${tensorflow_source_dir}/tensorflow/contrib/factorization/*_test.py"
     "${tensorflow_source_dir}/tensorflow/contrib/image/*_test.py"
@@ -226,6 +227,7 @@ if (tensorflow_BUILD_PYTHON_TESTS)
       "${tensorflow_source_dir}/tensorflow/python/kernel_tests/as_string_op_test.py"
       "${tensorflow_source_dir}/tensorflow/python/kernel_tests/string_to_number_op_test.py"
       "${tensorflow_source_dir}/tensorflow/python/kernel_tests/clip_ops_test.py"
+      "${tensorflow_source_dir}/tensorflow/python/kernel_tests/list_ops_test.py"  # Needs portpicker.
       "${tensorflow_source_dir}/tensorflow/python/kernel_tests/tensor_array_ops_test.py"  # Needs portpicker.
       # Numerical issues, calculations off.
       "${tensorflow_source_dir}/tensorflow/python/kernel_tests/concat_op_test.py"
@@ -306,6 +308,10 @@ if (tensorflow_BUILD_PYTHON_TESTS)
       # Depends on python/framework/test_ops
       "${tensorflow_source_dir}/tensorflow/python/kernel_tests/array_ops_test.py"
       "${tensorflow_source_dir}/tensorflow/python/kernel_tests/control_flow_util_test.py"
+      # Flaky replicate_model_fn_test
+      "${tensorflow_source_dir}/tensorflow/contrib/estimator/python/estimator/replicate_model_fn_test.py"  # b/71901810
+      # Broken io_utils_test
+      "${tensorflow_source_dir}/tensorflow/python/keras/_impl/keras/utils/io_utils_test.py"  # b/72894325
   )
   endif()
   list(REMOVE_ITEM tf_test_src_py ${tf_test_src_py_exclude})
@@ -373,7 +379,6 @@ if (tensorflow_BUILD_CC_TESTS)
     "${tensorflow_source_dir}/tensorflow/core/distributed_runtime/tensor_coding_test.cc"
     "${tensorflow_source_dir}/tensorflow/core/kernels/remote_fused_graph_rewriter_transform_test.cc"
     "${tensorflow_source_dir}/tensorflow/core/kernels/hexagon/graph_transferer_test.cc"
-    "${tensorflow_source_dir}/tensorflow/core/kernels/hexagon/quantized_matmul_op_for_hexagon_test.cc"
   )
 
   if (NOT tensorflow_ENABLE_GPU)

@@ -31,6 +31,7 @@ from tensorflow.python.framework import sparse_tensor as sparse_tensor_lib
 from tensorflow.python.keras._impl.keras import backend as K
 from tensorflow.python.keras._impl.keras import models
 from tensorflow.python.keras._impl.keras.utils.generic_utils import CustomObjectScope
+from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import metrics as metrics_module
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.saved_model import signature_constants
@@ -38,6 +39,14 @@ from tensorflow.python.training import saver as saver_lib
 from tensorflow.python.training import training_util
 
 _DEFAULT_SERVING_KEY = signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY
+
+
+def _cast_tensor_to_floatx(x):
+  """Cast tensor to keras's floatx dtype if it is not already the same dtype."""
+  if x.dtype == K.floatx():
+    return x
+  else:
+    return math_ops.cast(x, K.floatx())
 
 
 def _create_ordered_io(keras_model, estimator_io_dict, is_input=True):
@@ -68,7 +77,7 @@ def _create_ordered_io(keras_model, estimator_io_dict, is_input=True):
                                         ', '.join(keras_io_names)))
   tensors = []
   for io_name in keras_io_names:
-    tensors.append(estimator_io_dict[io_name])
+    tensors.append(_cast_tensor_to_floatx(estimator_io_dict[io_name]))
   return tensors
 
 
@@ -116,7 +125,8 @@ def _clone_and_build_model(mode,
       target_tensors = _create_ordered_io(keras_model, labels, is_input=False)
     else:
       target_tensors = [
-          sparse_tensor_lib.convert_to_tensor_or_sparse_tensor(labels)
+          _cast_tensor_to_floatx(
+              sparse_tensor_lib.convert_to_tensor_or_sparse_tensor(labels))
       ]
 
     model.compile(
@@ -211,18 +221,18 @@ def _save_first_checkpoint(keras_model, estimator, custom_objects,
   Returns:
     The model_fn for a keras Estimator.
   """
-  with ops.Graph().as_default() as g, g.device(estimator._device_fn):
-    random_seed.set_random_seed(estimator.config.tf_random_seed)
-    training_util.create_global_step()
-    model = _clone_and_build_model(model_fn_lib.ModeKeys.TRAIN, keras_model,
-                                   custom_objects)
-
-    if isinstance(model, models.Sequential):
-      model = model.model
-    # Load weights and save to checkpoint if there is no checkpoint
-    latest_path = saver_lib.latest_checkpoint(estimator.model_dir)
-    if not latest_path:
-      with session.Session() as sess:
+  # Load weights and save to checkpoint if there is no checkpoint
+  latest_path = saver_lib.latest_checkpoint(estimator.model_dir)
+  if not latest_path:
+    with ops.Graph().as_default():
+      random_seed.set_random_seed(estimator.config.tf_random_seed)
+      training_util.create_global_step()
+      model = _clone_and_build_model(model_fn_lib.ModeKeys.TRAIN, keras_model,
+                                     custom_objects)
+      if isinstance(model, models.Sequential):
+        model = model.model
+      # save to checkpoint
+      with session.Session(config=estimator._session_config) as sess:
         model.set_weights(keras_weights)
         # Make update ops and initialize all variables.
         if not model.train_function:

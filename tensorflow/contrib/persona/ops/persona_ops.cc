@@ -188,7 +188,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
         })
     .SetIsStateful()
     .Doc(R"doc(
-    Converts aligned AGD to SGA 
+    Converts aligned AGD to SGA
     )doc");
 
  REGISTER_OP("Compression")
@@ -211,7 +211,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
         })
     .SetIsStateful()
     .Doc(R"doc(
-    Compresses the bases 
+    Compresses the bases
     )doc");
 
     REGISTER_OP("AGDConverter")
@@ -233,7 +233,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
   .Doc(R"doc(
 Converts an input file into three files of bases, qualities, and metadata
 )doc");
-    
+
     REGISTER_OP("AGDFastaConverter")
     .Attr("is_nucleotide: bool = true")
     .Input("buffer_pair_pool: Ref(string)")
@@ -374,14 +374,20 @@ Prints records to stdout from record indices `start` to `finish`.
 
     REGISTER_OP("AGDBaseCompression")
     .Attr("unpack: bool = true")
-    .Attr("columns: list(string)")
-    .Input("chunk_names: string")
+    .Input("results: string")
+    .Input("records : string")
     .Input("chunk_size: int32")
-    .Input("start: int32")
-    .Input("finish: int32")
+    .Output("ret : int32")
+    .SetShapeFn([](InferenceContext *c) {
+                c->set_output(0, c->Scalar());
+        return Status::OK();
+        })
     .SetIsStateful()
     .Doc(R"doc(
-     compresses the base string using the cigar
+Conpress the given data into a CIGAR with additional information.
+
+Format of a regular cigar with "|" as delimiter.
+
     )doc");
 
     REGISTER_OP("AGDBaseDecompression")
@@ -580,7 +586,7 @@ file_handle: a Tensor(2) of strings to access the file resource in downstream no
     REGISTER_OP("FastaChunker")
     .Attr("chunk_size: int >= 1")
     .Input("queue_handle: resource")
-    .Input("fasta_file: string") 
+    .Input("fasta_file: string")
     .Input("fasta_pool: Ref(string)")
     .SetShapeFn([](InferenceContext *c) {
         ShapeHandle fastq_file;
@@ -607,7 +613,7 @@ Chunks fasta files for processing into AGD chunks.
     REGISTER_OP("FastqChunker")
     .Attr("chunk_size: int >= 1")
     .Input("queue_handle: resource")
-    .Input("fastq_file: string") 
+    .Input("fastq_file: string")
     .Input("fastq_pool: Ref(string)")
     .SetShapeFn([](InferenceContext *c) {
         ShapeHandle fastq_file;
@@ -635,7 +641,7 @@ Chunks fasta files for processing into AGD chunks.
     .Attr("chunk_size: int >= 1")
     .Input("queue_handle: resource")
     .Input("fastq_file_0: string")
-    .Input("fastq_file_1: string") 
+    .Input("fastq_file_1: string")
     .Input("fastq_pool: Ref(string)")
     .SetShapeFn([](InferenceContext *c) {
         ShapeHandle fastq_file;
@@ -1022,7 +1028,7 @@ for optimal performance.
   .Output("result_buf_handle: string")
     .SetIsStateful()
     .Doc(R"doc(
-  Run single-ended alignment with BWA MEM. 
+  Run single-ended alignment with BWA MEM.
   max_secondary must be at least 1 for chimeric reads that BWA may output.
 )doc");
 
@@ -1043,7 +1049,7 @@ for optimal performance.
         return Status::OK();
         })
     .Doc(R"doc(
-  Run single-ended alignment with BWA MEM. 
+  Run single-ended alignment with BWA MEM.
   max_secondary must be at least 1 for chimeric reads that BWA may output.
   Must use the BWA paired executor for `executor_handle`.
 )doc");
@@ -1188,7 +1194,7 @@ This uses the same buffer, and can handle any Data type that exposes mutable acc
         return Status::OK();
         })
   .Doc(R"doc(
-Import AGD chunks from a BAM file. The BAM can be aligned or unaligned. 
+Import AGD chunks from a BAM file. The BAM can be aligned or unaligned.
 If paired, sort order MUST be by ID (metadata).
 This op (currently) will skip secondary or supplemental alignments.
 
@@ -1222,7 +1228,7 @@ num_records: number of records in output. Usually `chunk_size` except for the la
         return Status::OK();
         })
   .Doc(R"doc(
-Import AGD chunks from a SRA file. 
+Import AGD chunks from a SRA file.
 
 path: the full path of the SRA file
 num_threads: number of threads to give SRA reader
@@ -1261,7 +1267,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   Not all tags for SAM/BAM are currently supported, but support
   is planned. Currently supported is only required tags.
 
-  RG and aux data is currently not supported. 
+  RG and aux data is currently not supported.
 
   results_handle: matrix of all results columns
   path: path for output .bam file
@@ -1426,4 +1432,25 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .Doc(R"doc(
   Compresses the prepared buffer_list records and into individual buffers, and then outputs them
   )doc");
+
+    REGISTER_OP("AGDReferenceGenome")
+    .Output("handle: Ref(string)")
+    .Attr("chunk_paths: list(string)")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .SetIsStateful()
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
+  .Doc(R"doc(
+    An op that creates a handle to an object containing an AGD reference genome dataset loaded into memory.
+    handle: The handle to the AGDReferenceGenome resource.
+    chunk_paths: The paths to the chunk files of the dataset storing the reference without extensions [refdata_0, refdata_1, etc] from the AGD metadata file.
+    container: If non-empty, this index is placed in the given container.
+    Otherwise, a default container is used.
+    shared_name: If non-empty, this queue will be shared under the given name
+    across multiple sessions.
+    )doc");
+
 }

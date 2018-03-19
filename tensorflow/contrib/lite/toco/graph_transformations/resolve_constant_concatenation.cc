@@ -179,13 +179,20 @@ bool ResolveConstantConcatenation::Run(Model* model, std::size_t op_index) {
       ConcatenateTensorBuffers<ArrayDataType::kInt64>(
           input_arrays, concatenation_axis, &concatenated_array);
       break;
+    case ArrayDataType::kString:
+      ConcatenateTensorBuffers<ArrayDataType::kString>(
+          input_arrays, concatenation_axis, &concatenated_array);
+      break;
     default:
       LOG(FATAL) << "ArrayDataType not supported";
   }
 
   // Remove all the resolved arrays.
   for (const string& input_name : concat_op->inputs) {
-    model->arrays.erase(input_name);
+    // Check to prevent removal of shared tensors
+    if(CountOpsWithInput(*model, input_name) == 1) {
+      model->EraseArray(input_name);
+    }
   }
 
   // Remove concatenate operator

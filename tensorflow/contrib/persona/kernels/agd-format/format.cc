@@ -108,13 +108,15 @@ BinaryBases::getBase(const size_t position, char* base) const
 }
 
 Status
-IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases)
+IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector<BinaryBases> &bases, bool warning)
 {
   bases.clear();
   size_t base_idx = 0;
   BinaryBases bb;
   for (size_t i = 0; i < fastq_base_size; i++) {
-    TF_RETURN_IF_ERROR(bb.setBase(fastq_base[i], base_idx++));
+    if (fastq_base[i] == '\n') // some fastq/fasta records have newlines in them, skip
+      continue;
+    TF_RETURN_IF_ERROR(bb.setBase(fastq_base[i], base_idx++, warning));
     if (base_idx == bb.compression) {
       bases.push_back(bb); // this should be a copy, by C++ default behavior
       bb.bases = 0;
@@ -127,7 +129,7 @@ IntoBases(const char *fastq_base, const std::size_t fastq_base_size, std::vector
   return Status::OK();
 }
 
-Status BinaryBases::setBase(const char base, size_t position) {
+Status BinaryBases::setBase(const char base, size_t position, bool warning) {
   BaseAlphabet b;
   switch (base) {
   case 'a':
@@ -151,8 +153,13 @@ Status BinaryBases::setBase(const char base, size_t position) {
     b = BaseAlphabet::N;
     break;
   default:
-    return InvalidArgument("Unable to convert the following base character: ", string(&base, 1),
-    " are you sure this column is base pair data?");
+    if (warning) {
+      b = BaseAlphabet::N;
+      LOG(INFO) << "Warning: base " << string(&base, 1) << " is not compatible and will be changed to 'N'.";
+    } else {
+      return InvalidArgument("Unable to convert the following base character: ", string(&base, 1),
+      " are you sure this column is base pair data?");
+    }
   }
 
   return setBaseAtPosition(b, position);
