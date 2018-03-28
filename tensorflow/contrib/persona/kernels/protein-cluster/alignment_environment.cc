@@ -10,8 +10,16 @@ namespace tensorflow {
 
   }
   
-  const AlignmentEnvironment& AlignmentEnvironments::FindNearest(double pam) {
+  const AlignmentEnvironment& AlignmentEnvironments::FindNearest(double pam) const {
 
+  }
+  
+  const AlignmentEnvironment& AlignmentEnvironments::LogPamEnv() const {
+    return logpam_env_;
+  }
+
+  const AlignmentEnvironment& AlignmentEnvironments::JustScoreEnv() const {
+    return just_score_env_;
   }
   
   void AlignmentEnvironments::Initialize(std::vector<AlignmentEnvironment>& envs, AlignmentEnvironment& logpam_env, 

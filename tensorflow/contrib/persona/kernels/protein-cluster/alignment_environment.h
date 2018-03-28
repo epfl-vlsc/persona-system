@@ -19,7 +19,6 @@ struct AlignmentEnvironment {
     int16 gap_open_int16;
     int16 gap_ext_int16;
     int16* matrix_int16 = nullptr;
-
 };
 
 class AlignmentEnvironments {
@@ -27,9 +26,9 @@ class AlignmentEnvironments {
  public:
   AlignmentEnvironments() {}
   void EstimatePam(char* seq1, char* seq2, int len);
-  const AlignmentEnvironment& FindNearest(double pam);
-  const AlignmentEnvironment& LogPamEnv();
-  const AlignmentEnvironment& JustScoreEnv();
+  const AlignmentEnvironment& FindNearest(double pam) const;
+  const AlignmentEnvironment& LogPamEnv() const;
+  const AlignmentEnvironment& JustScoreEnv() const;
 
   // init methods
   void CreateDayMatrices(std::vector<double>& gap_open, std::vector<double>& gap_ext,

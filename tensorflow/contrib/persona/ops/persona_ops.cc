@@ -1475,4 +1475,25 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     across multiple sessions.
     )doc");
 
+    REGISTER_OP("AGDProteinCluster")
+    .Attr("ring_size: int >= 1")
+    .Attr("should_seed: bool = false")
+    .Attr("total_chunks: int >= 1")
+    .Attr("min_score: int >= 1")
+    .Attr("subsequence_homology: bool = true")
+    .Attr("max_reps: int >= 1")
+    .Attr("max_n_aa_not_covered: int >= 1")
+    .Attr("node_id: int >= 0")
+    .Input("input_queue: resource")
+    .Input("neighbor_queue: resource")
+    .Input("neighbor_queue_out: resource")
+    .Input("cluster_queue: resource")
+    .Input("alignment_envs: Ref(string)")
+    .Output("whatevs: string")
+    .Doc(R"doc(
+    Op that is meant to be structured in a ring, taking input from input_queue
+    and neighbor_queue (preferring neighbor_queue, the link in the ring), aligning 
+    and clustering proteins therein, and maintaining the clusters created from chunks that were dequeued from 
+    the input_queue. 
+    )doc");
 }

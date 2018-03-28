@@ -59,11 +59,13 @@ namespace tensorflow {
             OP_REQUIRES_OK(ctx, AppendRecord(meta, meta_len, metadata_buf));
             LOG(INFO) << "meta: " << string(meta, meta_len);
             //LOG(INFO) << "0: base: " << string(bases, bases_len);
-            if (is_nucleotide_) {
-              OP_REQUIRES_OK(ctx, IntoBases(bases, bases_len, bases_, true /* warning, prevent crash and convert */));
+            /*if (is_nucleotide_) {
+              OP_REQUIRES_OK(ctx, IntoBases(bases, bases_len, bases_, true));
               OP_REQUIRES_OK(ctx, AppendRecord(&bases_[0], bases_.size(), bases_buf));
-            } else
-              OP_REQUIRES_OK(ctx, AppendWithNewlines(bases, bases_len, bases_buf));
+            } else*/
+           
+            // fasta data typically has newlines in the records
+            OP_REQUIRES_OK(ctx, AppendWithNewlines(bases, bases_len, bases_buf));
 
             // not bothering to use base compaction yet, would make loading refs super expensive
             //OP_REQUIRES_OK(ctx, AppendWithNewlines(bases, bases_len, bases_buf));
@@ -78,6 +80,7 @@ namespace tensorflow {
   private:
     ReferencePool<BufferPair> *bufpair_pool_ = nullptr;
     vector<BinaryBases> bases_;
+    vector<char> scratch_;
     bool is_nucleotide_ = true;
 
     template <typename T>
@@ -116,13 +119,45 @@ namespace tensorflow {
           ptr++;
         }
         if (*ptr == '\n') {
-          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr)); // exclude newline
+          size_t sz = ptr - prev_ptr;
+          if (!is_nucleotide_) {
+
+            // normalize the protein values
+            if (sz > scratch_.size())
+              scratch_.resize(sz);
+
+            memcpy(&scratch_[0], prev_ptr, sz);
+
+            for (size_t i = 0; i < sz; i++)
+              if (scratch_[i] != '_')
+                scratch_[i] = scratch_[i] - 'A'; // "normalize" the protein values
+
+            TF_RETURN_IF_ERROR(data_buf.AppendBuffer(&scratch_[0], sz));
+          } else {
+            TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, sz)); // exclude newline, orig
+          }
           //LOG(INFO) << "appending subsequence: " << string(prev_ptr, ptr - prev_ptr) << "|";
           converted_size--;
           ptr++;
           prev_ptr = ptr;
         } else {
-          TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, ptr - prev_ptr + 1));
+          size_t sz = ptr - prev_ptr + 1;
+          if (!is_nucleotide_) {
+
+            // normalize the protein values
+            if (sz > scratch_.size())
+              scratch_.resize(sz);
+
+            memcpy(&scratch_[0], prev_ptr, sz);
+
+            for (size_t i = 0; i < sz; i++)
+              if (scratch_[i] != '_')
+                scratch_[i] = scratch_[i] - 'A'; // "normalize" the protein values
+
+            TF_RETURN_IF_ERROR(data_buf.AppendBuffer(&scratch_[0], sz));
+          } else {
+            TF_RETURN_IF_ERROR(data_buf.AppendBuffer(prev_ptr, sz));
+          }
           //LOG(INFO) << "appending sequence: " << string(prev_ptr, ptr - prev_ptr) << "|";
           break;
         }

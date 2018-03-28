@@ -256,14 +256,14 @@ class AlignmentEnvironmentsOp : public OpKernel {
       justscoreenv.matrix_int16 = CreateScaled(justscoreenv.matrix, justscoreenv.threshold, justscoreenv.gap_open,
           justscoreenv.gap_extend, justscoreenv.gap_open_int16, justscoreenv.gap_ext_int16);
 
-      printf("gap: %.10f\n", justscoreenv.gap_open);
+      /*printf("gap: %.10f\n", justscoreenv.gap_open);
       printf("just score matrix\n");
       for (size_t i = 0; i < DIMSIZE; i++) {
         for (size_t j = 0; j < DIMSIZE; j++) {
           printf("%d ", justscoreenv.matrix_int8[i*DIMSIZE + j]);
         }
         printf("\n");
-      }
+      }*/
 
       new_envs->Initialize(all_envs, logpamenv, justscoreenv);
 
