@@ -51,7 +51,7 @@ namespace tensorflow {
     
       auto base_data = chunk_container->get()->data();
       Tensor* data_out_t = NULL;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape(),
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("tensor_out", TensorShape(),
             &data_out_t));
       auto data_out = data_out_t->scalar<string>();
       data_out() = string(base_data, chunk_container->get()->size());

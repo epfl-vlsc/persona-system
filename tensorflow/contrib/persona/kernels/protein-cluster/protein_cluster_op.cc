@@ -56,6 +56,8 @@ namespace tensorflow {
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 3), &cluster_queue_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "alignment_envs", &alignment_envs_container_));
       envs_ = alignment_envs_container_->get();
+      LOG(INFO) << "done init";
+      return Status::OK();
     }
 
     string PrintNormalizedProtein(const char* seq, size_t len) {
@@ -87,6 +89,7 @@ namespace tensorflow {
 
       OP_REQUIRES_OK(ctx, DequeueChunk(ctx, chunk_t, num_recs_t, sequence_t, 
             was_added_t, coverages_t));
+      LOG(INFO) << "Node " << to_string(node_id_) << " dequeued a chunk ";
 
       auto sequence = sequence_t.scalar<int32>()();
       int32 new_sequence = sequence + 1;
@@ -98,12 +101,16 @@ namespace tensorflow {
       const char * data;
       size_t len;
       Status s = seqs_reader.GetNextRecord(&data, &len);
+      LOG(INFO) << "Node " << to_string(node_id_) << " seq reader stat is  " << s;
+
       OP_REQUIRES_OK(ctx, s);
+      LOG(INFO) << "Node " << to_string(node_id_) << " seq is " << sequence;
 
       if (sequence == ring_size_) {
         // this chunk has been evaluated by all nodes
         // create new clusters for any non added proteins
         LOG(INFO) << "Node " << to_string(node_id_) << " seen this chunk, dumping " + to_string(sequence) + " and creating clusters";
+        return;
 
       }
 
@@ -166,12 +173,17 @@ namespace tensorflow {
      
     inline Status DequeueChunk(OpKernelContext* ctx, Tensor& chunk, Tensor& num_recs, 
         Tensor& sequence, Tensor& was_added, Tensor& coverages) {
+        
+      LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing ...";
 
       // prefer to dequeue neighbor queue, otherwise attempt to dequeue the main input
       if (neighbor_queue_->size() > 0) {
+      
+        LOG(INFO) << "Node " << to_string(node_id_) << " neighbor size is " << neighbor_queue_->size();
         // dequeue neighbor
-      } else if (!input_queue_->is_closed()) {
+      } else if (!input_queue_->is_closed() || input_queue_->is_closed() && input_queue_->size() > 0) {
         // dequeue input
+        LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing input";
         
         Notification n;
         input_queue_->TryDequeue(ctx, [ctx, &n, &chunk, &num_recs, &sequence, 
@@ -196,6 +208,7 @@ namespace tensorflow {
       } 
 
       // dequeue neighbor, and wait
+      LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing neighbor";
       Notification n;
       neighbor_queue_->TryDequeue(ctx, [ctx, &n, &chunk, &num_recs, &sequence, 
           &was_added, &coverages](const QueueInterface::Tuple &tuple) {
@@ -220,7 +233,7 @@ namespace tensorflow {
         const Tensor& coverages) {
       Notification n;
       QueueInterface::Tuple tuple;
-      tuple.resize(4);
+      tuple.resize(5);
       tuple[0] = chunk; tuple[1] = num_recs;
       tuple[2] = sequence; tuple[3] = was_added;
       tuple[4] = coverages;

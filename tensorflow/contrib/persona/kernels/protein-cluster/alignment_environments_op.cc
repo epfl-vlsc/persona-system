@@ -103,11 +103,11 @@ class AlignmentEnvironmentsOp : public OpKernel {
       for (size_t rows = 0; rows < double_matrices[i].dim_size(0); rows++) {
           for (size_t cols = 0; cols < double_matrices[i].dim_size(1); cols++) {
               // testing ...
-              if (i == 0) {
+              /*if (i == 0) {
                 printf("%f ", td(rows, cols));
                 if (cols == double_matrices[i].dim_size(1) - 1)
                   printf("\n");
-              }
+              }*/
               double_matrices_[i][rows*DIMSIZE + cols] = td(rows, cols);
           }
       }

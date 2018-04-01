@@ -1490,10 +1490,25 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Input("cluster_queue: resource")
     .Input("alignment_envs: Ref(string)")
     .Output("whatevs: string")
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Scalar());
+        return Status::OK();
+        })
     .Doc(R"doc(
     Op that is meant to be structured in a ring, taking input from input_queue
     and neighbor_queue (preferring neighbor_queue, the link in the ring), aligning 
     and clustering proteins therein, and maintaining the clusters created from chunks that were dequeued from 
     the input_queue. 
+    )doc");
+    
+    REGISTER_OP("AGDChunkToTensor")
+    .Input("chunk: string")
+    .Output("tensor_out: string")
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Scalar());
+        return Status::OK();
+        })
+    .Doc(R"doc(
+    Op that converts a chunk to a scalar string tensor.
     )doc");
 }
