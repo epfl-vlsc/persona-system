@@ -1484,12 +1484,14 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Attr("max_reps: int >= 1")
     .Attr("max_n_aa_not_covered: int >= 1")
     .Attr("node_id: int >= 0")
+    .Attr("chunk_size: int >= 0")
     .Input("input_queue: resource")
     .Input("neighbor_queue: resource")
     .Input("neighbor_queue_out: resource")
     .Input("cluster_queue: resource")
     .Input("alignment_envs: Ref(string)")
     .Output("whatevs: string")
+    .SetIsStateful()
     .SetShapeFn([](InferenceContext *c) {
         c->set_output(0, c->Scalar());
         return Status::OK();

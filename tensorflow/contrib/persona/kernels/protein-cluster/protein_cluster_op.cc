@@ -8,6 +8,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/cluster.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_environment.h"
 
 namespace tensorflow {
@@ -37,6 +38,7 @@ namespace tensorflow {
 
       // we keep processing until we have seen all the chunks
       OP_REQUIRES_OK(context, context->GetAttr("total_chunks", &total_chunks_));
+      OP_REQUIRES_OK(context, context->GetAttr("chunk_size", &chunk_size_));
       
       OP_REQUIRES_OK(context, context->GetAttr("min_score", &params_.min_score));
       OP_REQUIRES_OK(context, context->GetAttr("subsequence_homology", &params_.subsequence_homology));
@@ -79,6 +81,9 @@ namespace tensorflow {
       if (num_chunks_ == total_chunks_) {
         // not 100% sure if this can happen yet
         // just pass to neighbor because we are done
+        LOG(INFO) << "Node " << to_string(node_id_) << " num chunk is TOTAL CHUNK!";
+        ctx->SetStatus(errors::OutOfRange("cluster is done"));
+        return;
       }
 
       // continues computing until it has seen all chunks
@@ -96,6 +101,7 @@ namespace tensorflow {
 
       auto chunk = chunk_t.scalar<string>()();
       auto num_seqs = num_recs_t.scalar<int32>()();
+
       AGDRecordReader seqs_reader(chunk.data(), num_seqs);
 
       const char * data;
@@ -105,28 +111,44 @@ namespace tensorflow {
 
       OP_REQUIRES_OK(ctx, s);
       LOG(INFO) << "Node " << to_string(node_id_) << " seq is " << sequence;
-
+      
       if (sequence == ring_size_) {
         // this chunk has been evaluated by all nodes
         // create new clusters for any non added proteins
         LOG(INFO) << "Node " << to_string(node_id_) << " seen this chunk, dumping " + to_string(sequence) + " and creating clusters";
+
+        // create clusters
+        
+
+        Tensor* out;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &out));
+        out->scalar<string>()() = "Node " + to_string(node_id_) + " execution is done";
         return;
 
       }
 
-      /*if (clusters_.empty() && should_seed_) {
-      // seed a new cluster with first sequence
+      if (clusters_.empty() && should_seed_) {
+        // seed a new cluster with first sequence
+        
       } else {
-      // pass this chunk to neighbor
-      }*/
-
+        // pass this chunk to neighbor
+        sequence_t.scalar<int32>()() = new_sequence;
+        OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t));
+      }
+     
+      size_t i = 0;
+      auto coverages = coverages_t.vec<string>();
+      auto was_added = was_added_t.vec<bool>();
       while (s.ok()) {
         LOG(INFO) << "Node " << to_string(node_id_) << " evaluating sequence " 
           << PrintNormalizedProtein(data, len); 
-        /*for (auto& cluster : clusters_) {
-          cluster.EvaluateSequence*/
+        for (auto& cluster : clusters_) {
+          auto& cov = coverages(i);
+          was_added(i) = cluster.EvaluateSequence(data, len, cov, params_.max_representatives, envs_, &params_); 
+        }
 
         s = seqs_reader.GetNextRecord(&data, &len);
+        i++;
       }
 
       // pass all to neighbor queue
@@ -138,10 +160,14 @@ namespace tensorflow {
         // encode the clusters into tensors and enqueue them 
         // for downstream aggregation
         LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
-        Tensor* t;
-        OP_REQUIRES_OK(ctx, ctx->allocate_temp(DataType::DT_STRING, TensorShape({}), t));
-        t->scalar<string>()() = "Node " + to_string(node_id_) + " is done.";
-        OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, *t));
+        Tensor t;
+        OP_REQUIRES_OK(ctx, ctx->allocate_temp(DataType::DT_STRING, TensorShape({}), &t));
+        t.scalar<string>()() = "Node " + to_string(node_id_) + " is done.";
+        OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, t));
+        cluster_queue_->Close(ctx, false/*cancel pending enqueue*/, 
+            [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"cluster queue closed"; } );
+        neighbor_queue_out_->Close(ctx, false/*cancel pending enqueue*/, 
+            [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"neighbor out queue closed"; } );
       }
 
       Tensor* out;
@@ -162,7 +188,9 @@ namespace tensorflow {
     BasicContainer<AlignmentEnvironments> *alignment_envs_container_ = nullptr;
     Parameters params_;
     AlignmentEnvironments* envs_;
-    //vector<ProteinCluster> clusters_;
+    int chunk_size_ = 0;
+
+    vector<Cluster> clusters_;
   
     int ring_size_;
     bool should_seed_ = false;
@@ -175,6 +203,8 @@ namespace tensorflow {
         Tensor& sequence, Tensor& was_added, Tensor& coverages) {
         
       LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing ...";
+      LOG(INFO) << "Node " << to_string(node_id_) << " input queue is closed " << input_queue_->is_closed() 
+        << "input queue size: " << input_queue_->size();
 
       // prefer to dequeue neighbor queue, otherwise attempt to dequeue the main input
       if (neighbor_queue_->size() > 0) {
@@ -194,12 +224,20 @@ namespace tensorflow {
             }
             chunk = tuple[0];
             num_recs = tuple[1];
-            sequence = tuple[2];
+            
+            /*sequence = tuple[2];
             was_added = tuple[3];
-            coverages = tuple[4];
+            coverages = tuple[4];*/
             n.Notify();
         });
         n.WaitForNotification();
+        TF_RETURN_IF_ERROR(ctx->allocate_temp(DataType::DT_INT32, TensorShape({}), &sequence));
+        sequence.scalar<int32>()() = 0;
+        TF_RETURN_IF_ERROR(ctx->allocate_temp(DataType::DT_BOOL, TensorShape({chunk_size_}), &was_added));
+        auto wa = was_added.vec<bool>();
+        for (size_t i = 0; i < chunk_size_; i++)
+          wa(i) = false;
+        TF_RETURN_IF_ERROR(ctx->allocate_temp(DataType::DT_STRING, TensorShape({chunk_size_}), &coverages));
         if (ctx->status().ok()) {
           return Status::OK();
         } else if (!errors::IsOutOfRange(ctx->status()))

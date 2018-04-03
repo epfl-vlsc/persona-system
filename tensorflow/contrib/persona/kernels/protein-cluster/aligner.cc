@@ -72,7 +72,7 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
     value = short(score / (65535.0f / options.threshold));
 
   swps3_freeProfileShortSSE(profile);
-  return value >= 0.75f * params_.min_score;
+  return value >= 0.75f * params_->min_score;
 }
 
 }

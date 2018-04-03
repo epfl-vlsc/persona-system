@@ -20,7 +20,7 @@ class ProteinAligner {
       double pam_variance;
     };
 
-    ProteinAligner(const AlignmentEnvironments* envs, const Parameters& params) : 
+    ProteinAligner(const AlignmentEnvironments* envs, const Parameters* params) : 
       envs_(envs), params_(params) {}
 
     Status AlignLocal(const char* seq1, const char* seq2, int seq1_len, int seq2_len, Alignment& result);
@@ -31,11 +31,11 @@ class ProteinAligner {
     Status AlignDouble(const char* seq1, const char* seq2, int seq1_len, int seq2_len,
         bool stop_at_threshold,  Alignment& result, const AlignmentEnvironment& env);
 
-    const AlignmentEnvironments* Envs() { return envs_; }
+    //const AlignmentEnvironments* Envs() { return envs_; }
 
   private:
     const AlignmentEnvironments* envs_;
-    const Parameters params_;
+    const Parameters* params_;
 
 };
 
