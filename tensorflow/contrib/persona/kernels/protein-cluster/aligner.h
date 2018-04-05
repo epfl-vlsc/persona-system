@@ -36,6 +36,7 @@ class ProteinAligner {
   private:
     const AlignmentEnvironments* envs_;
     const Parameters* params_;
+    static const pam_list = [35, 49, 71, 98, 115, 133, 152, 174, 200, 229, 262, 300];
 
 };
 

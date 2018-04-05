@@ -5,22 +5,47 @@ namespace tensorflow {
 
   using namespace std;
 
-  bool Cluster::EvaluateSequence(const char* seq, int length, string& coverage, int num_reps, 
+  void AddCoveredRange(string& coverages, size_t min, size_t max) {
+    CHECK_LE(max, coverages.length());
+    CHECK_LE(min, max);
+    for (size_t i = min; i < max; i++)
+      coverages[i] = 0;
+  }
+
+  bool Cluster::EvaluateSequence(Sequence& sequence,  
       const AlignmentEnvironments* envs, const Parameters* params) {
     ProteinAligner aligner(envs, params);
     Status s;
 
-    for (size_t i = 0; i < num_reps && i < seqs_.size(); i++) {
+    for (size_t i = 0; i < params->max_representatives && i < seqs_.size(); i++) {
       auto& rep = seqs_[i];
 
-      if (aligner.PassesThreshold(seq, rep.data(), length, rep.length())) {
+      if (aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length())) {
 
+        ProteinAligner::Alignment alignment;
         // if subsequence homology, fully align and calculate coverages
+        if (params->subsequence_homology) {
+          if (sequence.total_seqs > rep.TotalSeqs() || (sequence.total_seqs == rep.TotalSeqs() 
+              && *sequence.genome > rep.Genome()) || (*sequence.genome == rep.Genome() 
+              && sequence.genome_index > rep.GenomeIndex()) ) {
+      
+            s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
+            AddCoveredRange(*sequence.coverages, alignment.seq2_min, alignment.seq2_max);
 
-        seqs_.push_back(Sequence(string(seq, length), 0));
+          } else {
+            s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
+            AddCoveredRange(*sequence.coverages, alignment.seq1_min, alignment.seq1_max);
+
+          }
+        }
+
+        seqs_.push_back(ClusterSequence(string(sequence.data, sequence.length), *sequence.genome, 
+              sequence.genome_index, sequence.total_seqs));
         return true;
       }
     }
+
+    return false;
 
   }
 }

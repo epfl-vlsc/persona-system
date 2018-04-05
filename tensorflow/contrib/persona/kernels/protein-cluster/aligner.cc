@@ -10,7 +10,10 @@ namespace tensorflow {
 
 Status ProteinAligner::AlignLocal(const char*seq1, const char* seq2, int seq1_len, int seq2_len, 
     Alignment& result) {
-  
+
+  // find starting point
+  // env find nearest point
+  //
 }
     
 Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_len, int seq2_len, 

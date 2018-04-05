@@ -90,10 +90,11 @@ namespace tensorflow {
       // one chunk processed each Compute()
       // then outputs tensor encoded clusters
 
-      Tensor chunk_t, num_recs_t, seq_number_t, was_added_t, sequence_t, coverages_t;
+      Tensor chunk_t, num_recs_t, seq_number_t, was_added_t, sequence_t, coverages_t, genome_t, 
+             first_ord_t, total_seqs_t;
 
       OP_REQUIRES_OK(ctx, DequeueChunk(ctx, chunk_t, num_recs_t, sequence_t, 
-            was_added_t, coverages_t));
+            was_added_t, coverages_t, genome_t, first_ord_t, total_seqs_t));
       LOG(INFO) << "Node " << to_string(node_id_) << " dequeued a chunk ";
 
       auto sequence = sequence_t.scalar<int32>()();
@@ -106,19 +107,37 @@ namespace tensorflow {
 
       const char * data;
       size_t len;
+      size_t i = 0;
       Status s = seqs_reader.GetNextRecord(&data, &len);
-      LOG(INFO) << "Node " << to_string(node_id_) << " seq reader stat is  " << s;
+      //LOG(INFO) << "Node " << to_string(node_id_) << " seq reader stat is  " << s;
 
       OP_REQUIRES_OK(ctx, s);
       LOG(INFO) << "Node " << to_string(node_id_) << " seq is " << sequence;
       
+      auto was_added = was_added_t.vec<bool>();
+      auto coverages = coverages_t.vec<string>();
+      auto genome = genome_t.scalar<string>()();
+      auto total_seqs = total_seqs_t.scalar<int32>()();
+      auto first_ord = first_ord_t.scalar<int32>()();
+      auto genome_index = first_ord;
+
       if (sequence == ring_size_) {
         // this chunk has been evaluated by all nodes
         // create new clusters for any non added proteins
         LOG(INFO) << "Node " << to_string(node_id_) << " seen this chunk, dumping " + to_string(sequence) + " and creating clusters";
 
         // create clusters
-        
+        while (s.ok()) {
+          if (!was_added(i) || params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
+              params_.max_n_aa_not_covered) {
+            // add cluster
+            Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
+            clusters_.push_back(std::move(cluster));
+          } 
+          s = seqs_reader.GetNextRecord(&data, &len);
+          i++;
+          genome_index++;
+        }
 
         Tensor* out;
         OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &out));
@@ -129,31 +148,64 @@ namespace tensorflow {
 
       if (clusters_.empty() && should_seed_) {
         // seed a new cluster with first sequence
+        LOG(INFO) << "Node " << to_string(node_id_) << " seeding cluster with sequence " 
+          << PrintNormalizedProtein(data, len) << " genome: " << genome << " genome_index: " << genome_index 
+          << " total_seqs: " << total_seqs;
         
-      } else {
-        // pass this chunk to neighbor
+        Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
+        clusters_.push_back(std::move(cluster));
+        // next sequence, and carry on
+        s = seqs_reader.GetNextRecord(&data, &len);
+
+      } else if (clusters_.empty()) {
+        // pass this chunk to neighbor, 
         sequence_t.scalar<int32>()() = new_sequence;
-        OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t));
+        OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
+              first_ord_t, total_seqs_t));
+        
+        Tensor* out;
+        OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &out));
+        out->scalar<string>()() = "Node " + to_string(node_id_) + " execution is done";
+        return;
       }
      
-      size_t i = 0;
-      auto coverages = coverages_t.vec<string>();
-      auto was_added = was_added_t.vec<bool>();
+      Sequence seq;
+
       while (s.ok()) {
         LOG(INFO) << "Node " << to_string(node_id_) << " evaluating sequence " 
           << PrintNormalizedProtein(data, len); 
+
+        if (coverages(i).size() == 0)
+          coverages(i).resize(len, 1);
+
         for (auto& cluster : clusters_) {
-          auto& cov = coverages(i);
-          was_added(i) = cluster.EvaluateSequence(data, len, cov, params_.max_representatives, envs_, &params_); 
+          // fill seq and pass to evaluate
+          seq.data = data;
+          seq.length = len;
+          seq.coverages = &coverages(i);
+          seq.genome_index = genome_index;
+          seq.genome = &genome;
+          seq.total_seqs = total_seqs;
+
+          auto added = cluster.EvaluateSequence(seq, envs_, &params_);
+
+          if (!was_added(i)) was_added(i) = added;
+          
+          if (added) {
+            LOG(INFO) << "Node " << to_string(node_id_) << " added sequence to cluster\n" 
+              << "coverages is now " << coverages;
+          }
         }
 
         s = seqs_reader.GetNextRecord(&data, &len);
+        genome_index++;
         i++;
       }
 
       // pass all to neighbor queue
       sequence_t.scalar<int32>()() = new_sequence;
-      OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t));
+      OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
+            first_ord_t, total_seqs_t));
 
       if (++num_chunks_ == total_chunks_) {
         // we have seen all chunks and are done, 
@@ -198,9 +250,17 @@ namespace tensorflow {
     int num_chunks_;
     vector<char> scratch_;
     int node_id_;
+
+    int NumUncoveredAA(const string& coverages) {
+      int sum = 0;
+      for (size_t i = 0; i < coverages.size(); i++)
+        sum += (int)coverages[i];
+      return sum;
+    }
      
     inline Status DequeueChunk(OpKernelContext* ctx, Tensor& chunk, Tensor& num_recs, 
-        Tensor& sequence, Tensor& was_added, Tensor& coverages) {
+        Tensor& sequence, Tensor& was_added, Tensor& coverages, Tensor& genome, Tensor& first_ord,
+        Tensor& total_seqs) {
         
       LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing ...";
       LOG(INFO) << "Node " << to_string(node_id_) << " input queue is closed " << input_queue_->is_closed() 
@@ -217,13 +277,16 @@ namespace tensorflow {
         
         Notification n;
         input_queue_->TryDequeue(ctx, [ctx, &n, &chunk, &num_recs, &sequence, 
-            &was_added, &coverages](const QueueInterface::Tuple &tuple) {
+            &was_added, &coverages, &genome, &first_ord, &total_seqs](const QueueInterface::Tuple &tuple) {
             if (!ctx->status().ok()) {
               n.Notify(); // should only happen when input queue closes
               return;
             }
             chunk = tuple[0];
             num_recs = tuple[1];
+            genome = tuple[5];
+            first_ord = tuple[6];
+            total_seqs = tuple[7];
             
             /*sequence = tuple[2];
             was_added = tuple[3];
@@ -249,7 +312,7 @@ namespace tensorflow {
       LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing neighbor";
       Notification n;
       neighbor_queue_->TryDequeue(ctx, [ctx, &n, &chunk, &num_recs, &sequence, 
-          &was_added, &coverages](const QueueInterface::Tuple &tuple) {
+          &was_added, &coverages, &genome, &first_ord, &total_seqs](const QueueInterface::Tuple &tuple) {
           if (!ctx->status().ok()) {
             LOG(INFO) << "neighbor queue closed WTFFFFFF"; //should never happen
             n.Notify(); 
@@ -260,6 +323,9 @@ namespace tensorflow {
           sequence = tuple[2];
           was_added = tuple[3];
           coverages = tuple[4];
+          genome = tuple[5];
+          first_ord = tuple[6];
+          total_seqs = tuple[7];
           n.Notify();
       });
       n.WaitForNotification();
@@ -268,13 +334,15 @@ namespace tensorflow {
 
     inline Status EnqueueChunk(OpKernelContext *ctx, const Tensor& chunk, 
         const Tensor& num_recs, const Tensor& sequence, const Tensor& was_added, 
-        const Tensor& coverages) {
+        const Tensor& coverages, const Tensor& genome, const Tensor& first_ord, 
+        const Tensor& total_seqs) {
       Notification n;
       QueueInterface::Tuple tuple;
-      tuple.resize(5);
+      tuple.resize(8);
       tuple[0] = chunk; tuple[1] = num_recs;
       tuple[2] = sequence; tuple[3] = was_added;
-      tuple[4] = coverages;
+      tuple[4] = coverages; tuple[5] = genome;
+      tuple[6] = first_ord; tuple[7] = total_seqs;
       neighbor_queue_out_->TryEnqueue(tuple, ctx, [&n]() {
           n.Notify();
         });

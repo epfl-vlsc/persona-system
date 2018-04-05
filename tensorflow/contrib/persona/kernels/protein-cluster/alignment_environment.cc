@@ -6,12 +6,25 @@ namespace tensorflow {
 
   using namespace std;
 
-  void AlignmentEnvironments::EstimatePam(char* seq1, char* seq2, int len) {
+  // len is seq1 len
+  void AlignmentEnvironments::EstimPam(char* seq1, char* seq2, int len, double result[3]) {
+
+    EstimatePam(seq1, seq2, len, day_matrices_, (int)envs_.size(), logpam_env_.matrix, result);
 
   }
   
   const AlignmentEnvironment& AlignmentEnvironments::FindNearest(double pam) const {
-
+    size_t i = 0;
+    while (pam - envs_[i].pam_distance > 0.0f && i < envs_.size())
+      i++;
+    if (i == envs_.size())
+      return envs_[i-1];
+    else {
+      if (fabs(envs_[i].pam_distance - pam) < fabs(envs_[i-1].pam_distance - pam))
+        return envs_[i];
+      else
+        return envs_[i-1];
+    }
   }
   
   const AlignmentEnvironment& AlignmentEnvironments::LogPamEnv() const {

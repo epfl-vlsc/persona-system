@@ -25,7 +25,7 @@ class AlignmentEnvironments {
  // pointers here own no data
  public:
   AlignmentEnvironments() {}
-  void EstimatePam(char* seq1, char* seq2, int len);
+  void EstimPam(char* seq1, char* seq2, int len, double result[3]);
   const AlignmentEnvironment& FindNearest(double pam) const;
   const AlignmentEnvironment& LogPamEnv() const;
   const AlignmentEnvironment& JustScoreEnv() const;

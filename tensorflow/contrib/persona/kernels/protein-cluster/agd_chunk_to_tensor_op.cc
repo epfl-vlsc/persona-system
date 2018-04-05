@@ -58,6 +58,8 @@ namespace tensorflow {
 
       resource_releaser(chunk_container);
 
+      LOG(INFO) << "Done chunk to tensor";
+
     }
 
   private:
