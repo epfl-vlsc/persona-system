@@ -377,7 +377,8 @@ Prints records to stdout from record indices `start` to `finish`.
     .Input("results: string")
     .Input("records : string")
     .Input("chunk_size: int32")
-    .Output("ret : int32")
+    .Input("buffer_pair_pool: Ref(string)")
+    .Output("ret : string")
     .SetShapeFn([](InferenceContext *c) {
                 c->set_output(0, c->Scalar());
         return Status::OK();
@@ -386,7 +387,7 @@ Prints records to stdout from record indices `start` to `finish`.
     .Doc(R"doc(
 Conpress the given data into a CIGAR with additional information.
 
-Format of a regular cigar with "|" as delimiter.
+Format of a regular CIGAR with "|" as delimiter.
     )doc");
 
     REGISTER_OP("AGDBaseDecompression")

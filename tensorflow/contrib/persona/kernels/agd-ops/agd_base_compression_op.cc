@@ -40,49 +40,67 @@ namespace tensorflow {
     AGDBaseCompressionOp(OpKernelConstruction *context) : OpKernel(context) {
       OP_REQUIRES_OK(context, context->GetAttr("unpack", &unpack_));
     }
+
+    Status InitHandles(OpKernelContext* ctx)
+    {
+      TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "buffer_pair_pool", &bufferpair_pool_));
+
+      return Status::OK();
+    }
+
+    Status GetOutputBufferPair(OpKernelContext* ctx, ResourceContainer<BufferPair> **ctr)
+    {
+      TF_RETURN_IF_ERROR(bufferpair_pool_->GetResource(ctr));
+      (*ctr)->get()->reset();
+      TF_RETURN_IF_ERROR((*ctr)->allocate_output("ret", ctx));
+      return Status::OK();
+    }
+
     //our main function of compression.
     void Compute(OpKernelContext* ctx) override {
-      LOG(INFO) << "Starting compression";
+      if( bufferpair_pool_ == nullptr){
+        OP_REQUIRES_OK(ctx,InitHandles(ctx));
+      }
+
+      // LOG(INFO) << "Starting compression";
       //create 2 tensor : 1 ressource and 1 chunk size
       const Tensor *results_t, *chunk_size_t, *records_t;
-      Tensor *ret_t;
-      /*just to have any output */
-      OP_REQUIRES_OK(ctx, ctx->allocate_output("ret",scalar_shape_,&ret_t));
-      ret_t->scalar<int32>()() = 0;
 
-      //this should point to the first element of or resources that should be 0.
-      //"tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
+      // LOG(INFO) << "instanciate the container";
       ResourceContainer<Data> *results_container;
       ResourceContainer<Data> *records_container;
-      //ResourceContainer<BufferPair> *output_bufferpair_container;
+      ResourceContainer<BufferPair> *output_bufferpair_container;
 
-      // For this given line arg comes from agd_merge_op line 230.
+      // LOG(INFO) << "initializes the tensor";
       // OP_REQUIRES_OK(ctx, LookupResource(ctx, HandleFromInput(ctx, 0), &results_container));
       OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
       OP_REQUIRES_OK(ctx, ctx->input("results", &results_t));
       OP_REQUIRES_OK(ctx, ctx->input("records", &records_t));
-      //TODO to see if necessary.
-      //OP_REQUIRES_OK(ctx, GetOutputBufferPair(ctx, &output_bufferpair_container));
+      OP_REQUIRES_OK(ctx,GetOutputBufferPair(ctx,&output_bufferpair_container));
 
+      // LOG(INFO) << "fill it";
+      auto output_bufferpair = output_bufferpair_container->get();
       auto results = results_t->vec<string>();
       auto records = records_t->vec<string>();
       auto chunk_size = chunk_size_t->scalar<int32>()();
       auto rmgr = ctx->resource_manager();
-      //auto output_bufferpair = output_bufferpair_container->get();
 
-      OP_REQUIRES_OK(ctx, rmgr->Lookup(results(0), results(1), &results_container));
       OP_REQUIRES_OK(ctx, rmgr->Lookup(records(0), records(1), &records_container));
+      OP_REQUIRES_OK(ctx, rmgr->Lookup(results(0), results(1), &results_container));
 
       //for results.
-      AlignmentResultBuilder results_builder;
-      //results_builder.SetBufferPair(output_bufferpair);
+      // LOG(INFO) << "instantiate the column builder for the output";
+      ColumnBuilder column_builder;
+      column_builder.SetBufferPair(output_bufferpair);
 
       //for cigar and other meta data.
+      // LOG(INFO) << "instanciate the Status to get the CIGAR";
       Alignment agd_result;
       AGDResultReader results_reader(results_container, chunk_size);
       Status s = results_reader.GetNextResult(agd_result);
 
       //for data.
+      // LOG(INFO) << "instantiate the Status to get the genome";
       const char* agd_record;
       size_t record_size;
       AGDRecordReader record_reader(records_container,chunk_size);
@@ -90,13 +108,14 @@ namespace tensorflow {
 
 //usefull stuff for comparison =================================================
 /* M = 0, I = 1, = = 2, X = 3, S = 4, D = 5, N = 6, H = 7, P= 8*/
+      // LOG(INFO) << "Create the string to compare the CIGAR with";
       const char* text = "MI=XSDNHP";
       string val = "";
       int pos = 0;
       string compress_cigar = "";
 //==============================================================================
       while(s.ok()){
-        //LOG(INFO) << "début de la compression";
+        // LOG(INFO) << "CIGAR initialisation";
         const char* cigar = agd_result.cigar().c_str();
         size_t cigar_len = agd_result.cigar().length();
         const int flag = agd_result.flag();
@@ -105,6 +124,7 @@ namespace tensorflow {
 /*
 use "|" as delimiter for the compress cigar to allow a better usage for decompress.
 */
+        // LOG(INFO) << "analysing the CIGAR";
         for(int i = 0 ; i < cigar_len ; i++){
           char tmp = cigar[i];
           //LOG(INFO) << "here is the CIGAR : " << cigar[i];
@@ -138,29 +158,30 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
         }//for loop end
 
         pos = 0;
-        for(int i = 0 ; i < record_size; i++){
-          LOG(INFO) << agd_record[i];
-        }
+        // for(int i = 0 ; i < record_size; i++){
+        //   LOG(INFO) << agd_record[i];
+        // }
         // LOG(INFO) << "record size : " << record_size;
-        LOG(INFO) << "compress cigar : " << compress_cigar;
-        LOG(INFO) << "here is the CIGAR : " << cigar;
+        // LOG(INFO) << "compress cigar : " << compress_cigar;
+        // LOG(INFO) << "here is the CIGAR : " << cigar;
         // LOG(INFO) << "CIGAR length : " << cigar_len;
         // LOG(INFO) << "results flag : " << flag;
         // LOG(INFO) << "results position : " << position;
 
         p = record_reader.GetNextRecord(&agd_record,&record_size);
         s = results_reader.GetNextResult(agd_result);
+
+        column_builder.AppendRecord(compress_cigar.c_str(),compress_cigar.length());
         //reset compress cigar
         compress_cigar = "";
       }//while s is ok()
 
-      //ret_t->vec<string>()() = compress_cigar;
       resource_releaser(results_container);
-      //TODO check dans d'autre operator pour store le resultat. MarkDuplicates.
     }//compute end
   private:
     // RecordParser rec_parser_;
     const TensorShape scalar_shape_{};
+    ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
     string record_id_;
     bool unpack_;
     vector<string> columns_;
