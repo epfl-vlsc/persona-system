@@ -22,6 +22,7 @@ namespace tensorflow {
 
       if (aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length())) {
 
+        LOG(INFO) << "passed threshold";
         ProteinAligner::Alignment alignment;
         // if subsequence homology, fully align and calculate coverages
         if (params->subsequence_homology) {

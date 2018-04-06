@@ -156,6 +156,8 @@ namespace tensorflow {
         clusters_.push_back(std::move(cluster));
         // next sequence, and carry on
         s = seqs_reader.GetNextRecord(&data, &len);
+        genome_index++;
+        i++;
 
       } else if (clusters_.empty()) {
         // pass this chunk to neighbor, 

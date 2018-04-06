@@ -8,6 +8,8 @@ namespace tensorflow {
 class ProteinAligner {
 
   public:
+    
+    const static double pam_list_ [];
 
     struct Alignment {
       int seq1_min;
@@ -15,13 +17,22 @@ class ProteinAligner {
       int seq2_min;
       int seq2_max;
       const AlignmentEnvironment* env;
-      int score;
+      double score;
       double pam_distance;
       double pam_variance;
     };
 
     ProteinAligner(const AlignmentEnvironments* envs, const Parameters* params) : 
       envs_(envs), params_(params) {}
+
+    ~ProteinAligner() { 
+      if (buf1_) {
+        delete [] buf1_;
+        delete [] buf2_;
+        delete [] savebuf1_;
+        delete [] savebuf2_;
+      }
+    }
 
     Status AlignLocal(const char* seq1, const char* seq2, int seq1_len, int seq2_len, Alignment& result);
 
@@ -36,7 +47,30 @@ class ProteinAligner {
   private:
     const AlignmentEnvironments* envs_;
     const Parameters* params_;
-    static const pam_list = [35, 49, 71, 98, 115, 133, 152, 174, 200, 229, 262, 300];
+
+    struct StartPoint {
+      double score;
+      const AlignmentEnvironment* env;
+      double estimated_pam;
+      double pam_dist;
+      double pam_var;
+      char* seq1;
+      char* seq2;
+      int seq1_len;
+      int seq2_len;
+    };
+    
+    void FindStartingPoint(const char*seq1, const char* seq2, int seq1_len, int seq2_len, 
+        StartPoint& point);
+
+    int AlignStrings(double* matrix, char *s1, int len1, char *s2, int len2, 
+        double escore, char *o1, char *o2, double maxerr, double gap_open, double gap_ext);
+
+    // these are for reuse over align double/local methods
+    char* buf1_ = nullptr; // MAXSEQLEN
+    char* buf2_ = nullptr; // MAXSEQLEN
+    char* savebuf1_ = nullptr; // MAXSEQLEN
+    char* savebuf2_ = nullptr; // MAXSEQLEN
 
 };
 

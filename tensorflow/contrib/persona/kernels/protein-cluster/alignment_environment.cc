@@ -7,7 +7,7 @@ namespace tensorflow {
   using namespace std;
 
   // len is seq1 len
-  void AlignmentEnvironments::EstimPam(char* seq1, char* seq2, int len, double result[3]) {
+  void AlignmentEnvironments::EstimPam(char* seq1, char* seq2, int len, double result[3]) const {
 
     EstimatePam(seq1, seq2, len, day_matrices_, (int)envs_.size(), logpam_env_.matrix, result);
 
