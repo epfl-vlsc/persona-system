@@ -131,6 +131,7 @@ namespace tensorflow {
           if (!was_added(i) || params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
               params_.max_n_aa_not_covered) {
             // add cluster
+            LOG(INFO) << "Node " << to_string(node_id_) << " creating cluster ";
             Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
             clusters_.push_back(std::move(cluster));
           } 
@@ -151,7 +152,8 @@ namespace tensorflow {
         LOG(INFO) << "Node " << to_string(node_id_) << " seeding cluster with sequence " 
           << PrintNormalizedProtein(data, len) << " genome: " << genome << " genome_index: " << genome_index 
           << " total_seqs: " << total_seqs;
-        
+       
+        was_added(i) = true;
         Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
         clusters_.push_back(std::move(cluster));
         // next sequence, and carry on
@@ -175,7 +177,10 @@ namespace tensorflow {
 
       while (s.ok()) {
         LOG(INFO) << "Node " << to_string(node_id_) << " evaluating sequence " 
-          << PrintNormalizedProtein(data, len); 
+          << PrintNormalizedProtein(data, len)
+          << " genome: " << genome << " genome_index: " << genome_index 
+          << " total_seqs: " << total_seqs;
+
 
         if (coverages(i).size() == 0)
           coverages(i).resize(len, 1);

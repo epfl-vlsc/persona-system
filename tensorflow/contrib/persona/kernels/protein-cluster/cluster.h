@@ -31,9 +31,6 @@ class Cluster {
     bool EvaluateSequence(Sequence& sequence,  
         const AlignmentEnvironments* envs, const Parameters* params);
 
-    // perform all to all between sequences in the cluster
-    void AllToAll(); 
-
     // encode the seq pairs into tensors
     void BuildOutput();
 
@@ -45,11 +42,11 @@ class Cluster {
         ClusterSequence(std::string seq, std::string genome, int idx, int total_seqs) : seq_(seq), 
           genome_(genome), genome_index_(idx), total_seqs_(total_seqs) {}
 
-        const char* Data() { return seq_.c_str(); }
-        int Length() { return int(seq_.length()); } 
-        int GenomeIndex() { return genome_index_; }
-        string& Genome() { return genome_; }
-        int TotalSeqs() { return total_seqs_; }
+        const char* Data() const { return seq_.c_str(); }
+        int Length() const { return int(seq_.length()); } 
+        int GenomeIndex() const { return genome_index_; }
+        const string& Genome() const { return genome_; }
+        int TotalSeqs() const { return total_seqs_; }
 
       private:
         std::string seq_; // a copy, because we don't hang onto all chunks
@@ -59,8 +56,30 @@ class Cluster {
         int total_seqs_;
     };
 
+    struct Candidate {
+      Candidate(int idx1, int idx2, const ProteinAligner::Alignment& alignment) :
+        index_1(idx1), index_2(idx2), alignment(alignment) {}
+
+      // indexes of sequences in seqs_ of this ClusterSequence
+      int index_1;
+      int index_2;
+
+      ProteinAligner::Alignment alignment;
+    };
+    
+    // perform all to all between sequences in the cluster
+    // skip X first seqs, because they have been tested or added already
+    void SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner); 
+
+    bool PassesLengthConstraint(const ProteinAligner::Alignment& alignment,
+        int seq1_len, int seq2_len);
+
+    bool PassesScoreConstraint(const Parameters* params, int score);
+
     // representatives are just the first X seqs_
     std::vector<ClusterSequence> seqs_;
+    // candidates are the result of intra cluster all to all
+    std::vector<Candidate> candidates_;
     const AlignmentEnvironments* envs_; // for alignments
 };
 

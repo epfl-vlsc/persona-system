@@ -20,6 +20,8 @@ class ProteinAligner {
       double score;
       double pam_distance;
       double pam_variance;
+      int seq1_length; // len of aligned string minus '_'
+      int seq2_length; // len of aligned string minus '_'
     };
 
     ProteinAligner(const AlignmentEnvironments* envs, const Parameters* params) : 
@@ -28,9 +30,6 @@ class ProteinAligner {
     ~ProteinAligner() { 
       if (buf1_) {
         delete [] buf1_;
-        delete [] buf2_;
-        delete [] savebuf1_;
-        delete [] savebuf2_;
       }
     }
 
@@ -44,16 +43,15 @@ class ProteinAligner {
 
     //const AlignmentEnvironments* Envs() { return envs_; }
 
+    const Parameters* Params() { return params_; }
+
   private:
     const AlignmentEnvironments* envs_;
     const Parameters* params_;
 
     struct StartPoint {
-      double score;
-      const AlignmentEnvironment* env;
+      Alignment alignment;
       double estimated_pam;
-      double pam_dist;
-      double pam_var;
       char* seq1;
       char* seq2;
       int seq1_len;
