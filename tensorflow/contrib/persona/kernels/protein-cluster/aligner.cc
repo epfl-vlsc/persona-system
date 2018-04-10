@@ -101,15 +101,15 @@ void ProteinAligner::FindStartingPoint(const char*seq1, const char* seq2, int se
    
     char* s1 = const_cast<char*>(seq1) + alignment.seq1_min;
     char* s2 = const_cast<char*>(seq2) + alignment.seq2_min;
-    int s1_len = alignment.seq1_max - alignment.seq1_min; // + 1  ?
-    int s2_len = alignment.seq2_max - alignment.seq2_min; // + 1  ?
+    int s1_len = alignment.seq1_max - alignment.seq1_min  + 1; //  ?
+    int s2_len = alignment.seq2_max - alignment.seq2_min  + 1; //  ?
     LOG(INFO) << "FSP: s1len: " << s1_len << " s2len: " << s2_len;
 
     int max_len = AlignStrings(new_env.matrix, s1, s1_len, s2, s2_len, alignment.score,
         buf1_, buf2_, 0.5e-4, new_env.gap_open, new_env.gap_extend);
     envs_->EstimPam(buf1_, buf2_, max_len, estim_result);
     LOG(INFO) << "FSP: estim pam values: " << estim_result[0] << ", " << estim_result[1] 
-      << ", " << estim_result[2];
+      << ", " << estim_result[2] << " str max len = " << max_len;
 
     if (estim_result[0] > starting_pam) {
       starting_pam = estim_result[0];
@@ -161,8 +161,8 @@ Status ProteinAligner::AlignLocal(const char*seq1, const char* seq2, int seq1_le
     
     char* s1 = const_cast<char*>(seq1) + alignment.seq1_min;
     char* s2 = const_cast<char*>(seq2) + alignment.seq2_min;
-    int s1_len = alignment.seq1_max - alignment.seq1_min; // + 1  ?
-    int s2_len = alignment.seq2_max - alignment.seq2_min; // + 1  ?
+    int s1_len = alignment.seq1_max - alignment.seq1_min + 1; //  ?
+    int s2_len = alignment.seq2_max - alignment.seq2_min + 1; //  ?
     LOG(INFO) << "AlignLocal: s1len: " << s1_len << " s2len: " << s2_len;
 
     int max_len = AlignStrings(new_env.matrix, s1, s1_len, s2, s2_len, alignment.score,
@@ -275,7 +275,7 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
     value = score / (65535.0f / options.threshold);
 
   swps3_freeProfileShortSSE(profile);
-  LOG(INFO) << "value is " << value << " score is " << score;
+  //LOG(INFO) << "value is " << value << " score is " << score;
   return value >= 0.75f * params_->min_score;
 }
 

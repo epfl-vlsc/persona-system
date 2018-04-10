@@ -128,6 +128,8 @@ namespace tensorflow {
 
         // create clusters
         while (s.ok()) {
+          LOG(INFO) << "Node " << to_string(node_id_) << "was added " 
+              << was_added(i) << " numuncovered: " << NumUncoveredAA(coverages(i));
           if (!was_added(i) || params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
               params_.max_n_aa_not_covered) {
             // add cluster
@@ -154,6 +156,11 @@ namespace tensorflow {
           << " total_seqs: " << total_seqs;
        
         was_added(i) = true;
+
+        // don't add coverages, to prevent the seed sequence 
+        /*if (coverages(i).size() == 0)
+          coverages(i).resize(len, 1);*/
+
         Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
         clusters_.push_back(std::move(cluster));
         // next sequence, and carry on
@@ -219,10 +226,20 @@ namespace tensorflow {
         // encode the clusters into tensors and enqueue them 
         // for downstream aggregation
         LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
+        
+        for (auto& cluster : clusters_) {
+          vector<Tensor> ints, doubles, genomes;
+          OP_REQUIRES_OK(ctx, cluster.BuildOutput(ints, doubles, genomes, 10, ctx));
+
+          // enqueue tensor tuples into cluster queue
+        }
+
         Tensor t;
         OP_REQUIRES_OK(ctx, ctx->allocate_temp(DataType::DT_STRING, TensorShape({}), &t));
         t.scalar<string>()() = "Node " + to_string(node_id_) + " is done.";
         OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, t));
+
+        // close queues
         cluster_queue_->Close(ctx, false/*cancel pending enqueue*/, 
             [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"cluster queue closed"; } );
         neighbor_queue_out_->Close(ctx, false/*cancel pending enqueue*/, 

@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
 
@@ -27,12 +28,31 @@ class Cluster {
     }
 
     // return true if added to cluster, false if not
-    // will modify coverage string if added
+    // will modify coverage string (in `sequence`) if added
     bool EvaluateSequence(Sequence& sequence,  
         const AlignmentEnvironments* envs, const Parameters* params);
 
-    // encode the seq pairs into tensors
-    void BuildOutput();
+    // BuildOutput() -- encode the seq pairs into tensors
+    // RefinedMatches consist of 6 ints and 3 doubles
+    // [idx1, idx2, score, distance, min1, max1, min2, max2, variance] 
+    // [int, int, double, double, int, int, int, int, double]
+    // which we split into an int tensor and a double tensor for downstream
+    // transmission for aggregation and output. We need to use tensors so 
+    // that we can transmit across machine boundaries. 
+    //
+    // Genomes (strings) are also required to disambiguate and find duplicates.
+    //
+    // [idx1, idx2, min1, max1, min2, max2], [score, distance, variance], [genome1, genome2]
+    //
+    // Shape([X, 6]), Shape([X, 3]), Shape([X,2])
+    //
+    // Where X is defined by whatever called BuildOutput()
+    // Tensors need a defined Shape to be put into Queues
+    //
+    // Called after cluster has seen all sequences.
+    Status BuildOutput(std::vector<Tensor>& match_ints, 
+      std::vector<Tensor>& match_doubles, std::vector<Tensor>& match_genomes, 
+      int size, OpKernelContext* ctx);
 
   private:
    
@@ -53,7 +73,7 @@ class Cluster {
         // these fields are primarily for constructing the output
         std::string genome_; // which dataset it belongs to
         int genome_index_; // what index in the dataset it was
-        int total_seqs_;
+        int total_seqs_; // total seqs in the genome this seq belongs to
     };
 
     struct Candidate {
