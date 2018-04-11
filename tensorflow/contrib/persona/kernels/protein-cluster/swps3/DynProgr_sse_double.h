@@ -8,6 +8,8 @@
 #ifndef DYNPROGR_SSE_DOUBLE_H_
 #define DYNPROGR_SSE_DOUBLE_H_
 
+#include "extras.h"
+
 typedef struct{
 	int ls1;
 	double* profile;
@@ -17,7 +19,7 @@ typedef struct{
 } ProfileDouble;
 
 double align_double_local(ProfileDouble* profileDouble, const char *s2, int ls2, double gap_open,
-		double gap_ext, double threshold, int* max1, int* max2);
+		double gap_ext, double threshold, int* max1, int* max2, BTData* data);
 ProfileDouble* createProfileDoubleSSE(const char* s1, int ls1, double* matrix);
 void free_profile_double_sse(ProfileDouble* profile);
 

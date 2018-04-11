@@ -9,5 +9,5 @@
 #include "DynProgr_sse_short.h"
 #include "DynProgr_sse_double.h"
 
-double coldel[MAXSEQLEN + 1], S[MAXSEQLEN + 1];
+//double coldel[MAXSEQLEN + 1], S[MAXSEQLEN + 1];
 

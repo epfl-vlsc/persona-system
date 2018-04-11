@@ -106,7 +106,7 @@ void ProteinAligner::FindStartingPoint(const char*seq1, const char* seq2, int se
     LOG(INFO) << "FSP: s1len: " << s1_len << " s2len: " << s2_len;
 
     int max_len = AlignStrings(new_env.matrix, s1, s1_len, s2, s2_len, alignment.score,
-        buf1_, buf2_, 0.5e-4, new_env.gap_open, new_env.gap_extend);
+        buf1_, buf2_, 0.5e-4, new_env.gap_open, new_env.gap_extend, &bt_data_);
     envs_->EstimPam(buf1_, buf2_, max_len, estim_result);
     LOG(INFO) << "FSP: estim pam values: " << estim_result[0] << ", " << estim_result[1] 
       << ", " << estim_result[2] << " str max len = " << max_len;
@@ -166,7 +166,7 @@ Status ProteinAligner::AlignLocal(const char*seq1, const char* seq2, int seq1_le
     LOG(INFO) << "AlignLocal: s1len: " << s1_len << " s2len: " << s2_len;
 
     int max_len = AlignStrings(new_env.matrix, s1, s1_len, s2, s2_len, alignment.score,
-        buf1_, buf2_, 0.5e-4, new_env.gap_open, new_env.gap_extend);
+        buf1_, buf2_, 0.5e-4, new_env.gap_open, new_env.gap_extend, &bt_data_);
     envs_->EstimPam(buf1_, buf2_, max_len, estim_result);
     LOG(INFO) << "AlignLocal: estim pam values: " << estim_result[0] << ", " << estim_result[1] 
       << ", " << estim_result[2];
@@ -211,7 +211,7 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
   auto thresh = stop_at_threshold ? env.threshold : FLT_MAX;
 
   double score = align_double_local(profile, seq2, seq2_len, env.gap_open,
-		env.gap_extend, thresh, &max1, &max2);
+		env.gap_extend, thresh, &max1, &max2, &bt_data_);
   max1--;
   max2--;
 
@@ -229,7 +229,7 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
   int max1_rev, max2_rev;
 
   double score_rev = align_double_local(profile_rev, seq2_rev.c_str(), seq2_rev.length(), env.gap_open,
-		env.gap_extend, thresh, &max1_rev, &max2_rev);
+		env.gap_extend, thresh, &max1_rev, &max2_rev, &bt_data_);
   max1_rev--;
   max2_rev--;
   
@@ -280,9 +280,13 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
 }
 
 double c_align_double_global(double* matrix, const char *s1, int ls1,
-    const char *s2, int ls2, double gap_open, double gap_ext) {
+    const char *s2, int ls2, double gap_open, double gap_ext, BTData* data) {
   int i, j, k;
   int AToInts2[MAXSEQLEN + 1];
+
+  //double coldel[MAXSEQLEN+1], S[MAXSEQLEN+1];
+  //int DelFrom[MAXSEQLEN+1];
+
   double DelFixed, DelIncr, *Score_s1 = NULL;
   double t, t2/*, MaxScore*/, rowdel, Sj1;
   /*double vScore[MAXMUTDIM];*/
@@ -294,22 +298,22 @@ double c_align_double_global(double* matrix, const char *s1, int ls1,
   DelIncr = gap_ext;
 
   /*MaxScore = MINUSINF;*/
-  S[0] = coldel[0] = 0;
+  data->S[0] = data->coldel[0] = 0;
   for (j = 1; j <= ls2; j++) {
     /*if (s2[j - 1] == '_')
      *     userror("underscores cannot be used in sequence alignment");*/
     AToInts2[j] = /*MapSymbol(s2[j - 1], DM)*/s2[j - 1];
-    coldel[j] = MINUSINF;
-    S[j] = /*(mode == CFE || mode == Local) ? 0 : */S[j - 1]
+    data->coldel[j] = MINUSINF;
+    data->S[j] = /*(mode == CFE || mode == Local) ? 0 : */data->S[j - 1]
       + (j == 1 ? DelFixed : DelIncr);
   }
 
-  DelFrom[0] = 1;
+  data->DelFrom[0] = 1;
   for (i = 1; i <= ls1; i++) {
 
-    Sj1 = S[0];
-    coldel[0] += i == 1 ? DelFixed : DelIncr;
-    S[0] = /*(mode == CFE || mode == Local) ? 0 :*/coldel[0];
+    Sj1 = data->S[0];
+    data->coldel[0] += i == 1 ? DelFixed : DelIncr;
+    data->S[0] = /*(mode == CFE || mode == Local) ? 0 :*/data->coldel[0];
     rowdel = MINUSINF;
 
     /*if (ProbSeqCnt == 0) {*/
@@ -331,15 +335,15 @@ double c_align_double_global(double* matrix, const char *s1, int ls1,
     for (j = 1; j <= ls2; j++) {
       /* current row is i (1..ls1), column is j (1..ls2) */
 
-      coldel[j] += DelIncr;
-      t = (t2 = S[j]) + DelFixed;
-      if (coldel[j] < t) {
-        coldel[j] = t;
-        DelFrom[j] = i;
+      data->coldel[j] += DelIncr;
+      t = (t2 = data->S[j]) + DelFixed;
+      if (data->coldel[j] < t) {
+        data->coldel[j] = t;
+        data->DelFrom[j] = i;
       }
 
       rowdel += DelIncr;
-      t = S[j - 1] + DelFixed;
+      t = data->S[j - 1] + DelFixed;
       if (rowdel < t)
         rowdel = t;
 
@@ -348,8 +352,8 @@ double c_align_double_global(double* matrix, const char *s1, int ls1,
         MINUSINF : Sj1 + Score_s1[AToInts2[j]];
       if (t < rowdel)
         t = rowdel;
-      if (t < coldel[j])
-        t = coldel[j];
+      if (t < data->coldel[j])
+        t = data->coldel[j];
 
       /*if (mode == Local) {
        *       if (t < 0)
@@ -372,7 +376,7 @@ double c_align_double_global(double* matrix, const char *s1, int ls1,
        *                                                                                                             return (MaxScore);
        *                                                                                                                   }
        *                                                                                                                         }*/
-      S[j] = t;
+      data->S[j] = t;
       Sj1 = t2;
     }
     totcells += ls2;
@@ -398,18 +402,21 @@ double c_align_double_global(double* matrix, const char *s1, int ls1,
    *               if (mode == Global) {
    *                 *Max1 = ls1;
    *                   *Max2 = ls2;*/
-  return (S[ls2]);
+  return (data->S[ls2]);
   /*}
    *   return (MaxScore);*/
 }
 // copied directly from pyopa python extension
 int ProteinAligner::AlignStrings(double* matrix, char *s1, int len1, char *s2, int len2, 
-        double escore, char *o1, char *o2, double maxerr, double gap_open, double gap_ext) {
+        double escore, char *o1, char *o2, double maxerr, double gap_open, double gap_ext, BTData* data) {
   int DelFrom1[MAXSEQLEN + 1], i, i1, j/*, M1*/;
   double S1[MAXSEQLEN + 1], coldel1[MAXSEQLEN + 1];
   double Slen2i, maxs, t;
   char rs1[2 * MAXSEQLEN], rs2[MAXSEQLEN], *prs1, *prs2;
   double tot;
+  
+  //double coldel[MAXSEQLEN+1], S[MAXSEQLEN+1];
+  //int DelFrom[MAXSEQLEN+1];
   /*int Global = 2;*/
   /* this NoSelf could be a parameter */
   /*int NoSelf = 0;*/
@@ -509,26 +516,26 @@ int ProteinAligner::AlignStrings(double* matrix, char *s1, int len1, char *s2, i
   i1 = len1 / 2;
   /*seq1.ds = s1;
    *   seq2.ds = s2;*/
-  c_align_double_global(matrix, s1, i1, s2, len2, gap_open, gap_ext);
+  c_align_double_global(matrix, s1, i1, s2, len2, gap_open, gap_ext, data);
   for (i = 0; i <= len2; i++) {
-    S1[i] = S[i];
-    coldel1[i] = coldel[i];
-    DelFrom1[i] = DelFrom[i];
+    S1[i] = data->S[i];
+    coldel1[i] = data->coldel[i];
+    DelFrom1[i] = data->DelFrom[i];
   }
   /*seq1.ds = prs1;
    *   seq2.ds = prs2;*/
   c_align_double_global(matrix, prs1, len1 - i1, prs2, len2, gap_open,
-      gap_ext);
+      gap_ext, data);
 
   /* Find the best sum of scores from the two halves */
   maxs = -DBL_MAX;
   for (j = 0; j <= len2; j++) {
-    t = S1[j] + S[len2 - j];
+    t = S1[j] + data->S[len2 - j];
     if (t > maxs) {
       maxs = t;
       i = j;
     }
-    t = coldel1[j] + coldel[len2 - j] - gap_open + gap_ext;
+    t = coldel1[j] + data->coldel[len2 - j] - gap_open + gap_ext;
     if (t > maxs) {
       maxs = t;
       i = j;
@@ -546,12 +553,12 @@ int ProteinAligner::AlignStrings(double* matrix, char *s1, int len1, char *s2, i
    *                   "score %.12g, reached %.12g instead\n", escore, maxs );*/
 
   /* splitting on a match */
-  if (maxs == S1[i] + S[len2 - i]) {
-    Slen2i = S[len2 - i];
+  if (maxs == S1[i] + data->S[len2 - i]) {
+    Slen2i = data->S[len2 - i];
     j = AlignStrings(matrix, s1, i1, s2, i, S1[i], o1, o2, 0.0, gap_open,
-        gap_ext);
+        gap_ext, data);
     j += AlignStrings(matrix, s1 + i1, len1 - i1, s2 + i, len2 - i,
-        Slen2i, o1 + j, o2 + j, 0.0, gap_open, gap_ext);
+        Slen2i, o1 + j, o2 + j, 0.0, gap_open, gap_ext, data);
     return (j);
   }
 
@@ -559,18 +566,18 @@ int ProteinAligner::AlignStrings(double* matrix, char *s1, int len1, char *s2, i
   {
     int i3, i4, len;
     i3 = DelFrom1[i] - 1;
-    i4 = len1 - DelFrom[len2 - i] + 2;
-    Slen2i = coldel[len2 - i];
+    i4 = len1 - data->DelFrom[len2 - i] + 2;
+    Slen2i = data->coldel[len2 - i];
     len = AlignStrings(matrix, s1, i3, s2, i,
         coldel1[i] - gap_open - gap_ext * (i1 - i3 - 1), o1, o2, 0.0,
-        gap_open, gap_ext);
+        gap_open, gap_ext, data);
     for (j = i3 + 1; j < i4; j++) {
       o1[len] = s1[j - 1];
       o2[len++] = '_';
     }
     len += AlignStrings(matrix, s1 + i4 - 1, len1 - i4 + 1, s2 + i,
         len2 - i, Slen2i - gap_open - gap_ext * (i4 - i1 - 2), o1 + len,
-        o2 + len, 0.0, gap_open, gap_ext);
+        o2 + len, 0.0, gap_open, gap_ext, data);
     return (len);
   }
   return 0;

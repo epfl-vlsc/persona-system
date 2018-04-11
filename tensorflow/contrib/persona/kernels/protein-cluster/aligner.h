@@ -2,6 +2,7 @@
 
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_environment.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/extras.h"
 
 namespace tensorflow {
 
@@ -62,13 +63,15 @@ class ProteinAligner {
         StartPoint& point);
 
     int AlignStrings(double* matrix, char *s1, int len1, char *s2, int len2, 
-        double escore, char *o1, char *o2, double maxerr, double gap_open, double gap_ext);
+        double escore, char *o1, char *o2, double maxerr, double gap_open, double gap_ext, BTData* data);
 
     // these are for reuse over align double/local methods
     char* buf1_ = nullptr; // MAXSEQLEN
     char* buf2_ = nullptr; // MAXSEQLEN
     char* savebuf1_ = nullptr; // MAXSEQLEN
     char* savebuf2_ = nullptr; // MAXSEQLEN
+
+    BTData bt_data_;
 
 };
 

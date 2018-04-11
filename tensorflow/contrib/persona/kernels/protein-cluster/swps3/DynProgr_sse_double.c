@@ -93,13 +93,15 @@ ProfileDouble* createProfileDoubleSSE(const char* s1, int ls1, double* matrix) {
 }
 
 double align_double_local(ProfileDouble* profileDouble, const char *s2, int ls2,
-		double gap_open, double gap_ext, double threshold, int* max1, int* max2) {
+		double gap_open, double gap_ext, double threshold, int* max1, int* max2, BTData* data) {
 	int i, j, k;
 	/*int AToInts2[MAXSEQLEN + 1];*/
 
 	int segLength = (profileDouble->ls1 + 1) / 2;
 	double DelFixed = gap_open, DelIncr = gap_ext/*, *Score_s1*/;
 	double /*Tcd, t, */MaxScore/*, Sj, Sj1, Tj, Tj1, Trd*/;
+
+  //double coldel[MAXSEQLEN+1], S[MAXSEQLEN+1];
 
 	/* This totcells was a system variable and I have no idea what it is used for */
 	double totcells = 0;
@@ -140,13 +142,13 @@ double align_double_local(ProfileDouble* profileDouble, const char *s2, int ls2,
 #endif
 
 	MaxScore = 0;
-	S[0] = coldel[0] = 0;
+	data->S[0] = data->coldel[0] = 0;
 	for (j = 1; j <= ls2; j++) {
 		/*if( s2[j-1]=='_' )
 		 userror("underscores cannot be used in sequence alignment");*/
 		/*AToInts2[j] = MapSymbol(s2[j-1],DM)s2[j - 1];*/
-		coldel[j] = MINUSINF;
-		S[j] = 0;
+		data->coldel[j] = MINUSINF;
+		data->S[j] = 0;
 	}
 
 	/* this version of the code does two lines per loop iteration */
@@ -263,7 +265,7 @@ double align_double_local(ProfileDouble* profileDouble, const char *s2, int ls2,
 		gapOpen = profileDouble->new_opt[segLength * 2 - 2] + DelFixed;
 
 		/* filling S and coldel for backtracking */
-		coldel[j + 1] = temp1[1];
+		data->coldel[j + 1] = temp1[1];
 
 		for (i = 0; i < segLength * 2 && new_cd1 >= gapOpen; i += 2) {
 			if (profileDouble->new_opt[i + 1] < new_cd1)
@@ -276,14 +278,14 @@ double align_double_local(ProfileDouble* profileDouble, const char *s2, int ls2,
 				if (ls2 % 2 == 1) {
 					/* depending on whether cd changed at the last position we */
 					/* have to adapt coldel[j+1] */
-					coldel[j + 1] = new_cd1 - DelIncr;
+					data->coldel[j + 1] = new_cd1 - DelIncr;
 				} else if (new_cd > gapOpen) {
-					coldel[j + 1] = new_cd1;
+					data->coldel[j + 1] = new_cd1;
 				}
 			}
 		}
 		/* filling S and coldel for backtracking */
-		S[j + 1] = profileDouble->new_opt[profileDouble->ls1 - 1
+		data->S[j + 1] = profileDouble->new_opt[profileDouble->ls1 - 1
 				- profileDouble->ls1 % 2];
 	}
 	/*} else {*/

@@ -12,7 +12,11 @@
 
 #define MMAX(a,b) ((a)>(b)?(a):(b))
 
-extern double coldel[MAXSEQLEN+1], S[MAXSEQLEN+1];
-extern int DelFrom[MAXSEQLEN+1];
+//extern double coldel[MAXSEQLEN+1], S[MAXSEQLEN+1];
+//extern int DelFrom[MAXSEQLEN+1];
+typedef struct {
+  double coldel[MAXSEQLEN+1], S[MAXSEQLEN+1];
+  int DelFrom[MAXSEQLEN+1];
+} BTData;
 
 #endif
