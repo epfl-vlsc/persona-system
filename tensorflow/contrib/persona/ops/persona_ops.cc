@@ -1485,6 +1485,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Attr("max_n_aa_not_covered: int >= 1")
     .Attr("node_id: int >= 0")
     .Attr("chunk_size: int >= 0")
+    .Attr("cluster_length: int")
     .Input("input_queue: resource")
     .Input("neighbor_queue: resource")
     .Input("neighbor_queue_out: resource")
@@ -1512,5 +1513,19 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
         })
     .Doc(R"doc(
     Op that converts a chunk to a scalar string tensor.
+    )doc");
+    
+    REGISTER_OP("AGDClusterAggregate")
+    .Attr("output_dir: string")
+    .Input("genomes: string")
+    .Input("match_ints: int32")
+    .Input("match_doubles: double")
+    .Output("tensor_out: string")
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Scalar());
+        return Status::OK();
+        })
+    .Doc(R"doc(
+    Op that aggregates cluster matches from multiple protein cluster ops.
     )doc");
 }

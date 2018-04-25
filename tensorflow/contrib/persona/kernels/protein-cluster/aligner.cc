@@ -95,21 +95,21 @@ void ProteinAligner::FindStartingPoint(const char*seq1, const char* seq2, int se
 
   for (const double& pam : pam_list_) {
     const auto& new_env = envs_->FindNearest(pam);
-    LOG(INFO) << "FSP env gap_open is " << new_env.gap_open;
+    //LOG(INFO) << "FSP env gap_open is " << new_env.gap_open;
     s = AlignDouble(seq1, seq2, seq1_len, seq2_len, false, alignment, new_env);
-    LOG(INFO) << "FSP align double score is " << alignment.score;
+    //LOG(INFO) << "FSP align double score is " << alignment.score;
    
     char* s1 = const_cast<char*>(seq1) + alignment.seq1_min;
     char* s2 = const_cast<char*>(seq2) + alignment.seq2_min;
     int s1_len = alignment.seq1_max - alignment.seq1_min  + 1; //  ?
     int s2_len = alignment.seq2_max - alignment.seq2_min  + 1; //  ?
-    LOG(INFO) << "FSP: s1len: " << s1_len << " s2len: " << s2_len;
+    //LOG(INFO) << "FSP: s1len: " << s1_len << " s2len: " << s2_len;
 
     int max_len = AlignStrings(new_env.matrix, s1, s1_len, s2, s2_len, alignment.score,
         buf1_, buf2_, 0.5e-4, new_env.gap_open, new_env.gap_extend, &bt_data_);
     envs_->EstimPam(buf1_, buf2_, max_len, estim_result);
-    LOG(INFO) << "FSP: estim pam values: " << estim_result[0] << ", " << estim_result[1] 
-      << ", " << estim_result[2] << " str max len = " << max_len;
+    //LOG(INFO) << "FSP: estim pam values: " << estim_result[0] << ", " << estim_result[1] 
+      //<< ", " << estim_result[2] << " str max len = " << max_len;
 
     if (estim_result[0] > starting_pam) {
       starting_pam = estim_result[0];
@@ -151,25 +151,25 @@ Status ProteinAligner::AlignLocal(const char*seq1, const char* seq2, int seq1_le
 
   while (true) {
     const auto& new_env = envs_->FindNearest(point.alignment.pam_distance);
-    LOG(INFO) << "AlignLocal: env gap open is: " << new_env.gap_open;
+    //LOG(INFO) << "AlignLocal: env gap open is: " << new_env.gap_open;
 
     if (point.alignment.env == &new_env) // envs are basically static, so this is safe
       break;
    
     s = AlignDouble(seq1, seq2, seq1_len, seq2_len, false, alignment, new_env);
-    LOG(INFO) << "AlignLocal align double score is " << alignment.score;
+    //LOG(INFO) << "AlignLocal align double score is " << alignment.score;
     
     char* s1 = const_cast<char*>(seq1) + alignment.seq1_min;
     char* s2 = const_cast<char*>(seq2) + alignment.seq2_min;
     int s1_len = alignment.seq1_max - alignment.seq1_min + 1; //  ?
     int s2_len = alignment.seq2_max - alignment.seq2_min + 1; //  ?
-    LOG(INFO) << "AlignLocal: s1len: " << s1_len << " s2len: " << s2_len;
+    //LOG(INFO) << "AlignLocal: s1len: " << s1_len << " s2len: " << s2_len;
 
     int max_len = AlignStrings(new_env.matrix, s1, s1_len, s2, s2_len, alignment.score,
         buf1_, buf2_, 0.5e-4, new_env.gap_open, new_env.gap_extend, &bt_data_);
     envs_->EstimPam(buf1_, buf2_, max_len, estim_result);
-    LOG(INFO) << "AlignLocal: estim pam values: " << estim_result[0] << ", " << estim_result[1] 
-      << ", " << estim_result[2];
+    //LOG(INFO) << "AlignLocal: estim pam values: " << estim_result[0] << ", " << estim_result[1] 
+     // << ", " << estim_result[2];
 
     point.seq1_len = max_len;
     point.seq2_len = max_len;
@@ -215,15 +215,15 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
   max1--;
   max2--;
 
-  LOG(INFO) << "aln dbl score " << score << ", max1, max2: " << max1 << ", " << max2;
+  //LOG(INFO) << "aln dbl score " << score << ", max1, max2: " << max1 << ", " << max2;
 
   string seq1_rev(seq1, max1+1);
   reverse(seq1_rev.begin(), seq1_rev.end());
   string seq2_rev(seq2, max2+1);
   reverse(seq2_rev.begin(), seq2_rev.end());
 
-  LOG(INFO) << "rev 1 is " << PrintNormalizedProtein(seq1_rev.c_str(), seq1_rev.length());
-  LOG(INFO) << "rev 2 is " << PrintNormalizedProtein(seq2_rev.c_str(), seq2_rev.length());
+  //LOG(INFO) << "rev 1 is " << PrintNormalizedProtein(seq1_rev.c_str(), seq1_rev.length());
+  //LOG(INFO) << "rev 2 is " << PrintNormalizedProtein(seq2_rev.c_str(), seq2_rev.length());
 
   ProfileDouble* profile_rev = createProfileDoubleSSE(seq1_rev.c_str(), seq1_rev.length(), env.matrix);
   int max1_rev, max2_rev;
@@ -233,7 +233,7 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
   max1_rev--;
   max2_rev--;
   
-  LOG(INFO) << "aln dbl rev score " << score_rev << ", max1, max2: " << max1_rev << ", " << max2_rev;
+  //LOG(INFO) << "aln dbl rev score " << score_rev << ", max1, max2: " << max1_rev << ", " << max2_rev;
 
   result.score = score;
   result.env = &env;
@@ -241,8 +241,8 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
   result.seq2_max = max2;
   result.seq1_min = max1 - max1_rev;
   result.seq2_min = max2 - max2_rev;
-  LOG(INFO) << "seq1max: " << max1 << ", seq2max: " << max2 << ", seq1min: " << result.seq1_min 
-    << ", seq2min: " << result.seq2_min;
+  //LOG(INFO) << "seq1max: " << max1 << ", seq2max: " << max2 << ", seq1min: " << result.seq1_min 
+    //<< ", seq2min: " << result.seq2_min;
 
   CHECK_LE(fabs(score - score_rev), fabs(score)*1e-10);
 
@@ -279,7 +279,7 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
   return value >= 0.75f * params_->min_score;
 }
 
-double c_align_double_global(double* matrix, const char *s1, int ls1,
+double ProteinAligner::c_align_double_global(double* matrix, const char *s1, int ls1,
     const char *s2, int ls2, double gap_open, double gap_ext, BTData* data) {
   int i, j, k;
   int AToInts2[MAXSEQLEN + 1];

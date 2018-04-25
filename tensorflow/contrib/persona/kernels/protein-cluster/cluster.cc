@@ -19,10 +19,12 @@ namespace tensorflow {
 
     for (size_t i = 0; i < params->max_representatives && i < seqs_.size(); i++) {
       const auto& rep = seqs_[i];
+      if (rep.Genome() == *sequence.genome && rep.GenomeIndex() == sequence.genome_index)
+        continue; // don't compare to itself
 
       if (aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length())) {
 
-        LOG(INFO) << "passed threshold";
+        //LOG(INFO) << "passed threshold";
         ProteinAligner::Alignment alignment;
         int skip = i;
         // if subsequence homology, fully align and calculate coverages
@@ -30,7 +32,7 @@ namespace tensorflow {
           int index1, index2;
           skip++;
           if (sequence.total_seqs > rep.TotalSeqs() || (sequence.total_seqs == rep.TotalSeqs() 
-              && *sequence.genome > rep.Genome()) || (*sequence.genome == rep.Genome() 
+              && *sequence.genome > rep.Genome()) || ((*sequence.genome == rep.Genome())
               && sequence.genome_index > rep.GenomeIndex()) ) {
       
             s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
@@ -46,14 +48,14 @@ namespace tensorflow {
             index1 = seqs_.size();
           }
 
-          if (PassesLengthConstraint(alignment, sequence.length, rep.Length()) &&
+          /*if (PassesLengthConstraint(alignment, sequence.length, rep.Length()) &&
               PassesScoreConstraint(params, alignment.score)) {
             // add candidate for the good alignment with the representative
             LOG(INFO) << "adding candidate with alignment: " << alignment.score << ", " << alignment.pam_distance 
               << ", " << alignment.pam_variance;
             Candidate cand(index1, index2, alignment);
             candidates_.push_back(std::move(cand));
-          }
+          }*/
         }
 
         ClusterSequence new_seq(string(sequence.data, sequence.length), *sequence.genome, 
@@ -88,11 +90,12 @@ namespace tensorflow {
     const ClusterSequence* seq2 = seq;
     int index1, index2;
 
-    LOG(INFO) << "SeqToAll against " << seqs_.size() - skip << " seqs in cluster";
-    for (size_t i = skip; i < seqs_.size(); i++) {
+    //LOG(INFO) << "SeqToAll against " << seqs_.size() - skip << " seqs in cluster";
+    for (size_t i = 0; i < seqs_.size(); i++) {
       const auto* sequence = &seqs_[i];
+      seq1 = seq; seq2 = seq;
       if (seq->TotalSeqs() > sequence->TotalSeqs() || 
-          (seq->TotalSeqs() == sequence->TotalSeqs() && seq->Genome() > 
+          ((seq->TotalSeqs() == sequence->TotalSeqs()) && seq->Genome() > 
            sequence->Genome())) {
         seq1 = sequence; index1 = i;
         index2 = seqs_.size();
@@ -102,6 +105,7 @@ namespace tensorflow {
       }
 
       if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() > seq2->GenomeIndex()) {
+        //LOG(INFO) << "seq 1 is greater than seq2 swapping ----------------------------";
         std::swap(seq1, seq2);
         std::swap(index1, index2);
         /*const auto& tmp = seq1;
@@ -130,6 +134,8 @@ namespace tensorflow {
   Status Cluster::BuildOutput(vector<Tensor>& match_ints, 
       vector<Tensor>& match_doubles, vector<Tensor>& match_genomes, 
       int size, OpKernelContext* ctx) {
+
+    if (candidates_.size() == 0) return Status::OK();
 
     int num_tensors = candidates_.size() / size + 1;
 
@@ -168,10 +174,10 @@ namespace tensorflow {
         genomes(j, 0) = seq1.Genome();
         genomes(j, 1) = seq2.Genome();
 
-        LOG(INFO) << "Candidate: " << seq1.Genome() << ", " << seq2.Genome() << " [" <<
+        /*LOG(INFO) << "Candidate: " << seq1.Genome() << ", " << seq2.Genome() << " [" <<
           seq1.GenomeIndex()+1 << ", " << seq2.GenomeIndex()+1 << ", " << aln.score << ", " <<
           aln.pam_distance << ", " << aln.seq1_min+1 << ".." << aln.seq1_max+1 << ", " <<
-          aln.seq2_min+1 << ".." << aln.seq2_max+1 << ", " << aln.pam_variance << "]";
+          aln.seq2_min+1 << ".." << aln.seq2_max+1 << ", " << aln.pam_variance << "]";*/
       }
       cur_cand += size;
     }

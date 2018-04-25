@@ -54,6 +54,8 @@ class Cluster {
       std::vector<Tensor>& match_doubles, std::vector<Tensor>& match_genomes, 
       int size, OpKernelContext* ctx);
 
+    size_t NumCandidates() { return candidates_.size(); }
+
   private:
    
     // internal representation of sequences in the cluster

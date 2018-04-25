@@ -39,7 +39,6 @@ namespace tensorflow {
     }
 
     void Compute(OpKernelContext* ctx) override {
-      LOG(INFO) << "Starting chunk to tensor";
 
       const Tensor* chunk_t;
       OP_REQUIRES_OK(ctx, ctx->input("chunk", &chunk_t));
@@ -58,13 +57,7 @@ namespace tensorflow {
 
       resource_releaser(chunk_container);
 
-      LOG(INFO) << "Done chunk to tensor";
-
     }
-
-  private:
-    ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
-
 
   };
 

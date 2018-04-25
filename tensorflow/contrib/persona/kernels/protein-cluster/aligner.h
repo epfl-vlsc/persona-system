@@ -65,6 +65,9 @@ class ProteinAligner {
     int AlignStrings(double* matrix, char *s1, int len1, char *s2, int len2, 
         double escore, char *o1, char *o2, double maxerr, double gap_open, double gap_ext, BTData* data);
 
+    double c_align_double_global(double* matrix, const char *s1, int ls1,
+        const char *s2, int ls2, double gap_open, double gap_ext, BTData* data);
+
     // these are for reuse over align double/local methods
     char* buf1_ = nullptr; // MAXSEQLEN
     char* buf2_ = nullptr; // MAXSEQLEN
