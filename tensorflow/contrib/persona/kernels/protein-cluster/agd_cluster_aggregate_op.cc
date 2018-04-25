@@ -1,8 +1,7 @@
 
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include <boost/functional/hash.hpp>
-#include <unordered_map>
+#include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
 
 namespace tensorflow {
 
@@ -199,20 +198,6 @@ namespace tensorflow {
         return s.str();
       }
     };
-
-    struct PairHash {
-      template <class T1, class T2>
-      size_t operator()(const std::pair<T1, T2> &p) const {
-        auto h1 = std::hash<T1>{}(p.first);
-        auto h2 = std::hash<T1>{}(p.second);
-        boost::hash_combine(h1, h2);
-        //LOG(INFO) << "hash was called on " << s.ToString() << " and value was: " << p;
-        return h1;
-      }
-    };
-
-    typedef pair<string, string> GenomePair; // could be replaced by ints that map to genome strings
-    typedef pair<int, int> SequencePair;
 
     // aggregate genome pairs, and sequence pairs -- because there can be dups
     unordered_map<GenomePair, unordered_map<SequencePair, Match, PairHash>, PairHash> all_matches_map_;

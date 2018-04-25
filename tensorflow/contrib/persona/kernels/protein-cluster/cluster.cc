@@ -13,7 +13,7 @@ namespace tensorflow {
   }
 
   bool Cluster::EvaluateSequence(Sequence& sequence,  
-      const AlignmentEnvironments* envs, const Parameters* params) {
+      const AlignmentEnvironments* envs, const Parameters* params, GenomeSequenceMap& candidate_map) {
     ProteinAligner aligner(envs, params);
     Status s;
 
@@ -61,7 +61,7 @@ namespace tensorflow {
         ClusterSequence new_seq(string(sequence.data, sequence.length), *sequence.genome, 
             sequence.genome_index, sequence.total_seqs);
 
-        SeqToAll(&new_seq, skip, aligner);
+        SeqToAll(&new_seq, skip, aligner, candidate_map);
 
         seqs_.push_back(std::move(new_seq));
         return true;
@@ -84,7 +84,8 @@ namespace tensorflow {
     return score >= params->min_score;
   }
    
-  void Cluster::SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner) {
+  void Cluster::SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner, 
+      GenomeSequenceMap& candidate_map) {
 
     const ClusterSequence* seq1 = seq;
     const ClusterSequence* seq2 = seq;
@@ -113,6 +114,18 @@ namespace tensorflow {
         seq2 = tmp;*/
       }
 
+      auto genome_pair = make_pair(seq1->Genome(), seq2->Genome());
+      auto seq_pair = make_pair(seq1->GenomeIndex(), seq2->GenomeIndex());
+      auto genome_pair_it = candidate_map.find(genome_pair);
+      if (genome_pair_it != candidate_map.end()) {
+        auto seq_pair_it = genome_pair_it->second.find(seq_pair);
+        if (seq_pair_it != genome_pair_it->second.end()) {
+          LOG(INFO) << "not computing duplicate!";
+          continue; // we already have this candidate
+        }
+      }
+
+
       if (aligner.PassesThreshold(seq1->Data(), seq2->Data(), 
             seq1->Length(), seq2->Length())) {
            
@@ -124,6 +137,7 @@ namespace tensorflow {
             PassesScoreConstraint(aligner.Params(), alignment.score)) {
           Candidate cand(index1, index2, alignment);
           candidates_.push_back(std::move(cand));
+          candidate_map[genome_pair][seq_pair] = true;
         }
 
       } // else we don't add to candidates, score not high enough

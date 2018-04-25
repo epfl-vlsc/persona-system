@@ -1,8 +1,6 @@
 
 #include <cstdint>
 #include <pthread.h>
-#include <boost/functional/hash.hpp>
-#include <unordered_map>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/format.h"
@@ -11,6 +9,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/cluster.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_environment.h"
 
@@ -206,7 +205,7 @@ namespace tensorflow {
               seq.genome = &genome;
               seq.total_seqs = total_seqs;
 
-              auto added = cluster.EvaluateSequence(seq, envs_, &params_);
+              auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
 
               if (!was_added(i)) was_added(i) = added;
 
@@ -279,7 +278,7 @@ namespace tensorflow {
           seq.genome = &genome;
           seq.total_seqs = total_seqs;
 
-          auto added = cluster.EvaluateSequence(seq, envs_, &params_);
+          auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
 
           if (!was_added(i)) was_added(i) = added;
           
@@ -354,24 +353,9 @@ namespace tensorflow {
 
     vector<Cluster> clusters_;
 
-    struct PairHash {
-      template <class T1, class T2>
-      size_t operator()(const std::pair<T1, T2> &p) const {
-        auto h1 = std::hash<T1>{}(p.first);
-        auto h2 = std::hash<T1>{}(p.second);
-        boost::hash_combine(h1, h2);
-        //LOG(INFO) << "hash was called on " << s.ToString() << " and value was: " << p;
-        return h1;
-      }
-    };
-
-    typedef pair<string, string> GenomePair; // could be replaced by ints that map to genome strings
-    typedef pair<int, int> SequencePair;
-   
     // record that we have alignments (candidate) between specific (g1, g2) (s1, s2) pairs
     // will still have duplicates between ring nodes
-    typedef unordered_map<GenomePair, unordered_map<SequencePair, bool, PairHash>, PairHash> GenomeSequenceMap;
-
+    GenomeSequenceMap candidate_map_;
   
     int ring_size_;
     bool should_seed_ = false;

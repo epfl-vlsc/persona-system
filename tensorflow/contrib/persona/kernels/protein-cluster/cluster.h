@@ -5,6 +5,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
 
 namespace tensorflow {
 
@@ -30,7 +31,8 @@ class Cluster {
     // return true if added to cluster, false if not
     // will modify coverage string (in `sequence`) if added
     bool EvaluateSequence(Sequence& sequence,  
-        const AlignmentEnvironments* envs, const Parameters* params);
+        const AlignmentEnvironments* envs, const Parameters* params, 
+        GenomeSequenceMap& candidate_map);
 
     // BuildOutput() -- encode the seq pairs into tensors
     // RefinedMatches consist of 6 ints and 3 doubles
@@ -91,7 +93,8 @@ class Cluster {
     
     // perform all to all between sequences in the cluster
     // skip X first seqs, because they have been tested or added already
-    void SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner); 
+    void SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner,
+        GenomeSequenceMap& candidate_map); 
 
     bool PassesLengthConstraint(const ProteinAligner::Alignment& alignment,
         int seq1_len, int seq2_len);
