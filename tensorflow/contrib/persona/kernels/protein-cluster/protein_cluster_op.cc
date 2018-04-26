@@ -217,6 +217,38 @@ namespace tensorflow {
           }
         }
 
+        if (++num_chunks_ == total_chunks_) {
+          // we have seen all chunks and are done, 
+          // encode the clusters into tensors and enqueue them 
+          // for downstream aggregation
+          LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
+          //
+          // seqs in this chunk however have not been compared to one another
+          
+          for (auto& cluster : clusters_) {
+
+            if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
+
+            vector<Tensor> ints, doubles, genomes;
+            OP_REQUIRES_OK(ctx, cluster.BuildOutput(ints, doubles, genomes, cluster_length_, ctx)); // TODO adjust or parametrize '10'
+
+            // enqueue tensor tuples into cluster queue
+            for (size_t i = 0; i < ints.size(); i++) {
+              OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, ints[i], doubles[i], genomes[i]));
+            }
+          }
+
+          Tensor t;
+          OP_REQUIRES_OK(ctx, ctx->allocate_temp(DataType::DT_STRING, TensorShape({}), &t));
+          t.scalar<string>()() = "Node " + to_string(node_id_) + " is done.";
+
+          // close queues
+          cluster_queue_->Close(ctx, false/*cancel pending enqueue*/, 
+              [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"cluster queue closed"; } );
+          neighbor_queue_out_->Close(ctx, false/*cancel pending enqueue*/, 
+              [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"neighbor out queue closed"; } );
+        }
+
         Tensor* out;
         OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &out));
         out->scalar<string>()() = "Node " + to_string(node_id_) + " execution is done";
@@ -264,7 +296,7 @@ namespace tensorflow {
           << " genome: " << genome << " genome_index: " << genome_index 
           << " total_seqs: " << total_seqs << ", seq len: " << len;*/
 
-        LOG(INFO) << " genome: " << genome;
+        //LOG(INFO) << " genome: " << genome;
 
         if (coverages(i).size() == 0)
           coverages(i).resize(len, 1);
@@ -300,35 +332,6 @@ namespace tensorflow {
 
       LOG(INFO) << "Total clusters: " << clusters_.size();
 
-      if (++num_chunks_ == total_chunks_) {
-        // we have seen all chunks and are done, 
-        // encode the clusters into tensors and enqueue them 
-        // for downstream aggregation
-        LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
-        
-        for (auto& cluster : clusters_) {
-
-          if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
-
-          vector<Tensor> ints, doubles, genomes;
-          OP_REQUIRES_OK(ctx, cluster.BuildOutput(ints, doubles, genomes, cluster_length_, ctx)); // TODO adjust or parametrize '10'
-
-          // enqueue tensor tuples into cluster queue
-          for (size_t i = 0; i < ints.size(); i++) {
-            OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, ints[i], doubles[i], genomes[i]));
-          }
-        }
-
-        Tensor t;
-        OP_REQUIRES_OK(ctx, ctx->allocate_temp(DataType::DT_STRING, TensorShape({}), &t));
-        t.scalar<string>()() = "Node " + to_string(node_id_) + " is done.";
-
-        // close queues
-        cluster_queue_->Close(ctx, false/*cancel pending enqueue*/, 
-            [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"cluster queue closed"; } );
-        neighbor_queue_out_->Close(ctx, false/*cancel pending enqueue*/, 
-            [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"neighbor out queue closed"; } );
-      }
 
       Tensor* out;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &out));
@@ -369,6 +372,67 @@ namespace tensorflow {
       for (size_t i = 0; i < coverages.size(); i++)
         sum += (int)coverages[i];
       return sum;
+    }
+
+    void AddClustersAndEvaluate(AGDRecordReader& seqs_reader, Tensor& was_added_t, 
+        Tensor& coverages_t, int first_ord, string& genome, const int& total_seqs) {
+
+      const char* data;
+      size_t len;
+      Sequence seq;
+      int i = 0;
+      int genome_index = first_ord;
+      auto was_added = was_added_t.vec<bool>();
+      auto coverages = coverages_t.vec<string>();
+
+      Status s = seqs_reader.GetNextRecord(&data, &len);
+      size_t start_cluster = clusters_.size();
+      // create clusters
+      while (s.ok()) {
+        /*LOG(INFO) << "Node " << to_string(node_id_) << "was added " 
+          << was_added(i) << " numuncovered: " << NumUncoveredAA(coverages(i));*/
+        if (!was_added(i) || params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
+            params_.max_n_aa_not_covered) {
+          // add cluster
+          //LOG(INFO) << "Node " << to_string(node_id_) << " creating cluster ";
+          Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
+          clusters_.push_back(std::move(cluster));
+        } 
+        s = seqs_reader.GetNextRecord(&data, &len);
+        i++;
+        genome_index++;
+      }
+
+      if (start_cluster < clusters_.size()) {
+        // now compare each seq to the newly added clusters
+        seqs_reader.Reset();
+        s = seqs_reader.GetNextRecord(&data, &len);
+        i = 0;
+        genome_index = first_ord;
+
+        while (s.ok()) {
+
+          for (size_t j = start_cluster; j < clusters_.size(); j++) {
+            auto& cluster = clusters_[j];
+            // fill seq and pass to evaluate
+            seq.data = data;
+            seq.length = len;
+            seq.coverages = &coverages(i);
+            seq.genome_index = genome_index;
+            seq.genome = &genome;
+            seq.total_seqs = total_seqs;
+
+            auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
+
+            if (!was_added(i)) was_added(i) = added;
+
+          }
+
+          s = seqs_reader.GetNextRecord(&data, &len);
+          genome_index++;
+          i++;
+        }
+      }
     }
      
     inline Status DequeueChunk(OpKernelContext* ctx, Tensor& chunk, Tensor& num_recs, 

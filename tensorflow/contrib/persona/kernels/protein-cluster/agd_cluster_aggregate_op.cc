@@ -115,7 +115,7 @@ namespace tensorflow {
 
       auto size = genomes_t.dim_size(0);
 
-      LOG(INFO) << "aggregate: processing " << size << " matches";
+      //LOG(INFO) << "aggregate: processing " << size << " matches";
 
       auto genomes = genomes_t.matrix<string>();
       auto match_ints = match_ints_t.matrix<int32>();
@@ -125,14 +125,14 @@ namespace tensorflow {
 
       for (size_t i = 0; i < size; i++) {
         if (genomes(i, 0) == "") {
-          LOG(INFO) << "empty genome at index " << i;
+          //LOG(INFO) << "empty genome at index " << i;
           break; // 
         }
 
         auto genome_pair = make_pair(genomes(i, 0), genomes(i, 1));
         auto seq_pair = make_pair(match_ints(i, 0), match_ints(i, 1));
-        LOG(INFO) << "idx: " << i << ", genome pair is " << genome_pair.first << ", " << genome_pair.second;
-        LOG(INFO) << "seq pair is " << seq_pair.first << ", " << seq_pair.second;
+        //LOG(INFO) << "idx: " << i << ", genome pair is " << genome_pair.first << ", " << genome_pair.second;
+        //LOG(INFO) << "seq pair is " << seq_pair.first << ", " << seq_pair.second;
         
         match.index_1 = seq_pair.first;
         match.index_2 = seq_pair.second;
