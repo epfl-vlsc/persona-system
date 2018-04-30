@@ -12,7 +12,6 @@
 #include <string>
 #include <iostream>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
-//alignment.pb.h is a special cmd.
 #include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/sam_flags.h"
 
@@ -32,7 +31,6 @@ namespace tensorflow {
        data->release();
      }
   }//namespace end
-
 
   class AGDBaseCompressionOp : public OpKernel {
   public:
@@ -72,7 +70,6 @@ namespace tensorflow {
       ResourceContainer<BufferPair> *output_bufferpair_container;
 
       // LOG(INFO) << "initializes the tensor";
-      // OP_REQUIRES_OK(ctx, LookupResource(ctx, HandleFromInput(ctx, 0), &results_container));
       OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
       OP_REQUIRES_OK(ctx, ctx->input("results", &results_t));
       OP_REQUIRES_OK(ctx, ctx->input("records", &records_t));
@@ -129,9 +126,9 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
           char tmp = cigar[i];
           //LOG(INFO) << "here is the CIGAR : " << cigar[i];
           if(tmp == text[0]){
-            //TODO set op kernel to bad. op requires macro
             LOG(INFO) << "should use X or =";
-            //s.Update(errors::InvalidArgument("the cigar : ",tmp," should be X or ="));
+            ctx->SetStatus(errors::Internal("should use X or '=' instead of M"));
+            return;
           }else if(tmp == text[1] || tmp == text[3] || tmp == text[5] ||tmp == text[6] ){
             pos += stoi(val);
             compress_cigar += val;
@@ -161,12 +158,12 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
         // for(int i = 0 ; i < record_size; i++){
         //   LOG(INFO) << agd_record[i];
         // }
-        // LOG(INFO) << "record size : " << record_size;
-        // LOG(INFO) << "compress cigar : " << compress_cigar;
-        // LOG(INFO) << "here is the CIGAR : " << cigar;
-        // LOG(INFO) << "CIGAR length : " << cigar_len;
-        // LOG(INFO) << "results flag : " << flag;
-        // LOG(INFO) << "results position : " << position;
+        LOG(INFO) << "record size : " << record_size;
+        LOG(INFO) << "compress cigar : " << compress_cigar;
+        LOG(INFO) << "here is the CIGAR : " << cigar;
+        LOG(INFO) << "CIGAR length : " << cigar_len;
+        LOG(INFO) << "results flag : " << flag;
+        LOG(INFO) << "results position : " << position;
 
         p = record_reader.GetNextRecord(&agd_record,&record_size);
         s = results_reader.GetNextResult(agd_result);
@@ -175,7 +172,6 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
         //reset compress cigar
         compress_cigar = "";
       }//while s is ok()
-
       resource_releaser(results_container);
     }//compute end
   private:

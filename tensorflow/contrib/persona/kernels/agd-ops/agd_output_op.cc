@@ -31,8 +31,7 @@ namespace tensorflow {
 
       //VLOG(INFO) << "chunk path is " << chunk_path;
       for (int i = 0; i < columns_.size(); i++) {
-
-        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile( 
+        TF_RETURN_IF_ERROR(ctx->env()->NewReadOnlyMemoryRegionFromFile(
               chunk_path + "." + columns_[i], &mmaps_[i]));
         buffers_[i].reset();
         auto unpack = columns_[i] == "base" && unpack_;
@@ -72,9 +71,10 @@ namespace tensorflow {
           OP_REQUIRES_OK(ctx, LoadChunk(ctx, chunk_names(which_chunk)));
           continue;
         }
-
+        //printf("columns size : %ld \n",columns_.size());
         for (int i = 0; i < columns_.size(); i++) {
-          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual" || columns_[i] == "prot") {
+          //printf("columns : %s \n", columns_[i].c_str());
+          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual" || columns_[i] == "prot" || columns_[i] == "refcompress") {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
             fwrite(data, length, 1, stdout);
             printf("\n");
@@ -107,7 +107,7 @@ namespace tensorflow {
 
         current++;
       }
-      for (int i = 0; i < columns_.size(); i++) 
+      for (int i = 0; i < columns_.size(); i++)
         mmaps_[i].reset(nullptr);
 
     }

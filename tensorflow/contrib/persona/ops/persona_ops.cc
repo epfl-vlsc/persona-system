@@ -375,12 +375,12 @@ Prints records to stdout from record indices `start` to `finish`.
     REGISTER_OP("AGDBaseCompression")
     .Attr("unpack: bool = true")
     .Input("results: string")
-    .Input("records : string")
+    .Input("records: string")
     .Input("chunk_size: int32")
     .Input("buffer_pair_pool: Ref(string)")
-    .Output("ret : string")
+    .Output("ret: string")
     .SetShapeFn([](InferenceContext *c) {
-                c->set_output(0, c->Scalar());
+                c->set_output(0, c->Vector(2));
         return Status::OK();
         })
     .SetIsStateful()
@@ -388,9 +388,24 @@ Prints records to stdout from record indices `start` to `finish`.
 Conpress the given data into a CIGAR with additional information.
 
 Format of a regular CIGAR with "|" as delimiter.
+
+more details will come after everythings dones.
     )doc");
 
     REGISTER_OP("AGDBaseDecompression")
+    // .Attr("unpack: bool = true")
+    // .Input("reference: string") // or list string ?
+    // .Input("compress_base")
+    // .Input("buffer_pair_pool: Ref(String)")
+    // .Output("uncompress: string")
+    // .SetShapeFn([](InferenceContext *c) {
+    //             c->set_output(0, c->Vector(2));
+    //     return Status::OK();
+    //     })
+    // .SetIsStateful()
+    // .Doc(R"doc(
+    //   Uncompress
+    // )doc");
     .Attr("ref_sequences: list(string)")
     .Attr("ref_index: list(int)")
     .Attr("unpack: bool = true")
