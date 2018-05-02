@@ -23,9 +23,13 @@ import six
 from tensorflow.python.keras._impl.keras import backend as K
 from tensorflow.python.keras._impl.keras.utils.generic_utils import deserialize_keras_object
 from tensorflow.python.layers.base import Layer
+from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import nn
 from tensorflow.python.platform import tf_logging as logging
+from tensorflow.python.util.tf_export import tf_export
 
 
+@tf_export('keras.activations.softmax')
 def softmax(x, axis=-1):
   """Softmax activation function.
 
@@ -41,19 +45,21 @@ def softmax(x, axis=-1):
   """
   ndim = K.ndim(x)
   if ndim == 2:
-    return K.softmax(x)
+    return nn.softmax(x)
   elif ndim > 2:
-    e = K.exp(x - K.max(x, axis=axis, keepdims=True))
-    s = K.sum(e, axis=axis, keepdims=True)
+    e = math_ops.exp(x - math_ops.reduce_max(x, axis=axis, keepdims=True))
+    s = math_ops.reduce_sum(e, axis=axis, keepdims=True)
     return e / s
   else:
     raise ValueError('Cannot apply softmax to a tensor that is 1D')
 
 
+@tf_export('keras.activations.elu')
 def elu(x, alpha=1.0):
   return K.elu(x, alpha)
 
 
+@tf_export('keras.activations.selu')
 def selu(x):
   """Scaled Exponential Linear Unit. (Klambauer et al., 2017).
 
@@ -73,38 +79,47 @@ def selu(x):
   return scale * K.elu(x, alpha)
 
 
+@tf_export('keras.activations.softplus')
 def softplus(x):
-  return K.softplus(x)
+  return nn.softplus(x)
 
 
+@tf_export('keras.activations.softsign')
 def softsign(x):
-  return K.softsign(x)
+  return nn.softsign(x)
 
 
+@tf_export('keras.activations.relu')
 def relu(x, alpha=0., max_value=None):
   return K.relu(x, alpha=alpha, max_value=max_value)
 
 
+@tf_export('keras.activations.tanh')
 def tanh(x):
-  return K.tanh(x)
+  return nn.tanh(x)
 
 
+@tf_export('keras.activations.sigmoid')
 def sigmoid(x):
-  return K.sigmoid(x)
+  return nn.sigmoid(x)
 
 
+@tf_export('keras.activations.hard_sigmoid')
 def hard_sigmoid(x):
   return K.hard_sigmoid(x)
 
 
+@tf_export('keras.activations.linear')
 def linear(x):
   return x
 
 
+@tf_export('keras.activations.serialize')
 def serialize(activation):
   return activation.__name__
 
 
+@tf_export('keras.activations.deserialize')
 def deserialize(name, custom_objects=None):
   return deserialize_keras_object(
       name,
@@ -113,6 +128,7 @@ def deserialize(name, custom_objects=None):
       printable_module_name='activation function')
 
 
+@tf_export('keras.activations.get')
 def get(identifier):
   if identifier is None:
     return linear

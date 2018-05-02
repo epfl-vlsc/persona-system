@@ -27,6 +27,7 @@ limitations under the License.
 #include "tensorflow/core/grappler/costs/utils.h"
 #include "tensorflow/core/grappler/op_types.h"
 #include "tensorflow/core/grappler/utils.h"
+#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/logging.h"
@@ -43,6 +44,8 @@ Costs CombineCosts(const Costs& left, const Costs& right) {
 
   Costs result = left;
   result.execution_time += right.execution_time;
+  result.compute_time += right.compute_time;
+  result.memory_time += right.memory_time;
   if (right.inaccurate) {
     result.inaccurate = true;
   }
@@ -324,7 +327,7 @@ Status VirtualScheduler::Init() {
 
   // Get the nodes that would run to output fetch_nodes.
   bool ill_formed = false;
-  std::vector<const NodeDef*> nodes =
+  const std::vector<const NodeDef*> fetch_fanin_nodes =
       ComputeTransitiveFanin(graph, fetch_nodes, &ill_formed);
   if (ill_formed) {
     return errors::InvalidArgument(
@@ -338,7 +341,7 @@ Status VirtualScheduler::Init() {
   // exactly the same as those executed for real. One possible discrepancy could
   // be the control flow nodes, where tf only executes one path.
   std::unordered_map<string, const NodeDef*> name_to_node;
-  for (const auto& node : nodes) {
+  for (const auto& node : fetch_fanin_nodes) {
     name_to_node[node->name()] = node;
   }
 
@@ -359,14 +362,22 @@ Status VirtualScheduler::Init() {
 
   // Build node_map; for each node, create its NodeState and connect its inputs
   // and outputs.
-  for (const auto* curr_node : nodes) {
+  for (const auto* curr_node : fetch_fanin_nodes) {
     auto& curr_node_state = GetNodeStateOrCreateIt(curr_node);
     const string curr_node_device = DeviceName(curr_node);
     std::vector<string> inputs;
     if (IsRecv(*curr_node)) {
       const auto& attr = curr_node->attr();
-      const NodeDef* send = name_to_send[attr.at("tensor_name").s()];
-      inputs = {send->name()};
+      if (attr.count("tensor_name")) {
+        const auto& send_node_name = attr.at("tensor_name").s();
+        auto it = name_to_send.find(send_node_name);
+        // If there is a _Send associated with the curr_node (_Recv), add it as
+        // input.
+        if (it != name_to_send.end()) {
+          const NodeDef* send = it->second;
+          inputs = {send->name()};
+        }
+      }
     } else {
       for (const string& input : curr_node->input()) {
         inputs.push_back(input);
@@ -425,9 +436,11 @@ Status VirtualScheduler::Init() {
         feed_nodes.find(curr_node->name()) != feed_nodes.end();
 
     // Default case: node without inputs are ready at time 0.
-    const bool has_no_inputs = curr_node->input().empty();
+    // Note that we check inputs vector which may be different to
+    // curr_node->input(); e.g., we add Send as input to Recv.
+    const bool has_no_inputs = inputs.empty();
 
-    if (!IsRecv(*curr_node) && (given_as_feed || has_no_inputs)) {
+    if (given_as_feed || has_no_inputs) {
       curr_node_state.time_ready = Costs::Duration();
       ready_nodes_->AddNode(curr_node);
       VLOG(3) << "Added ready node: " << curr_node->name();
@@ -446,13 +459,16 @@ Status VirtualScheduler::Init() {
   }
 
   if (ready_nodes_->Empty()) {
-    return Status(error::UNAVAILABLE, "No ready nodes in the graph.");
+    return errors::InvalidArgument("No ready nodes in the graph.");
   }
 
-  if (!feed_nodes.empty())
-    LOG(ERROR) << "Some feed nodes were not found in the graph: "
-               << str_util::Join(feed_nodes, ",");
-
+  if (!feed_nodes.empty()) {
+    // This isn't always a bug: when the caller hasn't specified the exact list
+    // of feed and fetch nodes, by default we consider all placeholders as feed
+    // nodes, but some of them may not be needed for the default fetch node.
+    VLOG(1) << "Some feed nodes were not consumed by the fetch fanin: "
+            << str_util::Join(feed_nodes, ",");
+  }
   initialized_ = true;
   return Status::OK();
 }
@@ -827,6 +843,8 @@ bool VirtualScheduler::MarkCurrNodeExecuted(const Costs& node_costs) {
 Costs VirtualScheduler::Summary() const {
   // Print out basic execution summary.
   VLOG(1) << "Expected execution time: " << graph_costs_.execution_time.count();
+  VLOG(1) << "Expected compute time: " << graph_costs_.compute_time.count();
+  VLOG(1) << "Expected memory time: " << graph_costs_.memory_time.count();
   VLOG(1) << "Expected max memory: " << graph_costs_.max_memory;
   VLOG(1) << "Expected max per-op buffers: " << graph_costs_.max_per_op_buffers;
   VLOG(1) << "Expected max per-op streaming buffers: "

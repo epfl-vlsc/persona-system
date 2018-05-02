@@ -5,7 +5,7 @@
 #include "util.h"
 #include "format.h"
 #include "tensorflow/core/platform/mutex.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
+//#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include <cstdint>
 
 namespace tensorflow {

@@ -5,7 +5,6 @@
 #include "tensorflow/contrib/persona/kernels/agd-format/data.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/util.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/buffer.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include <list>
 #include <rados/librados.hpp>
 

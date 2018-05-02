@@ -92,6 +92,7 @@ A pool specifically for agd read resources.
 Intended to be used for AGDAssembler
 )doc");
 
+#ifndef __APPLE__
     REGISTER_OP("AGDCephMerge")
     .Attr("chunk_size: int >= 1")
     .Attr("intermediate_files: list(string)")
@@ -145,6 +146,39 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
 
 )doc");
+    
+    REGISTER_OP("CephReader")
+    .Attr("cluster_name: string")
+    .Attr("user_name: string")
+    .Attr("ceph_conf_path: string")
+    .Attr("read_size: int")
+    .Attr("pool_name: string")
+    .Input("buffer_pool: Ref(string)")
+    .Input("key: string")
+    .Input("namespace: string")
+    .Output("file_handle: string")
+    .SetShapeFn([](InferenceContext *c) {
+        ShapeHandle sh;
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
+        auto dim_handle = c->Dim(sh, 0);
+        auto dim_val = c->Value(dim_handle);
+        if (dim_val != 2) {
+        return Internal("buffer_handle must have dimensions {2}. Got ", dim_val);
+        }
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 0, &sh));
+        TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 0, &sh));
+        c->set_output(0, c->input(0));
+        return Status::OK();
+        })
+  .Doc(R"doc(
+Obtains file names from a queue, fetches those files from Ceph storage using Librados,
+and writes them to a buffer from a pool of buffers.
+
+buffer_pool: a handle to the buffer pool
+key: key reference to the filename queue
+file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
+  )doc");
+#endif
 
     REGISTER_OP("AGDGeneCoverage")
     .Attr("ref_sequences: list(string)")
@@ -545,37 +579,6 @@ Note that the output is meaningless. It's only purpose is so that
 we can use it in other pipelines where writers are used
 )doc");
 
-    REGISTER_OP("CephReader")
-    .Attr("cluster_name: string")
-    .Attr("user_name: string")
-    .Attr("ceph_conf_path: string")
-    .Attr("read_size: int")
-    .Attr("pool_name: string")
-    .Input("buffer_pool: Ref(string)")
-    .Input("key: string")
-    .Input("namespace: string")
-    .Output("file_handle: string")
-    .SetShapeFn([](InferenceContext *c) {
-        ShapeHandle sh;
-        TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 1, &sh));
-        auto dim_handle = c->Dim(sh, 0);
-        auto dim_val = c->Value(dim_handle);
-        if (dim_val != 2) {
-        return Internal("buffer_handle must have dimensions {2}. Got ", dim_val);
-        }
-        TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 0, &sh));
-        TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 0, &sh));
-        c->set_output(0, c->input(0));
-        return Status::OK();
-        })
-  .Doc(R"doc(
-Obtains file names from a queue, fetches those files from Ceph storage using Librados,
-and writes them to a buffer from a pool of buffers.
-
-buffer_pool: a handle to the buffer pool
-key: key reference to the filename queue
-file_handle: a Tensor(2) of strings to access the file resource in downstream nodes
-  )doc");
 
     REGISTER_OP("FastaChunker")
     .Attr("chunk_size: int >= 1")
@@ -1341,8 +1344,10 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   DUAL_WRITER_OP("BufferPair");
   DUAL_WRITER_OP("BufferList");
 
+#ifndef __APPLE__
   CEPH_WRITER_OP("Buffer")
     .Attr("compressed: bool");
+#endif
 
   FS_WRITER_OP("Buffer")
     .Attr("compressed: bool");

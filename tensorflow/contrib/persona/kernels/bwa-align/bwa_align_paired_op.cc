@@ -24,7 +24,6 @@
 #include "bwa_reads.h"
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/read_resource.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include "tensorflow/contrib/persona/kernels/bwa-align/bwa_paired_executor.h"
 
 namespace tensorflow {
