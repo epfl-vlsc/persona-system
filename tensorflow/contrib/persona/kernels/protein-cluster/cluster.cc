@@ -22,6 +22,9 @@ namespace tensorflow {
       if (rep.Genome() == *sequence.genome && rep.GenomeIndex() == sequence.genome_index)
         continue; // don't compare to itself
 
+      if (rep.GenomeIndex() == 502 && rep.Genome() == "CHLL2" && sequence.genome == "CHLCH" && 
+          sequence.genome_index = 175)
+        LOG(INFO) << "found it";
       if (aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length())) {
 
         //LOG(INFO) << "passed threshold";

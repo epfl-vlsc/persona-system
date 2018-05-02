@@ -15,14 +15,6 @@
 
 namespace tensorflow {
 
-   namespace { 
-      void resource_releaser(ResourceContainer<Data> *data) {
-        core::ScopedUnref a(data);
-        data->release();
-      }
-   }
-
-
   using namespace std;
   using namespace errors;
   using namespace format;
@@ -174,8 +166,24 @@ namespace tensorflow {
         while (s.ok()) {
           /*LOG(INFO) << "Node " << to_string(node_id_) << "was added " 
               << was_added(i) << " numuncovered: " << NumUncoveredAA(coverages(i));*/
-          if (!was_added(i) || params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
-              params_.max_n_aa_not_covered) {
+          if (start_cluster < clusters_.size()) {
+            for (size_t j = start_cluster; j < clusters_.size(); j++) {
+              auto& cluster = clusters_[j];
+              // fill seq and pass to evaluate
+              seq.data = data;
+              seq.length = len;
+              seq.coverages = &coverages(i);
+              seq.genome_index = genome_index;
+              seq.genome = &genome;
+              seq.total_seqs = total_seqs;
+
+              auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
+
+              if (!was_added(i)) was_added(i) = added;
+            }
+          }
+          if (!was_added(i) || (params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
+              params_.max_n_aa_not_covered)) {
             // add cluster
             //LOG(INFO) << "Node " << to_string(node_id_) << " creating cluster ";
             Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
@@ -186,7 +194,7 @@ namespace tensorflow {
           genome_index++;
         }
        
-        if (start_cluster < clusters_.size()) {
+        /*if (start_cluster < clusters_.size()) {
           // now compare each seq to the newly added clusters
           seqs_reader.Reset();
           s = seqs_reader.GetNextRecord(&data, &len);
@@ -215,13 +223,14 @@ namespace tensorflow {
             genome_index++;
             i++;
           }
-        }
+        }*/
 
         if (++num_chunks_ == total_chunks_) {
           // we have seen all chunks and are done, 
           // encode the clusters into tensors and enqueue them 
           // for downstream aggregation
           LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
+          LOG(INFO) << "Total clusters: " << clusters_.size();
           //
           // seqs in this chunk however have not been compared to one another
           
@@ -391,8 +400,8 @@ namespace tensorflow {
       while (s.ok()) {
         /*LOG(INFO) << "Node " << to_string(node_id_) << "was added " 
           << was_added(i) << " numuncovered: " << NumUncoveredAA(coverages(i));*/
-        if (!was_added(i) || params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
-            params_.max_n_aa_not_covered) {
+        if (!was_added(i) || (params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
+            params_.max_n_aa_not_covered)) {
           // add cluster
           //LOG(INFO) << "Node " << to_string(node_id_) << " creating cluster ";
           Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
@@ -448,7 +457,7 @@ namespace tensorflow {
       
         LOG(INFO) << "Node " << to_string(node_id_) << " neighbor size is " << neighbor_queue_->size();
         // dequeue neighbor
-      } else if (!input_queue_->is_closed() || input_queue_->is_closed() && input_queue_->size() > 0) {
+      } else if (!input_queue_->is_closed() || (input_queue_->is_closed() && input_queue_->size() > 0)) {
         // dequeue input
         LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing input";
         
