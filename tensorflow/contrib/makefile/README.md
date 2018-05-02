@@ -155,7 +155,7 @@ CC_PREFIX=ccache tensorflow/contrib/makefile/build_all_android.sh -s tensorflow/
 (add -T on subsequent builds to skip protobuf downloading/building)
 
 
-#### Testing the the CUDA-enabled benchmark via adb:
+#### Testing the CUDA-enabled benchmark via adb:
 Build binaries first as above, then run:
 
 ```bash
@@ -193,6 +193,8 @@ with:
 ```
 srcs = glob(["libs/arm64-v8a/*.so"]),
 ```
+
+If you are building for Android TV (Shield TV devices), replace "portrait" with "landscape" for android:screenOrientation in all four activities in tensorflow/examples/android/AndroidManifest.xml
 
 Then run:
 ```bash
@@ -367,7 +369,7 @@ selectively register only for the operators used in your graph.
 ```bash
 tensorflow/contrib/makefile/build_all_ios.sh -a arm64 -g $HOME/graphs/inception/tensorflow_inception_graph.pb
 ```
-Please note this is an aggresive optimization of the operators and the resulting library may not work with other graphs but will reduce the size of the final library.
+Please note this is an aggressive optimization of the operators and the resulting library may not work with other graphs but will reduce the size of the final library.
 
 The `compile_ios_tensorflow.sh` script can take optional command-line arguments.
 The first argument will be passed as a C++ optimization flag and defaults to

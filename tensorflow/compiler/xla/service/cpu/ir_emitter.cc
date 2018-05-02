@@ -438,12 +438,14 @@ Status IrEmitter::EmitXfeedTransfer(XfeedKind kind, const Shape& shape,
 
   if (kind == XfeedKind::kInfeed) {
     // Copy to the program buffer address from the acquired buffer.
-    ir_builder_.CreateMemCpy(program_buffer_address, acquired_pointer,
-                             length_32, 1);
+    ir_builder_.CreateMemCpy(program_buffer_address, /*DstAlign=*/1,
+                             acquired_pointer,
+                             /*SrcAlign=*/1, length_32);
   } else {
     // Outfeed -- copy from the in-program address to the acquired buffer.
-    ir_builder_.CreateMemCpy(acquired_pointer, program_buffer_address,
-                             length_32, 1);
+    ir_builder_.CreateMemCpy(acquired_pointer, /*DstAlign=*/1,
+                             program_buffer_address,
+                             /*SrcAlign=*/1, length_32);
   }
 
   ir_builder_.CreateCall(release_func,
@@ -801,7 +803,7 @@ Status IrEmitter::HandleDot(HloInstruction* dot) {
   auto rhs = dot->operand(1);
   TF_RETURN_IF_ERROR(ElementTypesSameAndSupported(
       /*instruction=*/*dot, /*operands=*/{lhs, rhs},
-      /*supported_types=*/{F32, F64, C64}));
+      /*supported_types=*/{F16, F32, F64, C64}));
   const DotDimensionNumbers& dnums = dot->dot_dimension_numbers();
   if (dnums.lhs_batch_dimensions_size() > 0 ||
       dnums.rhs_batch_dimensions_size() > 0) {
@@ -849,7 +851,7 @@ Status IrEmitter::HandleConvolution(HloInstruction* convolution) {
   const auto& window = convolution->window();
   TF_RETURN_IF_ERROR(ElementTypesSameAndSupported(
       /*instruction=*/*convolution, /*operands=*/{lhs, rhs},
-      /*supported_types=*/{F32, C64}));
+      /*supported_types=*/{F16, F32, C64}));
 
   const ConvolutionDimensionNumbers& dnums =
       convolution->convolution_dimension_numbers();
@@ -928,25 +930,30 @@ Status IrEmitter::HandleConvolution(HloInstruction* convolution) {
       int64 rhs_col_dilation =
           one_dim_convolution ? 1 : window.dimensions(1).window_dilation();
 
-      // Args have been computed, make the call.
-      llvm::Type* float_ptr_type = ir_builder_.getFloatTy()->getPointerTo();
+      PrimitiveType primitive_type = lhs->shape().element_type();
+      llvm::Type* ir_ptr_type = primitive_type == F16
+                                    ? ir_builder_.getHalfTy()->getPointerTo()
+                                    : ir_builder_.getFloatTy()->getPointerTo();
       llvm::Type* int64_type = ir_builder_.getInt64Ty();
       llvm::Type* int8_ptr_type = ir_builder_.getInt8Ty()->getPointerTo();
       llvm::FunctionType* conv_type = llvm::FunctionType::get(
           ir_builder_.getVoidTy(),
-          {int8_ptr_type, float_ptr_type, float_ptr_type, float_ptr_type,
-           int64_type,    int64_type,     int64_type,     int64_type,
-           int64_type,    int64_type,     int64_type,     int64_type,
-           int64_type,    int64_type,     int64_type,     int64_type,
-           int64_type,    int64_type,     int64_type,     int64_type,
-           int64_type,    int64_type,     int64_type,     int64_type},
+          {int8_ptr_type, ir_ptr_type, ir_ptr_type, ir_ptr_type, int64_type,
+           int64_type,    int64_type,  int64_type,  int64_type,  int64_type,
+           int64_type,    int64_type,  int64_type,  int64_type,  int64_type,
+           int64_type,    int64_type,  int64_type,  int64_type,  int64_type,
+           int64_type,    int64_type,  int64_type,  int64_type},
           /*isVarArg=*/false);
       bool multi_threaded_eigen =
           hlo_module_config_.debug_options().xla_cpu_multi_thread_eigen();
       const char* fn_name =
-          (multi_threaded_eigen
-               ? runtime::kEigenConvF32SymbolName
-               : runtime::kEigenSingleThreadedConvF32SymbolName);
+          primitive_type == F16
+              ? (multi_threaded_eigen
+                     ? runtime::kEigenConvF16SymbolName
+                     : runtime::kEigenSingleThreadedConvF16SymbolName)
+              : (multi_threaded_eigen
+                     ? runtime::kEigenConvF32SymbolName
+                     : runtime::kEigenSingleThreadedConvF32SymbolName);
       llvm::Function* conv_func = llvm::cast<llvm::Function>(
           module_->getOrInsertFunction(fn_name, conv_type));
       conv_func->setCallingConv(llvm::CallingConv::C);
@@ -956,9 +963,9 @@ Status IrEmitter::HandleConvolution(HloInstruction* convolution) {
           conv_func, {
                          GetExecutableRunOptionsArgument(),
                          ir_builder_.CreateBitCast(
-                             GetEmittedValueFor(convolution), float_ptr_type),
-                         ir_builder_.CreateBitCast(lhs_address, float_ptr_type),
-                         ir_builder_.CreateBitCast(rhs_address, float_ptr_type),
+                             GetEmittedValueFor(convolution), ir_ptr_type),
+                         ir_builder_.CreateBitCast(lhs_address, ir_ptr_type),
+                         ir_builder_.CreateBitCast(rhs_address, ir_ptr_type),
                          ir_builder_.getInt64(input_batch),
                          ir_builder_.getInt64(input_rows),
                          ir_builder_.getInt64(input_cols),
@@ -1332,7 +1339,7 @@ IrEmitter::ReductionGenerator IrEmitter::MatchReductionGenerator(
   if (ShapeUtil::ElementIsComplex(root_shape)) {
     // TODO(b/65408531): Complex add could by done via bitcast to <float x [2N]>
     // Complex multiply would be more challenging. We could perhaps use a
-    // strided load to get all reals in a vector, all imags in a vector, or use
+    // strided load to get all reals in a vector, all images in a vector, or use
     // CreateShuffleVector on a bitcast to float x [2N].
     *failure_reason = "complex values not supported";
     return nullptr;
@@ -2069,7 +2076,7 @@ Status IrEmitter::HandleFusion(HloInstruction* fusion) {
 
     TF_RETURN_IF_ERROR(ElementTypesSameAndSupported(
         /*instruction=*/*root, /*operands=*/{lhs, rhs},
-        /*supported_types=*/{F32}));
+        /*supported_types=*/{F16, F32}));
 
     llvm_ir::IrArray lhs_array(GetIrArrayFor(lhs));
     llvm_ir::IrArray rhs_array(GetIrArrayFor(rhs));
@@ -2436,7 +2443,8 @@ void IrEmitter::EmitTransferElements(llvm::Value* target, llvm::Value* source,
     target_array.AnnotateLoadStoreInstructionWithMetadata(store_instruction);
   } else {
     auto* memcpy_instruction = ir_builder_.CreateMemCpy(
-        target, source, element_count * primitive_type_size, element_alignment);
+        target, /*DstAlign=*/element_alignment, source,
+        /*SrcAlign=*/element_alignment, element_count * primitive_type_size);
 
     // The memcpy does the load and the store internally.  The aliasing related
     // metadata has to reflect that.
@@ -2900,7 +2908,8 @@ Status IrEmitter::EmitMemcpy(const HloInstruction& source,
   llvm::Value* destination_value = GetEmittedValueFor(&destination);
   int64 source_size = ByteSizeOf(source.shape());
   // TODO(b/63762267): Be more aggressive about specifying alignment.
-  ir_builder_.CreateMemCpy(destination_value, source_value, source_size, 1);
+  ir_builder_.CreateMemCpy(destination_value, /*DstAlign=*/1, source_value,
+                           /*SrcAlign=*/1, source_size);
   return Status::OK();
 }
 
