@@ -1,5 +1,5 @@
 
-#include "tensorflow/contrib/persona/kernels/protein-cluster/cluster.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
 
 namespace tensorflow {
 
@@ -22,9 +22,6 @@ namespace tensorflow {
       if (rep.Genome() == *sequence.genome && rep.GenomeIndex() == sequence.genome_index)
         continue; // don't compare to itself
 
-      if (rep.GenomeIndex() == 502 && rep.Genome() == "CHLL2" && sequence.genome == "CHLCH" && 
-          sequence.genome_index = 175)
-        LOG(INFO) << "found it";
       if (aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length())) {
 
         //LOG(INFO) << "passed threshold";
@@ -78,8 +75,8 @@ namespace tensorflow {
   bool Cluster::PassesLengthConstraint(const ProteinAligner::Alignment& alignment,
     int seq1_len, int seq2_len) {
 
-    auto min_alignment_len = min(alignment.seq1_length, alignment.seq2_length);
-    auto max_min_seq_len = max(30, int(0.3f*min(seq1_len, seq2_len)));
+    float min_alignment_len = min(float(alignment.seq1_length), float(alignment.seq2_length));
+    float max_min_seq_len = max(30.0f, 0.3f*float(min(seq1_len, seq2_len)));
     return min_alignment_len >= max_min_seq_len;
   }
 
@@ -116,7 +113,7 @@ namespace tensorflow {
         seq1 = seq2;
         seq2 = tmp;*/
       }
-
+      
       auto genome_pair = make_pair(seq1->Genome(), seq2->Genome());
       auto seq_pair = make_pair(seq1->GenomeIndex(), seq2->GenomeIndex());
       auto genome_pair_it = candidate_map.find(genome_pair);

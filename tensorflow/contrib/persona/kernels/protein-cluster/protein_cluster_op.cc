@@ -10,7 +10,7 @@
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
-#include "tensorflow/contrib/persona/kernels/protein-cluster/cluster.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_environment.h"
 
 namespace tensorflow {
@@ -187,6 +187,7 @@ namespace tensorflow {
             // add cluster
             //LOG(INFO) << "Node " << to_string(node_id_) << " creating cluster ";
             Cluster cluster(envs_, data, len, genome, genome_index, total_seqs);
+            if (genome_index == 502) LOG(INFO) << "ADDING CLUSTER FOR INDEX 502!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
             clusters_.push_back(std::move(cluster));
           } 
           s = seqs_reader.GetNextRecord(&data, &len);
