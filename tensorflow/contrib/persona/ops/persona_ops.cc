@@ -1449,7 +1449,11 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .Doc(R"doc(
   Compresses the prepared buffer_list records and into individual buffers, and then outputs them
   )doc");
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> master
     REGISTER_OP("AGDReferenceGenome")
     .Output("handle: Ref(string)")
     .Attr("chunk_paths: list(string)")
