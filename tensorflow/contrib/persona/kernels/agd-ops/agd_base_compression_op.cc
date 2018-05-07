@@ -117,7 +117,7 @@ namespace tensorflow {
         size_t cigar_len = agd_result.cigar().length();
         const int flag = agd_result.flag();
         const double position = agd_result.position().position();
-
+        val = "";
 /*
 use "|" as delimiter for the compress cigar to allow a better usage for decompress.
 */
@@ -126,7 +126,7 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
           char tmp = cigar[i];
           //LOG(INFO) << "here is the CIGAR : " << cigar[i];
           if(tmp == text[0]){
-            LOG(INFO) << "should use X or =";
+            //LOG(INFO) << "should use X or =";
             ctx->SetStatus(errors::Internal("should use X or '=' instead of M"));
             return;
           }else if(tmp == text[1] || tmp == text[3] || tmp == text[5] ||tmp == text[6] ){
@@ -148,7 +148,13 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
             compress_cigar += "|";
             val = "";
           }else if (tmp == text[7] ||tmp == text[8]  || tmp == text[4]){
-            //TODO for moment do nothing but we should be trigger if we get this one time.
+            //LOG(INFO) << "Different op";
+            //LOG(INFO) << "results position : " << position;
+            compress_cigar += val;
+            compress_cigar += "|";
+            compress_cigar += cigar[i];
+            compress_cigar += "|";
+            val = "";
           }else{
             val += cigar[i];
           }
@@ -158,12 +164,12 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
         // for(int i = 0 ; i < record_size; i++){
         //   LOG(INFO) << agd_record[i];
         // }
-        LOG(INFO) << "record size : " << record_size;
-        LOG(INFO) << "compress cigar : " << compress_cigar;
-        LOG(INFO) << "here is the CIGAR : " << cigar;
-        LOG(INFO) << "CIGAR length : " << cigar_len;
-        LOG(INFO) << "results flag : " << flag;
-        LOG(INFO) << "results position : " << position;
+        // LOG(INFO) << "record size : " << record_size;
+        // LOG(INFO) << "compress cigar : " << compress_cigar;
+        // LOG(INFO) << "here is the CIGAR : " << cigar;
+        // LOG(INFO) << "CIGAR length : " << cigar_len;
+        // LOG(INFO) << "results flag : " << flag;
+        // LOG(INFO) << "results position : " << position;
 
         p = record_reader.GetNextRecord(&agd_record,&record_size);
         s = results_reader.GetNextResult(agd_result);
