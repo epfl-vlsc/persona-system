@@ -24,7 +24,7 @@ class Cluster {
   public:
     // create cluster and seed with sequence
     Cluster(const AlignmentEnvironments* envs, const char* seed_seq, int length, std::string genome,
-        int genome_index, int total_seqs) : envs_(envs) {
+        int genome_index, int total_seqs, int abs_seq) : envs_(envs), absolute_sequence_(abs_seq) {
       seqs_.push_back(ClusterSequence(string(seed_seq, length), genome, genome_index, total_seqs));
     }
 
@@ -33,6 +33,8 @@ class Cluster {
     bool EvaluateSequence(Sequence& sequence,  
         const AlignmentEnvironments* envs, const Parameters* params, 
         GenomeSequenceMap& candidate_map);
+
+    int AbsoluteSequence() { return absolute_sequence_; }
 
     // BuildOutput() -- encode the seq pairs into tensors
     // RefinedMatches consist of 6 ints and 3 doubles
@@ -106,6 +108,8 @@ class Cluster {
     // candidates are the result of intra cluster all to all
     std::vector<Candidate> candidates_;
     const AlignmentEnvironments* envs_; // for alignments
+    int absolute_sequence_; // the absolute sequence of the chunk that
+                            // produced this cluster
 };
 
 }
