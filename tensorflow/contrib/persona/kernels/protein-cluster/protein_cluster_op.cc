@@ -91,6 +91,16 @@ namespace tensorflow {
       return Status::OK();
     }
 
+    ~AGDProteinClusterOp() {
+      LOG(INFO) << abs_seq_.size() << " abs seqs from nb q";
+      stringstream ss;
+      for (auto i : abs_seq_) {
+        ss << i << " ";
+      }
+      LOG(INFO) << ss.str();
+    }
+
+
     // for debugz
     string PrintNormalizedProtein(const char* seq, size_t len) {
       scratch_.resize(len);
@@ -105,7 +115,7 @@ namespace tensorflow {
     void Compute(OpKernelContext* ctx) override {
       // this entire thing is a bit spaghetti and could use a rewrite
 
-      LOG(INFO) << "Node " << to_string(node_id_) << " Starting protein cluster";
+      //LOG(INFO) << "Node " << to_string(node_id_) << " Starting protein cluster";
       if (!neighbor_queue_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
       }
@@ -114,6 +124,17 @@ namespace tensorflow {
         // not 100% sure if this can happen yet
         LOG(INFO) << "Node " << to_string(node_id_) << " num chunk is TOTAL CHUNK!";
         ctx->SetStatus(errors::OutOfRange("cluster is done"));
+
+        // the off chance that this node never seeded a cluster
+        // and passed everything through. Possible on small datasets
+        if (!cluster_queue_->is_closed()) {
+          cluster_queue_->Close(ctx, false/*cancel pending enqueue*/, 
+              [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"cluster queue closed"; } );
+        }
+        if (!neighbor_queue_out_->is_closed()) {
+          neighbor_queue_out_->Close(ctx, false/*cancel pending enqueue*/, 
+              [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"neighbor out queue closed"; } );
+        }
         return;
       }
 
@@ -158,15 +179,52 @@ namespace tensorflow {
       auto abs_seq = abs_seq_t.scalar<int32>()();
       auto genome_index = first_ord;
       
-      LOG(INFO) << "Node " << to_string(node_id_) << " dequeued abs seq " << abs_seq << " seq " << sequence << " ring size is " << ring_size_;
+      //LOG(INFO) << "Node " << to_string(node_id_) << " dequeued abs seq " << abs_seq << " seq " << sequence << " ring size is " << ring_size_;
       Sequence seq;
       int cluster_start = 0;
 
       if (sequence == ring_size_) {
         // this chunk has been evaluated by all nodes (made one round)
         // create new clusters for any non added proteins
-        LOG(INFO) << "Node " << to_string(node_id_) << " seen this chunk, dumping " << sequence << " and creating clusters";
+        auto& point = abs_sequence_queue_.front();
+        CHECK_EQ(point.first, abs_seq);
+        cluster_start = point.second;
+        abs_sequence_queue_.pop();
+        
+        LOG(INFO) << "Node " << to_string(node_id_) << " seen this chunk, dumping " << abs_seq 
+          << " and creating cluster and Comparing to " << clusters_.size() - cluster_start << " more clusters";
+        
+        int num_compared = 0;
+        while (s.ok()) {
+          // first compare to all clusters prev created with a lower abs seq num
+          for (size_t j = cluster_start; j < clusters_.size(); j++) {
+            auto& cluster = clusters_[j];
+            if (cluster.AbsoluteSequence() > abs_seq) continue;
+            // fill seq and pass to evaluate
+            num_compared++;
+            seq.data = data;
+            seq.length = len;
+            seq.coverages = &coverages(i);
+            seq.genome_index = genome_index;
+            seq.genome = &genome;
+            seq.total_seqs = total_seqs;
 
+            auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
+
+            if (!was_added(i)) was_added(i) = added;
+          }
+          s = seqs_reader.GetNextRecord(&data, &len);
+          i++;
+          genome_index++;
+        }
+        LOG(INFO) << "compared seqs to " << num_compared << " clusters of lower or equal abs_seq ";
+
+        genome_index = first_ord;
+        i = 0;
+        seqs_reader.Reset();
+        s = seqs_reader.GetNextRecord(&data, &len);
+
+        // now compare seqs within the chunk
         size_t start_cluster = clusters_.size();
         // create clusters
         while (s.ok()) {
@@ -214,8 +272,9 @@ namespace tensorflow {
 
       } else if (sequence == ring_size_ * 2) {  // chunk has made 2 rounds, done
 
-        LOG(INFO) << "chunk complete after two rounds -----------------";
-        LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all " << num_chunks_ << " chunks, total is " << total_chunks_;
+        //LOG(INFO) << "chunk complete after two rounds -----------------";
+        //LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all " << num_chunks_ << " chunks, total is " << total_chunks_;
+        LOG(INFO) << "Node " << to_string(node_id_) << "abs seq " << abs_seq << " has made two rounds ";
 
         if (num_chunks_ == total_chunks_ * 2) {
           // we have seen all chunks and are done, this chunk also started at this node
@@ -255,8 +314,8 @@ namespace tensorflow {
         out->scalar<string>()() = "Node " + to_string(node_id_) + " execution is done";
         return;
 
-      } else if (sequence != 0) {
-        LOG(INFO) << " sequence not zerooooooooooooooooooooo! is " << sequence;
+      } else /*if (sequence != 0)*/ {
+        //LOG(INFO) << " sequence not zerooooooooooooooooooooo! is " << sequence;
         // if < size, push to queue
         // if > size, must be first element in queue
         // remove from queue, and start from that cluster index 
@@ -274,6 +333,7 @@ namespace tensorflow {
           abs_sequence_queue_.pop();
         } else {
           LOG(INFO) << " equal to ring size wtf ";
+          CHECK_EQ(0, 1);
         }
       }
 
@@ -324,8 +384,8 @@ namespace tensorflow {
         if (coverages(i).size() == 0)
           coverages(i).resize(len, 1);
 
-        for (size_t i = cluster_start; i < clusters_.size(); i++) {
-          auto& cluster = clusters_[i];
+        for (size_t x = cluster_start; x < clusters_.size(); x++) {
+          auto& cluster = clusters_[x];
           // fill seq and pass to evaluate
               
           if (cluster.AbsoluteSequence() > abs_seq) continue;
@@ -354,8 +414,8 @@ namespace tensorflow {
 
       // pass all to neighbor queue
       sequence_t.scalar<int32>()() = new_sequence;
-      LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
-      LOG(INFO) << "Node " << to_string(node_id_) << " enqueuing to neighbor seq " << new_sequence << " with abs seq " << abs_seq;
+      //LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
+      //LOG(INFO) << "Node " << to_string(node_id_) << " enqueuing to neighbor seq " << new_sequence << " with abs seq " << abs_seq;
       OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
             first_ord_t, total_seqs_t, abs_seq_t));
 
@@ -435,6 +495,7 @@ namespace tensorflow {
     int num_chunks_;
     vector<char> scratch_;
     int node_id_;
+    vector<int> abs_seq_;
 
     int NumUncoveredAA(const string& coverages) {
       int sum = 0;
@@ -508,17 +569,17 @@ namespace tensorflow {
         Tensor& sequence, Tensor& was_added, Tensor& coverages, Tensor& genome, Tensor& first_ord,
         Tensor& total_seqs, Tensor& abs_seq) {
         
-      LOG(INFO) << "Node " << to_string(node_id_) << " input queue closed " << input_queue_->is_closed() 
-        << "input queue size: " << input_queue_->size();
+      //LOG(INFO) << "Node " << to_string(node_id_) << " input queue closed " << input_queue_->is_closed() 
+        //<< "input queue size: " << input_queue_->size();
 
       // prefer to dequeue neighbor queue, otherwise attempt to dequeue the main input
       if (neighbor_queue_->size() > 0) {
       
-        LOG(INFO) << "Node " << to_string(node_id_) << " neighbor size is " << neighbor_queue_->size();
+        //LOG(INFO) << "Node " << to_string(node_id_) << " neighbor size is " << neighbor_queue_->size();
         // dequeue neighbor
       } else if (input_queue_->size() > 0) {
         // dequeue input
-        LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing input";
+        //LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing input";
         
         Notification n;
         input_queue_->TryDequeue(ctx, [this, ctx, &n, &chunk, &num_recs, &sequence, 
@@ -541,6 +602,16 @@ namespace tensorflow {
             n.Notify();
         });
         n.WaitForNotification();
+       
+        // it's possible another node took the last, and we received
+        // an OutOfRange or Cancelled status.
+        // Queue is closed, return and wait for reexecution
+        if (!ctx->status().ok()) {
+          LOG(INFO) << "INPUT QUEUE FAILED WITH " << ctx->status();
+          return ctx->status();
+        }
+
+        // initialize extra data for this chunk
         TF_RETURN_IF_ERROR(ctx->allocate_temp(DataType::DT_INT32, TensorShape({}), &sequence));
         sequence.scalar<int32>()() = 0;
         TF_RETURN_IF_ERROR(ctx->allocate_temp(DataType::DT_BOOL, TensorShape({chunk_size_}), &was_added));
@@ -548,16 +619,13 @@ namespace tensorflow {
         for (size_t i = 0; i < chunk_size_; i++)
           wa(i) = false;
         TF_RETURN_IF_ERROR(ctx->allocate_temp(DataType::DT_STRING, TensorShape({chunk_size_}), &coverages));
-        if (ctx->status().ok()) {
-          return Status::OK();
-        } else //if (!errors::IsOutOfRange(ctx->status()))
-          return ctx->status();
         // else we cont below and dequeue neighbor
         //LOG(INFO) << "Node " << node_id_ << " status was " << ctx->status() << " continuing to neighbor ";
+        return Status::OK();
       } 
 
       // dequeue neighbor, and wait
-      LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing neighbor";
+      //LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing neighbor";
       Notification n;
       neighbor_queue_->TryDequeue(ctx, [this, ctx, &n, &chunk, &num_recs, &sequence, 
           &was_added, &coverages, &genome, &first_ord, &total_seqs, &abs_seq](const QueueInterface::Tuple &tuple) {
@@ -578,8 +646,10 @@ namespace tensorflow {
           n.Notify();
       });
       n.WaitForNotification();
-      LOG(INFO) << "Node " << to_string(node_id_) << " dequeued neighbor";
+      //LOG(INFO) << "Node " << to_string(node_id_) << " dequeued neighbor";
       num_chunks_++;
+      auto abs_seq_val = abs_seq.scalar<int32>()();
+      abs_seq_.push_back(abs_seq_val);
       return Status::OK();
     }
 

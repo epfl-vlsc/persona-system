@@ -19,8 +19,8 @@ namespace tensorflow {
 
     for (size_t i = 0; i < params->max_representatives && i < seqs_.size(); i++) {
       const auto& rep = seqs_[i];
-      if (rep.Genome() == *sequence.genome && rep.GenomeIndex() == sequence.genome_index)
-        continue; // don't compare to itself
+      if (rep.Genome() == (*sequence.genome) && rep.GenomeIndex() == sequence.genome_index)
+        break; // don't compare to itself, its already in this cluster
 
       if (aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length())) {
 
@@ -104,6 +104,9 @@ namespace tensorflow {
         index1 = seqs_.size();
         seq2 = sequence; index2 = i;
       }
+      
+      if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() == seq2->GenomeIndex())
+        continue;
 
       if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() > seq2->GenomeIndex()) {
         //LOG(INFO) << "seq 1 is greater than seq2 swapping ----------------------------";
