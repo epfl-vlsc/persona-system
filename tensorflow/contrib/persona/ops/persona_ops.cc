@@ -1452,7 +1452,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     across multiple sessions.
     )doc");
     
-    REGISTER_OP("AlignmentEnvironments")
+/*    REGISTER_OP("AlignmentEnvironments")
     .Output("handle: Ref(string)")
     .Attr("gaps: list(float)")
     .Attr("gap_extends: list(float)")
@@ -1473,6 +1473,6 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     Otherwise, a default container is used.
     shared_name: If non-empty, this queue will be shared under the given name
     across multiple sessions.
-    )doc");
+    )doc");*/
 
 }
