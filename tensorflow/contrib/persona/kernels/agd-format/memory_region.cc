@@ -53,7 +53,11 @@ namespace tensorflow {
       struct stat st;
       ::fstat(fd, &st);
       const void* address =
+#ifndef __APPLE__
         mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE | (synchronous ? MAP_POPULATE : 0), fd, 0);
+#else
+        mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0); // appuru not have map_populate
+#endif
       if (address == MAP_FAILED) {
         s = Internal("PosixMappedRegion: mmap ", filepath, " (translated: ", translated_fname, ") failed with errno ", errno);
       } else {

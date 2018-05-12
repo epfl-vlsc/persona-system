@@ -8,7 +8,8 @@ cc_library(
     hdrs = glob(["bwa/*.h"]),
     includes = ["bwa"],
     linkopts = [
-        "-lm", "-lpthread", "-lz", "-lrt"
+        "-lm", "-lpthread", "-lz", 
+        #"-lrt"
     ],
     linkstatic = 1,
     visibility = ["//visibility:public"],
@@ -31,7 +32,7 @@ cc_library(
             "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
             "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
             "//tensorflow/contrib/persona/kernels/concurrent_queue:concurrent_queue",
-            "//tensorflow/contrib/persona/kernels/lttng:trace",
+            #"//tensorflow/contrib/persona/kernels/lttng:trace",
             "//third_party/eigen3",
             #"@protobuf//:protobuf",
             "@protobuf_archive//:protobuf",

@@ -34,6 +34,4 @@ xcuserdata/**
 *.iml
 local.properties
 gradleBuild
-
-
-python_dev
+/python_dev

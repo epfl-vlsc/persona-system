@@ -13,11 +13,9 @@
 #include <cstdint>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/ref_pool.h"
-#include "tensorflow/contrib/persona/kernels/lttng/tracepoints.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/sam_flags.h"
 #include <boost/functional/hash.hpp>
-#include <google/dense_hash_map>
 
 namespace tensorflow {
 

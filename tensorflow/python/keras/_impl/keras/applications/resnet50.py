@@ -34,7 +34,7 @@ from tensorflow.python.keras._impl.keras import layers
 from tensorflow.python.keras._impl.keras.applications.imagenet_utils import _obtain_input_shape
 from tensorflow.python.keras._impl.keras.applications.imagenet_utils import decode_predictions
 from tensorflow.python.keras._impl.keras.applications.imagenet_utils import preprocess_input
-from tensorflow.python.keras._impl.keras.engine.topology import get_source_inputs
+from tensorflow.python.keras._impl.keras.engine.network import get_source_inputs
 from tensorflow.python.keras._impl.keras.layers import Activation
 from tensorflow.python.keras._impl.keras.layers import AveragePooling2D
 from tensorflow.python.keras._impl.keras.layers import BatchNormalization
@@ -45,10 +45,12 @@ from tensorflow.python.keras._impl.keras.layers import GlobalAveragePooling2D
 from tensorflow.python.keras._impl.keras.layers import GlobalMaxPooling2D
 from tensorflow.python.keras._impl.keras.layers import Input
 from tensorflow.python.keras._impl.keras.layers import MaxPooling2D
+from tensorflow.python.keras._impl.keras.layers import ZeroPadding2D
 from tensorflow.python.keras._impl.keras.models import Model
 from tensorflow.python.keras._impl.keras.utils import layer_utils
 from tensorflow.python.keras._impl.keras.utils.data_utils import get_file
 from tensorflow.python.platform import tf_logging as logging
+from tensorflow.python.util.tf_export import tf_export
 
 
 WEIGHTS_PATH = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels.h5'
@@ -146,6 +148,8 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2,
   return x
 
 
+@tf_export('keras.applications.ResNet50',
+           'keras.applications.resnet50.ResNet50')
 def ResNet50(include_top=True,
              weights='imagenet',
              input_tensor=None,
@@ -234,8 +238,7 @@ def ResNet50(include_top=True,
     bn_axis = 1
 
   x = Conv2D(
-      64, (7, 7), strides=(2, 2), padding='same', name='conv1')(
-          img_input)
+      64, (7, 7), strides=(2, 2), padding='same', name='conv1')(img_input)
   x = BatchNormalization(axis=bn_axis, name='bn_conv1')(x)
   x = Activation('relu')(x)
   x = MaxPooling2D((3, 3), strides=(2, 2))(x)

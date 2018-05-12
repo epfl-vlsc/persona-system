@@ -172,7 +172,9 @@ StatusOr<std::unique_ptr<ScopedShapedBuffer>> LocalExecutable::Run(
       std::unique_ptr<ShapedBuffer> result,
       executable_->ExecuteOnStreamWrapper(
           &service_options, run_options.execution_profile(), arguments));
-  return ScopedShapedBuffer::MakeScoped(result.get(), run_options.allocator());
+
+  return MakeUnique<ScopedShapedBuffer>(std::move(*result),
+                                        run_options.allocator());
 }
 
 StatusOr<std::unique_ptr<ScopedShapedBuffer>> LocalExecutable::ExecuteAndDump(
@@ -258,6 +260,24 @@ StatusOr<std::unique_ptr<LocalExecutable>> LocalClient::Compile(
       std::unique_ptr<Executable> executable,
       local_service_->CompileExecutable(computation.handle(), argument_layouts,
                                         updated_options));
+  return WrapUnique(new LocalExecutable(std::move(executable),
+                                        local_service_->mutable_backend(),
+                                        updated_options));
+}
+
+StatusOr<std::unique_ptr<LocalExecutable>> LocalClient::Compile(
+    const XlaComputation& computation,
+    const tensorflow::gtl::ArraySlice<const Shape*> argument_layouts,
+    const ExecutableBuildOptions& options) {
+  ExecutableBuildOptions updated_options = options;
+  if (options.device_ordinal() == -1) {
+    updated_options.set_device_ordinal(default_device_ordinal());
+    VLOG(3) << "Set device ordinal to default value of: "
+            << updated_options.device_ordinal();
+  }
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<Executable> executable,
+                      local_service_->CompileExecutable(
+                          computation, argument_layouts, updated_options));
   return WrapUnique(new LocalExecutable(std::move(executable),
                                         local_service_->mutable_backend(),
                                         updated_options));

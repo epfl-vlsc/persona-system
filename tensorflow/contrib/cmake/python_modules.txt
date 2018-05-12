@@ -79,9 +79,11 @@ tensorflow/python/keras/_impl/keras/preprocessing
 tensorflow/python/keras/_impl/keras/utils
 tensorflow/python/keras/_impl/keras/wrappers
 tensorflow/python/kernel_tests
+tensorflow/python/kernel_tests/boosted_trees
 tensorflow/python/kernel_tests/distributions
 tensorflow/python/kernel_tests/linalg
 tensorflow/python/kernel_tests/random
+tensorflow/python/kernel_tests/testdata
 tensorflow/python/layers
 tensorflow/python/lib
 tensorflow/python/lib/core
@@ -102,6 +104,8 @@ tensorflow/python/user_ops
 tensorflow/python/util
 tensorflow/python/util/protobuf
 tensorflow/tools
+tensorflow/tools/api
+tensorflow/tools/api/generator
 tensorflow/tools/graph_transforms
 tensorflow/contrib
 tensorflow/contrib/all_reduce
@@ -147,8 +151,6 @@ tensorflow/contrib/crf
 tensorflow/contrib/crf/python
 tensorflow/contrib/crf/python/ops
 tensorflow/contrib/cudnn_rnn
-tensorflow/contrib/cudnn_rnn/kernels
-tensorflow/contrib/cudnn_rnn/ops
 tensorflow/contrib/cudnn_rnn/python
 tensorflow/contrib/cudnn_rnn/python/layers
 tensorflow/contrib/cudnn_rnn/python/ops
@@ -160,11 +162,15 @@ tensorflow/contrib/data/python/ops
 tensorflow/contrib/decision_trees
 tensorflow/contrib/decision_trees/proto
 tensorflow/contrib/deprecated
+tensorflow/contrib/distribute
+tensorflow/contrib/distribute/python
+tensorflow/contrib/distribute/python/examples
 tensorflow/contrib/distributions
 tensorflow/contrib/distributions/python
 tensorflow/contrib/distributions/python/ops
 tensorflow/contrib/distributions/python/ops/bijectors
 tensorflow/contrib/eager
+tensorflow/contrib/eager/proto
 tensorflow/contrib/eager/python
 tensorflow/contrib/estimator
 tensorflow/contrib/estimator/python
@@ -175,6 +181,9 @@ tensorflow/contrib/factorization/kernels
 tensorflow/contrib/factorization/ops
 tensorflow/contrib/factorization/python
 tensorflow/contrib/factorization/python/ops
+tensorflow/contrib/feature_column
+tensorflow/contrib/feature_column/python
+tensorflow/contrib/feature_column/python/feature_column
 tensorflow/contrib/ffmpeg
 tensorflow/contrib/ffmpeg/default
 tensorflow/contrib/framework
@@ -296,7 +305,9 @@ tensorflow/contrib/linear_optimizer/kernels/g3doc
 tensorflow/contrib/linear_optimizer/python
 tensorflow/contrib/linear_optimizer/python/ops
 # TODO(drpngx): Fix failing imports
+# tensorflow/contrib/lite
 # tensorflow/contrib/lite/python
+# tensorflow/contrib/lite/toco
 # tensorflow/contrib/lite/toco/python
 tensorflow/contrib/lookup
 tensorflow/contrib/losses
@@ -326,8 +337,7 @@ tensorflow/contrib/nccl/kernels
 tensorflow/contrib/nccl/ops
 tensorflow/contrib/nccl/python
 tensorflow/contrib/nccl/python/ops
-tensorflow/contrib/ndlstm
-tensorflow/contrib/ndlstm/python
+tensorflow/contrib/nearest_neighbor
 tensorflow/contrib/nearest_neighbor/kernels
 tensorflow/contrib/nearest_neighbor/ops
 tensorflow/contrib/nearest_neighbor/python
@@ -338,6 +348,7 @@ tensorflow/contrib/nn/python/ops
 tensorflow/contrib/opt
 tensorflow/contrib/opt/python
 tensorflow/contrib/opt/python/training
+tensorflow/contrib/optimizer_v2
 tensorflow/contrib/pi_examples
 tensorflow/contrib/pi_examples/camera
 tensorflow/contrib/pi_examples/label_image
@@ -346,6 +357,9 @@ tensorflow/contrib/periodic_resample
 tensorflow/contrib/periodic_resample/python
 tensorflow/contrib/periodic_resample/python/ops
 tensorflow/contrib/predictor
+tensorflow/contrib/proto
+tensorflow/contrib/proto/python
+tensorflow/contrib/proto/python/ops
 tensorflow/contrib/quantization
 tensorflow/contrib/quantization/python
 tensorflow/contrib/quantize
@@ -354,11 +368,16 @@ tensorflow/contrib/receptive_field
 tensorflow/contrib/receptive_field/python
 tensorflow/contrib/receptive_field/python/util
 tensorflow/contrib/receptive_field/python/util/examples
+tensorflow/contrib/recurrent
+tensorflow/contrib/recurrent/python
+tensorflow/contrib/recurrent/python/ops
+tensorflow/contrib/recurrent/python/kernel_tests
 tensorflow/contrib/reduce_slice_ops
 tensorflow/contrib/reduce_slice_ops/kernels
 tensorflow/contrib/reduce_slice_ops/ops
 tensorflow/contrib/reduce_slice_ops/python
 tensorflow/contrib/reduce_slice_ops/python/ops
+tensorflow/contrib/remote_fused_graph
 tensorflow/contrib/remote_fused_graph/pylib
 tensorflow/contrib/remote_fused_graph/pylib/python
 tensorflow/contrib/remote_fused_graph/pylib/python/ops
@@ -373,6 +392,9 @@ tensorflow/contrib/rnn/ops
 tensorflow/contrib/rnn/python
 tensorflow/contrib/rnn/python/kernel_tests
 tensorflow/contrib/rnn/python/ops
+tensorflow/contrib/rpc
+tensorflow/contrib/rpc/python
+tensorflow/contrib/rpc/python/ops
 tensorflow/contrib/saved_model
 tensorflow/contrib/saved_model/python
 tensorflow/contrib/saved_model/python/saved_model
@@ -408,6 +430,10 @@ tensorflow/contrib/summary
 tensorflow/contrib/tensorboard
 tensorflow/contrib/tensorboard/plugins
 tensorflow/contrib/tensorboard/plugins/projector
+tensorflow/contrib/tensorboard/plugins/trace
+# TODO(sami): Add cmake implementations.
+# tensorflow/contrib/tensorrt/python
+# tensorflow/contrib/tensorrt/python/ops
 tensorflow/contrib/tensor_forest
 tensorflow/contrib/tensor_forest/client
 tensorflow/contrib/tensor_forest/hybrid
@@ -418,6 +444,7 @@ tensorflow/contrib/tensor_forest/hybrid/python/layers
 tensorflow/contrib/tensor_forest/hybrid/python/models
 tensorflow/contrib/tensor_forest/hybrid/python/ops
 tensorflow/contrib/tensor_forest/kernels
+tensorflow/contrib/tensor_forest/proto
 tensorflow/contrib/tensor_forest/python
 tensorflow/contrib/tensor_forest/python/ops
 tensorflow/contrib/testing
@@ -438,6 +465,7 @@ tensorflow/contrib/timeseries/python/timeseries/state_space_models
 tensorflow/contrib/tpu
 tensorflow/contrib/tpu/ops
 tensorflow/contrib/tpu/profiler
+tensorflow/contrib/tpu/proto
 tensorflow/contrib/tpu/python
 tensorflow/contrib/tpu/python/ops
 tensorflow/contrib/tpu/python/profiler

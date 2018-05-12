@@ -17,6 +17,8 @@ limitations under the License.
 
 #include <stdint.h>
 
+#include "tensorflow/contrib/lite/context.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
@@ -151,6 +153,7 @@ typedef struct {
 } TfLiteLSTMParams;
 
 typedef struct {
+  bool align_corners;
 } TfLiteResizeBilinearParams;
 
 typedef struct {
@@ -173,6 +176,11 @@ typedef struct {
   int block_size;
 } TfLiteSpaceToDepthParams;
 
+typedef struct {
+  TfLiteType in_data_type;
+  TfLiteType out_data_type;
+} TfLiteCastParams;
+
 typedef enum {
   kTfLiteCombinerTypeSum = 0,
   kTfLiteCombinerTypeMean = 1,
@@ -193,6 +201,10 @@ typedef struct {
 typedef struct {
   bool keep_dims;
 } TfLiteMeanParams;
+
+typedef struct {
+  int num_splits;
+} TfLiteSplitParams;
 
 typedef struct {
   // TODO(ahentz): We can't have dynamic data in this struct, at least not yet.
