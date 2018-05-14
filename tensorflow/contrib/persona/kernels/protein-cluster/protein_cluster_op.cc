@@ -203,6 +203,11 @@ namespace tensorflow {
         
         LOG(INFO) << "Node " << to_string(node_id_) << " seen this chunk, dumping " << abs_seq 
           << " and creating cluster and Comparing to " << clusters_.size() - cluster_start << " more clusters";
+       
+        sequence_t.scalar<int32>()() = new_sequence;
+        LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
+        OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
+              first_ord_t, total_seqs_t, abs_seq_t));
         
         int num_compared = 0;
         while (s.ok()) {
@@ -269,10 +274,10 @@ namespace tensorflow {
           genome_index++;
         }
 
-        sequence_t.scalar<int32>()() = new_sequence;
+        /*sequence_t.scalar<int32>()() = new_sequence;
         LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
         OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
-              first_ord_t, total_seqs_t, abs_seq_t));
+              first_ord_t, total_seqs_t, abs_seq_t));*/
        
         //num_chunks_++;
         Tensor* out;
@@ -381,7 +386,18 @@ namespace tensorflow {
         out->scalar<string>()() = "Node " + to_string(node_id_) + " execution is done";
         return;
       }
-     
+   
+      bool passed = false;
+      if (sequence != ring_size_ - 1 && sequence != ring_size_*2 - 1) {
+
+        passed = true;
+        // pass all to neighbor queue
+        sequence_t.scalar<int32>()() = new_sequence;
+        //LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
+        //LOG(INFO) << "Node " << to_string(node_id_) << " enqueuing to neighbor seq " << new_sequence << " with abs seq " << abs_seq;
+        OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
+              first_ord_t, total_seqs_t, abs_seq_t));
+      }
 
       while (s.ok()) {
         /*LOG(INFO) << "Node " << to_string(node_id_) << " evaluating sequence " 
@@ -422,12 +438,14 @@ namespace tensorflow {
         i++;
       }
 
-      // pass all to neighbor queue
-      sequence_t.scalar<int32>()() = new_sequence;
-      //LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
-      //LOG(INFO) << "Node " << to_string(node_id_) << " enqueuing to neighbor seq " << new_sequence << " with abs seq " << abs_seq;
-      OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
-            first_ord_t, total_seqs_t, abs_seq_t));
+      if (!passed) {
+        // pass all to neighbor queue
+        sequence_t.scalar<int32>()() = new_sequence;
+        //LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
+        //LOG(INFO) << "Node " << to_string(node_id_) << " enqueuing to neighbor seq " << new_sequence << " with abs seq " << abs_seq;
+        OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
+              first_ord_t, total_seqs_t, abs_seq_t));
+      }
 
       //LOG(INFO) << "Node " << to_string(node_id_) << " Total clusters: " << clusters_.size();
 
