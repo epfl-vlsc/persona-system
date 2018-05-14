@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <pthread.h>
 #include <queue>
+#include <chrono>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/format.h"
@@ -98,6 +99,15 @@ namespace tensorflow {
         ss << i << " ";
       }
       LOG(INFO) << ss.str();
+      int total = 0;
+      for (auto& cluster : clusters_) {
+        total += cluster.TotalComps();
+      }
+      LOG(INFO) << "Node: " << node_id_ << " did a total of " << total << " 16b comps ";
+
+      double seconds = double(total_wait_) / 1000000.0f;
+      LOG(INFO) << "Node: " << node_id_ << " spent " << seconds << " waiting for input";
+
     }
 
 
@@ -496,6 +506,7 @@ namespace tensorflow {
     vector<char> scratch_;
     int node_id_;
     vector<int> abs_seq_;
+    int64 total_wait_ = 0;
 
     int NumUncoveredAA(const string& coverages) {
       int sum = 0;
@@ -572,6 +583,7 @@ namespace tensorflow {
       //LOG(INFO) << "Node " << to_string(node_id_) << " input queue closed " << input_queue_->is_closed() 
         //<< "input queue size: " << input_queue_->size();
 
+      auto begin = std::chrono::steady_clock::now();
       // prefer to dequeue neighbor queue, otherwise attempt to dequeue the main input
       if (neighbor_queue_->size() > 0) {
       
@@ -621,6 +633,9 @@ namespace tensorflow {
         TF_RETURN_IF_ERROR(ctx->allocate_temp(DataType::DT_STRING, TensorShape({chunk_size_}), &coverages));
         // else we cont below and dequeue neighbor
         //LOG(INFO) << "Node " << node_id_ << " status was " << ctx->status() << " continuing to neighbor ";
+      
+        auto end = std::chrono::steady_clock::now();
+        total_wait_ += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
         return Status::OK();
       } 
 
@@ -650,6 +665,8 @@ namespace tensorflow {
       num_chunks_++;
       auto abs_seq_val = abs_seq.scalar<int32>()();
       abs_seq_.push_back(abs_seq_val);
+      auto end = std::chrono::steady_clock::now();
+      total_wait_ += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
       return Status::OK();
     }
 

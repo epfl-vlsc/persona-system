@@ -35,6 +35,8 @@ class Cluster {
         GenomeSequenceMap& candidate_map);
 
     int AbsoluteSequence() { return absolute_sequence_; }
+    
+    int TotalComps() { return total_comps_; }
 
     // BuildOutput() -- encode the seq pairs into tensors
     // RefinedMatches consist of 6 ints and 3 doubles
@@ -61,6 +63,8 @@ class Cluster {
     size_t NumCandidates() { return candidates_.size(); }
 
   private:
+
+    int total_comps_ = 0;
    
     // internal representation of sequences in the cluster
     class ClusterSequence {

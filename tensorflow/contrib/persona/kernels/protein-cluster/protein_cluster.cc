@@ -22,6 +22,7 @@ namespace tensorflow {
       if (rep.Genome() == (*sequence.genome) && rep.GenomeIndex() == sequence.genome_index)
         break; // don't compare to itself, its already in this cluster
 
+      total_comps_++;
       if (aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length())) {
 
         //LOG(INFO) << "passed threshold";
@@ -129,6 +130,7 @@ namespace tensorflow {
       }
 
 
+      total_comps_++;
       if (aligner.PassesThreshold(seq1->Data(), seq2->Data(), 
             seq1->Length(), seq2->Length())) {
            
