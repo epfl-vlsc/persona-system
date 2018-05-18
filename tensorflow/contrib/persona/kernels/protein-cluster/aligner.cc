@@ -2,6 +2,7 @@
 #include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
 #include <cfloat>
 #include <vector>
+#include <fstream>
 extern "C" {
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/DynProgr_sse_short.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/DynProgr_sse_double.h"
@@ -75,6 +76,8 @@ void debug_profile(char* name, void* pb, const char* q, int queryLen,
 
 const double ProteinAligner::pam_list_ [] = {35, 49, 71, 98, 115, 133, 152, 174, 200, 229, 262, 300};
 
+static int filenum = 0;
+
 void ProteinAligner::FindStartingPoint(const char*seq1, const char* seq2, int seq1_len, int seq2_len, 
     StartPoint& point) {
 
@@ -93,12 +96,20 @@ void ProteinAligner::FindStartingPoint(const char*seq1, const char* seq2, int se
   point.seq1 = savebuf1_;
   point.seq2 = savebuf2_;
 
+  /*ofstream file;
+  file.open(string("dump/fsp_alignment_") + to_string(filenum) + string(".csv"));
+  filenum++;
+  file << seq1_len << ", " << seq2_len << "\n";*/
+
   for (const double& pam : pam_list_) {
     const auto& new_env = envs_->FindNearest(pam);
     //LOG(INFO) << "FSP env gap_open is " << new_env.gap_open;
     s = AlignDouble(seq1, seq2, seq1_len, seq2_len, false, alignment, new_env);
     //LOG(INFO) << "FSP align double score is " << alignment.score;
-   
+  
+    /*file << alignment.seq1_min << ", " << alignment.seq1_max << ", " << alignment.seq2_min 
+      << ", " << alignment.seq2_max << "\n";*/
+
     char* s1 = const_cast<char*>(seq1) + alignment.seq1_min;
     char* s2 = const_cast<char*>(seq2) + alignment.seq2_min;
     int s1_len = alignment.seq1_max - alignment.seq1_min  + 1; //  ?
@@ -128,6 +139,7 @@ void ProteinAligner::FindStartingPoint(const char*seq1, const char* seq2, int se
     }
 
   }
+  //file.close();
 }
 
 int CountUnderscore(const char* buf, int len) {
@@ -136,6 +148,16 @@ int CountUnderscore(const char* buf, int len) {
     if (buf[i] == '_') sum++;
   }
   return sum;
+}
+
+Status ProteinAligner::AlignSingle(const char*seq1, const char* seq2, int seq1_len, int seq2_len, 
+    Alignment& result) {
+
+  Status s;
+  const auto& env = envs_->JustScoreEnv();
+  s = AlignDouble(seq1, seq2, seq1_len, seq2_len, false, result, env);
+
+  return s;
 }
 
 Status ProteinAligner::AlignLocal(const char*seq1, const char* seq2, int seq1_len, int seq2_len, 

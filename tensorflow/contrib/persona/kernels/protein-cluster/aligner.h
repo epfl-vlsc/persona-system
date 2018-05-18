@@ -44,6 +44,9 @@ class ProteinAligner {
 
     //const AlignmentEnvironments* Envs() { return envs_; }
 
+    Status AlignSingle(const char*seq1, const char* seq2, int seq1_len, int seq2_len, 
+        Alignment& result);
+
     const Parameters* Params() { return params_; }
 
   private:

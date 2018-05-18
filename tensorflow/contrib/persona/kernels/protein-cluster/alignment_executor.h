@@ -1,0 +1,70 @@
+//
+// Created by Stuart Byma on 17/05/18.
+//
+
+#include <chrono>
+#include <atomic>
+#include <thread>
+#include "tensorflow/core/lib/core/threadpool.h"
+#include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/multi_notification.h"
+#include "tensorflow/core/framework/resource_mgr.h"
+
+#pragma once
+
+namespace tensorflow {
+
+
+  class AlignmentExecutor : public ResourceBase {
+
+
+  public:
+
+    typedef std::tuple<const ClusterSequence*, const ClusterSequence*, ProteinAligner::Alignment*, MultiNotification*> WorkItem;
+
+    AlignmentExecutor(Env *env, int num_threads, int capacity);
+    ~AlignmentExecutor();
+
+    Status EnqueueAlignment(const WorkItem& item);
+
+    // not, would be better if the Op received all this crap 
+    // but im too lazy to override resourceOp compute
+    void SetVars(CandidateMap* map, const AlignmentEnvironments* envs, 
+        const Parameters* params ) { 
+      if (!candidate_map_) {
+        candidate_map_ = map; 
+        params_ = params;
+        envs_ = envs;
+      }
+    }
+      
+    string DebugString() override {
+      return string("A AlignmentExecutor");
+    }
+    
+
+    Status ok() const;
+
+  private:
+    volatile bool run_ = true;
+    const AlignmentEnvironments* envs_ = nullptr;
+    const Parameters* params_ = nullptr;
+    CandidateMap* candidate_map_ = nullptr;
+
+    std::atomic_uint_fast32_t num_active_threads_, id_{0};
+    mutex mu_;
+
+    int num_threads_;
+    int capacity_;
+
+    std::unique_ptr<ConcurrentQueue <WorkItem>> work_queue_;
+
+    Status compute_status_ = Status::OK();
+    std::unique_ptr<thread::ThreadPool> workers_;
+
+    void init_workers();
+
+  };
+}

@@ -86,6 +86,7 @@ namespace tensorflow {
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 1), &neighbor_queue_));
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 2), &neighbor_queue_out_));
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 3), &cluster_queue_));
+      TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 4), &candidate_map_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "alignment_envs", &alignment_envs_container_));
       envs_ = alignment_envs_container_->get();
       //LOG(INFO) << "done init";
@@ -105,8 +106,14 @@ namespace tensorflow {
       }
       LOG(INFO) << "Node: " << node_id_ << " did a total of " << total << " 16b comps ";
 
+      int len = 0;
+      for (auto& cluster : clusters_)
+        if (cluster.LongestSeqLength() > len)
+          len = cluster.LongestSeqLength();
+  
       double seconds = double(total_wait_) / 1000000.0f;
-      LOG(INFO) << "Node: " << node_id_ << " spent " << seconds << " waiting for input";
+      LOG(INFO) << "Node: " << node_id_ << " spent " << seconds << " waiting for input and had " 
+        << clusters_.size() << " clusters, with a longest seq len of " << len;
 
     }
 
@@ -232,7 +239,7 @@ namespace tensorflow {
           i++;
           genome_index++;
         }
-        LOG(INFO) << "compared seqs to " << num_compared << " clusters of lower or equal abs_seq ";
+        LOG(INFO) << "compared seqs to " << num_compared << " comparisons of lower or equal abs_seq ";
 
         genome_index = first_ord;
         i = 0;
@@ -262,13 +269,17 @@ namespace tensorflow {
               if (!was_added(i)) was_added(i) = added;
             }
           }
-          if (!was_added(i) || (params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
-              params_.max_n_aa_not_covered)) {
+          if (!was_added(i)) {
             // add cluster
-            //LOG(INFO) << "Node " << to_string(node_id_) << " creating cluster ";
             Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq);
             clusters_.push_back(std::move(cluster));
-          } 
+          } else if (params_.subsequence_homology && (NumUncoveredAA(coverages(i)) >
+              params_.max_n_aa_not_covered)) {
+            
+            Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq);
+            clusters_.push_back(std::move(cluster));
+
+          }
           s = seqs_reader.GetNextRecord(&data, &len);
           i++;
           genome_index++;
@@ -300,7 +311,21 @@ namespace tensorflow {
           //
           // seqs in this chunk however have not been compared to one another
           
+          // notification
+          // each cluster submit alignments, add num to notification min
+          // wait
+          // build output for each cluster
+          MultiNotification n;
+          int total = 0;
           for (auto& cluster : clusters_) {
+            total += cluster.SubmitAlignments(executor_, &n);
+          }
+          n.SetMinNotifies(total);
+          n.WaitForNotification();
+
+          for (auto& cluster : clusters_) {
+
+            cluster.DoAllToAll(candidate_map_, envs_, &params_);
 
             if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
@@ -343,7 +368,7 @@ namespace tensorflow {
           auto& point = abs_sequence_queue_.front();
           CHECK_EQ(point.first, abs_seq);
           cluster_start = point.second;
-          LOG(INFO) << "received abs seq " << abs_seq << " for second time. " 
+          LOG(INFO) << "Node " << node_id_ << "received abs seq " << abs_seq << " for second time. " 
             << "Comparing to " << clusters_.size() - cluster_start << " more clusters";
           abs_sequence_queue_.pop();
         } else {
@@ -390,6 +415,7 @@ namespace tensorflow {
       bool passed = false;
       if (sequence != ring_size_ - 1 && sequence != ring_size_*2 - 1) {
 
+        // we pass early if the next node is not the originator of this chunk
         passed = true;
         // pass all to neighbor queue
         sequence_t.scalar<int32>()() = new_sequence;
@@ -460,6 +486,8 @@ namespace tensorflow {
 
         for (auto& cluster : clusters_) {
 
+          cluster.DoAllToAll(candidate_map_, envs_, &params_);
+          
           if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
           vector<Tensor> ints, doubles, genomes;
@@ -509,7 +537,7 @@ namespace tensorflow {
     // record that we have alignments (candidate) between specific (g1, g2) (s1, s2) pairs
     // will still have duplicates between ring nodes
     // TODO make this into a locked shared resource
-    GenomeSequenceMap candidate_map_;
+    CandidateMap* candidate_map_ = nullptr;
 
     // queue of pairs of (abs_seq, cluster_size) used to prevent comparing
     // second round chunks to clusters < cluster_size

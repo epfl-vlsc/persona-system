@@ -6,6 +6,7 @@
 #include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/multi_notification.h"
 
 namespace tensorflow {
 
@@ -17,6 +18,26 @@ struct Sequence {
   std::string* genome;
   int genome_index;
   int total_seqs;
+};
+    
+// internal representation of sequences in the cluster
+class ClusterSequence {
+  public:
+    ClusterSequence(std::string seq, std::string genome, int idx, int total_seqs) : seq_(seq), 
+      genome_(genome), genome_index_(idx), total_seqs_(total_seqs) {}
+
+    const char* Data() const { return seq_.c_str(); }
+    int Length() const { return int(seq_.length()); } 
+    int GenomeIndex() const { return genome_index_; }
+    const string& Genome() const { return genome_; }
+    int TotalSeqs() const { return total_seqs_; }
+
+  private:
+    std::string seq_; // a copy, because we don't hang onto all chunks
+    // these fields are primarily for constructing the output
+    std::string genome_; // which dataset it belongs to
+    int genome_index_; // what index in the dataset it was
+    int total_seqs_; // total seqs in the genome this seq belongs to
 };
 
 class Cluster {
@@ -32,11 +53,24 @@ class Cluster {
     // will modify coverage string (in `sequence`) if added
     bool EvaluateSequence(Sequence& sequence,  
         const AlignmentEnvironments* envs, const Parameters* params, 
-        GenomeSequenceMap& candidate_map);
+        CandidateMap* candidate_map);
 
+    // return the absolute chunk sequence number that 'founded' this cluster
     int AbsoluteSequence() { return absolute_sequence_; }
-    
+   
+    // call if on the fly SeqToAll is disabled
+    void DoAllToAll(const Parameters* params);
+   
+    // for debug ----------------------
     int TotalComps() { return total_comps_; }
+
+    int LongestSeqLength();
+    // -------------------------------
+
+    // submit all to all alignments to the executor queue
+    // using tuples of <seq1, seq2, alignment, notification>
+    // returns number of alignments submitted
+    int SubmitAlignments(AlignmentExecutor* executor, MultiNotification* n);
 
     // BuildOutput() -- encode the seq pairs into tensors
     // RefinedMatches consist of 6 ints and 3 doubles
@@ -56,35 +90,17 @@ class Cluster {
     // Tensors need a defined Shape to be put into Queues
     //
     // Called after cluster has seen all sequences.
+    // will wait on the cluster multi notification until all alignments are ready
     Status BuildOutput(std::vector<Tensor>& match_ints, 
       std::vector<Tensor>& match_doubles, std::vector<Tensor>& match_genomes, 
       int size, OpKernelContext* ctx);
 
     size_t NumCandidates() { return candidates_.size(); }
-
+    
   private:
 
     int total_comps_ = 0;
    
-    // internal representation of sequences in the cluster
-    class ClusterSequence {
-      public:
-        ClusterSequence(std::string seq, std::string genome, int idx, int total_seqs) : seq_(seq), 
-          genome_(genome), genome_index_(idx), total_seqs_(total_seqs) {}
-
-        const char* Data() const { return seq_.c_str(); }
-        int Length() const { return int(seq_.length()); } 
-        int GenomeIndex() const { return genome_index_; }
-        const string& Genome() const { return genome_; }
-        int TotalSeqs() const { return total_seqs_; }
-
-      private:
-        std::string seq_; // a copy, because we don't hang onto all chunks
-        // these fields are primarily for constructing the output
-        std::string genome_; // which dataset it belongs to
-        int genome_index_; // what index in the dataset it was
-        int total_seqs_; // total seqs in the genome this seq belongs to
-    };
 
     struct Candidate {
       Candidate(int idx1, int idx2, const ProteinAligner::Alignment& alignment) :
@@ -100,7 +116,7 @@ class Cluster {
     // perform all to all between sequences in the cluster
     // skip X first seqs, because they have been tested or added already
     void SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner,
-        GenomeSequenceMap& candidate_map); 
+        CandidateMap* candidate_map); 
 
     bool PassesLengthConstraint(const ProteinAligner::Alignment& alignment,
         int seq1_len, int seq2_len);
@@ -114,6 +130,10 @@ class Cluster {
     const AlignmentEnvironments* envs_; // for alignments
     int absolute_sequence_; // the absolute sequence of the chunk that
                             // produced this cluster
+    
+    // alignments in order, for when the cluster is complete
+    std::vector<ProteinAligner::Alignment> alignments_;
+  
 };
 
 }

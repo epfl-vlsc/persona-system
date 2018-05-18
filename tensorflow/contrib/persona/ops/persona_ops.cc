@@ -1479,6 +1479,19 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     shared_name: If non-empty, this queue will be shared under the given name
     across multiple sessions.
     )doc");
+    
+    REGISTER_OP("CandidateMap")
+    .Output("handle: resource")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .SetIsStateful()
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
+  .Doc(R"doc(
+    A shared map of all alignment pairs to avoid computing the same thing twice.
+    )doc");
 
     REGISTER_OP("AGDProteinCluster")
     .Attr("ring_size: int >= 1")
@@ -1495,6 +1508,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Input("neighbor_queue: resource")
     .Input("neighbor_queue_out: resource")
     .Input("cluster_queue: resource")
+    .Input("candidate_map: resource")
     .Input("alignment_envs: Ref(string)")
     .Output("whatevs: string")
     .SetIsStateful()
