@@ -14,6 +14,7 @@
 #include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_environment.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_executor.h"
 
 namespace tensorflow {
 
@@ -87,6 +88,7 @@ namespace tensorflow {
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 2), &neighbor_queue_out_));
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 3), &cluster_queue_));
       TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 4), &candidate_map_));
+      TF_RETURN_IF_ERROR(LookupResource(ctx, HandleFromInput(ctx, 5), &executor_));
       TF_RETURN_IF_ERROR(GetResourceFromContext(ctx, "alignment_envs", &alignment_envs_container_));
       envs_ = alignment_envs_container_->get();
       //LOG(INFO) << "done init";
@@ -135,6 +137,7 @@ namespace tensorflow {
       //LOG(INFO) << "Node " << to_string(node_id_) << " Starting protein cluster";
       if (!neighbor_queue_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
+        executor_->SetVars(candidate_map_, envs_, &params_);
       }
 
       if (num_chunks_ == total_chunks_*2) {
@@ -320,12 +323,13 @@ namespace tensorflow {
           for (auto& cluster : clusters_) {
             total += cluster.SubmitAlignments(executor_, &n);
           }
+          LOG(INFO) << "Node " << node_id_ << " submitted " << total << " alignments to queue";
           n.SetMinNotifies(total);
           n.WaitForNotification();
 
           for (auto& cluster : clusters_) {
 
-            cluster.DoAllToAll(candidate_map_, envs_, &params_);
+            cluster.DoAllToAll(&params_);
 
             if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
@@ -483,11 +487,19 @@ namespace tensorflow {
         LOG(INFO) << "Node " << to_string(node_id_) << "Total clusters: " << clusters_.size();
         //
         // seqs in this chunk however have not been compared to one another
+        MultiNotification n;
+        int total = 0;
+        for (auto& cluster : clusters_) {
+          total += cluster.SubmitAlignments(executor_, &n);
+        }
+        LOG(INFO) << "Node " << node_id_ << " submitted " << total << " alignments to queue";
+        n.SetMinNotifies(total);
+        n.WaitForNotification();
 
         for (auto& cluster : clusters_) {
 
-          cluster.DoAllToAll(candidate_map_, envs_, &params_);
-          
+          cluster.DoAllToAll(&params_);
+
           if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
           vector<Tensor> ints, doubles, genomes;
@@ -498,6 +510,7 @@ namespace tensorflow {
             OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, ints[i], doubles[i], genomes[i]));
           }
         }
+
 
         Tensor t;
         OP_REQUIRES_OK(ctx, ctx->allocate_temp(DataType::DT_STRING, TensorShape({}), &t));
@@ -553,6 +566,8 @@ namespace tensorflow {
     int node_id_;
     vector<int> abs_seq_;
     int64 total_wait_ = 0;
+
+    AlignmentExecutor* executor_;
 
     int NumUncoveredAA(const string& coverages) {
       int sum = 0;

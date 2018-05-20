@@ -98,8 +98,9 @@ namespace tensorflow {
   int Cluster::SubmitAlignments(AlignmentExecutor* executor, MultiNotification* n) {
 
     int N = seqs_.size();
+    LOG(INFO) << N << " sequences";
     alignments_.resize(N*(N-1)/2);
-    aln = 0;
+    int aln = 0;
     for (size_t i = 0; i < seqs_.size(); i++) {
       const auto* seq1 = &seqs_[i];
       for (size_t j = i+1; j < seqs_.size(); j++) {
@@ -110,7 +111,8 @@ namespace tensorflow {
         aln++;
       }
     }
-    CHECK_EQ(aln, N);
+    LOG(INFO) << "submitted " << aln << ", " << N*(N-1)/2 << " alignments";
+    CHECK_EQ(aln, N*(N-1)/2);
     return aln;
   }
 

@@ -1492,6 +1492,21 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .Doc(R"doc(
     A shared map of all alignment pairs to avoid computing the same thing twice.
     )doc");
+    
+    REGISTER_OP("AlignmentExecutor")
+    .Output("handle: resource")
+    .Attr("num_threads: int = 1")
+    .Attr("capacity: int = 100")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .SetIsStateful()
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
+  .Doc(R"doc(
+    Shared resource for farming out alignments to all cores evenly via a work queue.
+    )doc");
 
     REGISTER_OP("AGDProteinCluster")
     .Attr("ring_size: int >= 1")
@@ -1509,6 +1524,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Input("neighbor_queue_out: resource")
     .Input("cluster_queue: resource")
     .Input("candidate_map: resource")
+    .Input("executor: resource")
     .Input("alignment_envs: Ref(string)")
     .Output("whatevs: string")
     .SetIsStateful()

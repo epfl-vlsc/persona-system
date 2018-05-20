@@ -1,18 +1,20 @@
 //
 // Created by Stuart Byma on 17/05/18.
 //
+#pragma once
 
 #include <chrono>
 #include <atomic>
 #include <thread>
+#include <utility>
 #include "tensorflow/core/lib/core/threadpool.h"
+#include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
-#include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/multi_notification.h"
-#include "tensorflow/core/framework/resource_mgr.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/cluster_seq.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
 
-#pragma once
 
 namespace tensorflow {
 

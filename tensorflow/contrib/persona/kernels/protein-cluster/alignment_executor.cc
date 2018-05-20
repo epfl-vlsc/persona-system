@@ -34,6 +34,7 @@ void AlignmentExecutor::init_workers() {
   auto aligner_func = [this]() {
     //std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
     int my_id = id_.fetch_add(1, memory_order_relaxed);
+    LOG(INFO) << "Alignment thread spinning up with id " << my_id;
 
     int capacity = work_queue_->capacity();
 
@@ -46,6 +47,11 @@ void AlignmentExecutor::init_workers() {
         continue;
       }
 
+      if (!aligner.Params()) {
+        aligner = ProteinAligner(envs_, params_);
+      }
+
+      LOG(INFO) << my_id << " got alignment from queue ";
       const ClusterSequence* seq1 = nullptr;
       const ClusterSequence* seq2 = nullptr;
       seq1 = get<0>(item); seq2 = get<1>(item);
@@ -54,8 +60,8 @@ void AlignmentExecutor::init_workers() {
           ((seq1->TotalSeqs() == seq2->TotalSeqs()) && seq1->Genome() > 
            seq2->Genome())) {
         //seq1 = sequence;
-      } else {
         std::swap(seq1, seq2);
+      } else {
         //seq2 = sequence;
       }
       
@@ -63,7 +69,7 @@ void AlignmentExecutor::init_workers() {
       alignment.score = 0; // 0 score will signify not to create candidate
 
       if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() == seq2->GenomeIndex()) {
-        auto* n = get<3>(item);
+        MultiNotification* n = get<3>(item);
         n->Notify();
         continue;
       }
@@ -84,7 +90,7 @@ void AlignmentExecutor::init_workers() {
         }
       }
 
-      auto* n = get<3>(item);
+      MultiNotification* n = get<3>(item);
       n->Notify();
 
       auto compute_error = !compute_status_.ok();

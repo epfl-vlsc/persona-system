@@ -16,6 +16,8 @@ class AlignmentExecutorOp : public ResourceOpKernel<AlignmentExecutor> {
  private:
   Status CreateResource(AlignmentExecutor** ret) override
       EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+    LOG(INFO) << "Creating alignment resource with " << num_threads_ << " threads and "
+      << capacity_ << " capacity";
     AlignmentExecutor* map = new AlignmentExecutor(env_, num_threads_, capacity_);
     *ret = map;
     return Status::OK();
