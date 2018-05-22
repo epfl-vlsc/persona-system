@@ -23,6 +23,12 @@ class ProteinAligner {
       double pam_variance;
       int seq1_length; // len of aligned string minus '_'
       int seq2_length; // len of aligned string minus '_'
+      std::string ToString() {
+        std::stringstream ss;
+        ss << "score: " << score << " s1min " << seq1_min << " s1max " << seq1_max
+          << " s2min " << seq2_min << " s2max " << seq2_max;
+        return ss.str();
+      }
     };
 
     ProteinAligner(const AlignmentEnvironments* envs, const Parameters* params) : 

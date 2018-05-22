@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include <fstream>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
@@ -41,7 +42,8 @@ class Cluster {
     int AbsoluteSequence() { return absolute_sequence_; }
    
     // call if on the fly SeqToAll is disabled
-    void DoAllToAll(const Parameters* params);
+    void DoAllToAll(const AlignmentEnvironments* envs, 
+      const Parameters* params);
    
     // for debug ----------------------
     int TotalComps() { return total_comps_; }
@@ -78,6 +80,8 @@ class Cluster {
       int size, OpKernelContext* ctx);
 
     size_t NumCandidates() { return candidates_.size(); }
+
+    void Dump(std::ostream& file);
     
   private:
 

@@ -11,6 +11,16 @@ namespace tensorflow {
     for (size_t i = min; i < max; i++)
       coverages[i] = 0;
   }
+    
+  void Cluster::Dump(ostream& file) {
+    for (auto& seq : seqs_) {
+      file << "{\n";
+      file << "genome: " << seq.Genome() << ",\n";
+      file << "genome_index: " << seq.GenomeIndex() << ",\n";
+      file << "length: " << seq.Length() << "\n}\n";
+    }
+
+  }
 
   bool Cluster::EvaluateSequence(Sequence& sequence,  
       const AlignmentEnvironments* envs, const Parameters* params, CandidateMap* candidate_map) {
@@ -30,7 +40,6 @@ namespace tensorflow {
         int skip = i;
         // if subsequence homology, fully align and calculate coverages
         if (params->subsequence_homology) {
-          int index1, index2;
           skip++;
           if (sequence.total_seqs > rep.TotalSeqs() || (sequence.total_seqs == rep.TotalSeqs() 
               && *sequence.genome > rep.Genome()) || ((*sequence.genome == rep.Genome())
@@ -39,26 +48,12 @@ namespace tensorflow {
             //s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
             s = aligner.AlignSingle(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
             AddCoveredRange(*sequence.coverages, alignment.seq2_min, alignment.seq2_max);
-            index1 = i;
-            index2 = seqs_.size();
-
           } else {
 
             //s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
             s = aligner.AlignSingle(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
             AddCoveredRange(*sequence.coverages, alignment.seq1_min, alignment.seq1_max);
-            index2 = i;
-            index1 = seqs_.size();
           }
-
-          /*if (PassesLengthConstraint(alignment, sequence.length, rep.Length()) &&
-              PassesScoreConstraint(params, alignment.score)) {
-            // add candidate for the good alignment with the representative
-            LOG(INFO) << "adding candidate with alignment: " << alignment.score << ", " << alignment.pam_distance 
-              << ", " << alignment.pam_variance;
-            Candidate cand(index1, index2, alignment);
-            candidates_.push_back(std::move(cand));
-          }*/
         }
 
         ClusterSequence new_seq(string(sequence.data, sequence.length), *sequence.genome, 
@@ -107,7 +102,11 @@ namespace tensorflow {
         //LOG(INFO) << "comparing seq " << i << " with seq j " << j;
         const auto* seq2 = &seqs_[j];
         auto item = make_tuple(seq1, seq2, &alignments_[aln], n);
-        executor->EnqueueAlignment(item);
+        Status s = executor->EnqueueAlignment(item);
+        if (!s.ok()) {
+          LOG(INFO) << "error pushing!!! -----------------------";
+          exit(0);
+        }
         aln++;
       }
     }
@@ -117,12 +116,15 @@ namespace tensorflow {
   }
 
   
-  void Cluster::DoAllToAll(const Parameters* params) {
+  void Cluster::DoAllToAll(const AlignmentEnvironments* envs, 
+      const Parameters* params) {
 
     int index1, index2;
 
     const ClusterSequence* seq1 = nullptr;
     const ClusterSequence* seq2 = nullptr;
+    
+    ProteinAligner aligner(envs, params);
 
     int aln = 0;
     //LOG(INFO) << "comparing " << seqs_.size() << " sequences";
@@ -142,8 +144,10 @@ namespace tensorflow {
           seq2 = sequence; index2 = j;
         }
 
-        if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() == seq2->GenomeIndex())
+        if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() == seq2->GenomeIndex()) {
+          aln++;
           continue;
+        }
 
         if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() > seq2->GenomeIndex()) {
           std::swap(seq1, seq2);

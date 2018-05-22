@@ -109,9 +109,19 @@ namespace tensorflow {
       LOG(INFO) << "Node: " << node_id_ << " did a total of " << total << " 16b comps ";
 
       int len = 0;
-      for (auto& cluster : clusters_)
+
+      ofstream file;
+      file.open(string("dump/clusters") + to_string(node_id_) + string(".json"));
+      file << "[\n";
+      for (auto& cluster : clusters_) {
+        file << "cluster:\n";
+        cluster.Dump(file);
+        file << "\n";
         if (cluster.LongestSeqLength() > len)
           len = cluster.LongestSeqLength();
+      }
+      file << "]\n";
+      file.close();
   
       double seconds = double(total_wait_) / 1000000.0f;
       LOG(INFO) << "Node: " << node_id_ << " spent " << seconds << " waiting for input and had " 
@@ -214,10 +224,10 @@ namespace tensorflow {
         LOG(INFO) << "Node " << to_string(node_id_) << " seen this chunk, dumping " << abs_seq 
           << " and creating cluster and Comparing to " << clusters_.size() - cluster_start << " more clusters";
        
-        sequence_t.scalar<int32>()() = new_sequence;
+        /*sequence_t.scalar<int32>()() = new_sequence;
         LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
         OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
-              first_ord_t, total_seqs_t, abs_seq_t));
+              first_ord_t, total_seqs_t, abs_seq_t));*/
         
         int num_compared = 0;
         while (s.ok()) {
@@ -288,10 +298,10 @@ namespace tensorflow {
           genome_index++;
         }
 
-        /*sequence_t.scalar<int32>()() = new_sequence;
+        sequence_t.scalar<int32>()() = new_sequence;
         LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
         OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
-              first_ord_t, total_seqs_t, abs_seq_t));*/
+              first_ord_t, total_seqs_t, abs_seq_t));
        
         //num_chunks_++;
         Tensor* out;
@@ -329,7 +339,7 @@ namespace tensorflow {
 
           for (auto& cluster : clusters_) {
 
-            cluster.DoAllToAll(&params_);
+            cluster.DoAllToAll(envs_, &params_);
 
             if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
@@ -417,7 +427,7 @@ namespace tensorflow {
       }
    
       bool passed = false;
-      if (sequence != ring_size_ - 1 && sequence != ring_size_*2 - 1) {
+      /*if (sequence != ring_size_ - 1 && sequence != ring_size_*2 - 1) {
 
         // we pass early if the next node is not the originator of this chunk
         passed = true;
@@ -427,7 +437,7 @@ namespace tensorflow {
         //LOG(INFO) << "Node " << to_string(node_id_) << " enqueuing to neighbor seq " << new_sequence << " with abs seq " << abs_seq;
         OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
               first_ord_t, total_seqs_t, abs_seq_t));
-      }
+      }*/
 
       while (s.ok()) {
         /*LOG(INFO) << "Node " << to_string(node_id_) << " evaluating sequence " 
@@ -498,7 +508,7 @@ namespace tensorflow {
 
         for (auto& cluster : clusters_) {
 
-          cluster.DoAllToAll(&params_);
+          cluster.DoAllToAll(envs_, &params_);
 
           if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
