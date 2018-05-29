@@ -1,6 +1,7 @@
 
 
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_executor.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
 
 namespace tensorflow {
 
@@ -13,7 +14,9 @@ AlignmentExecutor::AlignmentExecutor(Env *env, int num_threads, int capacity) :
 
   // create a threadpool to execute stuff
   workers_.reset(new thread::ThreadPool(env, "AlignmentExecutor", num_threads_));
+  eval_workers_.reset(new thread::ThreadPool(env, "ClusterAlignmentExecutor", num_threads_));
   work_queue_.reset(new ConcurrentQueue<WorkItem>(capacity));
+  cluster_work_queue_.reset(new ConcurrentQueue<ClusterWorkItem>(capacity));
   init_workers();
 
 }
@@ -109,6 +112,47 @@ void AlignmentExecutor::init_workers() {
   num_active_threads_ = num_threads_;
   for (int i = 0; i < num_threads_; i++)
     workers_->Schedule(aligner_func);
+  
+  auto cluster_func = [this]() {
+    //std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
+    int my_id = id_.fetch_add(1, memory_order_relaxed);
+    LOG(INFO) << "Cluster eval thread spinning up with id " << my_id;
+
+    ClusterWorkItem item;
+    while (run_) {
+      // read from queue, and align work item 
+      if (!cluster_work_queue_->pop(item)) {
+        continue;
+      }
+
+      auto& seq = get<0>(item);
+      auto cluster = get<1>(item);
+      auto& was_added = *get<2>(item);
+      auto n = get<3>(item);
+            
+      auto added = cluster->EvaluateSequence(seq, envs_, params_);
+
+      if (!was_added) was_added = added;
+
+      n->Notify(); 
+      
+      auto compute_error = !compute_status_.ok();
+      if (compute_error) {
+        LOG(ERROR) << "Aligner thread received non-ResourceExhaustedError! : " << compute_status_
+                   << "\n";
+        run_ = false;
+        break;
+      }
+    }
+    
+    VLOG(INFO) << "cluster eval executor thread ending.";
+    num_active_threads_.fetch_sub(1, memory_order_relaxed);
+  };
+  
+  num_active_threads_ += num_threads_;
+  for (int i = 0; i < num_threads_; i++)
+    eval_workers_->Schedule(cluster_func);
+
 }
 
 Status AlignmentExecutor::EnqueueAlignment(const WorkItem& item) {
@@ -119,6 +163,15 @@ Status AlignmentExecutor::EnqueueAlignment(const WorkItem& item) {
     return Status::OK();
   }
 
+}
+    
+Status AlignmentExecutor::EnqueueClusterEval(const ClusterWorkItem& item) {
+
+  if (!cluster_work_queue_->push(item)) {
+    return errors::Internal("Failed to push to alignment work queue");
+  } else { 
+    return Status::OK();
+  }
 }
 
 }

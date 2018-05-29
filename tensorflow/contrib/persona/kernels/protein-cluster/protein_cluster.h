@@ -13,16 +13,6 @@
 
 namespace tensorflow {
 
-// packaged sequence for evaluating against cluster
-struct Sequence {
-  const char* data;
-  int length;
-  std::string* coverages;
-  std::string* genome;
-  int genome_index;
-  int total_seqs;
-};
-    
 class Cluster {
 
   public:
@@ -35,8 +25,7 @@ class Cluster {
     // return true if added to cluster, false if not
     // will modify coverage string (in `sequence`) if added
     bool EvaluateSequence(Sequence& sequence,  
-        const AlignmentEnvironments* envs, const Parameters* params, 
-        CandidateMap* candidate_map);
+        const AlignmentEnvironments* envs, const Parameters* params);
 
     // return the absolute chunk sequence number that 'founded' this cluster
     int AbsoluteSequence() { return absolute_sequence_; }
@@ -119,6 +108,8 @@ class Cluster {
     
     // alignments in order, for when the cluster is complete
     std::vector<ProteinAligner::Alignment> alignments_;
+  
+    mutex mu_;                    // protect modifications of seqs_
   
 };
 

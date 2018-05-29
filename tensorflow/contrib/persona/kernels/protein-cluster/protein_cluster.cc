@@ -23,7 +23,7 @@ namespace tensorflow {
   }
 
   bool Cluster::EvaluateSequence(Sequence& sequence,  
-      const AlignmentEnvironments* envs, const Parameters* params, CandidateMap* candidate_map) {
+      const AlignmentEnvironments* envs, const Parameters* params) {
     ProteinAligner aligner(envs, params);
     Status s;
 
@@ -66,7 +66,10 @@ namespace tensorflow {
 
         //SeqToAll(&new_seq, skip, aligner, candidate_map);
 
-        seqs_.push_back(std::move(new_seq));
+        {
+          mutex_lock l(mu_);
+          seqs_.push_back(std::move(new_seq));
+        }
         return true;
       }
     }

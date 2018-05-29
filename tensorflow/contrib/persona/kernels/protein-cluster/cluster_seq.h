@@ -4,6 +4,16 @@
 
 namespace tensorflow {
 
+// packaged sequence for evaluating against cluster
+struct Sequence {
+  const char* data;
+  int length;
+  std::string* coverages;
+  std::string* genome;
+  int genome_index;
+  int total_seqs;
+};
+    
 // internal representation of sequences in the cluster
 class ClusterSequence {
   public:

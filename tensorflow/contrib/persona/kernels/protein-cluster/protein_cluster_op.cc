@@ -230,6 +230,8 @@ namespace tensorflow {
               first_ord_t, total_seqs_t, abs_seq_t));*/
         
         int num_compared = 0;
+        MultiNotification n;
+        int num_added = 0;
         while (s.ok()) {
           // first compare to all clusters prev created with a lower abs seq num
           for (size_t j = cluster_start; j < clusters_.size(); j++) {
@@ -237,21 +239,28 @@ namespace tensorflow {
             if (cluster.AbsoluteSequence() > abs_seq) continue;
             // fill seq and pass to evaluate
             num_compared++;
-            seq.data = data;
-            seq.length = len;
-            seq.coverages = &coverages(i);
-            seq.genome_index = genome_index;
-            seq.genome = &genome;
-            seq.total_seqs = total_seqs;
+            Sequence s;
+            s.data = data;
+            s.length = len;
+            s.coverages = &coverages(i);
+            s.genome_index = genome_index;
+            s.genome = &genome;
+            s.total_seqs = total_seqs;
 
-            auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
+            auto item = make_tuple(s, &cluster, &was_added(i), &n);
+            num_added++;
+            /*auto added = cluster.EvaluateSequence(seq, envs_, &params_);
 
-            if (!was_added(i)) was_added(i) = added;
+            if (!was_added(i)) was_added(i) = added;*/
+
+            OP_REQUIRES_OK(ctx, executor_->EnqueueClusterEval(item));
           }
           s = seqs_reader.GetNextRecord(&data, &len);
           i++;
           genome_index++;
         }
+        n.SetMinNotifies(num_added);
+        n.WaitForNotification();
         LOG(INFO) << "compared seqs to " << num_compared << " comparisons of lower or equal abs_seq ";
 
         genome_index = first_ord;
@@ -277,11 +286,12 @@ namespace tensorflow {
               seq.genome = &genome;
               seq.total_seqs = total_seqs;
 
-              auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
+              auto added = cluster.EvaluateSequence(seq, envs_, &params_);
 
               if (!was_added(i)) was_added(i) = added;
             }
           }
+
           if (!was_added(i)) {
             // add cluster
             Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq);
@@ -439,13 +449,15 @@ namespace tensorflow {
               first_ord_t, total_seqs_t, abs_seq_t));
       }*/
 
+
+      int num_added = 0;
+      MultiNotification n;
       while (s.ok()) {
         /*LOG(INFO) << "Node " << to_string(node_id_) << " evaluating sequence " 
           << PrintNormalizedProtein(data, len)
           << " genome: " << genome << " genome_index: " << genome_index 
           << " total_seqs: " << total_seqs << ", seq len: " << len;*/
 
-        //LOG(INFO) << " genome: " << genome;
 
         if (coverages(i).size() == 0)
           coverages(i).resize(len, 1);
@@ -456,27 +468,29 @@ namespace tensorflow {
               
           if (cluster.AbsoluteSequence() > abs_seq) continue;
 
-          seq.data = data;
-          seq.length = len;
-          seq.coverages = &coverages(i);
-          seq.genome_index = genome_index;
-          seq.genome = &genome;
-          seq.total_seqs = total_seqs;
+          Sequence s;
+          s.data = data;
+          s.length = len;
+          s.coverages = &coverages(i);
+          s.genome_index = genome_index;
+          s.genome = &genome;
+          s.total_seqs = total_seqs;
 
-          auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
-
-          if (!was_added(i)) was_added(i) = added;
+          // workitem with seq*, cluster*, bool*, multinotification*
+          auto item = make_tuple(s, &cluster, &was_added(i), &n);
+          num_added++;
           
-          if (added) {
-            //LOG(INFO) << "Node " << to_string(node_id_) << " added sequence to cluster\n" ;
-              //<< "coverages is now " << coverages;
-          }
+          OP_REQUIRES_OK(ctx, executor_->EnqueueClusterEval(item));
+          
         }
 
         s = seqs_reader.GetNextRecord(&data, &len);
         genome_index++;
         i++;
       }
+      n.SetMinNotifies(num_added);
+      n.WaitForNotification();
+      LOG(INFO) << "finished " << num_added << " cluster evals";
 
       if (!passed) {
         // pass all to neighbor queue
@@ -586,67 +600,6 @@ namespace tensorflow {
       return sum;
     }
 
-    /*void AddClustersAndEvaluate(AGDRecordReader& seqs_reader, Tensor& was_added_t, 
-        Tensor& coverages_t, int first_ord, string& genome, const int& total_seqs) {
-
-      const char* data;
-      size_t len;
-      Sequence seq;
-      int i = 0;
-      int genome_index = first_ord;
-      auto was_added = was_added_t.vec<bool>();
-      auto coverages = coverages_t.vec<string>();
-
-      Status s = seqs_reader.GetNextRecord(&data, &len);
-      size_t start_cluster = clusters_.size();
-      // create clusters
-      while (s.ok()) {
-        //LOG(INFO) << "Node " << to_string(node_id_) << "was added " 
-         // << was_added(i) << " numuncovered: " << NumUncoveredAA(coverages(i));
-        if (!was_added(i) || (params_.subsequence_homology && NumUncoveredAA(coverages(i)) >
-            params_.max_n_aa_not_covered)) {
-          // add cluster
-          //LOG(INFO) << "Node " << to_string(node_id_) << " creating cluster ";
-          Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq);
-          clusters_.push_back(std::move(cluster));
-        } 
-        s = seqs_reader.GetNextRecord(&data, &len);
-        i++;
-        genome_index++;
-      }
-
-      if (start_cluster < clusters_.size()) {
-        // now compare each seq to the newly added clusters
-        seqs_reader.Reset();
-        s = seqs_reader.GetNextRecord(&data, &len);
-        i = 0;
-        genome_index = first_ord;
-
-        while (s.ok()) {
-
-          for (size_t j = start_cluster; j < clusters_.size(); j++) {
-            auto& cluster = clusters_[j];
-            // fill seq and pass to evaluate
-            seq.data = data;
-            seq.length = len;
-            seq.coverages = &coverages(i);
-            seq.genome_index = genome_index;
-            seq.genome = &genome;
-            seq.total_seqs = total_seqs;
-
-            auto added = cluster.EvaluateSequence(seq, envs_, &params_, candidate_map_);
-
-            if (!was_added(i)) was_added(i) = added;
-
-          }
-
-          s = seqs_reader.GetNextRecord(&data, &len);
-          genome_index++;
-          i++;
-        }
-      }
-    }*/
-     
     inline Status DequeueChunk(OpKernelContext* ctx, Tensor& chunk, Tensor& num_recs, 
         Tensor& sequence, Tensor& was_added, Tensor& coverages, Tensor& genome, Tensor& first_ord,
         Tensor& total_seqs, Tensor& abs_seq) {

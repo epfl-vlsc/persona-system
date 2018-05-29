@@ -12,12 +12,13 @@
 #include "tensorflow/contrib/persona/kernels/concurrent_queue/concurrent_queue.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/aligner.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/multi_notification.h"
-#include "tensorflow/contrib/persona/kernels/protein-cluster/cluster_seq.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/candidate_map.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/cluster_seq.h"
 
 
 namespace tensorflow {
 
+  class Cluster; // forward declare, protein_cluster.h
 
   class AlignmentExecutor : public ResourceBase {
 
@@ -25,11 +26,15 @@ namespace tensorflow {
   public:
 
     typedef std::tuple<const ClusterSequence*, const ClusterSequence*, ProteinAligner::Alignment*, MultiNotification*> WorkItem;
+    
+    typedef std::tuple<Sequence, Cluster*, bool*, MultiNotification*> ClusterWorkItem;
 
     AlignmentExecutor(Env *env, int num_threads, int capacity);
     ~AlignmentExecutor();
 
     Status EnqueueAlignment(const WorkItem& item);
+    
+    Status EnqueueClusterEval(const ClusterWorkItem& item);
 
     // not, would be better if the Op received all this crap 
     // but im too lazy to override resourceOp compute
@@ -62,9 +67,11 @@ namespace tensorflow {
     int capacity_;
 
     std::unique_ptr<ConcurrentQueue <WorkItem>> work_queue_;
+    std::unique_ptr<ConcurrentQueue <ClusterWorkItem>> cluster_work_queue_;
 
     Status compute_status_ = Status::OK();
     std::unique_ptr<thread::ThreadPool> workers_;
+    std::unique_ptr<thread::ThreadPool> eval_workers_;
 
     void init_workers();
 
