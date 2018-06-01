@@ -146,7 +146,7 @@ and is thus passed as an Attr instead of an input (for efficiency);
 
 
 )doc");
-    
+
     REGISTER_OP("CephReader")
     .Attr("cluster_name: string")
     .Attr("user_name: string")
@@ -427,33 +427,33 @@ more details will come after everythings dones.
     )doc");
 
     REGISTER_OP("AGDBaseDecompression")
-    .Attr("unpack: bool = true")
-    //.Input("reference: string") // or list string ? en fait on a potentiellement pas besoin de ca.
-    .Input("results: string")
-    .Input("compress_base")
-    .Input("buffer_pair_pool: Ref(String)")
-    .Output("uncompress: string")
-    .SetShapeFn([](InferenceContext *c) {
-                c->set_output(0, c->Vector(2));
-        return Status::OK();
-        })
-    .SetIsStateful()
-    .Doc(R"doc(
-      Uncompress
-    )doc");
-//==============================================================================
-    // .Attr("ref_sequences: list(string)")
-    // .Attr("ref_index: list(int)")
     // .Attr("unpack: bool = true")
-    // .Attr("columns: list(string)")
-    // .Input("chunk_names: string")
-    // .Input("chunk_size: int32")
-    // .Input("start: int32")
-    // .Input("finish: int32")
+    // //.Input("reference: string") // or list string ? en fait on a potentiellement pas besoin de ca.
+    // .Input("results: string")
+    // .Input("compress_base")
+    // .Input("buffer_pair_pool: Ref(String)")
+    // .Output("uncompress: string")
+    // .SetShapeFn([](InferenceContext *c) {
+    //             c->set_output(0, c->Vector(2));
+    //     return Status::OK();
+    //     })
     // .SetIsStateful()
     // .Doc(R"doc(
-    //  decompress the compressed base string into its original string of basepairs.
-    //  )doc");
+    //   Uncompress
+    // )doc");
+//==============================================================================
+    .Attr("ref_sequences: list(string)")
+    .Attr("ref_index: list(int)")
+    .Attr("unpack: bool = true")
+    .Attr("columns: list(string)")
+    .Input("chunk_names: string")
+    .Input("chunk_size: int32")
+    .Input("start: int32")
+    .Input("finish: int32")
+    .SetIsStateful()
+    .Doc(R"doc(
+     decompress the compressed base string into its original string of basepairs.
+     )doc");
 //==============================================================================
     REGISTER_OP("AGDReader")
     .Attr("container: string = ''")
@@ -1454,11 +1454,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
   .Doc(R"doc(
   Compresses the prepared buffer_list records and into individual buffers, and then outputs them
   )doc");
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> master
     REGISTER_OP("AGDReferenceGenome")
     .Output("handle: Ref(string)")
     .Attr("chunk_paths: list(string)")
@@ -1478,7 +1474,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     shared_name: If non-empty, this queue will be shared under the given name
     across multiple sessions.
     )doc");
-    
+
 /*    REGISTER_OP("AlignmentEnvironments")
     .Output("handle: Ref(string)")
     .Attr("gaps: list(float)")

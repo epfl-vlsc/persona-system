@@ -104,7 +104,7 @@ namespace tensorflow {
       Status p = record_reader.GetNextRecord(&agd_record,&record_size);
 
 //usefull stuff for comparison =================================================
-/* M = 0, I = 1, = = 2, X = 3, S = 4, D = 5, N = 6, H = 7, P= 8*/
+/* M = 0, I = 1, = = 2, X = 3, S = 4, D = 5, N = 6, H = 7, P= 8 */
       // LOG(INFO) << "Create the string to compare the CIGAR with";
       const char* text = "MI=XSDNHP";
       string val = "";
@@ -136,6 +136,7 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
             compress_cigar += cigar[i];
             compress_cigar += "|";
             for(int j = 0; j < stoi(val) ; j++){
+              //TODO est ce qu'on est sur que c'est bien ca genre que agd_record a la position 0 existe
               compress_cigar += agd_record[pos+j];
             }
             compress_cigar += "|";
@@ -148,6 +149,8 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
             compress_cigar += "|";
             val = "";
           }else if (tmp == text[7] ||tmp == text[8]  || tmp == text[4]){
+            //TODO on fait quoi avec pos ?
+            pos += stoi(val);
             //LOG(INFO) << "Different op";
             //LOG(INFO) << "results position : " << position;
             compress_cigar += val;
@@ -179,6 +182,8 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
         compress_cigar = "";
       }//while s is ok()
       resource_releaser(results_container);
+      resource_releaser(records_container);
+      //resource_releaser(output_bufferpair_container);
     }//compute end
   private:
     // RecordParser rec_parser_;
