@@ -427,33 +427,34 @@ more details will come after everythings dones.
     )doc");
 
     REGISTER_OP("AGDBaseDecompression")
-    // .Attr("unpack: bool = true")
-    // //.Input("reference: string") // or list string ? en fait on a potentiellement pas besoin de ca.
-    // .Input("results: string")
-    // .Input("compress_base")
-    // .Input("buffer_pair_pool: Ref(String)")
-    // .Output("uncompress: string")
+    .Attr("unpack: bool = true")
+    .Input("reference: string")
+    .Input("chunk_size: int32")
+    //.Input("results: string")
+    .Input("compress_base")
+    .Input("buffer_pair_pool: Ref(String)")
+    .Output("uncompress: string")
     // .SetShapeFn([](InferenceContext *c) {
     //             c->set_output(0, c->Vector(2));
     //     return Status::OK();
     //     })
-    // .SetIsStateful()
-    // .Doc(R"doc(
-    //   Uncompress
-    // )doc");
-//==============================================================================
-    .Attr("ref_sequences: list(string)")
-    .Attr("ref_index: list(int)")
-    .Attr("unpack: bool = true")
-    .Attr("columns: list(string)")
-    .Input("chunk_names: string")
-    .Input("chunk_size: int32")
-    .Input("start: int32")
-    .Input("finish: int32")
     .SetIsStateful()
     .Doc(R"doc(
-     decompress the compressed base string into its original string of basepairs.
-     )doc");
+      Uncompress
+    )doc");
+//==============================================================================
+    // .Attr("ref_sequences: list(string)")
+    // .Attr("ref_index: list(int)")
+    // .Attr("unpack: bool = true")
+    // .Attr("columns: list(string)")
+    // .Input("chunk_names: string")
+    // .Input("chunk_size: int32")
+    // .Input("start: int32")
+    // .Input("finish: int32")
+    // .SetIsStateful()
+    // .Doc(R"doc(
+    //  decompress the compressed base string into its original string of basepairs.
+    //  )doc");
 //==============================================================================
     REGISTER_OP("AGDReader")
     .Attr("container: string = ''")

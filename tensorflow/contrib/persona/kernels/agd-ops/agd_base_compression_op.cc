@@ -118,9 +118,55 @@ namespace tensorflow {
         const int flag = agd_result.flag();
         const double position = agd_result.position().position();
         val = "";
-/*
-use "|" as delimiter for the compress cigar to allow a better usage for decompress.
-*/
+
+      // //with delimiter=======================================================
+      // /*
+      // use "|" as delimiter for the compress cigar to allow a better usage for decompress.
+      // */
+      //   // LOG(INFO) << "analysing the CIGAR";
+      //   for(int i = 0 ; i < cigar_len ; i++){
+      //     char tmp = cigar[i];
+      //     //LOG(INFO) << "here is the CIGAR : " << cigar[i];
+      //     if(tmp == text[0]){
+      //       //LOG(INFO) << "should use X or =";
+      //       ctx->SetStatus(errors::Internal("should use X or '=' instead of M"));
+      //       return;
+      //     }else if(tmp == text[1] || tmp == text[3] || tmp == text[5] ||tmp == text[6] ){
+      //       pos += stoi(val);
+      //       compress_cigar += val;
+      //       compress_cigar += "|";
+      //       compress_cigar += cigar[i];
+      //       compress_cigar += "|";
+      //       for(int j = 0; j < stoi(val) ; j++){
+      //         //TODO est ce qu'on est sur que c'est bien ca genre que agd_record a la position 0 existe
+      //         compress_cigar += agd_record[pos+j];
+      //       }
+      //       compress_cigar += "|";
+      //       val = "";
+      //     }else if(tmp == text[2]){
+      //       pos += stoi(val);
+      //       compress_cigar += val;
+      //       compress_cigar += "|";
+      //       compress_cigar += cigar[i];
+      //       compress_cigar += "|";
+      //       val = "";
+      //     }else if (tmp == text[7] ||tmp == text[8]  || tmp == text[4]){
+      //       //TODO on fait quoi avec pos ?
+      //       pos += stoi(val);
+      //       //LOG(INFO) << "Different op";
+      //       //LOG(INFO) << "results position : " << position;
+      //       compress_cigar += val;
+      //       compress_cigar += "|";
+      //       compress_cigar += cigar[i];
+      //       compress_cigar += "|";
+      //       val = "";
+      //     }else{
+      //       val += cigar[i];
+      //     }
+      //   }//for loop end
+      //   //===================================================================
+
+      //without delimiter=======================================================
         // LOG(INFO) << "analysing the CIGAR";
         for(int i = 0 ; i < cigar_len ; i++){
           char tmp = cigar[i];
@@ -130,38 +176,36 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
             ctx->SetStatus(errors::Internal("should use X or '=' instead of M"));
             return;
           }else if(tmp == text[1] || tmp == text[3] || tmp == text[5] ||tmp == text[6] ){
+            //TODO si c'est une deletion ca fonctionne pas comme ca je l'aurais pas dans le chunck en principe si ?
+            //TODO faut revoir aussi avec stuart cet histoire avec N c'est pas clair.
             pos += stoi(val);
             compress_cigar += val;
-            compress_cigar += "|";
             compress_cigar += cigar[i];
-            compress_cigar += "|";
             for(int j = 0; j < stoi(val) ; j++){
               //TODO est ce qu'on est sur que c'est bien ca genre que agd_record a la position 0 existe
               compress_cigar += agd_record[pos+j];
             }
-            compress_cigar += "|";
             val = "";
           }else if(tmp == text[2]){
             pos += stoi(val);
             compress_cigar += val;
-            compress_cigar += "|";
             compress_cigar += cigar[i];
-            compress_cigar += "|";
             val = "";
           }else if (tmp == text[7] ||tmp == text[8]  || tmp == text[4]){
-            //TODO on fait quoi avec pos ?
             pos += stoi(val);
-            //LOG(INFO) << "Different op";
-            //LOG(INFO) << "results position : " << position;
             compress_cigar += val;
-            compress_cigar += "|";
             compress_cigar += cigar[i];
-            compress_cigar += "|";
             val = "";
           }else{
             val += cigar[i];
           }
         }//for loop end
+        //======================================================================
+
+
+        //TODO ici faut voir si on code le bitmap en mode yolo.
+
+
 
         pos = 0;
         // for(int i = 0 ; i < record_size; i++){
@@ -186,7 +230,7 @@ use "|" as delimiter for the compress cigar to allow a better usage for decompre
       //resource_releaser(output_bufferpair_container);
     }//compute end
   private:
-    // RecordParser rec_parser_;
+
     const TensorShape scalar_shape_{};
     ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
     string record_id_;
