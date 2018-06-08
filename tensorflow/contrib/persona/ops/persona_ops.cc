@@ -1519,6 +1519,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Attr("node_id: int >= 0")
     .Attr("chunk_size: int >= 0")
     .Attr("cluster_length: int")
+    .Attr("do_allall: bool = true")
     .Input("input_queue: resource")
     .Input("neighbor_queue: resource")
     .Input("neighbor_queue_out: resource")

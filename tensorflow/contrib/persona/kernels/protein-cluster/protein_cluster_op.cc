@@ -78,6 +78,7 @@ namespace tensorflow {
      
       // for debugging
       OP_REQUIRES_OK(context, context->GetAttr("node_id", &node_id_));
+      OP_REQUIRES_OK(context, context->GetAttr("do_allall", &do_allall_));
 
       num_chunks_ = 0;
     }
@@ -113,10 +114,15 @@ namespace tensorflow {
       ofstream file;
       file.open(string("dump/clusters") + to_string(node_id_) + string(".json"));
       file << "[\n";
+      int index = 1;
       for (auto& cluster : clusters_) {
-        file << "cluster:\n";
         cluster.Dump(file);
-        file << "\n";
+        if (index == clusters_.size()) {
+          file << "\n";
+        } else {
+          file << ",\n";
+        }
+        index++;
         if (cluster.LongestSeqLength() > len)
           len = cluster.LongestSeqLength();
       }
@@ -274,22 +280,34 @@ namespace tensorflow {
         while (s.ok()) {
           /*LOG(INFO) << "Node " << to_string(node_id_) << "was added " 
               << was_added(i) << " numuncovered: " << NumUncoveredAA(coverages(i));*/
+        
+          MultiNotification note;
+          num_added = 0;
           if (start_cluster < clusters_.size()) {
             for (size_t j = start_cluster; j < clusters_.size(); j++) {
               auto& cluster = clusters_[j];
               if (cluster.AbsoluteSequence() > abs_seq) continue;
               // fill seq and pass to evaluate
-              seq.data = data;
-              seq.length = len;
-              seq.coverages = &coverages(i);
-              seq.genome_index = genome_index;
-              seq.genome = &genome;
-              seq.total_seqs = total_seqs;
+              Sequence s;
+              s.data = data;
+              s.length = len;
+              s.coverages = &coverages(i);
+              s.genome_index = genome_index;
+              s.genome = &genome;
+              s.total_seqs = total_seqs;
 
-              auto added = cluster.EvaluateSequence(seq, envs_, &params_);
+              auto item = make_tuple(s, &cluster, &was_added(i), &note);
+              num_added++;
 
-              if (!was_added(i)) was_added(i) = added;
+              //auto added = cluster.EvaluateSequence(seq, envs_, &params_);
+
+              //if (!was_added(i)) was_added(i) = added;
+              OP_REQUIRES_OK(ctx, executor_->EnqueueClusterEval(item));
             }
+            note.SetMinNotifies(num_added);
+            note.WaitForNotification();
+            // we have to wait here because we need to check if this seq
+            // will form another cluster (below)
           }
 
           if (!was_added(i)) {
@@ -333,32 +351,35 @@ namespace tensorflow {
           LOG(INFO) << "Node " << to_string(node_id_) << "Total clusters: " << clusters_.size();
           //
           // seqs in this chunk however have not been compared to one another
+
+          if (do_allall_) {
           
-          // notification
-          // each cluster submit alignments, add num to notification min
-          // wait
-          // build output for each cluster
-          MultiNotification n;
-          int total = 0;
-          for (auto& cluster : clusters_) {
-            total += cluster.SubmitAlignments(executor_, &n);
-          }
-          LOG(INFO) << "Node " << node_id_ << " submitted " << total << " alignments to queue";
-          n.SetMinNotifies(total);
-          n.WaitForNotification();
+            // notification
+            // each cluster submit alignments, add num to notification min
+            // wait
+            // build output for each cluster
+            MultiNotification n;
+            int total = 0;
+            for (auto& cluster : clusters_) {
+              total += cluster.SubmitAlignments(executor_, &n);
+            }
+            LOG(INFO) << "Node " << node_id_ << " submitted " << total << " alignments to queue";
+            n.SetMinNotifies(total);
+            n.WaitForNotification();
 
-          for (auto& cluster : clusters_) {
+            for (auto& cluster : clusters_) {
 
-            cluster.DoAllToAll(envs_, &params_);
+              cluster.DoAllToAll(envs_, &params_);
 
-            if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
+              if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
-            vector<Tensor> ints, doubles, genomes;
-            OP_REQUIRES_OK(ctx, cluster.BuildOutput(ints, doubles, genomes, cluster_length_, ctx)); // TODO adjust or parametrize '10'
+              vector<Tensor> ints, doubles, genomes;
+              OP_REQUIRES_OK(ctx, cluster.BuildOutput(ints, doubles, genomes, cluster_length_, ctx)); // TODO adjust or parametrize '10'
 
-            // enqueue tensor tuples into cluster queue
-            for (size_t i = 0; i < ints.size(); i++) {
-              OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, ints[i], doubles[i], genomes[i]));
+              // enqueue tensor tuples into cluster queue
+              for (size_t i = 0; i < ints.size(); i++) {
+                OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, ints[i], doubles[i], genomes[i]));
+              }
             }
           }
 
@@ -590,6 +611,7 @@ namespace tensorflow {
     int node_id_;
     vector<int> abs_seq_;
     int64 total_wait_ = 0;
+    bool do_allall_ = true;
 
     AlignmentExecutor* executor_;
 
@@ -732,8 +754,6 @@ namespace tensorflow {
       n.WaitForNotification();
       return Status::OK();
     }
-
-
   };
 
   REGISTER_KERNEL_BUILDER(Name("AGDProteinCluster").Device(DEVICE_CPU), AGDProteinClusterOp);

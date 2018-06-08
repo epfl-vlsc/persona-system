@@ -13,12 +13,20 @@ namespace tensorflow {
   }
     
   void Cluster::Dump(ostream& file) {
+    file << "{\n\"sequences\": [ \n";
+    int index = 1;
     for (auto& seq : seqs_) {
       file << "{\n";
-      file << "genome: " << seq.Genome() << ",\n";
-      file << "genome_index: " << seq.GenomeIndex() << ",\n";
-      file << "length: " << seq.Length() << "\n}\n";
+      file << "\"POSITION\": " << "\"" << seq.GenomeIndex() << "\",\n";
+      file << "\"GENOME\": " << "\"" << seq.Genome() << "\"\n";
+      if (index == seqs_.size()) {
+        file << "}\n";
+      } else {
+        file << "},\n";
+      }
+      index++;
     }
+    file << "]\n}";
 
   }
 
