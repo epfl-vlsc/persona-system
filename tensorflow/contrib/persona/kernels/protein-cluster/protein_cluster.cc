@@ -58,13 +58,13 @@ namespace tensorflow {
               && *sequence.genome > rep.Genome()) || ((*sequence.genome == rep.Genome())
               && sequence.genome_index > rep.GenomeIndex()) ) {
       
-            //s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
-            s = aligner.AlignSingle(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
+            s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
+            //s = aligner.AlignSingle(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
             AddCoveredRange(*sequence.coverages, alignment.seq2_min, alignment.seq2_max);
           } else {
 
-            //s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
-            s = aligner.AlignSingle(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
+            s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
+            //s = aligner.AlignSingle(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
             AddCoveredRange(*sequence.coverages, alignment.seq1_min, alignment.seq1_max);
           }
         }

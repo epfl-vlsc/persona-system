@@ -530,32 +530,32 @@ namespace tensorflow {
         // for downstream aggregation
         LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
         LOG(INFO) << "Node " << to_string(node_id_) << "Total clusters: " << clusters_.size();
-        //
-        // seqs in this chunk however have not been compared to one another
-        MultiNotification n;
-        int total = 0;
-        for (auto& cluster : clusters_) {
-          total += cluster.SubmitAlignments(executor_, &n);
-        }
-        LOG(INFO) << "Node " << node_id_ << " submitted " << total << " alignments to queue";
-        n.SetMinNotifies(total);
-        n.WaitForNotification();
 
-        for (auto& cluster : clusters_) {
+        if (do_allall_) {
+          MultiNotification n;
+          int total = 0;
+          for (auto& cluster : clusters_) {
+            total += cluster.SubmitAlignments(executor_, &n);
+          }
+          LOG(INFO) << "Node " << node_id_ << " submitted " << total << " alignments to queue";
+          n.SetMinNotifies(total);
+          n.WaitForNotification();
 
-          cluster.DoAllToAll(envs_, &params_);
+          for (auto& cluster : clusters_) {
 
-          if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
+            cluster.DoAllToAll(envs_, &params_);
 
-          vector<Tensor> ints, doubles, genomes;
-          OP_REQUIRES_OK(ctx, cluster.BuildOutput(ints, doubles, genomes, cluster_length_, ctx)); // TODO adjust or parametrize '10'
+            if (cluster.NumCandidates() == 0) continue; // no cands, dont bother
 
-          // enqueue tensor tuples into cluster queue
-          for (size_t i = 0; i < ints.size(); i++) {
-            OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, ints[i], doubles[i], genomes[i]));
+            vector<Tensor> ints, doubles, genomes;
+            OP_REQUIRES_OK(ctx, cluster.BuildOutput(ints, doubles, genomes, cluster_length_, ctx)); // TODO adjust or parametrize '10'
+
+            // enqueue tensor tuples into cluster queue
+            for (size_t i = 0; i < ints.size(); i++) {
+              OP_REQUIRES_OK(ctx, EnqueueClusters(ctx, ints[i], doubles[i], genomes[i]));
+            }
           }
         }
-
 
         Tensor t;
         OP_REQUIRES_OK(ctx, ctx->allocate_temp(DataType::DT_STRING, TensorShape({}), &t));
