@@ -35,8 +35,10 @@ namespace tensorflow {
     ProteinAligner aligner(envs, params);
     Status s;
 
+    auto seq_it = seqs_.begin();
     for (size_t i = 0; i < params->max_representatives && i < seqs_.size(); i++) {
-      const auto& rep = seqs_[i];
+      const auto& rep = *seq_it;
+      seq_it++;
       if (rep.Genome() == (*sequence.genome) && rep.GenomeIndex() == sequence.genome_index)
         break; // don't compare to itself, its already in this cluster
 
@@ -112,11 +114,11 @@ namespace tensorflow {
     LOG(INFO) << N << " sequences";
     alignments_.resize(N*(N-1)/2);
     int aln = 0;
-    for (size_t i = 0; i < seqs_.size(); i++) {
-      const auto* seq1 = &seqs_[i];
-      for (size_t j = i+1; j < seqs_.size(); j++) {
+    for (auto it = seqs_.begin(); it != seqs_.end(); it++) {
+      const auto* seq1 = &(*it);
+      for (auto itj = next(it); itj != seqs_.end(); itj++) {
         //LOG(INFO) << "comparing seq " << i << " with seq j " << j;
-        const auto* seq2 = &seqs_[j];
+        const auto* seq2 = &(*itj);
         auto item = make_tuple(seq1, seq2, &alignments_[aln], n);
         Status s = executor->EnqueueAlignment(item);
         if (!s.ok()) {
@@ -135,8 +137,6 @@ namespace tensorflow {
   void Cluster::DoAllToAll(const AlignmentEnvironments* envs, 
       const Parameters* params) {
 
-    int index1, index2;
-
     const ClusterSequence* seq1 = nullptr;
     const ClusterSequence* seq2 = nullptr;
     
@@ -144,20 +144,18 @@ namespace tensorflow {
 
     int aln = 0;
     //LOG(INFO) << "comparing " << seqs_.size() << " sequences";
-    for (size_t i = 0; i < seqs_.size(); i++) {
-      const ClusterSequence* seq = &seqs_[i];
-      for (size_t j = i+1; j < seqs_.size(); j++) {
+    for (auto it = seqs_.begin(); it != seqs_.end(); it++) {
+      const ClusterSequence* seq = &(*it);
+      for (auto itj = next(it); itj != seqs_.end(); itj++) {
         //LOG(INFO) << "comparing seq " << i << " with seq j " << j;
-        const auto* sequence = &seqs_[j];
+        const auto* sequence = &(*itj);
         seq1 = seq; seq2 = seq;
         if (seq->TotalSeqs() > sequence->TotalSeqs() || 
             ((seq->TotalSeqs() == sequence->TotalSeqs()) && seq->Genome() > 
              sequence->Genome())) {
-          seq1 = sequence; index1 = j;
-          index2 = i;
+          seq1 = sequence;
         } else {
-          index1 = i;
-          seq2 = sequence; index2 = j;
+          seq2 = sequence;
         }
 
         if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() == seq2->GenomeIndex()) {
@@ -167,7 +165,6 @@ namespace tensorflow {
 
         if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() > seq2->GenomeIndex()) {
           std::swap(seq1, seq2);
-          std::swap(index1, index2);
         }
 
         auto& alignment = alignments_[aln];
@@ -175,7 +172,7 @@ namespace tensorflow {
 
         if (PassesLengthConstraint(alignment, seq1->Length(), seq2->Length()) &&
             PassesScoreConstraint(params, alignment.score)) {
-          Candidate cand(index1, index2, alignment);
+          Candidate cand(seq1, seq2, alignment);
           candidates_.push_back(std::move(cand));
         }
       }
@@ -244,75 +241,6 @@ namespace tensorflow {
     }
   }*/
 
-  // for doing all to all on the fly
-  void Cluster::SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner, 
-      CandidateMap* candidate_map) {
-
-    const ClusterSequence* seq1 = seq;
-    const ClusterSequence* seq2 = seq;
-    int index1, index2;
-
-    //LOG(INFO) << "SeqToAll against " << seqs_.size() - skip << " seqs in cluster";
-    for (size_t i = 0; i < seqs_.size(); i++) {
-      const auto* sequence = &seqs_[i];
-      seq1 = seq; seq2 = seq;
-      if (seq->TotalSeqs() > sequence->TotalSeqs() || 
-          ((seq->TotalSeqs() == sequence->TotalSeqs()) && seq->Genome() > 
-           sequence->Genome())) {
-        seq1 = sequence; index1 = i;
-        index2 = seqs_.size();
-      } else {
-        index1 = seqs_.size();
-        seq2 = sequence; index2 = i;
-      }
-      
-      if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() == seq2->GenomeIndex())
-        continue;
-
-      if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() > seq2->GenomeIndex()) {
-        //LOG(INFO) << "seq 1 is greater than seq2 swapping ----------------------------";
-        std::swap(seq1, seq2);
-        std::swap(index1, index2);
-        /*const auto& tmp = seq1;
-        seq1 = seq2;
-        seq2 = tmp;*/
-      }
-      
-      auto genome_pair = make_pair(seq1->Genome(), seq2->Genome());
-      auto seq_pair = make_pair(seq1->GenomeIndex(), seq2->GenomeIndex());
-      if (candidate_map->ExistsOrInsert(genome_pair, seq_pair)) {
-        LOG(INFO) << "not computing duplicate!";
-        continue;
-      }
-      /*auto genome_pair_it = candidate_map.find(genome_pair);
-      if (genome_pair_it != candidate_map.end()) {
-        auto seq_pair_it = genome_pair_it->second.find(seq_pair);
-        if (seq_pair_it != genome_pair_it->second.end()) {
-          LOG(INFO) << "not computing duplicate!";
-          continue; // we already have this candidate
-        }
-      }*/
-
-
-      total_comps_++;
-      if (aligner.PassesThreshold(seq1->Data(), seq2->Data(), 
-            seq1->Length(), seq2->Length())) {
-           
-        ProteinAligner::Alignment alignment;
-        Status s = aligner.AlignLocal(seq1->Data(), seq2->Data(), 
-            seq1->Length(), seq2->Length(), alignment);
-
-        if (PassesLengthConstraint(alignment, seq1->Length(), seq2->Length()) &&
-            PassesScoreConstraint(aligner.Params(), alignment.score)) {
-          Candidate cand(index1, index2, alignment);
-          candidates_.push_back(std::move(cand));
-          //candidate_map[genome_pair][seq_pair] = true;
-        }
-
-      } // else we don't add to candidates, score not high enough
-
-    }
-  }
     
   Status Cluster::BuildOutput(vector<Tensor>& match_ints, 
       vector<Tensor>& match_doubles, vector<Tensor>& match_genomes, 
@@ -341,12 +269,12 @@ namespace tensorflow {
 
       for (size_t j = 0; j < size && cur_cand + j < candidates_.size(); j++) {
         const auto& candidate = candidates_[cur_cand + j];
-        const auto& seq1 = seqs_[candidate.index_1];
-        const auto& seq2 = seqs_[candidate.index_2];
+        const auto seq1 = candidate.seq_1;
+        const auto seq2 = candidate.seq_2;
         const auto& aln = candidate.alignment;
 
-        ints(j, 0) = seq1.GenomeIndex();
-        ints(j, 1) = seq2.GenomeIndex();
+        ints(j, 0) = seq1->GenomeIndex();
+        ints(j, 1) = seq2->GenomeIndex();
         ints(j, 2) = aln.seq1_min;
         ints(j, 3) = aln.seq1_max;
         ints(j, 4) = aln.seq2_min;
@@ -354,8 +282,8 @@ namespace tensorflow {
         doubles(j, 0) = aln.score;
         doubles(j, 1) = aln.pam_distance;
         doubles(j, 2) = aln.pam_variance;
-        genomes(j, 0) = seq1.Genome();
-        genomes(j, 1) = seq2.Genome();
+        genomes(j, 0) = seq1->Genome();
+        genomes(j, 1) = seq2->Genome();
 
         /*LOG(INFO) << "Candidate: " << seq1.Genome() << ", " << seq2.Genome() << " [" <<
           seq1.GenomeIndex()+1 << ", " << seq2.GenomeIndex()+1 << ", " << aln.score << ", " <<
@@ -367,4 +295,5 @@ namespace tensorflow {
     return Status::OK();
   }
 
-}
+} // namespace tensorflow
+

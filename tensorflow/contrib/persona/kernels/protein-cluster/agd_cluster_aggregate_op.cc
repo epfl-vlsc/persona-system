@@ -29,6 +29,7 @@ namespace tensorflow {
         auto& candidate_map = matches_kv.second;
         string path = output_dir_ + "/" + genome_pair.first;
         LOG(INFO) << "creating dir: " << path;
+        LOG(INFO) << "out dir : " << output_dir_ << " pair first: " << genome_pair.first;
         s= env_->CreateDir(path);
         if (!IsAlreadyExists(s) && !s.ok()) {
           LOG(INFO) << "not able to create dir: " << path << ", aborting output.";

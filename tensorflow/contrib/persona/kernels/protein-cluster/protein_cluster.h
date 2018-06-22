@@ -78,28 +78,24 @@ class Cluster {
    
 
     struct Candidate {
-      Candidate(int idx1, int idx2, const ProteinAligner::Alignment& alignment) :
-        index_1(idx1), index_2(idx2), alignment(alignment) {}
+      Candidate(const ClusterSequence* seq1, const ClusterSequence* seq2, 
+          const ProteinAligner::Alignment& alignment) :
+        seq_1(seq1), seq_2(seq2), alignment(alignment) {}
 
       // indexes of sequences in seqs_ of this ClusterSequence
-      int index_1;
-      int index_2;
+      const ClusterSequence* seq_1;
+      const ClusterSequence* seq_2;
 
       ProteinAligner::Alignment alignment;
     };
     
-    // perform all to all between sequences in the cluster
-    // skip X first seqs, because they have been tested or added already
-    void SeqToAll(const ClusterSequence* seq, int skip, ProteinAligner& aligner,
-        CandidateMap* candidate_map); 
-
     bool PassesLengthConstraint(const ProteinAligner::Alignment& alignment,
         int seq1_len, int seq2_len);
 
     bool PassesScoreConstraint(const Parameters* params, int score);
 
     // representatives are just the first X seqs_
-    std::vector<ClusterSequence> seqs_;
+    std::list<ClusterSequence> seqs_;
     // candidates are the result of intra cluster all to all
     std::vector<Candidate> candidates_;
     const AlignmentEnvironments* envs_; // for alignments

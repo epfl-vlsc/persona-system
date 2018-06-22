@@ -202,7 +202,9 @@ namespace tensorflow {
       size_t len;
       size_t i = 0;
       Status s = seqs_reader.GetNextRecord(&data, &len);
-      //LOG(INFO) << "Node " << to_string(node_id_) << " seq reader stat is  " << s;
+      LOG(INFO) << "Node " << to_string(node_id_) << " seq reader len is  " << len;
+      if (len > 50000)
+        OP_REQUIRES_OK(ctx, errors::Internal("super long seq wtf"));
 
       OP_REQUIRES_OK(ctx, s);
       //LOG(INFO) << "Node " << to_string(node_id_) << " seq is " << sequence;
@@ -216,7 +218,7 @@ namespace tensorflow {
       auto genome_index = first_ord;
       
       //LOG(INFO) << "Node " << to_string(node_id_) << " dequeued abs seq " << abs_seq << " seq " << sequence << " ring size is " << ring_size_;
-      Sequence seq;
+      //Sequence seq;
       int cluster_start = 0;
 
       if (sequence == ring_size_) {
@@ -262,6 +264,9 @@ namespace tensorflow {
             OP_REQUIRES_OK(ctx, executor_->EnqueueClusterEval(item));
           }
           s = seqs_reader.GetNextRecord(&data, &len);
+          LOG(INFO) << "Node " << to_string(node_id_) << " seq reader len is  " << len;
+          if (len > 50000)
+            OP_REQUIRES_OK(ctx, errors::Internal("super long seq wtf"));
           i++;
           genome_index++;
         }
@@ -273,6 +278,9 @@ namespace tensorflow {
         i = 0;
         seqs_reader.Reset();
         s = seqs_reader.GetNextRecord(&data, &len);
+        if (len > 50000)
+          OP_REQUIRES_OK(ctx, errors::Internal("super long seq wtf"));
+        LOG(INFO) << "Node " << to_string(node_id_) << " seq reader len is  " << len;
 
         // now compare seqs within the chunk
         size_t start_cluster = clusters_.size();
@@ -322,6 +330,9 @@ namespace tensorflow {
 
           }
           s = seqs_reader.GetNextRecord(&data, &len);
+          LOG(INFO) << "Node " << to_string(node_id_) << " seq reader len is  " << len;
+          if (len > 50000)
+            OP_REQUIRES_OK(ctx, errors::Internal("super long seq wtf"));
           i++;
           genome_index++;
         }
@@ -438,6 +449,9 @@ namespace tensorflow {
         clusters_.push_back(std::move(cluster));
         // next sequence, and carry on
         s = seqs_reader.GetNextRecord(&data, &len);
+        LOG(INFO) << "Node " << to_string(node_id_) << " seq reader len is  " << len;
+        if (len > 50000)
+          OP_REQUIRES_OK(ctx, errors::Internal("super long seq wtf"));
         genome_index++;
         i++;
 
@@ -506,6 +520,9 @@ namespace tensorflow {
         }
 
         s = seqs_reader.GetNextRecord(&data, &len);
+        LOG(INFO) << "Node " << to_string(node_id_) << " seq reader len is  " << len;
+        if (len > 50000)
+          OP_REQUIRES_OK(ctx, errors::Internal("super long seq wtf"));
         genome_index++;
         i++;
       }
