@@ -24,6 +24,7 @@ namespace tensorflow {
       // one folder per genome, one file per pair in each folder
 
       Status s;
+      size_t total_candidates = 0;
       for (auto& matches_kv : all_matches_map_) {
         auto& genome_pair = matches_kv.first;
         auto& candidate_map = matches_kv.second;
@@ -62,6 +63,8 @@ namespace tensorflow {
         }
 
         for (auto it(candidate_map.begin()); it != candidate_map.end(); it++) {
+        
+          total_candidates++;
           auto& match = it->second;
           ostringstream ss;
           ss << "[" << match.index_1 + 1 << ", " << match.index_2 + 1 << ", ";
@@ -103,6 +106,7 @@ namespace tensorflow {
         }
 
       }
+      LOG(INFO) << "Total candidates: " << total_candidates;
       
     }
 

@@ -54,7 +54,7 @@ void AlignmentExecutor::init_workers() {
         aligner = ProteinAligner(envs_, params_);
       }
 
-      LOG(INFO) << my_id << " got alignment from queue ";
+      //LOG(INFO) << my_id << " got alignment from queue ";
       const ClusterSequence* seq1 = nullptr;
       const ClusterSequence* seq2 = nullptr;
       seq1 = get<0>(item); seq2 = get<1>(item);

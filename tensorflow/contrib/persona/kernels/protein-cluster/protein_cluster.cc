@@ -285,8 +285,8 @@ namespace tensorflow {
         genomes(j, 0) = seq1->Genome();
         genomes(j, 1) = seq2->Genome();
 
-        /*LOG(INFO) << "Candidate: " << seq1.Genome() << ", " << seq2.Genome() << " [" <<
-          seq1.GenomeIndex()+1 << ", " << seq2.GenomeIndex()+1 << ", " << aln.score << ", " <<
+        /*LOG(INFO) << "Candidate: " << seq1->Genome() << ", " << seq2->Genome() << " [" <<
+          seq1->GenomeIndex()+1 << ", " << seq2->GenomeIndex()+1 << ", " << aln.score << ", " <<
           aln.pam_distance << ", " << aln.seq1_min+1 << ".." << aln.seq1_max+1 << ", " <<
           aln.seq2_min+1 << ".." << aln.seq2_max+1 << ", " << aln.pam_variance << "]";*/
       }
