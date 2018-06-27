@@ -24,6 +24,7 @@ cc_library(
         "//third_party/eigen3",
     ],
     alwayslink = 1,
+    linkstatic = 1
 )
 
 filegroup(

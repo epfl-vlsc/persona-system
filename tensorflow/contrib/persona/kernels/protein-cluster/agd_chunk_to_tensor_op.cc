@@ -38,7 +38,6 @@ namespace tensorflow {
     }
 
     void Compute(OpKernelContext* ctx) override {
-      LOG(INFO) << "Starting chunk to tensor";
 
       const Tensor* chunk_t;
       OP_REQUIRES_OK(ctx, ctx->input("chunk", &chunk_t));
@@ -50,7 +49,7 @@ namespace tensorflow {
     
       auto base_data = chunk_container->get()->data();
       Tensor* data_out_t = NULL;
-      OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape(),
+      OP_REQUIRES_OK(ctx, ctx->allocate_output("tensor_out", TensorShape(),
             &data_out_t));
       auto data_out = data_out_t->scalar<string>();
       data_out() = string(base_data, chunk_container->get()->size());
@@ -58,10 +57,6 @@ namespace tensorflow {
       resource_releaser(chunk_container);
 
     }
-
-  private:
-    ReferencePool<BufferPair> *bufferpair_pool_ = nullptr;
-
 
   };
 

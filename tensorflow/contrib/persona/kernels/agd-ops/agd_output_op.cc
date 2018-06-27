@@ -43,6 +43,16 @@ namespace tensorflow {
       return Status::OK();
     }
 
+    void PrintNormalizedProtein(const char* seq, size_t len) {
+      scratch_.resize(len);
+      memcpy(&scratch_[0], seq, len);
+      for (size_t i = 0; i < len; i++) {
+        scratch_[i] = scratch_[i] + 'A';
+      }
+      fwrite(&scratch_[0], len, 1, stdout);
+      printf("\n");
+    }
+
     void Compute(OpKernelContext* ctx) override {
 
       const Tensor *chunk_names_t, *start_t, *end_t, *chunk_size_t;
@@ -74,7 +84,10 @@ namespace tensorflow {
         }
 
         for (int i = 0; i < columns_.size(); i++) {
-          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual" || columns_[i] == "prot") {
+          if (columns_[i] == "prot") {
+            OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
+            PrintNormalizedProtein(data, length);
+          } else if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual") {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
             fwrite(data, length, 1, stdout);
             printf("\n");
@@ -113,6 +126,7 @@ namespace tensorflow {
     }
 
   private:
+    vector<char> scratch_;
     vector<std::unique_ptr<ReadOnlyMemoryRegion>> mmaps_;
 
     //Buffer bases_buf_, qual_buf_, meta_buf_, results_buf_;
