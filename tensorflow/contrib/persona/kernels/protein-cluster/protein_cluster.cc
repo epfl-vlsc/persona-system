@@ -60,21 +60,19 @@ namespace tensorflow {
               && *sequence.genome > rep.Genome()) || ((*sequence.genome == rep.Genome())
               && sequence.genome_index > rep.GenomeIndex()) ) {
       
-            s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
-            //s = aligner.AlignSingle(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
+            //s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
+            s = aligner.AlignSingle(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
             AddCoveredRange(*sequence.coverages, alignment.seq2_min, alignment.seq2_max);
           } else {
 
-            s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
-            //s = aligner.AlignSingle(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
+            //s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
+            s = aligner.AlignSingle(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
             AddCoveredRange(*sequence.coverages, alignment.seq1_min, alignment.seq1_max);
           }
         }
 
         ClusterSequence new_seq(string(sequence.data, sequence.length), *sequence.genome, 
             sequence.genome_index, sequence.total_seqs);
-
-        //SeqToAll(&new_seq, skip, aligner, candidate_map);
 
         {
           mutex_lock l(mu_);
@@ -111,7 +109,7 @@ namespace tensorflow {
   int Cluster::SubmitAlignments(AlignmentExecutor* executor, MultiNotification* n) {
 
     int N = seqs_.size();
-    LOG(INFO) << N << " sequences";
+    //LOG(INFO) << N << " sequences";
     alignments_.resize(N*(N-1)/2);
     int aln = 0;
     for (auto it = seqs_.begin(); it != seqs_.end(); it++) {
@@ -128,12 +126,12 @@ namespace tensorflow {
         aln++;
       }
     }
-    LOG(INFO) << "submitted " << aln << ", " << N*(N-1)/2 << " alignments";
+    //LOG(INFO) << "submitted " << aln << ", " << N*(N-1)/2 << " alignments";
     CHECK_EQ(aln, N*(N-1)/2);
     return aln;
   }
 
-  
+  // post all-to-all
   void Cluster::DoAllToAll(const AlignmentEnvironments* envs, 
       const Parameters* params) {
 
@@ -167,6 +165,7 @@ namespace tensorflow {
           std::swap(seq1, seq2);
         }
 
+        // expects this to be filled by submitAlignments()
         auto& alignment = alignments_[aln];
         aln++;
 
@@ -179,69 +178,6 @@ namespace tensorflow {
     }
   }
  
-  // for doing post clustering all to all
-  /*void Cluster::DoAllToAll(CandidateMap* candidate_map, const AlignmentEnvironments* envs, 
-      const Parameters* params) {
-
-    ProteinAligner aligner(envs, params);
-    int index1, index2;
-
-    const ClusterSequence* seq1 = nullptr;
-    const ClusterSequence* seq2 = nullptr;
-
-    //LOG(INFO) << "comparing " << seqs_.size() << " sequences";
-    for (size_t i = 0; i < seqs_.size(); i++) {
-      const ClusterSequence* seq = &seqs_[i];
-      for (size_t j = i+1; j < seqs_.size(); j++) {
-        //LOG(INFO) << "comparing seq " << i << " with seq j " << j;
-        const auto* sequence = &seqs_[j];
-        seq1 = seq; seq2 = seq;
-        if (seq->TotalSeqs() > sequence->TotalSeqs() || 
-            ((seq->TotalSeqs() == sequence->TotalSeqs()) && seq->Genome() > 
-             sequence->Genome())) {
-          seq1 = sequence; index1 = j;
-          index2 = i;
-        } else {
-          index1 = i;
-          seq2 = sequence; index2 = j;
-        }
-
-        if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() == seq2->GenomeIndex())
-          continue;
-
-        if (seq1->Genome() == seq2->Genome() && seq1->GenomeIndex() > seq2->GenomeIndex()) {
-          std::swap(seq1, seq2);
-          std::swap(index1, index2);
-        }
-
-        auto genome_pair = make_pair(seq1->Genome(), seq2->Genome());
-        auto seq_pair = make_pair(seq1->GenomeIndex(), seq2->GenomeIndex());
-        if (candidate_map->ExistsOrInsert(genome_pair, seq_pair)) {
-          LOG(INFO) << "not computing duplicate!";
-          continue;
-        }
-      
-        if (aligner.PassesThreshold(seq1->Data(), seq2->Data(), 
-              seq1->Length(), seq2->Length())) {
-
-          ProteinAligner::Alignment alignment;
-          Status s = aligner.AlignLocal(seq1->Data(), seq2->Data(), 
-              seq1->Length(), seq2->Length(), alignment);
-
-          if (PassesLengthConstraint(alignment, seq1->Length(), seq2->Length()) &&
-              PassesScoreConstraint(aligner.Params(), alignment.score)) {
-            Candidate cand(index1, index2, alignment);
-            candidates_.push_back(std::move(cand));
-            //candidate_map[genome_pair][seq_pair] = true;
-          }
-
-        } // else we don't add to candidates, score not high enough
-
-      }
-    }
-  }*/
-
-    
   Status Cluster::BuildOutput(vector<Tensor>& match_ints, 
       vector<Tensor>& match_doubles, vector<Tensor>& match_genomes, 
       int size, OpKernelContext* ctx) {

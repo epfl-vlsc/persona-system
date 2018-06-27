@@ -269,13 +269,13 @@ class AlignmentEnvironmentsOp : public OpKernel {
 
       std::unique_ptr<AlignmentEnvironments> value(new_envs);
 
+      *envs = new EnvsContainer(move(value));
       auto end = std::chrono::high_resolution_clock::now();
       LOG(INFO) << "envs load time is: "
                 << ((float)std::chrono::duration_cast<std::chrono::nanoseconds>(
                         end - begin)
                         .count()) /
                        1000000000.0f;
-      *envs = new EnvsContainer(move(value));
       return Status::OK();
     };
 

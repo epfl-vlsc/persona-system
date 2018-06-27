@@ -153,6 +153,7 @@ void AlignmentExecutor::init_workers() {
   for (int i = 0; i < num_threads_; i++)
     eval_workers_->Schedule(cluster_func);
 
+  LOG(INFO) << "Finished spinning up worker threads.";
 }
 
 Status AlignmentExecutor::EnqueueAlignment(const WorkItem& item) {

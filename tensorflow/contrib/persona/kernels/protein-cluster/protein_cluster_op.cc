@@ -150,7 +150,7 @@ namespace tensorflow {
     void Compute(OpKernelContext* ctx) override {
       // this entire thing is a bit spaghetti and could use a rewrite
 
-      //LOG(INFO) << "Node " << to_string(node_id_) << " Starting protein cluster";
+      LOG(INFO) << "Node " << to_string(node_id_) << " Starting protein cluster";
       if (!neighbor_queue_) {
         OP_REQUIRES_OK(ctx, Init(ctx));
         executor_->SetVars(candidate_map_, envs_, &params_);
@@ -267,7 +267,7 @@ namespace tensorflow {
         }
         n.SetMinNotifies(num_added);
         n.WaitForNotification();
-        LOG(INFO) << "compared seqs to " << num_compared << " comparisons of lower or equal abs_seq ";
+        //LOG(INFO) << "compared seqs to " << num_compared << " comparisons of lower or equal abs_seq ";
 
         genome_index = first_ord;
         i = 0;
@@ -458,6 +458,8 @@ namespace tensorflow {
       }
    
       bool passed = false;
+      // this is some test logic for forwarding chunks so other nodes can process while 
+      // we process
       /*if (sequence != ring_size_ - 1 && sequence != ring_size_*2 - 1) {
 
         // we pass early if the next node is not the originator of this chunk
@@ -626,8 +628,8 @@ namespace tensorflow {
         Tensor& sequence, Tensor& was_added, Tensor& coverages, Tensor& genome, Tensor& first_ord,
         Tensor& total_seqs, Tensor& abs_seq) {
         
-      //LOG(INFO) << "Node " << to_string(node_id_) << " input queue closed " << input_queue_->is_closed() 
-        //<< "input queue size: " << input_queue_->size();
+      LOG(INFO) << "Node " << to_string(node_id_) << " input queue closed " << input_queue_->is_closed() 
+        << "input queue size: " << input_queue_->size();
 
       auto begin = std::chrono::steady_clock::now();
       // prefer to dequeue neighbor queue, otherwise attempt to dequeue the main input
@@ -635,7 +637,7 @@ namespace tensorflow {
       
         //LOG(INFO) << "Node " << to_string(node_id_) << " neighbor size is " << neighbor_queue_->size();
         // dequeue neighbor
-      } else if (input_queue_->size() > 0) {
+      } else if (input_queue_->size() > 0 || !input_queue_->is_closed()) {
         // dequeue input
         //LOG(INFO) << "Node " << to_string(node_id_) << " dequeueing input";
         
@@ -659,7 +661,9 @@ namespace tensorflow {
             coverages = tuple[4];*/
             n.Notify();
         });
+        LOG(INFO) << "Node " << node_id_ << " waiting on input queue.";
         n.WaitForNotification();
+        LOG(INFO) << "Node " << node_id_ << " done.";
        
         // it's possible another node took the last, and we received
         // an OutOfRange or Cancelled status.
@@ -706,8 +710,9 @@ namespace tensorflow {
           abs_seq = tuple[8];
           n.Notify();
       });
+      LOG(INFO) << "Node " << node_id_ << " waiting on neighbor queue.";
       n.WaitForNotification();
-      //LOG(INFO) << "Node " << to_string(node_id_) << " dequeued neighbor";
+      LOG(INFO) << "Node " << to_string(node_id_) << " done.";
       num_chunks_++;
       auto abs_seq_val = abs_seq.scalar<int32>()();
       abs_seq_.push_back(abs_seq_val);
