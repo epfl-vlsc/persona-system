@@ -28,7 +28,7 @@ namespace tensorflow {
       int32_t i;
       OP_REQUIRES_OK(context, context->GetAttr("reserve", &i));
       reserve_bytes_ = static_cast<decltype(reserve_bytes_)>(i);
-      
+
       OP_REQUIRES_OK(context, context->GetAttr("unpack", &unpack_));
     }
 
@@ -74,6 +74,7 @@ namespace tensorflow {
           num_records() = num_recs_;
           first_ordinals() = first_ord_;
           record_id() = record_id_;
+          //LOG(INFO) << "record_id =" << record_id;
         }
       }
     }

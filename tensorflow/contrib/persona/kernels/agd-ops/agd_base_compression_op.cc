@@ -175,7 +175,7 @@ namespace tensorflow {
             //LOG(INFO) << "should use X or =";
             ctx->SetStatus(errors::Internal("should use X or '=' instead of M"));
             return;
-          }else if(tmp == text[1] || tmp == text[3] || tmp == text[5] ||tmp == text[6] ){
+          }else if(tmp == text[1] || tmp == text[3] || tmp == text[6] ){
             //TODO si c'est une deletion ca fonctionne pas comme ca je l'aurais pas dans le chunck en principe si ?
             //TODO faut revoir aussi avec stuart cet histoire avec N c'est pas clair.
             pos += stoi(val);
@@ -191,7 +191,7 @@ namespace tensorflow {
             compress_cigar += val;
             compress_cigar += cigar[i];
             val = "";
-          }else if (tmp == text[7] ||tmp == text[8]  || tmp == text[4]){
+          }else if (tmp == text[7] ||tmp == text[8]  || tmp == text[4] || tmp == text[5]){
             pos += stoi(val);
             compress_cigar += val;
             compress_cigar += cigar[i];
@@ -201,11 +201,6 @@ namespace tensorflow {
           }
         }//for loop end
         //======================================================================
-
-
-        //TODO ici faut voir si on code le bitmap en mode yolo.
-
-
 
         pos = 0;
         // for(int i = 0 ; i < record_size; i++){
@@ -227,7 +222,6 @@ namespace tensorflow {
       }//while s is ok()
       resource_releaser(results_container);
       resource_releaser(records_container);
-      //resource_releaser(output_bufferpair_container);
     }//compute end
   private:
 

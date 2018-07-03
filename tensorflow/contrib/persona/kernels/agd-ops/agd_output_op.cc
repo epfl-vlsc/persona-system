@@ -74,7 +74,7 @@ namespace tensorflow {
         //printf("columns size : %ld \n",columns_.size());
         for (int i = 0; i < columns_.size(); i++) {
           //printf("columns : %s \n", columns_[i].c_str());
-          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual" || columns_[i] == "prot" || columns_[i] == "refcompress") {
+          if (columns_[i] == "base" || columns_[i] == "metadata" || columns_[i] == "qual" || columns_[i] == "prot" || columns_[i] == "refcompress" || columns_[i] == "uncompress") {
             OP_REQUIRES_OK(ctx, readers_[i]->GetRecordAt(chunk_offset, &data, &length));
             fwrite(data, length, 1, stdout);
             printf("\n");

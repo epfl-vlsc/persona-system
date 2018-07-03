@@ -40,11 +40,11 @@ def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     if tensor_dtype != expected_dtype:
         raise Exception("Tensor {t} doesn't have expected dtype {d}. Has {a}".format(t=tensor, d=expected_dtype, a=tensor_dtype))
 
-valid_columns = {"base", "qual", "metadata", "results", "secondary"} # TODO add for other columns
+valid_columns = {"base", "qual", "metadata", "results", "secondary","refcompress"} # TODO add for other columns
 def validate_columns(columns):
     """
     Validates the columns based on their validity, returning a set
-    :param columns: 
+    :param columns:
     :return: a set of columns, constructed from the iterable passed in as the param
     """
     if len(columns) == 0:
@@ -74,17 +74,17 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
                        ceph_read_size=2**26, buffer_pool=None, buffer_pool_args=pool_default_args, name="ceph_read_pipeline"):
     """
     Create a ceph input pipeline.
-    
+
     FIXME doesn't return the generic column name that was read. Must be assumed to be in order based on the columns
     :param upstream_tensors: a tuple of tensors (key, pool_name), which are typically found in the metadata file. This controls the parallelism
-    :param user_name: 
-    :param cluster_name: 
-    :param ceph_conf_path: 
-    :param columns: 
+    :param user_name:
+    :param cluster_name:
+    :param ceph_conf_path:
+    :param columns:
     :param downstream_parallel: the level of parallelism to create for the downstream nodes
-    :param ceph_read_size: 
-    :param buffer_pool: 
-    :param name: 
+    :param ceph_read_size:
+    :param buffer_pool:
+    :param name:
     :return: a list of (key, pool_name, tuple(chunk_buffers)) for every tensor in upstream tensors
     """
     def make_ceph_reader(key, namespace):
@@ -110,9 +110,9 @@ def ceph_read_pipeline(upstream_tensors, user_name, cluster_name, ceph_conf_path
 def aligner_compress_pipeline(upstream_tensors, buffer_pool=None, buffer_pool_args=pool_default_args, name="aligner_compress_pipeline"):
     """
     Compresses a list of upstream tensors of buffer list (via handles) into buffers
-    :param upstream_tensors: 
-    :param name: 
-    :return: 
+    :param upstream_tensors:
+    :param name:
+    :return:
     """
     def compress_buffer_list(buffer_list):
         return persona_ops.buffer_list_compressor(buffer_list=buffer_list, buffer_pool=buffer_pool)
@@ -128,10 +128,10 @@ def ceph_aligner_write_pipeline(upstream_tensors, user_name, cluster_name, pool_
     """
     Create a ceph write pipeline for aligner results (that outputs a BufferList, which we must wait on for completion
     :param upstream_tensors: a list of aligner output tensors of type (key, first ordinal, number of records, pool name, record id, column handle)
-    :param user_name: 
-    :param cluster_name: 
-    :param ceph_conf_path: 
-    :param name: 
+    :param user_name:
+    :param cluster_name:
+    :param ceph_conf_path:
+    :param name:
     :return: yields the output of ceph write columns
     """
     if compressed:
@@ -174,7 +174,7 @@ def local_read_pipeline(upstream_tensors, columns, sync=True, mmap_pool=None, mm
     :param sync: whether or not to synchronously map the files
     :param mmap_pool: if not None, provide a persona_ops.file_m_map pool to this method
     :param mmap_pool_args:
-    :param name: 
+    :param name:
     :return: yield a tuple of '(persona_ops.file_m_map for every column file, a generator)' for every tensor in upstream_tensors
     """
     def make_readers(input_file_basename):
@@ -199,7 +199,7 @@ def local_write_pipeline(upstream_tensors, compressed, record_types=default_reco
     Create a local write pipeline, based on the number of upstream tensors received.
     :param upstream_tensors: a list of tensor tuples of type: buffer_list_handle, record_id, first_ordinal, num_records, file_path
     :param record_type: the type of results to write. See persona_ops.cc for valid types
-    :param name: 
+    :param name:
     :return: yield a writer for each record to be written in upstream tensors
     """
     if compressed:
@@ -231,14 +231,14 @@ def local_write_pipeline(upstream_tensors, compressed, record_types=default_reco
 def agd_reader_pipeline(upstream_tensors, verify=False, buffer_pool=None, buffer_pool_args=pool_default_args, name="agd_reader_pipeline"):
     """
     Yield a pipeline of input buffers processed by AGDReader.
-    
+
     This processes ONLY A SINGLE COLUMN. Use agd_reader_multi_column_pipeline to do multiple columns in parallel.
-    
+
     :param upstream_tensors: a tensor of handles to resources of type Data (in C++ persona code)
     :param verify: if True, enable format verification by AGDReader. Will fail if shape doesn't conform, but causes performance impact
     :param buffer_pool: if not None, use this as the buffer_pool, else create buffer_pool
     :param buffer_pool_default_args: the arguments to make the buffer_pool, if it is None
-    :param name: 
+    :param name:
     :return: yields a tuple of output_buffer, num_records, first_ordinal, record_id
     """
     if buffer_pool is None:
@@ -264,7 +264,7 @@ def agd_reader_multi_column_pipeline(upstream_tensorz, verify=False, buffer_pool
     :param buffer_pool: pass in a buffer_pool to reuse
     :param share_buffer_pool: if buffer_pool is not passed in, create one to share among all the AGDReader instances
     :param buffer_pool_args: special buffer pool args, if it's created
-    :param name: 
+    :param name:
     :return: yield [output_buffer_handles], num_records, first_ordinal, record_id; in order, for each column group in upstream_tensorz
     """
     if buffer_pool is None and share_buffer_pool:
@@ -283,7 +283,7 @@ def agd_bwa_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_a
     :param agd_read_pool: if not None, pass in an instance of persona_ops.agd_read_pool to share
     :param agd_read_pool_args: args for deafult construction of agd_read_pool if it's None
     :param include_meta: create a meta read assembler if passed. The shape of upstream_tensors must be compatible
-    :param name: 
+    :param name:
     :return: yield instances of a tensor with AGDRead instance as the result
     """
     def make_agd_read(column_buffers, num_reads):
@@ -318,7 +318,7 @@ def agd_read_assembler(upstream_tensors, agd_read_pool=None, agd_read_pool_args=
     :param agd_read_pool: if not None, pass in an instance of persona_ops.agd_read_pool to share
     :param agd_read_pool_args: args for deafult construction of agd_read_pool if it's None
     :param include_meta: create a meta read assembler if passed. The shape of upstream_tensors must be compatible
-    :param name: 
+    :param name:
     :return: yield instances of a tensor with AGDRead instance as the result
     """
     def make_agd_read(column_buffers, num_reads):
@@ -421,7 +421,7 @@ def _keys_maker(file_keys, read_parallel):
 Build an input pipeline to get columns from an AGD dataset.
 
   ops = persona_in_pipe("dataset/metadata.json", ["base","qual"])
-  
+
 columns: list of extensions, which columns to read in, must be in same group
 key: optional scalar tensor with chunk key (otherwise adds a string_input_producer for all
   chunks in `metadata_path`
@@ -497,7 +497,7 @@ Build an input pipeline to get columns from an AGD dataset in a Ceph object stor
 Expects Ceph keyring and config files to be in PWD.
 
   ops = persona_ceph_in_pipe("dataset/metadata.json", ["base","qual"])
-  
+
 columns: list of extensions, which columns to read in, must be in same group
 keys: optional list of scalar tensors with chunk keys (otherwise adds a string_input_producer for all
   chunks in `metadata_path`)
@@ -617,7 +617,7 @@ def persona_out_pipe(path, columns, write_list_list, record_id, compress=False, 
 
 
 """
-interpret pairs in a buffer_list as subchunks of a single column write it out to disk 
+interpret pairs in a buffer_list as subchunks of a single column write it out to disk
 in `path`.
 
 path: the for the dataset. will overwrite existing files with same keys and extension
@@ -679,7 +679,7 @@ def persona_parallel_out_pipe(path, column, write_list_list, record_id, compress
     return sink_queue[0]
 
 """
-Interpret pairs in a buffer_list in order of `columns` and write them out to ceph 
+Interpret pairs in a buffer_list in order of `columns` and write them out to ceph
 Uses a batch_join queue internally.
 
 path: the for the dataset. will overwrite existing files with same keys and extension
@@ -731,7 +731,7 @@ def persona_ceph_out_pipe(metadata_path, column, write_list_list, record_id, cep
   return sink_queue[0]
 
 """
-interpret pairs in a buffer_list as subchunks of a single column write it out to ceph 
+interpret pairs in a buffer_list as subchunks of a single column write it out to ceph
 in `path`.
 
 path: the for the dataset. will overwrite existing files with same keys and extension
@@ -799,4 +799,3 @@ def persona_parallel_ceph_out_pipe(metadata_path, column, write_list_list, recor
 
     sink_queue = batch_join_pdq([write_ops], capacity=10, num_dq_ops=1, batch_size=1, name=name)
     return sink_queue[0]
-

@@ -12,10 +12,6 @@
 #include <string>
 #include <vector>
 #include <iostream>
-// #include <algorithm>
-// #include <cctype>
-// #include <stdio.h>
-// #include <stdlib.h>
 #include "tensorflow/contrib/persona/kernels/object-pool/resource_container.h"
 #include "tensorflow/contrib/persona/kernels/object-pool/basic_container.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/proto/alignment.pb.h"
@@ -96,6 +92,22 @@ namespace tensorflow {
     }
 
 //==============================================================================
+//usefull function
+/* M= 0, I= 1, == 2, X= 3, S= 4, D= 5, N= 6, H= 7, P= 8, A= 9, T= 10, C= 11, G=12*/
+      bool isOp(const char cigar){
+        const char* text = "MI=XSDNHP";
+        size_t size = 9;
+        for (int i = 0 ; i < size ; i++){
+          if(text[i] == cigar){
+            return true;
+          }
+        }
+        return false;
+      }
+
+
+
+//==============================================================================
 
     void Compute(OpKernelContext* ctx) override {
 
@@ -104,58 +116,59 @@ namespace tensorflow {
         OP_REQUIRES_OK(ctx,InitHandles(ctx));
       }
 
-      //TODO potentiellement que le reference container et tout ne sera pas necessaire
-      //const Tensor *reference_t, *compress_t, *results_t, chunk_size_t;
-      const Tensor *compress_t, *chunk_size_t, *reference_t;
+      const Tensor *compress_t, *chunk_size_t, *reference_t, *results_t;
 
       //ResourceContainer<Data> *reference_container;
       BasicContainer<AGDReferenceGenome> *reference_container;
       ResourceContainer<Data> *compress_container;
-      //ResourceContainer<Data> *results_container;
+      ResourceContainer<Data> *results_container;
       ResourceContainer<BufferPair> *output_bufferpair_container;
 
-      OP_REQUIRES_OK(ctx,ctx->input("reference", &reference_t));
-      //TF_RETURN_IF_ERROR(ctx->input("reference", &reference_t));
+
+      //TODO ok ca devrais être une fct qui retourne un statut. et qui prend le container en argument.
+      OP_REQUIRES_OK(ctx, ctx->input("reference", &reference_t));
+      OP_REQUIRES_OK(ctx, ctx->input("results", &results_t));
       OP_REQUIRES_OK(ctx, ctx->input("chunk_size", &chunk_size_t));
       OP_REQUIRES_OK(ctx, ctx->input("compress_base", &compress_t));
-      OP_REQUIRES_OK(ctx,GetOutputBufferPair(ctx,&output_bufferpair_container));
+      OP_REQUIRES_OK(ctx, GetOutputBufferPair(ctx,&output_bufferpair_container));
 
       auto ref = reference_t->vec<string>();
       auto compress_base = compress_t->vec<string>();
+      auto results = results_t->vec<string>();
       auto chunk_size = chunk_size_t->scalar<int32>()();
       auto output_bufferpair = output_bufferpair_container->get();
       auto rmgr = ctx->resource_manager();
 
-      //TODO je doit changer la ligne ici pour pouvoir faire fonctionner dans l'idée
-      //l'indexe fonctionne en fct de l'ordre des input et ici c'est le premier-
-      //TF_RETURN_IF_ERROR(rmgr->Lookup(ref(0),ref(1),&reference_container));
-      OP_REQUIRES_OK(ctx,rmgr->Lookup(ref(0),ref(1),&reference_container));
+      OP_REQUIRES_OK(ctx, rmgr->Lookup(ref(0),ref(1),&reference_container));
       OP_REQUIRES_OK(ctx, rmgr->Lookup(compress_base(0), compress_base(1), &compress_container));
+      OP_REQUIRES_OK(ctx, rmgr->Lookup(results(0), results(1), &results_container));
 
       ColumnBuilder column_builder;
       column_builder.SetBufferPair(output_bufferpair);
 
       //compress cigar
-      Alignment agd_compress;
-      AGDResultReader results_reader(compress_container, chunk_size);
-      Status c = results_reader.GetNextResult(agd_compress);
+      const char* agd_compress;
+      size_t compress_size;
+      AGDRecordReader record_reader(compress_container,chunk_size);
+      Status c = record_reader.GetNextRecord(&agd_compress,&compress_size);
 
+      //metadata
+      Alignment agd_result;
+      AGDResultReader results_reader(results_container, chunk_size);
+      Status s = results_reader.GetNextResult(agd_result);
 
       //reference
       AGDReferenceGenome *refGen = reference_container->get();
 
 //usefull stuff for comparison =================================================
-/* M = 0, I = 1, = = 2, X = 3, S = 4, D = 5, N = 6, H = 7, P= 8*/
-      // LOG(INFO) << "Create the string to compare the CIGAR with";
-      const char* text = "MI=XSDNHP";
+/* M= 0, I= 1, == 2, X= 3, S= 4, D= 5, N= 6, H= 7, P= 8 || A= 0, T= 1, C= 1, G=3*/
+//initializes the needed val
+      const char* oper = "MI=XSDNHP";
+      const char* line = "|";
+      size_t oper_size = 9;
       string val = "";
-      string decompress_genome = "";
-      char* letter;
-
-      // int l = 0;
-      // int v = 0;
-      // letter = malloc(sizeof(char)*cigar_len)
-
+      int pos = 0;
+      string tmp_genome = "";
       //copy the entire reference into decompress genome
       // for(int i = 0 ; i < reference_size; i++)|{
       //   decompress_genome += agd_reference[i];
@@ -164,55 +177,109 @@ namespace tensorflow {
 
       while(c.ok()){
 
-        const char* cigar = agd_compress.cigar().c_str();
-        size_t cigar_len = agd_compress.cigar().length();
-        const int flag = agd_compress.flag();
-        const double position = agd_compress.position().position();
+        //ici il faut reinit le toute
         val = "";
+        tmp_genome = "";
+        pos = 0;
 
-        const char* ref = refGen->GetSubstring(agd_compress.position().ref_index(),position);
+        const double position = agd_result.position().position();
+        const double contig = agd_result.position().ref_index();
+        //LOG(INFO) << "contig : "<< contig;
+        if( contig > 93 || contig < 0){
+          c = record_reader.GetNextRecord(&agd_compress,&compress_size);
+          s = results_reader.GetNextResult(agd_result);
+          continue;
+        }
+        const char* ref = refGen->GetSubstring(contig,position);
+
+        const char* cigar = agd_result.cigar().c_str();
+        // size_t cigar_len = agd_result.cigar().length();
+        // const int flag = agd_result.flag();
+
+        string refe = "";
         for(int i = 0 ; i < 101 ; i++){
-          LOG(INFO) << ref[i];
+          refe += ref[i];
         }
 
-        LOG(INFO) << "here is the CIGAR : " << cigar;
-        LOG(INFO) << "CIGAR length : " << cigar_len;
-        LOG(INFO) << "results flag : " << flag;
-        LOG(INFO) << "results position : " << position;
-        //TODO faire verifier ici je suis pas sur que la fonction soit .contig()
-        // TODO faire comme dans compression et noté les algos au entre commentaire pour les tester
-        //uint32_t contig = agd_compress.contig();
-        //uint32_t pos = agd_compress.position().position();
+        // // recomposition de la string.
+        string comp = "";
+        for(int i = 0 ; i < compress_size ; i++){
+          comp += agd_compress[i];
+        }
+        // LOG(INFO) << "here is the compression :" << comp;
+        // LOG(INFO) << "here is the CIGAR : " << cigar;
+        // LOG(INFO) << "CIGAR length : " << cigar_len;
+        // LOG(INFO) << "results flag : " << flag;
+        // LOG(INFO) << "results position : " << position;
 
-        // val = ""
-        // for(int i = 0; i < cigar_len; i++){
-        //   if(cigar[i] is char quon connait){
-        //     letter[l++] = cigar[i];
-        //     if(!val.strcomp("")){
-        //       //rajoute le chiffre dans le tab et remet le a 0
-        //       val = ""
-        //     }
-        //   }else{
-        //       val += cigar[i]
-        //   }
-        // }
-
-
-        //modify the decompress genome according to the cigar.
-        // for(int i = 0 ; i < cigar_len ; i++){
-        //
-        // }
-
-
-
-        // c = record_reader.GetNextRecord(&agd_compress,&compress_size);
-        // s = results_reader.GetNextResult(agd_result);
-        // column_builder.AppendRecord(decompress_genome.c_str(),decompress_genome.length());
+        for(int i = 0; i < compress_size ; i++){
+          // LOG(INFO) << "cigar : " << agd_compress[i];
+          //if it's an op ======================================================
+          if(isOp(agd_compress[i])){
+            char op = agd_compress[i];
+            // LOG(INFO) << "val = " << val;
+            // LOG(INFO) << "op = " << op;
+            int v = stoi(val);
+            // LOG(INFO) << "val = " << v;
+            //if it's a match ================================================
+            if(op == oper[2]){
+              // LOG(INFO) << "match !";
+              for(int k = 0 ; k < v ; k++){
+                //concatenate the matching bases
+                tmp_genome += ref[pos+k];
+              }
+              if(agd_compress[i + 1] == line[0]){
+                i++;
+              }
+              //update the genome position
+              pos += v;
+              //if it's a I or X ===============================================
+            }else if(op == oper[1] || op == oper[3]){
+              // LOG(INFO) << "v = " << v;
+              // LOG(INFO) << "op = " << op;
+              // LOG(INFO) << "its something changing from the ref !";
+              for(int k = 0 ; k < v ; k++){
+                if(agd_compress[i + 1] == line[0]){
+                  i++;
+                }
+                //concatenate the matching bases
+                tmp_genome += agd_compress[++i];
+                // LOG(INFO) << "on a changer la base en : " << agd_compress[i];
+                //update the genome position
+                pos++;
+              }
+              //if it's a D ====================================================
+            }else if(op == oper[5]){
+              //update the genome position
+              // LOG(INFO) << "val = " << val;
+              // LOG(INFO) << "op = " << op;
+              pos += stoi(val);
+              if(agd_compress[i + 1] == line[0]){
+                i++;
+              }
+              //if something else should not done so much ======================
+            }else{
+            }
+            //reinit val
+            val = "";
+            //if it's a val ======================================================
+          }else if(agd_compress[i] == line[0]){
+            //do nothing
+          }else{
+            val += agd_compress[i];
+          }
+        }
+        // LOG(INFO) << "reference = " << refe;
+        // LOG(INFO) << "tmp genom = " << tmp_genome;
+        c = record_reader.GetNextRecord(&agd_compress,&compress_size);
+        s = results_reader.GetNextResult(agd_result);
+        column_builder.AppendRecord(tmp_genome.c_str(),tmp_genome.length());
       }//while end
-
+      LOG(INFO) << "genome decompressé";
       //release resource !
       //drfree(letter);
       resource_releaser(compress_container);
+      resource_releaser(results_container);
 //==============================================================================
     //   const Tensor *chunk_names_t, *start_t, *end_t, *chunk_size_t;
     //   OP_REQUIRES_OK(ctx, ctx->input("chunk_names", &chunk_names_t));

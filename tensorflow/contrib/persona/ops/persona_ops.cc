@@ -429,19 +429,32 @@ more details will come after everythings dones.
     REGISTER_OP("AGDBaseDecompression")
     .Attr("unpack: bool = true")
     .Input("reference: string")
+    .Input("compress_base: string")
+    .Input("results: string")
     .Input("chunk_size: int32")
-    //.Input("results: string")
-    .Input("compress_base")
-    .Input("buffer_pair_pool: Ref(String)")
+    .Input("buffer_pair_pool: Ref(string)")
     .Output("uncompress: string")
-    // .SetShapeFn([](InferenceContext *c) {
-    //             c->set_output(0, c->Vector(2));
-    //     return Status::OK();
-    //     })
+    .SetShapeFn([](InferenceContext *c) {
+                c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
     .SetIsStateful()
     .Doc(R"doc(
       Uncompress
     )doc");
+    /*
+    REGISTER_OP("AGDReferenceGenome")
+    .Output("handle: Ref(string)")
+    .Attr("chunk_paths: list(string)")
+    .Attr("container: string = ''")
+    .Attr("shared_name: string = ''")
+    .SetIsStateful()
+    .SetShapeFn([](InferenceContext *c) {
+        c->set_output(0, c->Vector(2));
+        return Status::OK();
+        })
+
+    */
 //==============================================================================
     // .Attr("ref_sequences: list(string)")
     // .Attr("ref_index: list(int)")

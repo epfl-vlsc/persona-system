@@ -136,7 +136,7 @@ def _which_queue(dynamic_pad):
 def batch_pdq(tensor_list, batch_size, num_threads=1, capacity=32, num_dq_ops=1,
           enqueue_many=False, shapes=None, dynamic_pad=False,
           shared_name=None, name=None):
-  """Creates batches of tensors in `tensor_list`. Can dequeue multiple 
+  """Creates batches of tensors in `tensor_list`. Can dequeue multiple
   batches at a .
 
   This function is implemented using a queue. A `QueueRunner` for the
@@ -213,11 +213,11 @@ def batch_pdq(tensor_list, batch_size, num_threads=1, capacity=32, num_dq_ops=1,
       dequeued = [queue.dequeue_many(batch_size, name=name+"_%d"%i) for i in range(num_dq_ops)]
     return dequeued
 
-def batch_join_pdq(tensor_list_list, batch_size, num_dq_ops=1, capacity=32, 
+def batch_join_pdq(tensor_list_list, batch_size, num_dq_ops=1, capacity=32,
                enqueue_many=False,shapes=None, dynamic_pad=False,
                shared_name=None, name=None):
   """Runs a list of tensors to fill a queue to create batches of examples.
-  This is a parallel dequeue batch join, and returns `num_dq_ops * 
+  This is a parallel dequeue batch join, and returns `num_dq_ops *
   dequeue_many` ops.
 
   Enqueues a different list of tensors in different threads.
@@ -303,4 +303,3 @@ def batch_join_pdq(tensor_list_list, batch_size, num_dq_ops=1, capacity=32,
     else:
       dequeued = [queue.dequeue_many(batch_size, name=name+"_%d"%i) for i in range(num_dq_ops)]
     return dequeued
-

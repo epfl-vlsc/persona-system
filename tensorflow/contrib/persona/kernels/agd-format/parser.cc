@@ -207,7 +207,11 @@ namespace tensorflow {
 
     *first_ordinal = file_header->first_ordinal;
     *num_records = index_size;
-    record_id.assign(&file_header->string_id[0], strnlen(&file_header->string_id[0], sizeof(file_header->string_id)));
+    //record_id.assign(&file_header->string_id[0], strnlen(&file_header->string_id[0], sizeof(file_header->string_id)));
+    record_id.assign(&file_header->string_id[0], 9);
+    // LOG(INFO) << "string_id[0] : "<< &file_header->string_id[0];
+    // LOG(INFO) << "length : " << strnlen(&file_header->string_id[0], sizeof(file_header->string_id));
+    // LOG(INFO) << "size of is  : "<< sizeof(file_header->string_id);
     return Status::OK();
   }
 
