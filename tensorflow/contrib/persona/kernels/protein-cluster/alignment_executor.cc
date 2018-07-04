@@ -2,18 +2,32 @@
 
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_executor.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
+#include <pthread.h>
 
 namespace tensorflow {
 
 using namespace std;
 using namespace errors;
 
-AlignmentExecutor::AlignmentExecutor(Env *env, int num_threads, int capacity) : 
+void OutputThreadStackSize() {
+    
+    pthread_attr_t attr;
+    int s = pthread_getattr_np(pthread_self(), &attr);
+    size_t stack_size;
+    s = pthread_attr_getstacksize(&attr, &stack_size);
+    LOG(INFO) << "stack size is " << stack_size << " bytes ";
+
+}
+
+AlignmentExecutor::AlignmentExecutor(Env *env, int num_threads, int num_threads_align, int capacity) : 
   num_threads_(num_threads),
+  num_threads_align_(num_threads_align),
   capacity_(capacity) {
 
+  // num_threads is for cluster evaluators
+  // num_threads_align is for final aligners
   // create a threadpool to execute stuff
-  workers_.reset(new thread::ThreadPool(env, "AlignmentExecutor", num_threads_));
+  workers_.reset(new thread::ThreadPool(env, "AlignmentExecutor", num_threads_align_));
   eval_workers_.reset(new thread::ThreadPool(env, "ClusterAlignmentExecutor", num_threads_));
   work_queue_.reset(new ConcurrentQueue<WorkItem>(capacity));
   cluster_work_queue_.reset(new ConcurrentQueue<ClusterWorkItem>(capacity));
@@ -109,8 +123,8 @@ void AlignmentExecutor::init_workers() {
     num_active_threads_.fetch_sub(1, memory_order_relaxed);
   };
 
-  num_active_threads_ = num_threads_;
-  for (int i = 0; i < num_threads_; i++)
+  num_active_threads_ = num_threads_align_;
+  for (int i = 0; i < num_threads_align_; i++)
     workers_->Schedule(aligner_func);
   
   auto cluster_func = [this]() {

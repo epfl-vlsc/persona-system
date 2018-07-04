@@ -1,4 +1,3 @@
-# sorting operations
 
 load(
     "//tensorflow/core:platform/default/build_config.bzl",
@@ -43,7 +42,7 @@ cc_library(
     copts = ["-msse3"]
 )
 
-
+# protein clustering ops
 cc_library(
     name = "protein_clustering",
     srcs = glob(["*.cc"]),
