@@ -275,30 +275,80 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
 
 }
     
-bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
+// bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
 
-  // we use the short (int16) version for this
-  const auto& env = envs_->JustScoreEnv();
-  ProfileShort* profile = swps3_createProfileShortSSE(seq1, seq1_len, env.matrix_int16);
+//   // we use the short (int16) version for this
+//   const auto& env = envs_->JustScoreEnv();
+//   ProfileShort* profile = swps3_createProfileShortSSE(seq1, seq1_len, env.matrix_int16);
 
-  Options options;
-  options.gapOpen = env.gap_open_int16;
-  options.gapExt= env.gap_ext_int16;
-  options.threshold= env.threshold;
+//   Options options;
+//   options.gapOpen = env.gap_open_int16;
+//   options.gapExt= env.gap_ext_int16;
+//   options.threshold= env.threshold;
   
-  //debug_profile("SHORT", profile, seq1, seq1_len, env.matrix_int16, 1);
-  //debug_alignment("SHORT", profile, seq2, seq2_len, &options);
+//   //debug_profile("SHORT", profile, seq1, seq1_len, env.matrix_int16, 1);
+//   //debug_alignment("SHORT", profile, seq2, seq2_len, &options);
 
-  double score = swps3_alignmentShortSSE(profile, seq2, seq2_len, &options);
-  double value;
-  if (score >= FLT_MAX) 
-    value = SHRT_MAX;
-  else
-    value = score / (65535.0f / options.threshold);
+//   double score = swps3_alignmentShortSSE(profile, seq2, seq2_len, &options);
+//   double value;
+//   if (score >= FLT_MAX) 
+//     value = SHRT_MAX;
+//   else
+//     value = score / (65535.0f / options.threshold);
 
-  swps3_freeProfileShortSSE(profile);
-  //LOG(INFO) << "value is " << value << " score is " << score;
-  return value >= 0.75f * params_->min_score;
+//   swps3_freeProfileShortSSE(profile);
+//   //LOG(INFO) << "value is " << value << " score is " << score;
+//   return value >= 0.75f * params_->min_score;
+// }
+
+bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
+    s_profile* p, *p_rc = 0;
+    int32_t readLen = (int32_t)seq2_len;
+    int32_t maskLen = readLen / 2;
+
+    while (readLen >= s2) {
+        ++s2;
+        kroundup32(s2);
+        num = (int8_t*)realloc(num, s2);
+        if (reverse == 1 && n == 5) {
+            read_rc = (char*)realloc(read_rc, s2);
+            num_rc = (int8_t*)realloc(num_rc, s2);
+        }
+    }
+    for (m = 0; m < readLen; ++m) num[m] = table[(int)read_seq->seq.s[m]];
+    p = ssw_init(num, readLen, mat, n, 2);
+
+  s_align* result, *result_rc = 0;
+    int32_t refLen = ref_seq->seq.l;
+    int8_t flag = 0;
+    while (refLen > s1) {
+        ++s1;
+        kroundup32(s1);
+        ref_num = (int8_t*)realloc(ref_num, s1);
+    }
+    for (m = 0; m < refLen; ++m) ref_num[m] = table[(int)ref_seq->seq.s[m]];
+  if (path == 1) flag = 2;
+  result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
+  if (reverse == 1 && protein == 0)
+      result_rc = ssw_align(p_rc, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
+  if (result_rc && result_rc->score1 > result->score1 && result_rc->score1 >= filter) {
+      printf("Here1\n");
+      if (sam) ssw_write (result_rc, ref_seq, read_seq, read_rc, ref_num, num_rc, table, 1, 1);
+      else ssw_write (result_rc, ref_seq, read_seq, read_rc, ref_num, num_rc, table, 1, 0);
+  }else if (result && result->score1 >= filter){
+      printf("Here2\n");
+      if (sam) ssw_write(result, ref_seq, read_seq, read_seq->seq.s, ref_num, num, table, 0, 1);
+      else ssw_write(result, ref_seq, read_seq, read_seq->seq.s, ref_num, num, table, 0, 0);
+  } else if (! result) return 1;
+  if (result_rc) align_destroy(result_rc);
+  init_destroy(p);
+  cout << "Score: " << result->score1<< endl;
+  if (result-> score1 > 85){
+    align_destroy(result);
+    return true;
+  }
+  align_destroy(result);
+  return false;
 }
 
 double ProteinAligner::c_align_double_global(double* matrix, const char *s1, int ls1,
