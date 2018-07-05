@@ -7,6 +7,8 @@ extern "C" {
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/DynProgr_sse_short.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/DynProgr_sse_double.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/extras.h"
+  #include "tensorflow/contrib/persona/kernels/protein-cluster/ssw/kseq.h"
+  #include "tensorflow/contrib/persona/kernels/protein-cluster/ssw/ssw.h"
 }
 
 namespace tensorflow {
@@ -310,10 +312,7 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
         ++s2;
         kroundup32(s2);
         num = (int8_t*)realloc(num, s2);
-        if (reverse == 1 && n == 5) {
-            read_rc = (char*)realloc(read_rc, s2);
-            num_rc = (int8_t*)realloc(num_rc, s2);
-        }
+        
     }
     for (m = 0; m < readLen; ++m) num[m] = table[(int)read_seq->seq.s[m]];
     p = ssw_init(num, readLen, mat, n, 2);
@@ -329,17 +328,6 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
     for (m = 0; m < refLen; ++m) ref_num[m] = table[(int)ref_seq->seq.s[m]];
   if (path == 1) flag = 2;
   result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
-  if (reverse == 1 && protein == 0)
-      result_rc = ssw_align(p_rc, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
-  if (result_rc && result_rc->score1 > result->score1 && result_rc->score1 >= filter) {
-      printf("Here1\n");
-      if (sam) ssw_write (result_rc, ref_seq, read_seq, read_rc, ref_num, num_rc, table, 1, 1);
-      else ssw_write (result_rc, ref_seq, read_seq, read_rc, ref_num, num_rc, table, 1, 0);
-  }else if (result && result->score1 >= filter){
-      printf("Here2\n");
-      if (sam) ssw_write(result, ref_seq, read_seq, read_seq->seq.s, ref_num, num, table, 0, 1);
-      else ssw_write(result, ref_seq, read_seq, read_seq->seq.s, ref_num, num, table, 0, 0);
-  } else if (! result) return 1;
   if (result_rc) align_destroy(result_rc);
   init_destroy(p);
   cout << "Score: " << result->score1<< endl;

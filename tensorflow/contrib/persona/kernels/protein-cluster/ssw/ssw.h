@@ -31,6 +31,16 @@ extern const uint8_t encoded_ops[];
 struct _profile;
 typedef struct _profile s_profile;
 
+int32_t l, m, k, match, mismatch, gap_open, gap_extension, path, n, sam, protein, header, s1, s2, filter;
+int8_t* table;
+
+  int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
+    const int8_t* mat;
+    char mat_name[16];
+    int8_t* ref_num;
+    int8_t* num, *num_rc ;
+    char* read_rc;
+
 /*!	@typedef	structure of the alignment result
 	@field	score1	the best alignment score
 	@field	score2	sub-optimal alignment score
