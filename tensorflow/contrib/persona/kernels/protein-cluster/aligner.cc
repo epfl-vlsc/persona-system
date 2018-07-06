@@ -277,33 +277,87 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
 
 }
     
-// bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
-
-//   // we use the short (int16) version for this
-//   const auto& env = envs_->JustScoreEnv();
-//   ProfileShort* profile = swps3_createProfileShortSSE(seq1, seq1_len, env.matrix_int16);
-
-//   Options options;
-//   options.gapOpen = env.gap_open_int16;
-//   options.gapExt= env.gap_ext_int16;
-//   options.threshold= env.threshold;
-  
-//   //debug_profile("SHORT", profile, seq1, seq1_len, env.matrix_int16, 1);
-//   //debug_alignment("SHORT", profile, seq2, seq2_len, &options);
-
-//   double score = swps3_alignmentShortSSE(profile, seq2, seq2_len, &options);
-//   double value;
-//   if (score >= FLT_MAX) 
-//     value = SHRT_MAX;
-//   else
-//     value = score / (65535.0f / options.threshold);
-
-//   swps3_freeProfileShortSSE(profile);
-//   //LOG(INFO) << "value is " << value << " score is " << score;
-//   return value >= 0.75f * params_->min_score;
-// }
-
 bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
+
+  // we use the short (int16) version for this
+  const auto& env = envs_->JustScoreEnv();
+  ProfileShort* profile = swps3_createProfileShortSSE(seq1, seq1_len, env.matrix_int16);
+
+  Options options;
+  options.gapOpen = env.gap_open_int16;
+  options.gapExt= env.gap_ext_int16;
+  options.threshold= env.threshold;
+  
+  //debug_profile("SHORT", profile, seq1, seq1_len, env.matrix_int16, 1);
+  //debug_alignment("SHORT", profile, seq2, seq2_len, &options);
+
+  double score = swps3_alignmentShortSSE(profile, seq2, seq2_len, &options);
+  double value;
+  if (score >= FLT_MAX) 
+    value = SHRT_MAX;
+  else
+    value = score / (65535.0f / options.threshold);
+
+  swps3_freeProfileShortSSE(profile);
+  //LOG(INFO) << "value is " << value << " score is " << score;
+  return value >= 0.75f * params_->min_score;
+}
+
+bool ProteinAligner::PassesThresholdSSW(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
+  int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, reverse = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
+  int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
+  // match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
+  // mata = (int8_t*)calloc(25, sizeof(int8_t));  
+    const int8_t* mat = mata;
+    char mat_name[16];
+    mat_name[0] = '\0';
+    int8_t* ref_num = (int8_t*)malloc(s1);
+    int8_t* num = (int8_t*)malloc(s2), *num_rc = 0;
+    char* read_rc = 0;
+
+  int8_t aa_table[128] = {
+        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+        23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+        14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23,
+        23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+        14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23
+    };
+    static const int8_t mat50[] = {
+        //BLOSUM62
+    9, -1, -1, -3, 0, -3, -3, -3, -4, -3, -3, -3, -3, -1, -1, -1, -1, -2, -2, -2,
+    -1, 4, 1, -1, 1, 0, 1, 0, 0, 0, -1, -1, 0, -1, -2, -2, -2, -2, -2, -3,
+    -1, 1, 4, 1, -1, 1, 0, 1, 0, 0, 0, -1, 0, -1, -2, -2, -2, -2, -2, -3,
+    -3, -1, 1, 7, -1, -2, -1, -1, -1, -1, -2, -2, -1, -2, -3, -3, -2, -4, -3, -4,
+    0, 1, -1, -1, 4, 0, -1, -2, -1, -1, -2, -1, -1, -1, -1, -1, -2, -2, -2, -3,
+    -3, 0, 1, -2, 0, 6, -2, -1, -2, -2, -2, -2, -2, -3, -4, -4, 0, -3, -3, -2,
+    -3, 1, 0, -2, -2, 0, 6, 1, 0, 0, -1, 0, 0, -2, -3, -3, -3, -3, -2, -4,
+    -3, 0, 1, -1, -2, -1, 1, 6, 2, 0, -1, -2, -1, -3, -3, -4, -3, -3, -3, -4,
+    -4, 0, 0, -1, -1, -2, 0, 2, 5, 2, 0, 0, 1, -2, -3, -3, -3, -3, -2, -3,
+    -3, 0, 0, -1, -1, -2, 0, 0, 2, 5, 0, 1, 1, 0, -3, -2, -2, -3, -1, -2,
+    -3, -1, 0, -2, -2, -2, 1, 1, 0, 0, 8, 0, -1, -2, -3, -3, -2, -1, 2, -2,
+    -3, -1, -1, -2, -1, -2, 0, -2, 0, 1, 0, 5, 2, -1, -3, -2, -3, -3, -2, -3,
+    -3, 0, 0, -1, -1, -2, 0, -1, 1, 1, -1, 2, 5, -1, -3, -2, -3, -3, -2, -3,
+    -1, -1, -1, -2, -1, -3, -2, -3, -2, 0, -2, -1, -1, 5, 1, 2, -2, 0, -1, -1,
+    -1, -2, -2, -3, -1, -4, -3, -3, -3, -3, -3, -3, -3, 1, 4, 2, 1, 0, -1, -3,
+    -1, -2, -2, -3, -1, -4, -3, -4, -3, -2, -3, -2, -2, 2, 2, 4, 3, 0, -1, -2,
+    -1, -2, -2, -2, 0, -3, -3, -3, -2, -2, -3, -3, -2, 1, 3, 1, 4, -1, -1, -3,
+    -2, -2, -2, -4, -2, -3, -3, -3, -3, -3, -1, -3, -3, 0, 0, 0, -1, 6, 3, 1,
+    -2, -2, -2, -3, -2, -3, -2, -3, -2, -1, 2, -2, -2, -1, -1, -1, -1, 3, 7, 2,
+    -2, -3, -3, -4, -3, -2, -4, -4, -3, -2, -2, -3, -3, -1, -3, -2, -3, 1, 2, 11    
+    };
+    for (l = k = 0; LIKELY(l < 4); ++l) {
+        for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; /* weight_match : -weight_mismatch_ssw */
+        mata[k++] = 0; // ambiguous base
+    }
+    for (m = 0; LIKELY(m < 5); ++m) mata[k++] = 0;
+
+  n = 24;
+  int8_t* table = aa_table;
+  // table = aa_table;
+  mat = mat50;
     s_profile* p= 0;
     int32_t readLen = (int32_t)seq2_len;
     int32_t maskLen = readLen / 2;

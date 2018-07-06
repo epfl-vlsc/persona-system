@@ -33,11 +33,11 @@ AlignmentExecutor::~AlignmentExecutor() {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 }
-void setup_func_matrixssw(){
-  // int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, reverse = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
-  // int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
-  match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
-  mata = (int8_t*)calloc(25, sizeof(int8_t));  
+/*void setup_func_matrixssw(){
+  int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, reverse = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
+  int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
+  // match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
+  // mata = (int8_t*)calloc(25, sizeof(int8_t));  
     const int8_t* mat = mata;
     char mat_name[16];
     mat_name[0] = '\0';
@@ -79,7 +79,7 @@ void setup_func_matrixssw(){
     -2, -3, -3, -4, -3, -2, -4, -4, -3, -2, -2, -3, -3, -1, -3, -2, -3, 1, 2, 11    
     };
     for (l = k = 0; LIKELY(l < 4); ++l) {
-        for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; /* weight_match : -weight_mismatch_ssw */
+        for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; // weight_match : -weight_mismatch_ssw 
         mata[k++] = 0; // ambiguous base
     }
     for (m = 0; LIKELY(m < 5); ++m) mata[k++] = 0;
@@ -90,11 +90,11 @@ void setup_func_matrixssw(){
   mat = mat50;
 
 
-}
+}*/
 
 void AlignmentExecutor::init_workers() {
 
-  setup_func_matrixssw();
+  //setup_func_matrixssw();
 
   auto aligner_func = [this]() {
     //std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
@@ -147,7 +147,7 @@ void AlignmentExecutor::init_workers() {
       auto seq_pair = make_pair(seq1->GenomeIndex(), seq2->GenomeIndex());
       if (candidate_map_ && !candidate_map_->ExistsOrInsert(genome_pair, seq_pair)) {
 
-        if (aligner.PassesThreshold(seq1->Data(), seq2->Data(), 
+        if (aligner.PassesThresholdSSW(seq1->Data(), seq2->Data(), 
               seq1->Length(), seq2->Length())) {
 
           Status s = aligner.AlignLocal(seq1->Data(), seq2->Data(), 
