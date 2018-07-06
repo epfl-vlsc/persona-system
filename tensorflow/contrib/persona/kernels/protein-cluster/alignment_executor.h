@@ -29,7 +29,7 @@ namespace tensorflow {
     
     typedef std::tuple<Sequence, Cluster*, bool*, MultiNotification*> ClusterWorkItem;
 
-    AlignmentExecutor(Env *env, int num_threads, int capacity);
+    AlignmentExecutor(Env *env, int num_threads, int num_threads_align, int capacity);
     ~AlignmentExecutor();
 
     Status EnqueueAlignment(const WorkItem& item);
@@ -64,6 +64,7 @@ namespace tensorflow {
     mutex mu_;
 
     int num_threads_;
+    int num_threads_align_;
     int capacity_;
 
     std::unique_ptr<ConcurrentQueue <WorkItem>> work_queue_;

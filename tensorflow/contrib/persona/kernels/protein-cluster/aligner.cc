@@ -26,7 +26,7 @@ string PrintNormalizedProtein(const char* seq, size_t len) {
 }
 
 char* denormalize(const char* str, int len) {
-  char* ret = (char*) malloc((len + 1) * sizeof(char));
+  auto ret = new char[(len + 1) * sizeof(char)];
   int i;
 
   for (i = 0; i < len; ++i) {
@@ -55,7 +55,7 @@ void debug_profile(char* name, void* pb, const char* q, int queryLen,
 
   printf(
       "Successfully created %s profile at %lu from query = %s, len(query) = %d\n",
-      name, (unsigned long) pb, query, queryLen);
+      name, (uint64) pb, query, queryLen);
   printf("The matrix used for the %s profile: \n", name);
 
   for (i = 0; i < 26; ++i) {

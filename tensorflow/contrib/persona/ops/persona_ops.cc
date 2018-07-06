@@ -1496,6 +1496,7 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     REGISTER_OP("AlignmentExecutor")
     .Output("handle: resource")
     .Attr("num_threads: int = 1")
+    .Attr("num_threads_align: int = 1")
     .Attr("capacity: int = 100")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
