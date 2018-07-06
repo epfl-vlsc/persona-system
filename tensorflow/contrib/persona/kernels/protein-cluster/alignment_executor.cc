@@ -2,6 +2,8 @@
 
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_executor.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
+  #include "tensorflow/contrib/persona/kernels/protein-cluster/ssw/kseq.h"
+  #include "tensorflow/contrib/persona/kernels/protein-cluster/ssw/ssw.h"
 
 namespace tensorflow {
 
@@ -32,8 +34,10 @@ AlignmentExecutor::~AlignmentExecutor() {
   }
 }
 void setup_func_matrixssw(){
-  int32_t l, m, k, match = 2, mismatch = 2, gap_open = 3, gap_extension = 1, path = 0, reverse = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
-  int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
+  // int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, reverse = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
+  // int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
+  match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
+  mata = (int8_t*)calloc(25, sizeof(int8_t));  
     const int8_t* mat = mata;
     char mat_name[16];
     mat_name[0] = '\0';
@@ -75,12 +79,13 @@ void setup_func_matrixssw(){
     -2, -3, -3, -4, -3, -2, -4, -4, -3, -2, -2, -3, -3, -1, -3, -2, -3, 1, 2, 11    
     };
     for (l = k = 0; LIKELY(l < 4); ++l) {
-        for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch; /* weight_match : -weight_mismatch */
+        for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; /* weight_match : -weight_mismatch_ssw */
         mata[k++] = 0; // ambiguous base
     }
     for (m = 0; LIKELY(m < 5); ++m) mata[k++] = 0;
 
   n = 24;
+  // int8_t* table = aa_table;
   table = aa_table;
   mat = mat50;
 

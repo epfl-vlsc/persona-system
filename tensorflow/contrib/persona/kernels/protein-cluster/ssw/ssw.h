@@ -30,8 +30,8 @@ extern const uint8_t encoded_ops[];
 /*!	@typedef	structure of the query profile	*/
 struct _profile;
 typedef struct _profile s_profile;
-
-int32_t l, m, k, match, mismatch, gap_open, gap_extension, path, n, sam, protein, header, s1, s2, filter;
+void setup_func_matrixssw();
+int32_t l, m, k, match, mismatch_ssw, gap_open, gap_extension, path, n, sam, protein, header, s1, s2, filter;
 int8_t* table;
 
   int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));

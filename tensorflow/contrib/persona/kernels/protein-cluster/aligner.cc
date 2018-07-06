@@ -304,7 +304,7 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
 // }
 
 bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
-    s_profile* p, *p_rc = 0;
+    s_profile* p= 0;
     int32_t readLen = (int32_t)seq2_len;
     int32_t maskLen = readLen / 2;
 
@@ -314,21 +314,20 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
         num = (int8_t*)realloc(num, s2);
         
     }
-    for (m = 0; m < readLen; ++m) num[m] = table[(int)read_seq->seq.s[m]];
+    for (m = 0; m < readLen; ++m) num[m] = table[(int)seq2[m]];
     p = ssw_init(num, readLen, mat, n, 2);
 
-  s_align* result, *result_rc = 0;
-    int32_t refLen = ref_seq->seq.l;
+  s_align* result = 0;
+    int32_t refLen = (int32_t)seq1_len;
     int8_t flag = 0;
     while (refLen > s1) {
         ++s1;
         kroundup32(s1);
         ref_num = (int8_t*)realloc(ref_num, s1);
     }
-    for (m = 0; m < refLen; ++m) ref_num[m] = table[(int)ref_seq->seq.s[m]];
+    for (m = 0; m < refLen; ++m) ref_num[m] = table[(int)seq1[m]];
   if (path == 1) flag = 2;
   result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
-  if (result_rc) align_destroy(result_rc);
   init_destroy(p);
   cout << "Score: " << result->score1<< endl;
   if (result-> score1 > 85){
