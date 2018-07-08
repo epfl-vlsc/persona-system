@@ -1,5 +1,5 @@
 
-#include "Sketch.h"
+#include "sketch.h"
 #include <unistd.h>
 #include <zlib.h>
 #include <stdio.h>
@@ -65,110 +65,6 @@ void setAlphabetFromString(Sketch::Parameters & parameters, const char * charact
     }
     
     parameters.use64 = pow(parameters.alphabetSize, parameters.kmerSize) > pow(2, 32);
-}
-
-
-void addMinHashes(MinHashHeap & minHashHeap, char * seq, uint64_t length, const Sketch::Parameters & parameters)
-{
-    int kmerSize = parameters.kmerSize;
-    uint64_t mins = parameters.minHashesPerWindow;
-    bool noncanonical = parameters.noncanonical;
-    
-    // Determine the 'mins' smallest hashes, including those already provided
-    // (potentially replacing them). This allows min-hash sets across multiple
-    // sequences to be determined.
-    
-    // uppercase TODO: alphabets?
-    //
-    for ( uint64_t i = 0; i < length; i++ )
-    {
-        if ( ! parameters.preserveCase && seq[i] > 96 && seq[i] < 123 )
-        {
-            seq[i] -= 32;
-        }
-    }
-    
-    char * seqRev;
-    
-    if ( ! noncanonical )
-    {
-    	seqRev = new char[length];
-        reverseComplement(seq, seqRev, length);
-    }
-    
-    for ( uint64_t i = 0; i < length - kmerSize + 1; i++ )
-    {
-        bool useRevComp = false;
-        bool debug = false;
-        
-		// repeatedly skip kmers with bad characters
-		
-		bool bad = false;
-		
-		for ( uint64_t j = i; j < i + kmerSize && i + kmerSize <= length; j++ )
-		{
-			if ( ! parameters.alphabet[seq[j]] )
-			{
-				i = j; // skip to past the bad character
-				bad = true;
-				break;
-			}
-		}
-		
-		if ( bad )
-		{
-			continue;
-		}
-	
-		if ( i + kmerSize > length )
-		{
-			// skipped to end
-			break;
-		}
-            
-        if ( ! noncanonical )
-        {
-            useRevComp = true;
-            bool prefixEqual = true;
-        
-            if ( debug ) {for ( uint64_t j = i; j < i + kmerSize; j++ ) { cout << *(seq + j); } cout << endl;}
-        
-            for ( uint64_t j = 0; j < kmerSize; j++ )
-            {
-                char base = seq[i + j];
-                char baseMinus = seqRev[length - i - kmerSize + j];
-            
-                if ( debug ) cout << baseMinus;
-            
-                if ( prefixEqual && baseMinus > base )
-                {
-                    useRevComp = false;
-                    break;
-                }
-            
-                if ( prefixEqual && baseMinus < base )
-                {
-                    prefixEqual = false;
-                }
-            }
-        
-            if ( debug ) cout << endl;
-        }
-        
-        const char * kmer = useRevComp ? seqRev + length - i - kmerSize : seq + i;
-        bool filter = false;
-        
-        hash_u hash = getHash(useRevComp ? seqRev + length - i - kmerSize : seq + i, kmerSize, parameters.seed, parameters.use64);
-        
-        if ( debug ) cout << endl;
-        
-		minHashHeap.tryInsert(hash);
-    }
-    
-    if ( ! noncanonical )
-    {
-        delete [] seqRev;
-    }
 }
 
 
@@ -603,7 +499,7 @@ void getMinHashPositions(vector<Sketch::PositionHash> & positionHashes, char * s
 
 
 
-int Sketch::init(std::string fileNameNew, char * seqNew, uint64_t lengthNew, const std::string & nameNew, const std::string & commentNew, const Sketch::Parameters & parametersNew)
+int Sketch::init( char * seqNew, uint64_t lengthNew, const std::string & nameNew, const std::string & commentNew, const Sketch::Parameters & parametersNew)
 {
 
 	//check the exact arguements requied by sketchInput here and send those arguments to sketch::Inti from minhash_distance.cpp

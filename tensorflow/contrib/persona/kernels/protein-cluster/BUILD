@@ -44,24 +44,25 @@ cc_library(
 
 cc_library(
     name = "minhash_lib",
-    srcs = ["hash.cpp",
-            "HashList.cpp",
-            "HashPriorityQueue.cpp",
-            "HashSet.cpp",
-            "minhash_distance.cc",
-            "MinHashHeap.cc",
-            "MurmurHash3.cc",
-            "sketch.cc"
+    srcs = ["minhash/hash.cpp",
+            "minhash/HashList.cpp",
+            "minhash/HashPriorityQueue.cpp",
+            "minhash/HashSet.cpp",
+            "minhash/minhash_distance.cc",
+            "minhash/MinHashHeap.cc",
+            "minhash/MurmurHash3.cc",
+            "minhash/sketch.cc"
             ],
-    hdrs = ["hash.h",
-            "HashList.h",
-            "HashPriorityQueue.h",
-            "HashSet.h",
-            "kseq.h",
-            "minhash_distance.h",
-            "MinHashHeap.h",
-            "MurmurHash3.h",
-            "sketch.h"
+    hdrs = ["minhash/hash.h",
+            "minhash/HashList.h",
+            "minhash/HashPriorityQueue.h",
+            "minhash/HashSet.h",
+            "minhash/kseq.h",
+            "minhash/minhash_distance.h",
+            "minhash/MinHashHeap.h",
+            "minhash/MurmurHash3.h",
+            "minhash/sketch.h",
+            "minhash/bloom_filter.hpp"
             ],
     linkopts = [
         "-msse3"

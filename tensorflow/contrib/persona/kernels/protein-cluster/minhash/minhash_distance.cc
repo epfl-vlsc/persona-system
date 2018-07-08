@@ -1,5 +1,4 @@
-#include <minhash_distance.h>
-#include <sketch.h>
+#include "minhash_distance.h"
 #include <math.h>
 #include <vector>
 
@@ -13,7 +12,7 @@
 
 using namespace::std;
 
-namespace minhash {
+namespace mash {
 
 
 minhash_distance::CompareOutput * compare(minhash_distance::CompareInput * input)
@@ -158,7 +157,7 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
 
 
 
-minhash_distance::CompareOutput * minhash_distance::run(const char* seqref, const char*seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
+minhash_distance::CompareOutput * minhash_distance::run( char* seqref,  char*seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
 {
     //we need only the seqNew, lengthNew, and parametersNew to be sent. Remaining all are empty strings.
 
@@ -171,16 +170,16 @@ minhash_distance::CompareOutput * minhash_distance::run(const char* seqref, cons
     int warningCount = 0;
 
 
-    sketchRef.init("", seqref, lengthref, "", "", parametersNew);
+    sketchRef.init( seqref, lengthref, "", "", parametersNew);
     Sketch sketchQuery;
-    sketchQuery.init("", seqqry, lengthqry, "", "", parametersNew);
+    sketchQuery.init( seqqry, lengthqry, "", "", parametersNew);
 
     uint64_t pairCount = sketchRef.getReferenceCount() * sketchQuery.getReferenceCount();
 
   	minhash_distance::CompareOutput * distances;
     double distanceMax = 1;
     double pValueMax = 1;
-    distances = compare(new CompareInput(sketchRef, sketchQuery, 0, 0, 1, parameters, distanceMax, pValueMax));
+    distances = compare(new CompareInput(sketchRef, sketchQuery, 0, 0, 1, parametersNew, distanceMax, pValueMax));
 
     return distances;
 

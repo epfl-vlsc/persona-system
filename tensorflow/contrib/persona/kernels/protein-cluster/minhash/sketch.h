@@ -6,6 +6,9 @@
 #include <string.h>
 #include "MinHashHeap.h"
 
+static const char * alphabetNucleotide = "ACGT";
+static const char * alphabetProtein = "ACDEFGHIKLMNPQRSTVWY";
+
 class Sketch
 {
 public:
@@ -179,11 +182,10 @@ public:
     bool getNoncanonical() const {return parameters.noncanonical;}
     bool hasHashCounts() const {return references.size() > 0 && references.at(0).counts.size() > 0;}
     bool hasLociByHash(hash_t hash) const {return lociByHash.count(hash);}
-	bool sketchFileBySequence(FILE * file, ThreadPool<Sketch::SketchInput, Sketch::SketchOutput> * threadPool);
 	void useThreadOutput(SketchOutput * output);
     void warnKmerSize(uint64_t lengthMax, const std::string & lengthMaxName, double randomChance, int kMin, int warningCount) const;
     // int init(const std::vector<std::string> & files, const Parameters & parametersNew, int verbosity = 0, bool enforceParameters = false, bool contain = false);
-    int init(std::string fileNameNew, char * seqNew, uint64_t lengthNew, const std::string & nameNew, const std::string & commentNew, const Sketch::Parameters & parametersNew)
+    int init( char * seqNew, uint64_t lengthNew, const std::string & nameNew, const std::string & commentNew, const Sketch::Parameters & parametersNew);
 
 
 
@@ -203,8 +205,8 @@ private:
     std::string file;
 };
 
-void addMinHashes(MinHashHeap & minHashHeap, char * seq, uint64_t length, const Sketch::Parameters & parameters);
-void getMinHashPositions(std::vector<Sketch::PositionHash> & loci, char * seq, uint32_t length, const Sketch::Parameters & parameters, int verbosity = 0);
+void addMinHashes(MinHashHeap & minHashHeap,  char * seq, uint64_t length, const Sketch::Parameters & parameters);
+void getMinHashPositions(std::vector<Sketch::PositionHash> & loci,  char * seq, uint32_t length, const Sketch::Parameters & parameters, int verbosity);
 bool hasSuffix(std::string const & whole, std::string const & suffix);
 Sketch::SketchOutput * loadCapnp(Sketch::SketchInput * input);
 void reverseComplement(const char * src, char * dest, int length);
@@ -217,4 +219,4 @@ int def(int fdSource, int fdDest, int level);
 int inf(int fdSource, int fdDest);
 void zerr(int ret);
 
-#endif
+

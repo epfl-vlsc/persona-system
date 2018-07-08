@@ -1,4 +1,4 @@
-#include <sketch.h>
+#include "sketch.h"
 
 namespace mash{
 
@@ -68,15 +68,15 @@ namespace mash{
         PairOutput * pairs;
     };
         
-    minhash_distance::CompareOutput * run(const char* seqref, const char*seqlen, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew); // override
+    minhash_distance::CompareOutput * run( char* seqref, char* seqlen, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew); // override
     
 private:
     
     void writeOutput(CompareOutput * output, bool table) const;
 };
 
-CommandDistance::CompareOutput * compare(CommandDistance::CompareInput * input);
-void compareSketches(CommandDistance::CompareOutput::PairOutput * output, const Sketch::Reference & refRef, const Sketch::Reference & refQry, uint64_t sketchSize, int kmerSize, double kmerSpace, double maxDistance, double maxPValue);
+minhash_distance::CompareOutput * compare(minhash_distance::CompareInput * input);
+void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const Sketch::Reference & refRef, const Sketch::Reference & refQry, uint64_t sketchSize, int kmerSize, double kmerSpace, double maxDistance, double maxPValue);
 double pValue(uint64_t x, uint64_t lengthRef, uint64_t lengthQuery, double kmerSpace, uint64_t sketchSize);
 
 }//namespace ends here
