@@ -8,6 +8,8 @@ extern "C" {
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/DynProgr_sse_double.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/extras.h"
 }
+#include "tensorflow/contrib/persona/kernels/protein-cluster/minhash/minhash_distance.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/minhash/sketch.h"
 
 namespace tensorflow {
    
@@ -275,31 +277,64 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
 
 }
     
-bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
+// bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
 
-  // we use the short (int16) version for this
-  const auto& env = envs_->JustScoreEnv();
-  ProfileShort* profile = swps3_createProfileShortSSE(seq1, seq1_len, env.matrix_int16);
+//   // we use the short (int16) version for this
+//   const auto& env = envs_->JustScoreEnv();
+//   ProfileShort* profile = swps3_createProfileShortSSE(seq1, seq1_len, env.matrix_int16);
 
-  Options options;
-  options.gapOpen = env.gap_open_int16;
-  options.gapExt= env.gap_ext_int16;
-  options.threshold= env.threshold;
+//   Options options;
+//   options.gapOpen = env.gap_open_int16;
+//   options.gapExt= env.gap_ext_int16;
+//   options.threshold= env.threshold;
   
-  //debug_profile("SHORT", profile, seq1, seq1_len, env.matrix_int16, 1);
-  //debug_alignment("SHORT", profile, seq2, seq2_len, &options);
+//   //debug_profile("SHORT", profile, seq1, seq1_len, env.matrix_int16, 1);
+//   //debug_alignment("SHORT", profile, seq2, seq2_len, &options);
 
-  double score = swps3_alignmentShortSSE(profile, seq2, seq2_len, &options);
-  double value;
-  if (score >= FLT_MAX) 
-    value = SHRT_MAX;
-  else
-    value = score / (65535.0f / options.threshold);
+//   double score = swps3_alignmentShortSSE(profile, seq2, seq2_len, &options);
+//   double value;
+//   if (score >= FLT_MAX) 
+//     value = SHRT_MAX;
+//   else
+//     value = score / (65535.0f / options.threshold);
 
-  swps3_freeProfileShortSSE(profile);
-  //LOG(INFO) << "value is " << value << " score is " << score;
-  return value >= 0.75f * params_->min_score;
+//   swps3_freeProfileShortSSE(profile);
+//   //LOG(INFO) << "value is " << value << " score is " << score;
+//   return value >= 0.75f * params_->min_score;
+// }
+
+
+
+
+//A new passesThreshold function for minhash without any previous skteching
+bool ProteinAligner::PassesThreshold(const char* seq1, const char*seq2, int seq1_len, int seq2_len){
+
+const char* seqref = denormalize(seq1,seq1_len);
+const char* seqqry = denormalize(seq2,seq2_len);
+
+const Sketch::Parameters parameters;
+parameters.kmerSize = 3;              
+parameters.minHashesPerWindow = 1000; //sketch size
+parameters.noncanonical = true;
+setAlphabetFromString(parameters, alphabetProtein); //alphabetProtein declared in sketch.h
+
+mash::minhash_distance = minhash;
+mash::minhash_distance::CompareOutput * distances = minhash.run(seqref, seqqry, seq1_len, seq2_len, &parameters );
+
+//there should be only one pair, as we are passing only one pair to run() command. 
+
+const mash::minhash_distance::CompareOutput::PairOutput * pair = &distances->pairs[0];
+double distance = pair->distance;
+double pvalue  = pair->pvalue;
+uint64_t numerator_jaccard= pair->numer;
+uint64_t denominator_jaccard = pair->denom;
+
+
+double score = distance*100;
+return score >= 120;
+
 }
+
 
 double ProteinAligner::c_align_double_global(double* matrix, const char *s1, int ls1,
     const char *s2, int ls2, double gap_open, double gap_ext, BTData* data) {
