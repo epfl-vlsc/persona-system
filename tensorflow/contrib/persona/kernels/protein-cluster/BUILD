@@ -42,6 +42,36 @@ cc_library(
     copts = ["-msse3"]
 )
 
+cc_library(
+    name = "minhash_lib",
+    srcs = ["hash.cpp",
+            "HashList.cpp",
+            "HashPriorityQueue.cpp",
+            "HashSet.cpp",
+            "minhash_distance.cc",
+            "MinHashHeap.cc",
+            "MurmurHash3.cc",
+            "sketch.cc"
+            ],
+    hdrs = ["hash.h",
+            "HashList.h",
+            "HashPriorityQueue.h",
+            "HashSet.h",
+            "kseq.h",
+            "minhash_distance.h",
+            "MinHashHeap.h",
+            "MurmurHash3.h",
+            "sketch.h"
+            ],
+    linkopts = [
+        "-msse3"
+    ],
+    linkstatic = 1,
+    alwayslink = 1,
+    visibility = ["//visibility:public"],
+    copts = ["-msse3"]
+)
+
 # protein clustering ops
 cc_library(
     name = "protein_clustering",
@@ -53,6 +83,7 @@ cc_library(
     alwayslink = 1,
     visibility = ["//visibility:public"],
     deps = [":swps3_lib",
+            ":minhash_lib",
             "//tensorflow/core:framework_headers_lib",
             "//tensorflow/contrib/persona/kernels/object-pool:object_pool",
             "//tensorflow/contrib/persona/kernels/agd-format:agd_format",
