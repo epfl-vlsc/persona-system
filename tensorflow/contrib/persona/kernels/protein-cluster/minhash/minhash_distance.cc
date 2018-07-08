@@ -158,7 +158,7 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
 
 
 
-minhash_distance::CompareOutput minhash_distance::run(std::string fileNameNew, char * seqNew, uint64_t lengthNew, const std::string & nameNew, const std::string & commentNew, const Sketch::Parameters & parametersNew)
+minhash_distance::CompareOutput * minhash_distance::run(const char* seqref, const char*seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
 {
     //we need only the seqNew, lengthNew, and parametersNew to be sent. Remaining all are empty strings.
 
@@ -171,13 +171,16 @@ minhash_distance::CompareOutput minhash_distance::run(std::string fileNameNew, c
     int warningCount = 0;
 
 
-    sketchRef.init(refArgVector, parameters);
+    sketchRef.init("", seqref, lengthref, "", "", parametersNew);
     Sketch sketchQuery;
-    sketchQuery.init(queryFiles, parameters, 0, true);
+    sketchQuery.init("", seqqry, lengthqry, "", "", parametersNew);
+
     uint64_t pairCount = sketchRef.getReferenceCount() * sketchQuery.getReferenceCount();
 
-  	minhash_distance::CompareOutput distances;
-    distances = compare(new CompareInput(sketchRef, sketchQuery, j, i, pairsPerThread, parameters, distanceMax, pValueMax));
+  	minhash_distance::CompareOutput * distances;
+    double distanceMax = 1;
+    double pValueMax = 1;
+    distances = compare(new CompareInput(sketchRef, sketchQuery, 0, 0, 1, parameters, distanceMax, pValueMax));
 
     return distances;
 

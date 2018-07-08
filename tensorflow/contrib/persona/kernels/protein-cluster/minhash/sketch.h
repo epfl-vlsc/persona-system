@@ -179,12 +179,9 @@ public:
     bool getNoncanonical() const {return parameters.noncanonical;}
     bool hasHashCounts() const {return references.size() > 0 && references.at(0).counts.size() > 0;}
     bool hasLociByHash(hash_t hash) const {return lociByHash.count(hash);}
-    uint64_t initParametersFromCapnp(const char * file);
 	bool sketchFileBySequence(FILE * file, ThreadPool<Sketch::SketchInput, Sketch::SketchOutput> * threadPool);
 	void useThreadOutput(SketchOutput * output);
     void warnKmerSize(uint64_t lengthMax, const std::string & lengthMaxName, double randomChance, int kMin, int warningCount) const;
-    bool writeToFile() const;
-    int writeToCapnp(const char * file) const;
     // int init(const std::vector<std::string> & files, const Parameters & parametersNew, int verbosity = 0, bool enforceParameters = false, bool contain = false);
     int init(std::string fileNameNew, char * seqNew, uint64_t lengthNew, const std::string & nameNew, const std::string & commentNew, const Sketch::Parameters & parametersNew)
 

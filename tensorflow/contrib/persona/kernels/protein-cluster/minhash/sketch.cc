@@ -36,6 +36,37 @@ void reverseComplement(const char * src, char * dest, int length)
     }
 }
 
+void setAlphabetFromString(Sketch::Parameters & parameters, const char * characters)
+{
+    parameters.alphabetSize = 0;
+    memset(parameters.alphabet, 0, 256);
+    
+	const char * character = characters;
+	
+	while ( *character != 0 )
+	{
+		char characterUpper = *character;
+		
+        if ( ! parameters.preserveCase && characterUpper > 96 && characterUpper < 123 )
+        {
+            characterUpper -= 32;
+        }
+        
+		parameters.alphabet[characterUpper] = true;
+		character++;
+	}
+    
+    for ( int i = 0; i < 256; i++ )
+    {
+    	if ( parameters.alphabet[i] )
+    	{
+	    	parameters.alphabetSize++;
+	    }
+    }
+    
+    parameters.use64 = pow(parameters.alphabetSize, parameters.kmerSize) > pow(2, 32);
+}
+
 
 void addMinHashes(MinHashHeap & minHashHeap, char * seq, uint64_t length, const Sketch::Parameters & parameters)
 {
@@ -576,7 +607,7 @@ int Sketch::init(std::string fileNameNew, char * seqNew, uint64_t lengthNew, con
 {
 
 	//check the exact arguements requied by sketchInput here and send those arguments to sketch::Inti from minhash_distance.cpp
-	parameters = parametersNew;
+	// parameters = parametersNew;
 	Sketch::SketchOutput * outputstructure= sketchSequence(new SketchInput("", seqNew, lengthNew, "", "", parametersNew));
 	useThreadOutput(outputstructure);
 }

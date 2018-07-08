@@ -68,7 +68,7 @@ namespace mash{
         PairOutput * pairs;
     };
         
-    int run(); // override
+    minhash_distance::CompareOutput * run(const char* seqref, const char*seqlen, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew); // override
     
 private:
     
