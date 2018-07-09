@@ -25,6 +25,7 @@ minhash_distance::CompareOutput * compare(minhash_distance::CompareInput * input
     uint64_t sketchSize = sketchQuery.getMinHashesPerWindow() < sketchRef.getMinHashesPerWindow() ?
         sketchQuery.getMinHashesPerWindow() :
         sketchRef.getMinHashesPerWindow();
+        // std::cout << "THe disatnce is " << sketchQuery.getMinHashesPerWindow() << "   BBBBBBBBBBBBBBBB" << endl;
     
     uint64_t i = input->indexQuery;
     uint64_t j = input->indexRef;

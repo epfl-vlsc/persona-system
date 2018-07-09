@@ -504,6 +504,7 @@ int Sketch::init( char * seqNew, uint64_t lengthNew, const std::string & nameNew
 
 	//check the exact arguements requied by sketchInput here and send those arguments to sketch::Inti from minhash_distance.cpp
 	// parameters = parametersNew;
+	parameters = parametersNew;
 	Sketch::SketchOutput * outputstructure= sketchSequence(new SketchInput("", seqNew, lengthNew, "", "", parametersNew));
 	useThreadOutput(outputstructure);
 }
