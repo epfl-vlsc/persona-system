@@ -308,13 +308,13 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
 //A new passesThreshold function for minhash without any previous skteching
 bool ProteinAligner::PassesThreshold(const char* seq1, const char*seq2, int seq1_len, int seq2_len){
 
-// LOG(INFO) << "Evaluating minhash distance";
+LOG(INFO) << "Evaluating minhash distance";
  char* seqref = denormalize(seq1,seq1_len);
  char* seqqry = denormalize(seq2,seq2_len);
 
 Sketch::Parameters parameters;
 parameters.kmerSize = 3;              
-parameters.minHashesPerWindow = 1000; //sketch size
+parameters.minHashesPerWindow = 300; //sketch size
 parameters.noncanonical = true;
 setAlphabetFromString(parameters, alphabetProtein); //alphabetProtein declared in sketch.h
 
@@ -331,7 +331,7 @@ uint64_t denominator_jaccard = pair->denom;
 
 
 double score = distance*100;
-return score <= 50;
+return score <= 30;
 
 }
 
