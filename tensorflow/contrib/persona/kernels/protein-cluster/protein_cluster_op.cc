@@ -104,10 +104,13 @@ namespace tensorflow {
       }
       LOG(INFO) << ss.str();
       int total = 0;
+      int total_disagreements = 0;
       for (auto& cluster : clusters_) {
         total += cluster.TotalComps();
+        total_disagreements += cluster.TotalDisagree();
       }
       LOG(INFO) << "Node: " << node_id_ << " did a total of " << total << " 16b comps ";
+      LOG(INFO) << "Node: " << node_id_ << " had a total of " << total_disagreements << " disagreements ";
 
       int len = 0;
 

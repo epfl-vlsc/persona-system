@@ -44,6 +44,7 @@ AlignmentExecutor::~AlignmentExecutor() {
   while (num_active_threads_.load(std::memory_order_relaxed) > 0) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
+  LOG(INFO) << " all threads finished!!!!!!!!!!!!!!!!!!!!!!!!!";
 }
 
 void AlignmentExecutor::init_workers() {
@@ -132,6 +133,8 @@ void AlignmentExecutor::init_workers() {
     int my_id = id_.fetch_add(1, memory_order_relaxed);
     LOG(INFO) << "Cluster eval thread spinning up with id " << my_id;
 
+    //ofstream outfile("times.csv", std::ofstream::out);
+
     ClusterWorkItem item;
     while (run_) {
       // read from queue, and align work item 
@@ -145,6 +148,7 @@ void AlignmentExecutor::init_workers() {
       auto n = get<3>(item);
             
       auto added = cluster->EvaluateSequence(seq, envs_, params_);
+      //outfile.flush();
 
       if (!was_added) was_added = added;
 
@@ -158,8 +162,9 @@ void AlignmentExecutor::init_workers() {
         break;
       }
     }
-    
-    VLOG(INFO) << "cluster eval executor thread ending.";
+
+    //outfile.close(); 
+    LOG(INFO) << "cluster eval executor thread ending, closing file";
     num_active_threads_.fetch_sub(1, memory_order_relaxed);
   };
   

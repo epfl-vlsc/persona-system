@@ -10,6 +10,7 @@
 #include "tensorflow/contrib/persona/kernels/protein-cluster/multi_notification.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_executor.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/cluster_seq.h"
+#include "tensorflow/contrib/persona/kernels/protein-cluster/aho_corasick_dict.h"
 
 namespace tensorflow {
 
@@ -19,7 +20,11 @@ class Cluster {
     // create cluster and seed with sequence
     Cluster(const AlignmentEnvironments* envs, const char* seed_seq, int length, std::string genome,
         int genome_index, int total_seqs, int abs_seq) : envs_(envs), absolute_sequence_(abs_seq) {
-      seqs_.push_back(ClusterSequence(string(seed_seq, length), genome, genome_index, total_seqs));
+      
+      string s(seed_seq, length);
+      seqs_.push_back(ClusterSequence(s, genome, genome_index, total_seqs));
+      //auto s = NormalizedProtein(seed_seq, length);
+      ah_dict_.AddRepresentative(s);
     }
 
     // return true if added to cluster, false if not
@@ -36,6 +41,8 @@ class Cluster {
    
     // for debug ----------------------
     int TotalComps() { return total_comps_; }
+    
+    int TotalDisagree() { return total_disagree_; }
 
     int LongestSeqLength();
     // -------------------------------
@@ -75,7 +82,18 @@ class Cluster {
   private:
 
     int total_comps_ = 0;
+    int total_disagree_ = 0;
+    std::vector<char> scratch_;
    
+    string NormalizedProtein(const char* seq, size_t len) {
+      scratch_.resize(len);
+      memcpy(&scratch_[0], seq, len);
+      for (size_t i = 0; i < len; i++) {
+        scratch_[i] = scratch_[i] + 'A';
+      }
+      return string(&scratch_[0], len);
+    }
+
 
     struct Candidate {
       Candidate(const ClusterSequence* seq1, const ClusterSequence* seq2, 
@@ -104,6 +122,8 @@ class Cluster {
     
     // alignments in order, for when the cluster is complete
     std::vector<ProteinAligner::Alignment> alignments_;
+
+    AhoCorasickDict<3> ah_dict_;
   
     mutex mu_;                    // protect modifications of seqs_
   

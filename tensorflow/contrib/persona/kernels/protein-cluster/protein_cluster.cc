@@ -30,24 +30,42 @@ namespace tensorflow {
 
   }
 
+
   bool Cluster::EvaluateSequence(Sequence& sequence,  
       const AlignmentEnvironments* envs, const Parameters* params) {
     ProteinAligner aligner(envs, params);
     Status s;
 
     auto seq_it = seqs_.begin();
+
     for (size_t i = 0; i < params->max_representatives && i < seqs_.size(); i++) {
       const auto& rep = *seq_it;
       seq_it++;
       if (rep.Genome() == (*sequence.genome) && rep.GenomeIndex() == sequence.genome_index)
         break; // don't compare to itself, its already in this cluster
 
+      //outfile << sequence.length << ", " << rep.Length() << ", ";
+      //auto s = NormalizedProtein(sequence.data, sequence.length);
+      // auto t1j = chrono::high_resolution_clock::now();
+      //auto jaccard = ah_dict_.Jaccard(sequence.data, sequence.length);
+      // auto t2j = chrono::high_resolution_clock::now();
+      // auto elapsedj = chrono::duration_cast<chrono::microseconds>(t2j - t1j);
+      //outfile << jaccard << ", " << elapsedj.count() << ", ";
+      //LOG(INFO) << "jaccard calc was " << elapsed.count() << " us";
+
+
       total_comps_++;
+      //bool passed= jaccard > 0.10f;
       //auto t1 = chrono::high_resolution_clock::now();
       bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
       //auto t2 = chrono::high_resolution_clock::now();
+      //LOG(INFO) << "passed = " << passed << ", Jaccard is " << jaccard;
       //auto elapsed = chrono::duration_cast<chrono::microseconds>(t2 - t1);
-      //outfile << sequence.length << ", " << rep.Length() << ", " << elapsed.count() << "\n";
+      //LOG(INFO) << "threshold calc was " << elapsed.count() << " us, writing";
+      //outfile << elapsed.count() << "\n";
+
+      //if (passed != passed_jaccard) total_disagree_++;
+
       if (passed) {
 
         //LOG(INFO) << "passed threshold";
