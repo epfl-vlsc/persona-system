@@ -1,6 +1,7 @@
 
 #pragma once
 #include <string>
+#include "minhash/sketch.h"
 
 namespace tensorflow {
 
@@ -12,6 +13,7 @@ struct Sequence {
   std::string* genome;
   int genome_index;
   int total_seqs;
+  Sketch data_sketch;
 };
     
 // internal representation of sequences in the cluster

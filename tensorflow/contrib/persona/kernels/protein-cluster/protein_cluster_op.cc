@@ -54,6 +54,19 @@ namespace tensorflow {
   //
   // The ring itself and all the queues and dataflow is constructed via the 
   // TF python API. See persona-shell/modules/protein_cluster/*
+
+  char* Denormalise(const char* str, int len) {
+  auto ret = new char[(len + 1) * sizeof(char)];
+  int i;
+
+  for (i = 0; i < len; ++i) {
+    ret[i] = 'A' + str[i];
+  }
+
+  ret[len] = '\0';
+
+  return ret;
+}
   
   class AGDProteinClusterOp : public OpKernel {
   public:
@@ -203,6 +216,16 @@ namespace tensorflow {
       size_t i = 0;
       Status s = seqs_reader.GetNextRecord(&data, &len);
 
+
+      Sketch data_sketch;
+      Sketch::Parameters parameters;
+      parameters.kmerSize = 3;              
+      parameters.minHashesPerWindow = 1000; //sketch size
+      parameters.noncanonical = true;
+      setAlphabetFromString(parameters, alphabetProtein); //alphabetProtein declared in sketch.h
+      char *Denormalised_data = Denormalise(data,len);
+      data_sketch.init( Denormalised_data, len, "", "", parameters);
+
       OP_REQUIRES_OK(ctx, s);
       //LOG(INFO) << "Node " << to_string(node_id_) << " seq is " << sequence;
       
@@ -252,6 +275,7 @@ namespace tensorflow {
             s.genome_index = genome_index;
             s.genome = &genome;
             s.total_seqs = total_seqs;
+            s.data_sketch = data_sketch;
 
             auto item = make_tuple(s, &cluster, &was_added(i), &n);
             num_added++;
@@ -262,6 +286,9 @@ namespace tensorflow {
             OP_REQUIRES_OK(ctx, executor_->EnqueueClusterEval(item));
           }
           s = seqs_reader.GetNextRecord(&data, &len);
+          char *Denormalised_data = Denormalise(data,len);
+          data_sketch.init( Denormalised_data, len, "", "", parameters);
+
           i++;
           genome_index++;
         }
@@ -273,6 +300,9 @@ namespace tensorflow {
         i = 0;
         seqs_reader.Reset();
         s = seqs_reader.GetNextRecord(&data, &len);
+        char *Denormalised_data = Denormalise(data,len);
+        data_sketch.init( Denormalised_data, len, "", "", parameters);
+
 
         // now compare seqs within the chunk
         size_t start_cluster = clusters_.size();
@@ -295,6 +325,7 @@ namespace tensorflow {
               s.genome_index = genome_index;
               s.genome = &genome;
               s.total_seqs = total_seqs;
+              s.data_sketch = data_sketch;
 
               auto item = make_tuple(s, &cluster, &was_added(i), &note);
               num_added++;
@@ -322,6 +353,8 @@ namespace tensorflow {
 
           }
           s = seqs_reader.GetNextRecord(&data, &len);
+          char *Denormalised_data = Denormalise(data,len);
+          data_sketch.init( Denormalised_data, len, "", "", parameters);
           i++;
           genome_index++;
         }
@@ -443,6 +476,8 @@ namespace tensorflow {
         clusters_.push_back(std::move(cluster));
         // next sequence, and carry on
         s = seqs_reader.GetNextRecord(&data, &len);
+        char *Denormalised_data = Denormalise(data,len);
+        data_sketch.init( Denormalised_data, len, "", "", parameters);
         genome_index++;
         i++;
 
@@ -503,6 +538,7 @@ namespace tensorflow {
           s.genome_index = genome_index;
           s.genome = &genome;
           s.total_seqs = total_seqs;
+          s.data_sketch = data_sketch;
 
           // workitem with seq*, cluster*, bool*, multinotification*
           auto item = make_tuple(s, &cluster, &was_added(i), &n);
@@ -513,6 +549,8 @@ namespace tensorflow {
         }
 
         s = seqs_reader.GetNextRecord(&data, &len);
+        char *Denormalised_data = Denormalise(data,len);
+        data_sketch.init( Denormalised_data, len, "", "", parameters);
         genome_index++;
         i++;
       }

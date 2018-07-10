@@ -157,7 +157,24 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
     output->pass = true;
 }
 
+minhash_distance::CompareOutput * minhash_distance::run_seqsktech( Sketch sketchRef,  char*seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
+{
 
+    Sketch sketchQuery;
+    sketchQuery.init( seqqry, lengthqry, "", "", parametersNew);
+
+    uint64_t pairCount = sketchRef.getReferenceCount() * sketchQuery.getReferenceCount();
+
+    minhash_distance::CompareOutput * distances;
+    double distanceMax = 1;
+    double pValueMax = 1;
+    distances = compare(new CompareInput(sketchRef, sketchQuery, 0, 0, 1, parametersNew, distanceMax, pValueMax));
+
+    return distances;
+
+
+
+}
 
 minhash_distance::CompareOutput * minhash_distance::run( char* seqref,  char*seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
 {

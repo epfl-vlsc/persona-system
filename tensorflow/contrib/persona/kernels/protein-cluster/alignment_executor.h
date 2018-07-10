@@ -16,6 +16,7 @@
 #include "tensorflow/contrib/persona/kernels/protein-cluster/cluster_seq.h"
 
 
+
 namespace tensorflow {
 
   class Cluster; // forward declare, protein_cluster.h
