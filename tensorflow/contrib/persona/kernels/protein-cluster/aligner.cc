@@ -336,7 +336,7 @@ return score <=65;
 
 }
 
-bool minhash_PassesThreshold_seqsketch(Sketch data_sketch, const char*seq2, int seq1_len, int seq2_len){
+bool ProteinAligner::minhash_PassesThreshold_seqsketch ( Sketch data_sketch, const char*seq2, int seq1_len, int seq2_len){
   char * seqqry = denormalize(seq2,seq2_len);
 
   mash::minhash_distance minhash;

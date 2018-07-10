@@ -44,8 +44,8 @@ namespace tensorflow {
 
       total_comps_++;
       //auto t1 = chrono::high_resolution_clock::now();
-      bool passed = aligner.minhash_PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
-      // bool passed = aligner.minhash_PassesThreshold_seqsketch(sequence.data_sketch, rep.Data(), sequence.length, rep.Length());
+      // bool passed = aligner.minhash_PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
+      bool passed = aligner.minhash_PassesThreshold_seqsketch(sequence.data_sketch, rep.Data(), sequence.length, rep.Length());
 
 
 
