@@ -69,6 +69,7 @@ class Cluster {
       int size, OpKernelContext* ctx);
 
     size_t NumCandidates() { return candidates_.size(); }
+    int NumSequences() {return seqs_.size();}
 
     void Dump(std::ostream& file);
     

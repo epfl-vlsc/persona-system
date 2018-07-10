@@ -43,6 +43,8 @@ class ProteinAligner {
     Status AlignLocal(const char* seq1, const char* seq2, int seq1_len, int seq2_len, Alignment& result);
 
     bool PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len);
+    bool minhash_PassesThreshold(const char* seq1, const char*seq2, int seq1_len, int seq2_len);
+
 
     // with full range calc
     Status AlignDouble(const char* seq1, const char* seq2, int seq1_len, int seq2_len,

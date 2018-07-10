@@ -136,6 +136,7 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
     {
         //distance = log(double(common + 1) / (denom + 1)) / log(1. / (denom + 1));
         distance = -log(2 * jaccard / (1. + jaccard)) / kmerSize;
+        // distance = jaccard;
     }
     // std::cout << "Max distance is " << maxDistance << endl;
     // if ( distance > maxDistance )
