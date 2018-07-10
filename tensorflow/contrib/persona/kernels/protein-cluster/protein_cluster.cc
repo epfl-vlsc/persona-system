@@ -44,8 +44,11 @@ namespace tensorflow {
 
       total_comps_++;
       //auto t1 = chrono::high_resolution_clock::now();
+      
+      // bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
       // bool passed = aligner.minhash_PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
       bool passed = aligner.minhash_PassesThreshold_seqsketch(sequence.data_sketch, rep.Data(), sequence.length, rep.Length());
+      // bool passed = aligner.minhash_PassesThreshold_seqsketch_repsketch (sequence.data_sketch, rep.RepSketch(), sequence.length, rep.Length());
 
 
 
@@ -76,7 +79,7 @@ namespace tensorflow {
         }
 
         ClusterSequence new_seq(string(sequence.data, sequence.length), *sequence.genome, 
-            sequence.genome_index, sequence.total_seqs);
+            sequence.genome_index, sequence.total_seqs, sequence.data_sketch);
 
         {
           mutex_lock l(mu_);

@@ -18,8 +18,8 @@ class Cluster {
   public:
     // create cluster and seed with sequence
     Cluster(const AlignmentEnvironments* envs, const char* seed_seq, int length, std::string genome,
-        int genome_index, int total_seqs, int abs_seq) : envs_(envs), absolute_sequence_(abs_seq) {
-      seqs_.push_back(ClusterSequence(string(seed_seq, length), genome, genome_index, total_seqs));
+        int genome_index, int total_seqs, int abs_seq, Sketch data_sketch) : envs_(envs), absolute_sequence_(abs_seq) {
+      seqs_.push_back(ClusterSequence(string(seed_seq, length), genome, genome_index, total_seqs, data_sketch));
     }
 
     // return true if added to cluster, false if not

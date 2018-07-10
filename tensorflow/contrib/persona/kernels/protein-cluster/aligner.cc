@@ -331,7 +331,7 @@ uint64_t denominator_jaccard = pair->denom;
 
 
 double score = distance*100;
-// LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
+LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
 return score <=65;
 
 }
@@ -348,7 +348,7 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch ( Sketch data_sketch, con
   parameters.minHashesPerWindow = 1000; //sketch size
   parameters.noncanonical = true;
   setAlphabetFromString(parameters, alphabetProtein); 
-  mash::minhash_distance::CompareOutput * distances = minhash.run_seqsktech(data_sketch, seqqry, seq1_len, seq2_len, parameters );
+  mash::minhash_distance::CompareOutput * distances = minhash.run_seqsketch(data_sketch, seqqry, seq1_len, seq2_len, parameters );
 
   //there should be only one pair, as we are passing only one pair to run() command. 
 
@@ -360,14 +360,40 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch ( Sketch data_sketch, con
 
 
   double score = distance*100;
-  // LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
+   LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
   return score <=65;
 
 
 }
 
 
+bool ProteinAligner::minhash_PassesThreshold_seqsketch_repsketch ( Sketch data_sketch, Sketch ref_sketch, int seq1_len, int seq2_len){
 
+  mash::minhash_distance minhash;
+
+  Sketch::Parameters parameters;
+  parameters.kmerSize = 3;              
+  parameters.minHashesPerWindow = 1000; //sketch size
+  parameters.noncanonical = true;
+  setAlphabetFromString(parameters, alphabetProtein); 
+  
+  mash::minhash_distance::CompareOutput * distances = minhash.run_seqsketch_repsketch(data_sketch, ref_sketch, seq1_len, seq2_len, parameters);
+
+  //there should be only one pair, as we are passing only one pair to run() command. 
+
+  const mash::minhash_distance::CompareOutput::PairOutput * pair = &(distances->pairs[0]);
+  double distance = pair->distance;
+  double pValue  = pair->pValue;
+  uint64_t numerator_jaccard= pair->numer;
+  uint64_t denominator_jaccard = pair->denom;
+
+
+  double score = distance*100;
+   LOG(INFO) << "score is in seqsketch_repsketch " << score <<"MINHASH NUMBERS";
+  return score <=65;
+
+
+}
 
 
 double ProteinAligner::c_align_double_global(double* matrix, const char *s1, int ls1,

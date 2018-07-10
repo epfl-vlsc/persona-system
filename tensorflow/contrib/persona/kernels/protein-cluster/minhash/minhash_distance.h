@@ -69,7 +69,8 @@ namespace mash{
     };
         
     minhash_distance::CompareOutput * run( char* seqref, char* seqlen, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew); // override
-    minhash_distance::CompareOutput * run_seqsktech( Sketch sketchRef,  char*seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew);
+    minhash_distance::CompareOutput * run_seqsketch( Sketch sketchRef,  char* seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew);
+    minhash_distance::CompareOutput * run_seqsketch_repsketch(  Sketch sketchRef, Sketch sketchQry,int lengthref, int lengthqry,const Sketch::Parameters & parametersNew);
 
     
 private:

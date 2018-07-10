@@ -136,6 +136,7 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
     {
         //distance = log(double(common + 1) / (denom + 1)) / log(1. / (denom + 1));
         distance = -log(2 * jaccard / (1. + jaccard)) / kmerSize;
+        // std::cout << "Printing the distance and it is " << distance << "DENOM IS " << denom << "Numerator is " <<common << "JACCARD IS " << jaccard << endl;
         // distance = jaccard;
     }
     // std::cout << "Max distance is " << maxDistance << endl;
@@ -157,7 +158,9 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
     output->pass = true;
 }
 
-minhash_distance::CompareOutput * minhash_distance::run_seqsktech( Sketch sketchRef,  char*seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
+
+
+minhash_distance::CompareOutput * minhash_distance::run_seqsketch( Sketch sketchRef,  char* seqqry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
 {
 
     Sketch sketchQuery;
@@ -169,6 +172,21 @@ minhash_distance::CompareOutput * minhash_distance::run_seqsktech( Sketch sketch
     double distanceMax = 1;
     double pValueMax = 1;
     distances = compare(new CompareInput(sketchRef, sketchQuery, 0, 0, 1, parametersNew, distanceMax, pValueMax));
+
+    return distances;
+
+
+
+}
+
+
+minhash_distance::CompareOutput * minhash_distance::run_seqsketch_repsketch(  Sketch sketchRef, Sketch sketchQry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
+{
+
+    minhash_distance::CompareOutput * distances;
+    double distanceMax = 1;
+    double pValueMax = 1;
+    distances = compare(new CompareInput(sketchRef, sketchQry, 0, 0, 1, parametersNew, distanceMax, pValueMax));
 
     return distances;
 

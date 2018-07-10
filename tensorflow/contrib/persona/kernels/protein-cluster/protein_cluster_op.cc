@@ -343,12 +343,12 @@ namespace tensorflow {
 
           if (!was_added(i)) {
             // add cluster
-            Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq);
+            Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq, data_sketch);
             clusters_.push_back(std::move(cluster));
           } else if (params_.subsequence_homology && (NumUncoveredAA(coverages(i)) >
               params_.max_n_aa_not_covered)) {
             
-            Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq);
+            Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq, data_sketch);
             clusters_.push_back(std::move(cluster));
 
           }
@@ -472,7 +472,7 @@ namespace tensorflow {
         /*if (coverages(i).size() == 0)
           coverages(i).resize(len, 1);*/
 
-        Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq);
+        Cluster cluster(envs_, data, len, genome, genome_index, total_seqs, abs_seq, data_sketch);
         clusters_.push_back(std::move(cluster));
         // next sequence, and carry on
         s = seqs_reader.GetNextRecord(&data, &len);
