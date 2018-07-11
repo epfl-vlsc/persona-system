@@ -25,7 +25,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <map>
+#include <unordered_map>
 #include <memory>
 #include <set>
 #include <string>
@@ -305,7 +305,7 @@ namespace aho_corasick {
 	private:
 		size_t                         d_depth;
 		ptr                            d_root;
-		std::map<CharType, unique_ptr> d_success;
+		std::unordered_map<CharType, unique_ptr> d_success;
 		ptr                            d_failure;
 		string_collection              d_emits;
 
@@ -350,6 +350,8 @@ namespace aho_corasick {
 		}
 
 		string_collection get_emits() const { return d_emits; }
+		
+		size_t num_emits() const { return d_emits.size(); }
 
 		ptr failure() const { return d_failure; }
 
@@ -504,6 +506,24 @@ namespace aho_corasick {
 				collected_emits.swap(tmp);
 			}
 			//return emit_collection(collected_emits);
+		}
+
+		size_t parse_text_matches(string_type text) {
+			check_construct_failure_states();
+			size_t pos = 0;
+			state_ptr_type cur_state = d_root.get();
+			size_t num_emits = 0;
+			//emit_collection collected_emits;
+			for (auto c : text) {
+				if (d_config.is_case_insensitive()) {
+					c = std::tolower(c);
+				}
+				cur_state = get_state(cur_state, c);
+				num_emits += cur_state->num_emits();
+				//store_emits(pos, cur_state, collected_emits);
+				pos++;
+			}
+			return num_emits;
 		}
 
 	private:

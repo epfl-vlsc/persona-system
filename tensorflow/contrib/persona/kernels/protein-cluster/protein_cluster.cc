@@ -47,7 +47,7 @@ namespace tensorflow {
       //outfile << sequence.length << ", " << rep.Length() << ", ";
       //auto s = NormalizedProtein(sequence.data, sequence.length);
       // auto t1j = chrono::high_resolution_clock::now();
-      //auto jaccard = ah_dict_.Jaccard(sequence.data, sequence.length);
+      auto jaccard = ah_dict_.Jaccard(sequence.data, sequence.length);
       // auto t2j = chrono::high_resolution_clock::now();
       // auto elapsedj = chrono::duration_cast<chrono::microseconds>(t2j - t1j);
       //outfile << jaccard << ", " << elapsedj.count() << ", ";
@@ -55,9 +55,9 @@ namespace tensorflow {
 
 
       total_comps_++;
-      //bool passed= jaccard > 0.10f;
+      bool passed = jaccard < 67.0f;
       //auto t1 = chrono::high_resolution_clock::now();
-      bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
+      //bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
       //auto t2 = chrono::high_resolution_clock::now();
       //LOG(INFO) << "passed = " << passed << ", Jaccard is " << jaccard;
       //auto elapsed = chrono::duration_cast<chrono::microseconds>(t2 - t1);
