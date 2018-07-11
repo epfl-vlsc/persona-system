@@ -279,6 +279,13 @@ Status ProteinAligner::AlignDouble(const char* seq1, const char* seq2, int seq1_
     
 bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
 
+  /*
+  cout << " Seq 1 ";  
+  for (int r = 0; r<seq1_len; r++){
+    cout << seq1_denorm[r] ;
+    }
+    cout<< endl; 
+   */ 
   // we use the short (int16) version for this
   const auto& env = envs_->JustScoreEnv();
   ProfileShort* profile = swps3_createProfileShortSSE(seq1, seq1_len, env.matrix_int16);
@@ -297,99 +304,111 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
     value = SHRT_MAX;
   else
     value = score / (65535.0f / options.threshold);
+  // cout << value<<", " ;
 
   swps3_freeProfileShortSSE(profile);
   //LOG(INFO) << "value is " << value << " score is " << score;
   return value >= 0.75f * params_->min_score;
 }
 
-bool ProteinAligner::PassesThresholdSSW(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
-  int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, reverse = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
+bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
+  //Constants Being Initialised
+  const char * seq1 = denormalize(seq1_norm, seq1_len);
+  const char * seq2 = denormalize(seq2_norm, seq2_len);
+  int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 37.64 - 7.434 * log10(224), gap_extension = 1.3961, n = 5, s1 = 67108864, s2 = 128, filter = 0;
   int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
-  // match = 2, mismatch_ssw = 2, gap_open = 3, gap_extension = 1, path = 0, n = 5, sam = 0, protein = 0, header = 0, s1 = 67108864, s2 = 128, filter = 0;
-  // mata = (int8_t*)calloc(25, sizeof(int8_t));  
-    const int8_t* mat = mata;
-    char mat_name[16];
-    mat_name[0] = '\0';
-    int8_t* ref_num = (int8_t*)malloc(s1);
-    int8_t* num = (int8_t*)malloc(s2), *num_rc = 0;
-    char* read_rc = 0;
-
+  // int8_t mat = (int8_t*)calloc(25, sizeof(int8_t));  
+  const int8_t* mat = mata;
+  int8_t* ref_num = (int8_t*)malloc(s1);
+  int8_t* num = (int8_t*)malloc(s2);
+  //Table for Protein Matchings
   int8_t aa_table[128] = {
-        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-        23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-        23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
-        14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23,
-        23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
-        14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23,
+    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23
+  };
+  // cout << 335 <<endl;
+  //Alignment Matrix
+  static const int8_t mat50[] = {
+     //PAM220
+      2,  -2, 0,  0,  -2, -1, 0,  1,  -2, -1, -2, -1, -1, -4, 1,  1,  1,  -6, -4, 0,  0,  0,  0,  -8,
+      -2, 7,  0,  -2, -4, 1,  -1, -3, 2,  -2, -3, 4,  -1, -5, 0,  0,  -1, 2,  -5, -3, -1, 0,  -1, -8,
+      0,  0,  3,  2,  -4, 1,  2,  0,  2,  -2, -3, 1,  -2, -4, -1, 1,  0,  -4, -2, -2, 2,  1,  0,  -8,
+      0,  -2, 2,  4,  -6, 2,  4,  0,  1,  -3, -5, 0,  -3, -6, -1, 0,  0,  -8, -5, -3, 4,  3,  -1, -8,
+      -2, -4, -4, -6, 12, -6, -6, -4, -4, -3, -7, -6, -6, -5, -3, 0,  -3, -8, 0,  -2, -5, -6, -3, -8,
+      -1, 1,  1,  2,  -6, 5,  3,  -2, 3,  -2, -2, 1,  -1, -5, 0,  -1, -1, -5, -5, -2, 1,  4,  -1, -8,
+      0,  -1, 2,  4,  -6, 3,  4,  0,  1,  -2, -4, 0,  -2, -6, -1, 0,  -1, -8, -5, -2, 3,  4,  -1, -8,
+      1,  -3, 0,  0,  -4, -2, 0,  5,  -3, -3, -5, -2, -3, -5, -1, 1,  0,  -8, -6, -2, 0,  -1, -1, -8,
+      -2, 2,  2,  1,  -4, 3,  1,  -3, 7,  -3, -2, 0,  -3, -2, 0,  -1, -2, -3, 0,  -3, 1,  2,  -1, -8,
+      -1, -2, -2, -3, -3, -2, -2, -3, -3, 5,  2,  -2, 2,  1,  -2, -2, 0,  -6, -1, 4,  -2, -2, -1, -8,
+      -2, -3, -3, -5, -7, -2, -4, -5, -2, 2,  6,  -3, 4,  2,  -3, -3, -2, -2, -1, 2,  -4, -3, -2, -8,
+      -1, 4,  1,  0,  -6, 1,  0,  -2, 0,  -2, -3, 5,  1,  -6, -1, 0,  0,  -4, -5, -3, 0,  0,  -1, -8,
+      -1, -1, -2, -3, -6, -1, -2, -3, -3, 2,  4,  1,  8,  0,  -2, -2, -1, -5, -3, 2,  -3, -2, -1, -8,
+      -4, -5, -4, -6, -5, -5, -6, -5, -2, 1,  2,  -6, 0,  10, -5, -4, -4, 0,  7,  -2, -5, -6, -3, -8,
+      1,  0,  -1, -1, -3, 0,  -1, -1, 0,  -2, -3, -1, -2, -5, 7,  1,  0,  -6, -6, -1, -1, 0,  -1, -8,
+      1,  0,  1,  0,  0,  -1, 0,  1,  -1, -2, -3, 0,  -2, -4, 1,  2,  2,  -3, -3, -1, 0,  0,  0,  -8,
+      1,  -1, 0,  0,  -3, -1, -1, 0,  -2, 0,  -2, 0,  -1, -4, 0,  2,  3,  -6, -3, 0,  0,  -1, 0,  -8,
+      -6, 2,  -4, -8, -8, -5, -8, -8, -3, -6, -2, -4, -5, 0,  -6, -3, -6, 17, 0,  -7, -6, -7, -5, -8,
+      -4, -5, -2, -5, 0,  -5, -5, -6, 0,  -1, -1, -5, -3, 7,  -6, -3, -3, 0,  11, -3, -3, -5, -3, -8,
+      0,  -3, -2, -3, -2, -2, -2, -2, -3, 4,  2,  -3, 2,  -2, -1, -1, 0,  -7, -3, 5,  -2, -2, -1, -8,
+      0,  -1, 2,  4,  -5, 1,  3,  0,  1,  -2, -4, 0,  -3, -5, -1, 0,  0,  -6, -3, -2, 3,  2,  -1, -8,
+      0,  0,  1,  3,  -6, 4,  4,  -1, 2,  -2, -3, 0,  -2, -6, 0,  0,  -1, -7, -5, -2, 2,  4,  -1, -8,
+      0,  -1, 0,  -1, -3, -1, -1, -1, -1, -1, -2, -1, -1, -3, -1, 0,  0,  -5, -3, -1, -1, -1, -1, -8,
+      -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, 1
     };
-    static const int8_t mat50[] = {
-        //BLOSUM62
-    9, -1, -1, -3, 0, -3, -3, -3, -4, -3, -3, -3, -3, -1, -1, -1, -1, -2, -2, -2,
-    -1, 4, 1, -1, 1, 0, 1, 0, 0, 0, -1, -1, 0, -1, -2, -2, -2, -2, -2, -3,
-    -1, 1, 4, 1, -1, 1, 0, 1, 0, 0, 0, -1, 0, -1, -2, -2, -2, -2, -2, -3,
-    -3, -1, 1, 7, -1, -2, -1, -1, -1, -1, -2, -2, -1, -2, -3, -3, -2, -4, -3, -4,
-    0, 1, -1, -1, 4, 0, -1, -2, -1, -1, -2, -1, -1, -1, -1, -1, -2, -2, -2, -3,
-    -3, 0, 1, -2, 0, 6, -2, -1, -2, -2, -2, -2, -2, -3, -4, -4, 0, -3, -3, -2,
-    -3, 1, 0, -2, -2, 0, 6, 1, 0, 0, -1, 0, 0, -2, -3, -3, -3, -3, -2, -4,
-    -3, 0, 1, -1, -2, -1, 1, 6, 2, 0, -1, -2, -1, -3, -3, -4, -3, -3, -3, -4,
-    -4, 0, 0, -1, -1, -2, 0, 2, 5, 2, 0, 0, 1, -2, -3, -3, -3, -3, -2, -3,
-    -3, 0, 0, -1, -1, -2, 0, 0, 2, 5, 0, 1, 1, 0, -3, -2, -2, -3, -1, -2,
-    -3, -1, 0, -2, -2, -2, 1, 1, 0, 0, 8, 0, -1, -2, -3, -3, -2, -1, 2, -2,
-    -3, -1, -1, -2, -1, -2, 0, -2, 0, 1, 0, 5, 2, -1, -3, -2, -3, -3, -2, -3,
-    -3, 0, 0, -1, -1, -2, 0, -1, 1, 1, -1, 2, 5, -1, -3, -2, -3, -3, -2, -3,
-    -1, -1, -1, -2, -1, -3, -2, -3, -2, 0, -2, -1, -1, 5, 1, 2, -2, 0, -1, -1,
-    -1, -2, -2, -3, -1, -4, -3, -3, -3, -3, -3, -3, -3, 1, 4, 2, 1, 0, -1, -3,
-    -1, -2, -2, -3, -1, -4, -3, -4, -3, -2, -3, -2, -2, 2, 2, 4, 3, 0, -1, -2,
-    -1, -2, -2, -2, 0, -3, -3, -3, -2, -2, -3, -3, -2, 1, 3, 1, 4, -1, -1, -3,
-    -2, -2, -2, -4, -2, -3, -3, -3, -3, -3, -1, -3, -3, 0, 0, 0, -1, 6, 3, 1,
-    -2, -2, -2, -3, -2, -3, -2, -3, -2, -1, 2, -2, -2, -1, -1, -1, -1, 3, 7, 2,
-    -2, -3, -3, -4, -3, -2, -4, -4, -3, -2, -2, -3, -3, -1, -3, -2, -3, 1, 2, 11    
-    };
-    for (l = k = 0; LIKELY(l < 4); ++l) {
-        for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; /* weight_match : -weight_mismatch_ssw */
-        mata[k++] = 0; // ambiguous base
-    }
-    for (m = 0; LIKELY(m < 5); ++m) mata[k++] = 0;
-
+  
+  for (l = k = 0; LIKELY(l < 4); ++l) {
+      for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; /* weight_match : -weight_mismatch_ssw */
+      mata[k++] = 0; // ambiguous base
+  }
+  // cout << 369 <<endl;
+  for (m = 0; LIKELY(m < 5); ++m) mata[k++] = 0; //387,385,384 mata -> mat
   n = 24;
   int8_t* table = aa_table;
   // table = aa_table;
   mat = mat50;
-    s_profile* p= 0;
-    int32_t readLen = (int32_t)seq2_len;
-    int32_t maskLen = readLen / 2;
-
-    while (readLen >= s2) {
-        ++s2;
-        kroundup32(s2);
-        num = (int8_t*)realloc(num, s2);
-        
-    }
-    for (m = 0; m < readLen; ++m) num[m] = table[(int)seq2[m]];
-    p = ssw_init(num, readLen, mat, n, 2);
-
+  s_profile* p= 0;
+  int32_t readLen = (int32_t)seq2_len;
+  int32_t maskLen = readLen / 2;
+  // cout << 378 <<endl;
+  while (readLen >= s2) {
+      ++s2;
+      kroundup32(s2);
+      num = (int8_t*)realloc(num, s2);
+      
+  }
+  for (m = 0; m < readLen; ++m) num[m] = table[(int)seq2[m]];
+  p = ssw_init(num, readLen, mat, n, 2);
+  // cout << 387 <<endl;
   s_align* result = 0;
-    int32_t refLen = (int32_t)seq1_len;
-    int8_t flag = 0;
-    while (refLen > s1) {
-        ++s1;
-        kroundup32(s1);
-        ref_num = (int8_t*)realloc(ref_num, s1);
-    }
-    for (m = 0; m < refLen; ++m) ref_num[m] = table[(int)seq1[m]];
-  if (path == 1) flag = 2;
+  int32_t refLen = (int32_t)seq1_len;
+  int8_t flag = 0;
+  while (refLen > s1) {
+      ++s1;
+      kroundup32(s1);
+      ref_num = (int8_t*)realloc(ref_num, s1);
+  }
+  for (m = 0; m < refLen; ++m) ref_num[m] = table[(int)seq1[m]];
   result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
   init_destroy(p);
-  cout << "Score: " << result->score1<< endl;
-  if (result-> score1 > 85){
-    align_destroy(result);
-    return true;
+  // cout << result->score1<< endl;
+  //ThresholdSSw
+  free(mata);
+  free(ref_num);
+  free(num);
+  bool retval;
+  if (result-> score1 > 120){
+    retval =  true;
   }
+  else retval = false;
   align_destroy(result);
-  return false;
+  return retval;
+  
 }
 
 double ProteinAligner::c_align_double_global(double* matrix, const char *s1, int ls1,

@@ -37,6 +37,8 @@ class Cluster {
     // for debug ----------------------
     int TotalComps() { return total_comps_; }
 
+    int NumSequences() {return seqs_.size();}
+
     int LongestSeqLength();
     // -------------------------------
 

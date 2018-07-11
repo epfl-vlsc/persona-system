@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <queue>
 #include <chrono>
+#include <iostream>
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/contrib/persona/kernels/agd-format/format.h"
@@ -247,6 +248,7 @@ namespace tensorflow {
             num_compared++;
             Sequence s;
             s.data = data;
+             
             s.length = len;
             s.coverages = &coverages(i);
             s.genome_index = genome_index;
@@ -349,6 +351,10 @@ namespace tensorflow {
           // for downstream aggregation
           LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
           LOG(INFO) << "Node " << to_string(node_id_) << "Total clusters: " << clusters_.size();
+          for (int c = 0 ; c< clusters_.size(); c++){
+            cout << "Cluster " << c <<  "Size: " << clusters_[c].NumSequences() << endl;
+          }
+          
           //
           // seqs in this chunk however have not been compared to one another
 
@@ -421,8 +427,9 @@ namespace tensorflow {
           CHECK_EQ(0, 1);
         }
       }
-
+      // cout << "429"<<endl;
       if (clusters_.empty() && should_seed_ && sequence == 0) {
+        // cout << "431"<<endl;
         // seed a new cluster with first sequence
         LOG(INFO) << "Node " << to_string(node_id_) << " seeding cluster with sequence " 
           << PrintNormalizedProtein(data, len) << " genome: " << genome << " genome_index: " << genome_index 
@@ -442,6 +449,7 @@ namespace tensorflow {
         i++;
 
       } else if (clusters_.empty()) { // TODO not sure if this still needs to exist
+        // cout << "451"<<endl;
         // pass this chunk to neighbor, 
         //LOG(INFO) << "Node " << to_string(node_id_) << " passing chunk to neighbor because no seed";
         
@@ -456,7 +464,7 @@ namespace tensorflow {
         out->scalar<string>()() = "Node " + to_string(node_id_) + " execution is done";
         return;
       }
-   
+      // cout << "466"<<endl;
       bool passed = false;
       // this is some test logic for forwarding chunks so other nodes can process while 
       // we process
@@ -472,7 +480,7 @@ namespace tensorflow {
               first_ord_t, total_seqs_t, abs_seq_t));
       }*/
 
-
+      // cout << "482"<<endl;
       int num_added = 0;
       MultiNotification n;
       while (s.ok()) {
@@ -484,7 +492,7 @@ namespace tensorflow {
 
         if (coverages(i).size() == 0)
           coverages(i).resize(len, 1);
-
+        // if (abs_seq == 20)   cout << "494"<<endl;
         for (size_t x = cluster_start; x < clusters_.size(); x++) {
           auto& cluster = clusters_[x];
           // fill seq and pass to evaluate
@@ -502,15 +510,17 @@ namespace tensorflow {
           // workitem with seq*, cluster*, bool*, multinotification*
           auto item = make_tuple(s, &cluster, &was_added(i), &n);
           num_added++;
-          
+          // if (abs_seq == 20)   cout << "512"<<endl;
           OP_REQUIRES_OK(ctx, executor_->EnqueueClusterEval(item));
+          // if (abs_seq == 20)   cout << "514"<<endl;
           
         }
-
+        // if (abs_seq == 20)   cout << "517"<<endl;
         s = seqs_reader.GetNextRecord(&data, &len);
         genome_index++;
         i++;
       }
+      // cout << "521" <<endl;
       n.SetMinNotifies(num_added);
       n.WaitForNotification();
       LOG(INFO) << "finished " << num_added << " cluster evals";
@@ -524,6 +534,7 @@ namespace tensorflow {
               first_ord_t, total_seqs_t, abs_seq_t));
       }
 
+      // cout << "535" <<endl;
       //LOG(INFO) << "Node " << to_string(node_id_) << " Total clusters: " << clusters_.size();
 
       if (num_chunks_ == total_chunks_ * 2) {
@@ -569,7 +580,7 @@ namespace tensorflow {
         neighbor_queue_out_->Close(ctx, false/*cancel pending enqueue*/, 
             [this](){ LOG(INFO) << "Node " << to_string(node_id_) <<"neighbor out queue closed"; } );
       }
-
+      //cout << "581" <<endl;
       //num_chunks_++;
       Tensor* out;
       OP_REQUIRES_OK(ctx, ctx->allocate_output(0, TensorShape({}), &out));

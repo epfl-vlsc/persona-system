@@ -42,7 +42,7 @@ cc_library(
     copts = ["-msse3"]
 )
 
-<<<<<<< HEAD
+
 cc_library(
     name = "ssw_lib",
     srcs = [
@@ -60,8 +60,6 @@ cc_library(
     copts = ["-msse3"]
 )
 
-=======
->>>>>>> master
 # protein clustering ops
 cc_library(
     name = "protein_clustering",

@@ -2,12 +2,12 @@
 
 #include "tensorflow/contrib/persona/kernels/protein-cluster/alignment_executor.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/protein_cluster.h"
-<<<<<<< HEAD
+
   #include "tensorflow/contrib/persona/kernels/protein-cluster/ssw/kseq.h"
   #include "tensorflow/contrib/persona/kernels/protein-cluster/ssw/ssw.h"
-=======
+
 #include <pthread.h>
->>>>>>> master
+
 
 namespace tensorflow {
 
@@ -164,7 +164,7 @@ void AlignmentExecutor::init_workers() {
       auto seq_pair = make_pair(seq1->GenomeIndex(), seq2->GenomeIndex());
       if (candidate_map_ && !candidate_map_->ExistsOrInsert(genome_pair, seq_pair)) {
 
-        if (aligner.PassesThresholdSSW(seq1->Data(), seq2->Data(), 
+        if (aligner.PassesThreshold(seq1->Data(), seq2->Data(), 
               seq1->Length(), seq2->Length())) {
 
           Status s = aligner.AlignLocal(seq1->Data(), seq2->Data(), 
