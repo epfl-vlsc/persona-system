@@ -497,6 +497,37 @@ void getMinHashPositions(vector<Sketch::PositionHash> & positionHashes, char * s
 }
 
 
+uint64_t Sketch::getReferenceIndex(string id) const
+{
+    if ( referenceIndecesById.count(id) == 1 )
+    {
+        return referenceIndecesById.at(id);
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+void Sketch::createIndex()
+{
+    for ( int i = 0; i < references.size(); i++ )
+    {
+        referenceIndecesById[references[i].name] = i;
+    }
+    
+    for ( int i = 0; i < positionHashesByReference.size(); i++ )
+    {
+        for ( int j = 0; j < positionHashesByReference.at(i).size(); j++ )
+        {
+            const PositionHash & positionHash = positionHashesByReference.at(i).at(j);
+            
+            lociByHash[positionHash.hash].push_back(Locus(i, positionHash.position));
+        }
+    }
+    
+    kmerSpace = pow(parameters.alphabetSize, parameters.kmerSize);
+}
 
 
 int Sketch::init( char * seqNew, uint64_t lengthNew, const std::string & nameNew, const std::string & commentNew, const Sketch::Parameters & parametersNew)
@@ -505,8 +536,14 @@ int Sketch::init( char * seqNew, uint64_t lengthNew, const std::string & nameNew
 	//check the exact arguements requied by sketchInput here and send those arguments to sketch::Inti from minhash_distance.cpp
 	// parameters = parametersNew;
 	parameters = parametersNew;
-	Sketch::SketchOutput * outputstructure= sketchSequence(new SketchInput("", seqNew, lengthNew, "", "", parametersNew));
-	useThreadOutput(outputstructure);
+	// std::cout << "Printing the parameteers value that came here, sketch  "<< parameters.minHashesPerWindow << "data is " << seqNew[2] << "    length is " << lengthNew << endl;
+	references.clear();
+	positionHashesByReference.clear();
+    referenceIndecesById.clear();
+    lociByHash.clear();
+    Sketch::SketchOutput * outputstructure= sketchSequence(new SketchInput("", seqNew, lengthNew, "", "", parametersNew));
+    useThreadOutput(outputstructure);
+    createIndex();
 }
 
 

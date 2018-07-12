@@ -30,6 +30,7 @@ char* denormalize(const char* str, int len) {
 
   for (i = 0; i < len; ++i) {
     ret[i] = 'A' + str[i];
+    // ret[i] = str[i];
   }
 
   ret[len] = '\0';
@@ -314,7 +315,7 @@ bool ProteinAligner::minhash_PassesThreshold(const char* seq1, const char*seq2, 
 
 Sketch::Parameters parameters;
 parameters.kmerSize = 3;              
-parameters.minHashesPerWindow = 1000; //sketch size
+parameters.minHashesPerWindow = 5000; //sketch size
 parameters.noncanonical = true;
 setAlphabetFromString(parameters, alphabetProtein); //alphabetProtein declared in sketch.h
 
@@ -331,8 +332,8 @@ uint64_t denominator_jaccard = pair->denom;
 
 
 double score = distance*100;
-LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
-return score <=65;
+// LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
+return score <=150;
 
 }
 
@@ -360,7 +361,17 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch ( Sketch data_sketch, con
 
 
   double score = distance*100;
-   LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
+   if(score == 0)
+  {
+    cout << " in passesThreshold_seqsktech score is " << score <<" , and seq1_len is " << seq1_len << " seq2_len is "<< seq2_len << " Sketch length is " <<   data_sketch.getMinHashesPerWindow() << " Kmer size is " <<data_sketch.getKmerSize()<<  endl;
+     cout<< "Printing the protein in the == zero case " << endl;
+      for (size_t i = 0; i < seq2_len; i++) {
+          cout << seqqry[i];
+        } 
+        cout << endl;
+     // cout << PrintNormalizedProtein(seq2, seq2_len) << endl;
+  }
+   LOG(INFO) << "score is " << score <<" MINHASH NUMBERS";
   return score <=65;
 
 
@@ -389,8 +400,21 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch_repsketch ( Sketch data_s
 
 
   double score = distance*100;
-   LOG(INFO) << "score is in seqsketch_repsketch " << score <<"MINHASH NUMBERS";
-  return score <=65;
+  if(score == 0)
+  {
+    cout << " in passesThreshold_seqsktech score is " << score <<" , and seq1_len is " << seq1_len << " seq2_len is "<< seq2_len << " Sketch length is " <<   data_sketch.getReferenceCount() << " and " << ref_sketch.getReferenceCount() << " Kmer size is " <<data_sketch.getKmerSize()<< " and  "  << ref_sketch.getKmerSize()<<  endl;
+     // cout<< "Printing the protein in the == zero case " << endl;
+      // for (size_t i = 0; i < seq2_len; i++) {
+      //     cout << seqqry[i];
+      //   } 
+        // cout << endl;
+     // cout << PrintNormalizedProtein(seq2, seq2_len) << endl;
+
+  }
+   // LOG(INFO) << "score is in seqsketch_repsketch " << score <<" MINHASH NUMBERS";
+   // cout << " in passesThreshold_seqsktech score is " << score <<" , and seq1_len is " << seq1_len << " seq2_len is "<< seq2_len << " Sketch length is " <<   data_sketch.getReferenceCount() << " and " << ref_sketch.getReferenceCount() << " Kmer size is " <<data_sketch.getKmerSize()<< " and  "  << ref_sketch.getKmerSize()<<  endl;
+
+  return score >=150;
 
 
 }

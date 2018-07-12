@@ -64,6 +64,7 @@ double pValue(uint64_t x, uint64_t lengthRef, uint64_t lengthQuery, double kmerS
     // return gsl_cdf_hypergeometric_Q(x - 1, r * M, M - r * M, sketchSize);
     
 #ifndef USE_BOOST
+    // cout << "In the Pvalue function,  matches is " << x <<" lengthref is " << lengthRef << " lengthquery is " << lengthQuery << " kmerspace is " << kmerSpace <<" sketchSize is " <<sketchSize << " px is " << pX << " pY is "<< pY <<" r is " << r << endl;
     return cdf(complement(binomial(sketchSize, r), x - 1));
 #else
     return gsl_cdf_binomial_Q(x - 1, r, sketchSize);
@@ -135,9 +136,10 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
     else
     {
         //distance = log(double(common + 1) / (denom + 1)) / log(1. / (denom + 1));
-        distance = -log(2 * jaccard / (1. + jaccard)) / kmerSize;
+        //The following is the log of jaccard
+        // distance = -log(2 * jaccard / (1. + jaccard)) / kmerSize;
         // std::cout << "Printing the distance and it is " << distance << "DENOM IS " << denom << "Numerator is " <<common << "JACCARD IS " << jaccard << endl;
-        // distance = jaccard;
+        distance = jaccard*20;
     }
     // std::cout << "Max distance is " << maxDistance << endl;
     // if ( distance > maxDistance )
@@ -187,6 +189,7 @@ minhash_distance::CompareOutput * minhash_distance::run_seqsketch_repsketch(  Sk
     double distanceMax = 1;
     double pValueMax = 1;
     distances = compare(new CompareInput(sketchRef, sketchQry, 0, 0, 1, parametersNew, distanceMax, pValueMax));
+    // cout << " seq1_len is " << lengthref << " seq2_len is "<< lengthqry << " reference length is " <<  sketchRef.getReferenceCount() << " and " << sketchQry.getReferenceCount() << " Kmer size is " <<sketchRef.getKmerSize()<< " and  "  << sketchQry.getKmerSize()<<  endl;
 
     return distances;
 
@@ -217,6 +220,9 @@ minhash_distance::CompareOutput * minhash_distance::run( char* seqref,  char*seq
     double distanceMax = 1;
     double pValueMax = 1;
     distances = compare(new CompareInput(sketchRef, sketchQuery, 0, 0, 1, parametersNew, distanceMax, pValueMax));
+
+    // cout << " seq1_len is " << lengthref << " seq2_len is "<< lengthqry << " reference length is " <<  sketchRef.getReferenceCount() << " and " << sketchQuery.getReferenceCount() << " Kmer size is " <<sketchRef.getKmerSize()<< " and  "  << sketchQuery.getKmerSize()<<  endl;
+
 
     return distances;
 

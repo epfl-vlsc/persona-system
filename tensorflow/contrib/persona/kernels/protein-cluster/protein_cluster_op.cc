@@ -61,6 +61,7 @@ namespace tensorflow {
 
   for (i = 0; i < len; ++i) {
     ret[i] = 'A' + str[i];
+    // ret[i] = str[i];
   }
 
   ret[len] = '\0';
@@ -220,7 +221,7 @@ namespace tensorflow {
       Sketch data_sketch;
       Sketch::Parameters parameters;
       parameters.kmerSize = 3;              
-      parameters.minHashesPerWindow = 1000; //sketch size
+      parameters.minHashesPerWindow = 5000; //sketch size
       parameters.noncanonical = true;
       setAlphabetFromString(parameters, alphabetProtein); //alphabetProtein declared in sketch.h
       char *Denormalised_data = Denormalise(data,len);

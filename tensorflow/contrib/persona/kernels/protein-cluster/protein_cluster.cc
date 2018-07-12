@@ -47,8 +47,8 @@ namespace tensorflow {
       
       // bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
       // bool passed = aligner.minhash_PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
-      bool passed = aligner.minhash_PassesThreshold_seqsketch(sequence.data_sketch, rep.Data(), sequence.length, rep.Length());
-      // bool passed = aligner.minhash_PassesThreshold_seqsketch_repsketch (sequence.data_sketch, rep.RepSketch(), sequence.length, rep.Length());
+      // bool passed = aligner.minhash_PassesThreshold_seqsketch(sequence.data_sketch, rep.Data(), sequence.length, rep.Length());
+      bool passed = aligner.minhash_PassesThreshold_seqsketch_repsketch (sequence.data_sketch, rep.RepSketch(), sequence.length, rep.Length());
 
 
 
