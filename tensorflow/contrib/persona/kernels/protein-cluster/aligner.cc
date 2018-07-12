@@ -333,7 +333,7 @@ uint64_t denominator_jaccard = pair->denom;
 
 double score = distance*100;
 // LOG(INFO) << "score is " << score <<"MINHASH NUMBERS";
-return score <=150;
+return score <=65;
 
 }
 
@@ -414,7 +414,7 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch_repsketch ( Sketch data_s
    // LOG(INFO) << "score is in seqsketch_repsketch " << score <<" MINHASH NUMBERS";
    // cout << " in passesThreshold_seqsktech score is " << score <<" , and seq1_len is " << seq1_len << " seq2_len is "<< seq2_len << " Sketch length is " <<   data_sketch.getReferenceCount() << " and " << ref_sketch.getReferenceCount() << " Kmer size is " <<data_sketch.getKmerSize()<< " and  "  << ref_sketch.getKmerSize()<<  endl;
 
-  return score >=150;
+  return score <=65;
 
 
 }
