@@ -60,6 +60,7 @@ class ProteinAligner {
     const AlignmentEnvironments* envs_;
     const Parameters* params_;
 
+
     struct StartPoint {
       Alignment alignment;
       double estimated_pam;

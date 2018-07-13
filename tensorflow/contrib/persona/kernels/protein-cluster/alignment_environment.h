@@ -21,7 +21,7 @@ struct AlignmentEnvironment {
     int16* matrix_int16 = nullptr;
 };
 
-struct SSW_Environment{
+/*struct SSW_Environment{
   int32_t l, m, k, match, mismatch_ssw, gap_open, gap_extension, n, s1, s2, filter;
   int8_t* mata ; 
   const int8_t* mat;
@@ -68,8 +68,10 @@ struct SSW_Environment{
       0,  -1, 0,  -1, -3, -1, -1, -1, -1, -1, -2, -1, -1, -3, -1, 0,  0,  -5, -3, -1, -1, -1, -1, -8,
       -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, 1
     };
-  int8_t* table;
+
+    int8_t* table;
 };
+*/
 
 class AlignmentEnvironments {
  // pointers here own no data
@@ -79,12 +81,13 @@ class AlignmentEnvironments {
   const AlignmentEnvironment& FindNearest(double pam) const;
   const AlignmentEnvironment& LogPamEnv() const;
   const AlignmentEnvironment& JustScoreEnv() const;
+  /*const SSW_Environment& GetSSWEnv() const;*/
 
   // init methods
   void CreateDayMatrices(std::vector<double>& gap_open, std::vector<double>& gap_ext,
       std::vector<double>& pam_dist, std::vector<double*>& matrices);
   void Initialize(std::vector<AlignmentEnvironment>& envs, AlignmentEnvironment& logpam_env, 
-      AlignmentEnvironment& just_score_env, SSW_Environment& ssw_env);
+      AlignmentEnvironment& just_score_env);//, SSW_Environment& ssw_env);
 
  private:
   std::vector<AlignmentEnvironment> envs_;
@@ -92,8 +95,7 @@ class AlignmentEnvironments {
   //double* logpam1_matrix_;
   AlignmentEnvironment logpam_env_;
   AlignmentEnvironment just_score_env_;
-  SSW_Environment ssw_env_;
-
+  //SSW_Environment ssw_env_;
 };
 
 }

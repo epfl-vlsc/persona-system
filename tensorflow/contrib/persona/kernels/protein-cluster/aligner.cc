@@ -314,8 +314,8 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
 bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
   
   //Constants Being Initialised
-  /*
-  int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 37.64 - 7.434 * log10(224), gap_extension = 1.3961, n = 5, s1 = 128, s2 = 128, filter = 0;
+  
+  int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 37.64 - 7.434 * log10(224), gap_extension = 1.3961, n = 5, s1 = 1024, s2 = 1024, filter = 0;
   int8_t* mata = (int8_t*)calloc(25, sizeof(int8_t));
   // int8_t mat = (int8_t*)calloc(25, sizeof(int8_t));  
   const int8_t* mat = mata;
@@ -364,7 +364,7 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
 
   
   for (l = k = 0; LIKELY(l < 4); ++l) {
-      for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; /* weight_match : -weight_mismatch_ssw 
+      for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; // weight_match : -weight_mismatch_ssw 
       mata[k++] = 0; // ambiguous base
   }
   // cout << 369 <<endl;
@@ -374,50 +374,53 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   // table = aa_table;
   mat = mat50;
 
-*/
+
   //To be done every time
   const char * seq1 = denormalize(seq1_norm, seq1_len);
   const char * seq2 = denormalize(seq2_norm, seq2_len);
-  SSW_Environment ssw_env_;
+
+  //SSW_Environment ssw_env_pair = envs_ ->GetSSWEnv();
   s_profile* p= 0;
   int32_t readLen = (int32_t)seq2_len;
   int32_t maskLen = readLen / 2;
-  cout << 378 <<endl;
+  // cout << match <<endl;
+  // cout << 378 <<endl;
 
-  while (readLen >= ssw_env_.s2) {
-      cout << "ssw_env_.s2: "<<ssw_env_.s2<<endl;
-      ++ssw_env_.s2;
-      kroundup32(ssw_env_.s2);
-      ssw_env_.num = (int8_t*)realloc(ssw_env_.num, ssw_env_.s2);
+  while (readLen >= s2) {
+      // cout << "s2: "<<s2<<endl;
+      ++s2;
+      kroundup32(s2);
+      num = (int8_t*)realloc(num, s2);
       
   }
-  cout <<393<<endl;
-  for (int m = 0; m < readLen; ++m) ssw_env_.num[m] = ssw_env_.table[(int)seq2[m]];
-    cout <<394<<endl;
-  p = ssw_init(ssw_env_.num, readLen, ssw_env_.mat, ssw_env_.n, 2);
-  cout << 387 <<endl;
+  // cout <<393<<endl;
+  for (int m = 0; m < readLen; ++m) num[m] = table[(int)seq2[m]];
+    // cout <<394<<endl;
+  p = ssw_init(num, readLen, mat, n, 2);
+  // cout << 387 <<endl;
   s_align* result = 0;
   int32_t refLen = (int32_t)seq1_len;
   int8_t flag = 0;
-  cout <<398<<endl;
-  while (refLen > ssw_env_.s1) {
-      ++ssw_env_.s1;
-      kroundup32(ssw_env_.s1);
-      ssw_env_.ref_num = (int8_t*)realloc(ssw_env_.ref_num, ssw_env_.s1);
+  // cout <<398<<endl;
+  while (refLen > s1) {
+      // cout << "s1: "<<s1<<endl;
+      ++s1;
+      kroundup32(s1);
+      ref_num = (int8_t*)realloc(ref_num, s1);
   }
-  for (int m = 0; m < refLen; ++m) ssw_env_.ref_num[m] = ssw_env_.table[(int)seq1[m]];
-    cout <<404<<endl;
-  result = ssw_align (p, ssw_env_.ref_num, refLen, ssw_env_.gap_open, ssw_env_.gap_extension, flag, ssw_env_.filter, 0, maskLen);
+  for (int m = 0; m < refLen; ++m) ref_num[m] = table[(int)seq1[m]];
+    // cout <<404<<endl;
+  result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
   init_destroy(p);
   // cout << result->score1<< endl;
   //ThresholdSSw
 
   //To be done once from here
-  /*
+  
   free(mata);
   free(ref_num);
   free(num); 
-  */
+  
   //To here
 
   bool retval;

@@ -34,14 +34,19 @@ namespace tensorflow {
   const AlignmentEnvironment& AlignmentEnvironments::JustScoreEnv() const {
     return just_score_env_;
   }
+  /*
+  const SSW_Environment& AlignmentEnvironments::GetSSWEnv() const{
+    return ssw_env_;
+  }
+  */
   
   void AlignmentEnvironments::Initialize(std::vector<AlignmentEnvironment>& envs, AlignmentEnvironment& logpam_env, 
-      AlignmentEnvironment& just_score_env, SSW_Environment& ssw_env) {
+      AlignmentEnvironment& just_score_env){//, SSW_Environment& ssw_env) {
 
     envs_ = envs;
     logpam_env_ = logpam_env;
     just_score_env_ = just_score_env;
-    ssw_env_ = ssw_env;
+    //ssw_env_ = ssw_env;
   }
 
   void AlignmentEnvironments::CreateDayMatrices(vector<double>& gap_open, vector<double>& gap_ext,

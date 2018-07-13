@@ -265,7 +265,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
         printf("\n");
       }*/
 
-
+/*
 
   SSW_Environment ssw_env;
   ssw_env.match = 2;
@@ -273,7 +273,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
   ssw_env.gap_open = 37.64 - 7.434 * log10(224);
   ssw_env.gap_extension = 1.3961;
   ssw_env.n = 5;
-  ssw_env.s1 = 128;
+  ssw_env.s1 = 6748000;
   ssw_env.s2 = 128;
   ssw_env.filter = 0;
   ssw_env.mata = (int8_t*)calloc(25, sizeof(int8_t));
@@ -287,7 +287,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
 
   
   for (ssw_env.l = ssw_env.k = 0; LIKELY(ssw_env.l < 4); ++ssw_env.l) {
-      for (ssw_env.m = 0; LIKELY(ssw_env.m < 4); ++ssw_env.m) ssw_env.mata[ssw_env.k++] = ssw_env.l == ssw_env.m ? ssw_env.match : -ssw_env.mismatch_ssw; /* weight_match : -weight_mismatch_ssw */
+      for (ssw_env.m = 0; LIKELY(ssw_env.m < 4); ++ssw_env.m) ssw_env.mata[ssw_env.k++] = ssw_env.l == ssw_env.m ? ssw_env.match : -ssw_env.mismatch_ssw; // weight_match : -weight_mismatch_ssw 
       ssw_env.mata[ssw_env.k++] = 0; // ambiguous base
   }
   // cout << 369 <<endl;
@@ -296,9 +296,10 @@ class AlignmentEnvironmentsOp : public OpKernel {
   ssw_env.table = ssw_env.aa_table;
   // table = aa_table;
   ssw_env.mat = ssw_env.mat50;
+  */
 
 
-      new_envs->Initialize(all_envs, logpamenv, justscoreenv, ssw_env);
+      new_envs->Initialize(all_envs, logpamenv, justscoreenv);//, ssw_env);
 
       std::unique_ptr<AlignmentEnvironments> value(new_envs);
 

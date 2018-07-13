@@ -42,7 +42,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <iostream>
 #include "ssw.h"
+
+using namespace std;
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -337,11 +340,12 @@ static alignment_end* sw_sse2_byte (const int8_t* ref,
 	free(pvHStore);
 
 	/* Find the most possible 2nd best alignment. */
+
 	alignment_end* bests = (alignment_end*) calloc(2, sizeof(alignment_end));
 	bests[0].score = max + bias >= 255 ? 255 : max;
 	bests[0].ref = end_ref;
 	bests[0].read = end_read;
-	/* Removing second best for now*/
+	/* Removing second best for now
 	bests[1].score = 0;
 	bests[1].ref = 0;
 	bests[1].read = 0;
@@ -360,7 +364,7 @@ static alignment_end* sw_sse2_byte (const int8_t* ref,
 			bests[1].ref = i;
 		}
 	}
-	/**/
+	*/
 
 	free(maxColumn);
 	free(end_read_column);
@@ -410,6 +414,7 @@ static alignment_end* sw_sse2_word (const int8_t* ref,
 	int32_t end_read = readLen - 1;
 	int32_t end_ref = 0; /* 1_based best alignment ending point; Initialized as isn't aligned - 0. */
 	int32_t segLen = (readLen + 7) / 8; /* number of segment */
+	// cout << "Seglen: " <<segLen <<endl;
 
 	/* array to record the largest score of each reference position */
 	uint16_t* maxColumn = (uint16_t*) calloc(refLen, 2);
@@ -438,11 +443,14 @@ static alignment_end* sw_sse2_word (const int8_t* ref,
 	int32_t edge, begin = 0, end = refLen, step = 1;
 
 	/* outer loop to process the reference sequence */
+	// cout << 444 <<endl;
 	if (ref_dir == 1) {
+		// cout <<446<<endl;
 		begin = refLen - 1;
 		end = -1;
 		step = -1;
 	}
+	// cout << 450 <<endl;
 	for (i = begin; LIKELY(i != end); i += step) {
 		int32_t cmp;
 		__m128i e, vF = vZero; /* Initialize F value to 0.
@@ -459,17 +467,21 @@ static alignment_end* sw_sse2_word (const int8_t* ref,
 		const __m128i* vP = vProfile + ref[i] * segLen; /* Right part of the vProfile */
 		pvHLoad = pvHStore;
 		pvHStore = pv;
-
+		// cout <<468<< endl;
 		/* inner loop to process the query sequence */
 		for (j = 0; LIKELY(j < segLen); j ++) {
+			// cout <<471 <<endl;
 			vH = _mm_adds_epi16(vH, _mm_load_si128(vP + j));
 
+			// cout <<471 <<endl;
 			/* Get max from vH, vE and vF. */
 			e = _mm_load_si128(pvE + j);
+			// cout <<471 <<endl;
 			vH = _mm_max_epi16(vH, e);
+			// cout <<471 <<endl;
 			vH = _mm_max_epi16(vH, vF);
 			vMaxColumn = _mm_max_epi16(vMaxColumn, vH);
-
+			// cout <<479 <<endl;
 			/* Save vH values. */
 			_mm_store_si128(pvHStore + j, vH);
 
@@ -478,7 +490,7 @@ static alignment_end* sw_sse2_word (const int8_t* ref,
 			e = _mm_subs_epu16(e, vGapE);
 			e = _mm_max_epi16(e, vH);
 			_mm_store_si128(pvE + j, e);
-
+			// cout <<488 <<endl;
 			/* Update vF value. */
 			vF = _mm_subs_epu16(vF, vGapE);
 			vF = _mm_max_epi16(vF, vH);
@@ -486,7 +498,7 @@ static alignment_end* sw_sse2_word (const int8_t* ref,
 			/* Load the next vH. */
 			vH = _mm_load_si128(pvHLoad + j);
 		}
-
+		// cout << 495 <<endl;
 		/* Lazy_F loop: has been revised to disallow adjecent insertion and then deletion, so don't update E(i, j), learn from SWPS3 */
 		for (k = 0; LIKELY(k < 8); ++k) {
 			vF = _mm_slli_si128 (vF, 2);
@@ -500,8 +512,10 @@ static alignment_end* sw_sse2_word (const int8_t* ref,
 				if (UNLIKELY(! _mm_movemask_epi8(_mm_cmpgt_epi16(vF, vH)))) goto end;
 			}
 		}
+		// cout << 508 <<endl;
 
 end:
+
 		vMaxScore = _mm_max_epi16(vMaxScore, vMaxColumn);
 		vTemp = _mm_cmpeq_epi16(vMaxMark, vMaxScore);
 		cmp = _mm_movemask_epi8(vTemp);
@@ -511,19 +525,23 @@ end:
 			max8(temp, vMaxScore);
 			vMaxScore = vMaxMark;
 
+			
 			if (LIKELY(temp > max)) {
 				max = temp;
 				end_ref = i;
 				for (j = 0; LIKELY(j < segLen); ++j) pvHmax[j] = pvHStore[j];
 			}
+			
 		}
 
-		/* Record the max score of current column. */
+		// Record the max score of current column. 
 		max8(maxColumn[i], vMaxColumn);
 		if (maxColumn[i] == terminate) break;
 	}
 
+
 	/* Trace the alignment ending position on read. */
+	/*commenting
 	uint16_t *t = (uint16_t*)pvHmax;
 	int32_t column_len = segLen * 8;
 	for (i = 0; LIKELY(i < column_len); ++i, ++t) {
@@ -533,6 +551,7 @@ end:
 			if (temp < end_read) end_read = temp;
 		}
 	}
+	*/
 
 	free(pvHmax);
 	free(pvE);
@@ -544,7 +563,7 @@ end:
 	bests[0].score = max;
 	bests[0].ref = end_ref;
 	bests[0].read = end_read;
-	/* Removing Second Best*/
+	/* Removing Second Best
 	bests[1].score = 0;
 	bests[1].ref = 0;
 	bests[1].read = 0;
@@ -563,22 +582,23 @@ end:
 			bests[1].ref = i;
 		}
 	}
-	/**/
+	*/
 
 	free(maxColumn);
 	free(end_read_column);
 	return bests;
 }
 
+/*
 static cigar* banded_sw (const int8_t* ref,
 				 const int8_t* read,
 				 int32_t refLen,
 				 int32_t readLen,
 				 int32_t score,
-				 const uint32_t weight_gapO,  /* will be used as - */
-				 const uint32_t weight_gapE,  /* will be used as - */
+				 const uint32_t weight_gapO,  // will be used as - 
+				 const uint32_t weight_gapE,  // will be used as - 
 				 int32_t band_width,
-				 const int8_t* mat,	/* pointer to the weight matrix */
+				 const int8_t* mat,	// pointer to the weight matrix 
 				 int32_t n) {
 
 	uint32_t *c = (uint32_t*)malloc(16 * sizeof(uint32_t)), *c1;
@@ -757,6 +777,7 @@ static cigar* banded_sw (const int8_t* ref,
 	free(c);
 	return result;
 }
+*/
 
 static int8_t* seq_reverse(const int8_t* seq, int32_t end)	/* end is 0-based alignment ending position */
 {
@@ -810,44 +831,57 @@ s_align* ssw_align (const s_profile* prof,
 					const int32_t filterd,
 					const int32_t maskLen) {
 
-	alignment_end* bests = 0, *bests_reverse = 0;
+	alignment_end* bests = 0; //, *bests_reverse = 0;
 	__m128i* vP = 0;
-	int32_t word = 0, band_width = 0, readLen = prof->readLen;
+	int32_t word = 0,  readLen = prof->readLen; //band_width = 0,
 	int8_t* read_reverse = 0;
-	cigar* path;
+	//cigar* path;
+	// cout <<818 <<endl;
 	s_align* r = (s_align*)calloc(1, sizeof(s_align));
 	r->ref_begin1 = -1;
 	r->read_begin1 = -1;
-	r->cigar = 0;
-	r->cigarLen = 0;
-	if (maskLen < 15) {
-		fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
-	}
-
+	//r->cigar = 0;
+	//r->cigarLen = 0;
+	//if (maskLen < 15) {
+	//	fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
+	// }
+	// cout <<826 <<endl;
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
 		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen);
+		// cout <<834 <<endl;
 		if (prof->profile_word && bests[0].score == 255) {
+			// cout <<836 <<endl;
 			free(bests);
+			// cout <<838<<endl;
 			bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen);
+			// cout <<840<<endl;
 			word = 1;
 		} else if (bests[0].score == 255) {
+			// cout <<841 <<endl;
 			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
 			free(r);
 			return NULL;
 		}
-	}else if (prof->profile_word) {
+	}
+	
+	else if (prof->profile_word) {
+		// cout <<849 <<endl;
 		bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen);
 		word = 1;
-	}else {
+	}
+	
+	else {
+		// cout <<846 <<endl;
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		free(r);
 		return NULL;
 	}
+	// cout <<848 <<endl;
 	r->score1 = bests[0].score;
-	r->ref_end1 = bests[0].ref;
-	r->read_end1 = bests[0].read;
-	/*Removing second*/
+	//r->ref_end1 = bests[0].ref;
+	//r->read_end1 = bests[0].read;
+	/*Removing second
 	if (maskLen >= 15) {
 		r->score2 = bests[1].score;
 		r->ref_end2 = bests[1].ref;
@@ -858,7 +892,7 @@ s_align* ssw_align (const s_profile* prof,
 	/**/
 	free(bests);
 
-	/*Commenting out from here*/
+	/*Commenting out from here
 
 
 	if (flag == 0 || (flag == 2 && r->score1 < filters)) goto end;
@@ -894,7 +928,7 @@ s_align* ssw_align (const s_profile* prof,
 		free(path);
 	}
 
-	/*Commenting till here
+	Commenting till here
 	*/
 
 end:
@@ -905,7 +939,7 @@ void align_destroy (s_align* a) {
 	free(a->cigar);
 	free(a);
 }
-
+/*
 uint32_t* add_cigar (uint32_t* new_cigar, int32_t* p, int32_t* s, uint32_t length, char op) {
 	if ((*p) >= (*s)) {
 		++(*s);
@@ -933,14 +967,14 @@ uint32_t* store_previous_m (int8_t choice,	// 0: current not M, 1: current match
 	return new_cigar;
 }				
 
-/*! @function:
-     1. Calculate the number of mismatches.
-     2. Modify the cigar string:
-         differentiate matches (=) and mismatches(X); add softclip(S) at the beginning and ending of the original cigar.
-    @return:
-     The number of mismatches.
-	 The cigar and cigarLen are modified.
-*/
+// /*! @function:
+//      1. Calculate the number of mismatches.
+//      2. Modify the cigar string:
+//          differentiate matches (=) and mismatches(X); add softclip(S) at the beginning and ending of the original cigar.
+//     @return:
+//      The number of mismatches.
+// 	 The cigar and cigarLen are modified.
+
 int32_t mark_mismatch (int32_t ref_begin1,
 					   int32_t read_begin1,
 					   int32_t read_end1,
@@ -998,5 +1032,5 @@ int32_t mark_mismatch (int32_t ref_begin1,
 	return mismatch_length;
 }
 
-
+*/
 
