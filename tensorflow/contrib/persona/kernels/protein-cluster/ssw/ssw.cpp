@@ -341,7 +341,7 @@ static alignment_end* sw_sse2_byte (const int8_t* ref,
 	bests[0].score = max + bias >= 255 ? 255 : max;
 	bests[0].ref = end_ref;
 	bests[0].read = end_read;
-	/* Removing second best for now
+	/* Removing second best for now*/
 	bests[1].score = 0;
 	bests[1].ref = 0;
 	bests[1].read = 0;
@@ -360,7 +360,7 @@ static alignment_end* sw_sse2_byte (const int8_t* ref,
 			bests[1].ref = i;
 		}
 	}
-	*/
+	/**/
 
 	free(maxColumn);
 	free(end_read_column);
@@ -544,7 +544,7 @@ end:
 	bests[0].score = max;
 	bests[0].ref = end_ref;
 	bests[0].read = end_read;
-	/* Removing Second Best
+	/* Removing Second Best*/
 	bests[1].score = 0;
 	bests[1].ref = 0;
 	bests[1].read = 0;
@@ -563,7 +563,7 @@ end:
 			bests[1].ref = i;
 		}
 	}
-	*/
+	/**/
 
 	free(maxColumn);
 	free(end_read_column);
@@ -847,7 +847,7 @@ s_align* ssw_align (const s_profile* prof,
 	r->score1 = bests[0].score;
 	r->ref_end1 = bests[0].ref;
 	r->read_end1 = bests[0].read;
-	/*Removing second
+	/*Removing second*/
 	if (maskLen >= 15) {
 		r->score2 = bests[1].score;
 		r->ref_end2 = bests[1].ref;
@@ -855,8 +855,12 @@ s_align* ssw_align (const s_profile* prof,
 		r->score2 = 0;
 		r->ref_end2 = -1;
 	}
-	*/
+	/**/
 	free(bests);
+
+	/*Commenting out from here*/
+
+
 	if (flag == 0 || (flag == 2 && r->score1 < filters)) goto end;
 
 	// Find the beginning position of the best alignment.
@@ -889,6 +893,9 @@ s_align* ssw_align (const s_profile* prof,
 		r->cigarLen = path->length;
 		free(path);
 	}
+
+	/*Commenting till here
+	*/
 
 end:
 	return r;

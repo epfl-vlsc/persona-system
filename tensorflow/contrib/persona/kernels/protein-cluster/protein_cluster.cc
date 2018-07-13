@@ -44,8 +44,8 @@ namespace tensorflow {
 
       total_comps_++;
       //auto t1 = chrono::high_resolution_clock::now();
-      bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
-      // bool passed1 = aligner.PassesThresholdSSW(sequence.data, rep.Data(), sequence.length, rep.Length());
+      // bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
+      bool passed = aligner.PassesThresholdSSW(sequence.data, rep.Data(), sequence.length, rep.Length());
       //auto t2 = chrono::high_resolution_clock::now();
       //auto elapsed = chrono::duration_cast<chrono::microseconds>(t2 - t1);
       //outfile << sequence.length << ", " << rep.Length() << ", " << elapsed.count() << "\n";
