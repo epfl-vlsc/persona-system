@@ -403,7 +403,7 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   while (refLen > ssw_env_.s1) {
       ++ssw_env_.s1;
       kroundup32(ssw_env_.s1);
-      ssw_env_.ref_num = (int8_t*)realloc(ssw_env_.ref_num, ssw_env_.s1);
+      ssw_env_.ref_num = (int32_t*)realloc(ssw_env_.ref_num, ssw_env_.s1);
   }
   for (int m = 0; m < refLen; ++m) ssw_env_.ref_num[m] = ssw_env_.table[(int)seq1[m]];
     cout <<404<<endl;

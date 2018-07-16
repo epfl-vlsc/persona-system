@@ -25,7 +25,7 @@ struct SSW_Environment{
   int32_t l, m, k, match, mismatch_ssw, gap_open, gap_extension, n, s1, s2, filter;
   int8_t* mata ; 
   const int8_t* mat;
-  int8_t* ref_num;
+  int32_t* ref_num;
   int8_t* num, flag;
   //Table for Protein Matchings
   int8_t aa_table[128] = {

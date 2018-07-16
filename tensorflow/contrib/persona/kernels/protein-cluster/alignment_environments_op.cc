@@ -280,7 +280,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
   ssw_env.mata = (int8_t*)calloc(25, sizeof(int8_t));
   // int8_t mat = (int8_t*)calloc(25, sizeof(int8_t));  
   ssw_env.mat = ssw_env.mata;
-  ssw_env.ref_num = (int8_t*)malloc(ssw_env.s1);
+  ssw_env.ref_num = (int32_t*)malloc(ssw_env.s1);
   ssw_env.num = (int8_t*)malloc(ssw_env.s2);
   
   // cout << 335 <<endl;

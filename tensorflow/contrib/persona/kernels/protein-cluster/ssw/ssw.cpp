@@ -43,6 +43,9 @@
 #include <string.h>
 #include <math.h>
 #include "ssw.h"
+#include <iostream>
+
+using namespace std;
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -83,7 +86,7 @@ struct _profile{
 	const int8_t* mat;
 	int32_t readLen;
 	int32_t n;
-	uint8_t bias;
+	int32_t bias;
 };
 
 /* array index is an ASCII character value from a CIGAR, 
@@ -158,7 +161,7 @@ static __m128i* qP_byte (const int8_t* read_num,
    wight_match > 0, all other weights < 0.
    The returned positions are 0-based.
  */
-static alignment_end* sw_sse2_byte (const int8_t* ref,
+static alignment_end* sw_sse2_byte (const int32_t* ref,
 							 int8_t ref_dir,	// 0: forward ref; 1: reverse ref
 							 int32_t refLen,
 							 int32_t readLen,
@@ -391,7 +394,7 @@ static __m128i* qP_word (const int8_t* read_num,
 	return vProfile;
 }
 
-static alignment_end* sw_sse2_word (const int8_t* ref,
+static alignment_end* sw_sse2_word (const int32_t* ref,
 							 int8_t ref_dir,	// 0: forward ref; 1: reverse ref
 							 int32_t refLen,
 							 int32_t readLen,
@@ -570,7 +573,7 @@ end:
 	return bests;
 }
 
-static cigar* banded_sw (const int8_t* ref,
+static cigar* banded_sw (const int32_t* ref,
 				 const int8_t* read,
 				 int32_t refLen,
 				 int32_t readLen,
@@ -801,7 +804,7 @@ void init_destroy (s_profile* p) {
 }
 
 s_align* ssw_align (const s_profile* prof,
-					const int8_t* ref,
+					const int32_t* ref,
 				  	int32_t refLen,
 				  	const uint8_t weight_gapO,
 				  	const uint8_t weight_gapE,
@@ -823,7 +826,10 @@ s_align* ssw_align (const s_profile* prof,
 	if (maskLen < 15) {
 		fprintf(stderr, "When maskLen < 15, the function ssw_align doesn't return 2nd best alignment information.\n");
 	}
-
+	cout << "prof->readLen: "<<prof->readLen<<endl;
+	cout << "prof->profile_byte: "<<prof->profile_byte<<endl;
+	cout << "prof->profile_word: "<<prof->profile_word<<endl;
+	cout << "prof->bias: "<<prof->bias<<endl;
 	// Find the alignment scores and ending positions
 	if (prof->profile_byte) {
 		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen);
@@ -944,7 +950,7 @@ uint32_t* store_previous_m (int8_t choice,	// 0: current not M, 1: current match
 int32_t mark_mismatch (int32_t ref_begin1,
 					   int32_t read_begin1,
 					   int32_t read_end1,
-					   const int8_t* ref,
+					   const int32_t* ref,
 					   const int8_t* read,
 					   int32_t readLen,
 					   uint32_t** cigar,
