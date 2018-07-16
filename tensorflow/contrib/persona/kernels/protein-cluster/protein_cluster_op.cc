@@ -351,9 +351,12 @@ namespace tensorflow {
           // for downstream aggregation
           LOG(INFO) << "Node " << to_string(node_id_) << " we have seen all chunks, outputting clusters";
           LOG(INFO) << "Node " << to_string(node_id_) << "Total clusters: " << clusters_.size();
+          /*
+          Printererere
           for (int c = 0 ; c< clusters_.size(); c++){
             cout << "Cluster " << c <<  "Size: " << clusters_[c].NumSequences() << endl;
           }
+          */
           
           //
           // seqs in this chunk however have not been compared to one another
