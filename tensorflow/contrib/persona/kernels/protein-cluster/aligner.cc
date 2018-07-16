@@ -364,7 +364,7 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
 
   
   for (l = k = 0; LIKELY(l < 4); ++l) {
-      for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; /* weight_match : -weight_mismatch_ssw 
+      for (m = 0; LIKELY(m < 4); ++m) mata[k++] = l == m ? match : -mismatch_ssw; // weight_match : -weight_mismatch_ssw 
       mata[k++] = 0; // ambiguous base
   }
   // cout << 369 <<endl;
@@ -375,10 +375,11 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   mat = mat50;
 
 */
+
   //To be done every time
   const char * seq1 = denormalize(seq1_norm, seq1_len);
   const char * seq2 = denormalize(seq2_norm, seq2_len);
-  SSW_Environment ssw_env_;
+  SSW_Environment ssw_env_ = envs_->GetSSWEnv();
   s_profile* p= 0;
   int32_t readLen = (int32_t)seq2_len;
   int32_t maskLen = readLen / 2;

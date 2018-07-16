@@ -34,6 +34,10 @@ namespace tensorflow {
   const AlignmentEnvironment& AlignmentEnvironments::JustScoreEnv() const {
     return just_score_env_;
   }
+
+  const SSW_Environment& AlignmentEnvironments::GetSSWEnv() const {
+    return ssw_env_;
+  }
   
   void AlignmentEnvironments::Initialize(std::vector<AlignmentEnvironment>& envs, AlignmentEnvironment& logpam_env, 
       AlignmentEnvironment& just_score_env, SSW_Environment& ssw_env) {

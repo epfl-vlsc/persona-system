@@ -79,6 +79,7 @@ class AlignmentEnvironments {
   const AlignmentEnvironment& FindNearest(double pam) const;
   const AlignmentEnvironment& LogPamEnv() const;
   const AlignmentEnvironment& JustScoreEnv() const;
+  const SSW_Environment& GetSSWEnv() const;
 
   // init methods
   void CreateDayMatrices(std::vector<double>& gap_open, std::vector<double>& gap_ext,
