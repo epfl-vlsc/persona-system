@@ -276,6 +276,7 @@ class AlignmentEnvironmentsOp : public OpKernel {
   ssw_env.s1 = 128;
   ssw_env.s2 = 128;
   ssw_env.filter = 0;
+  ssw_env.flag = 0;
   ssw_env.mata = (int8_t*)calloc(25, sizeof(int8_t));
   // int8_t mat = (int8_t*)calloc(25, sizeof(int8_t));  
   ssw_env.mat = ssw_env.mata;
