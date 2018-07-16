@@ -46,7 +46,7 @@ cc_library(
 cc_library(
     name = "protein_clustering",
     srcs = glob(["*.cc"]),
-    hdrs = glob(["*.h", "aho_corasick/*.hpp"]),
+    hdrs = glob(["*.h", "aho_corasick/*.h"]),
     copts = tf_copts() + ["-std=c++14"],
     #linkopts = ["-lrados"],
     linkstatic = 1,
