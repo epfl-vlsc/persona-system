@@ -410,6 +410,15 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   }
   for (int m = 0; m < refLen; ++m) ref_num[m] = table[(int)seq1[m]];
     // cout <<404<<endl;
+  cout << "p: "<< p << endl;
+  cout << "ref_num: "<< ref_num << endl;
+  cout << "refLen: "<< refLen << endl;
+  cout << "gap_open: "<< gap_open << endl;
+  cout << "gap_extension: "<< gap_extension << endl;
+  cout << "flag: "<< flag << endl;
+  cout << "filter: "<< filter << endl;
+  cout << "maskLen: "<< maskLen << endl;
+
   result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
   init_destroy(p);
   // cout << result->score1<< endl;

@@ -834,6 +834,8 @@ s_align* ssw_align (const s_profile* prof,
 	alignment_end* bests = 0; //, *bests_reverse = 0;
 	__m128i* vP = 0;
 	int32_t word = 0,  readLen = prof->readLen; //band_width = 0,
+	  cout << "prof->readLen: "<<prof->readLen<<endl;
+
 	int8_t* read_reverse = 0;
 	//cigar* path;
 	// cout <<818 <<endl;
@@ -847,6 +849,9 @@ s_align* ssw_align (const s_profile* prof,
 	// }
 	// cout <<826 <<endl;
 	// Find the alignment scores and ending positions
+	cout << "prof->profile_byte: "<<prof->profile_byte<<endl;
+	cout << "prof->profile_word: "<<prof->profile_word<<endl;
+	cout << "prof->bias: "<<prof->bias<<endl;
 	if (prof->profile_byte) {
 		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen);
 		// cout <<834 <<endl;
