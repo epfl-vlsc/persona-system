@@ -116,9 +116,9 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
             denom += hashesSortedQry.size() - j;
         }
         
-        if ( denom > sketchSize )
+        if ( denom > 800 )
         {
-            denom = sketchSize;
+            denom = 800;
         }
     }
     
@@ -150,7 +150,7 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
     output->numer = common;
     output->denom = denom;
     output->distance = distance;
-    output->pValue = pValue(common, refRef.length, refQry.length, kmerSpace, denom);
+    output->pValue = 0.1f; //pValue(common, refRef.length, refQry.length, kmerSpace, denom);
     
     if ( output->pValue > maxPValue )
     {
@@ -182,7 +182,7 @@ minhash_distance::CompareOutput * minhash_distance::run_seqsketch( Sketch sketch
 }
 
 
-minhash_distance::CompareOutput * minhash_distance::run_seqsketch_repsketch(  Sketch sketchRef, Sketch sketchQry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
+minhash_distance::CompareOutput * minhash_distance::run_seqsketch_repsketch(  const Sketch& sketchRef, const Sketch& sketchQry, int lengthref, int lengthqry, const Sketch::Parameters & parametersNew)
 {
 
     minhash_distance::CompareOutput * distances;

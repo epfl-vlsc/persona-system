@@ -99,7 +99,7 @@ void AlignmentExecutor::init_workers() {
       auto seq_pair = make_pair(seq1->GenomeIndex(), seq2->GenomeIndex());
       if (candidate_map_ && !candidate_map_->ExistsOrInsert(genome_pair, seq_pair)) {
 
-        if (aligner.minhash_PassesThreshold(seq1->Data(), seq2->Data(), 
+        if (aligner.PassesThreshold(seq1->Data(), seq2->Data(), 
               seq1->Length(), seq2->Length())) {
 
           Status s = aligner.AlignLocal(seq1->Data(), seq2->Data(), 

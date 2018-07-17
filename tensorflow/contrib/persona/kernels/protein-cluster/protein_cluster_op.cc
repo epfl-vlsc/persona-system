@@ -221,7 +221,7 @@ namespace tensorflow {
       Sketch data_sketch;
       Sketch::Parameters parameters;
       parameters.kmerSize = 3;              
-      parameters.minHashesPerWindow = 5000; //sketch size
+      parameters.minHashesPerWindow = 3000; //sketch size
       parameters.noncanonical = true;
       setAlphabetFromString(parameters, alphabetProtein); //alphabetProtein declared in sketch.h
       char *Denormalised_data = Denormalise(data,len);
