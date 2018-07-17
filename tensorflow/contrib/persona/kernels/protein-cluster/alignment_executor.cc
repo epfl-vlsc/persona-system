@@ -109,6 +109,9 @@ void AlignmentExecutor::init_workers() {
 
       MultiNotification* n = get<3>(item);
       n->Notify();
+      total_alignments_++;
+      if (total_alignments_.load() % 1000 == 0)
+        LOG(INFO) << "total alignments " << total_alignments_.load();
 
       auto compute_error = !compute_status_.ok();
       if (compute_error) {

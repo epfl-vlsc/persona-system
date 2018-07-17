@@ -60,7 +60,7 @@ namespace tensorflow {
     const Parameters* params_ = nullptr;
     CandidateMap* candidate_map_ = nullptr;
 
-    std::atomic_uint_fast32_t num_active_threads_, id_{0};
+    std::atomic_uint_fast32_t num_active_threads_, id_{0}, total_alignments_{0};
     mutex mu_;
 
     int num_threads_;
