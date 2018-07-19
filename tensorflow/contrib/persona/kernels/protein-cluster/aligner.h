@@ -46,7 +46,7 @@ class ProteinAligner {
     bool PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len);
     bool minhash_PassesThreshold(const char* seq1, const char*seq2, int seq1_len, int seq2_len);
     bool minhash_PassesThreshold_seqsketch( Sketch data_sketch, const char*seq2, int seq1_len, int seq2_len);
-    bool minhash_PassesThreshold_seqsketch_repsketch( Sketch data_sketch, Sketch ref_sketch, int seq1_len, int seq2_len);
+    bool minhash_PassesThreshold_seqsketch_repsketch( Sketch data_sketch, Sketch ref_sketch, int seq1_len, int seq2_len, double& pval);
 
 
     // with full range calc

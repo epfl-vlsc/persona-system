@@ -44,11 +44,16 @@ namespace tensorflow {
 
       total_comps_++;
       //auto t1 = chrono::high_resolution_clock::now();
-      
-      // bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
+     
+
+      bool passed_orig = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
       // bool passed = aligner.minhash_PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
       // bool passed = aligner.minhash_PassesThreshold_seqsketch(sequence.data_sketch, rep.Data(), sequence.length, rep.Length());
-      bool passed = aligner.minhash_PassesThreshold_seqsketch_repsketch (sequence.data_sketch, rep.RepSketch(), sequence.length, rep.Length());
+      double p_value;
+      bool passed = aligner.minhash_PassesThreshold_seqsketch_repsketch (sequence.data_sketch, rep.RepSketch(), sequence.length, rep.Length(), p_value);
+
+      if (passed_orig != passed)
+        LOG(INFO) << "minhash passes = " << passed << ", passed_orig " << passed_orig << " with p value = " << p_value << "  len diff: " << abs(rep.Length() - sequence.length);
 
 
 

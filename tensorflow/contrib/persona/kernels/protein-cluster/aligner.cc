@@ -318,6 +318,7 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2,
   swps3_freeProfileShortSSE(profile);
   // LOG(INFO) << "value is " << value << " score is " << score << "and min
   // score is " << params_->min_score << "SWPS3 NUMBERS";
+  //LOG(INFO) << "orig passes = " << bool(value >= 0.75f * params_->min_score);
   return value >= 0.75f * params_->min_score;
 }
 
@@ -399,7 +400,7 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch(Sketch data_sketch,
 }
 
 bool ProteinAligner::minhash_PassesThreshold_seqsketch_repsketch(
-    Sketch data_sketch, Sketch ref_sketch, int seq1_len, int seq2_len) {
+    Sketch data_sketch, Sketch ref_sketch, int seq1_len, int seq2_len, double& pval) {
   mash::minhash_distance minhash;
 
   Sketch::Parameters parameters;
@@ -419,6 +420,7 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch_repsketch(
       &(distances->pairs[0]);
   double distance = pair->distance;
   double pValue = pair->pValue;
+  pval = pValue;
   uint64_t numerator_jaccard = pair->numer;
   uint64_t denominator_jaccard = pair->denom;
 
@@ -446,6 +448,7 @@ bool ProteinAligner::minhash_PassesThreshold_seqsketch_repsketch(
   // ref_sketch.getReferenceCount() << " Kmer size is "
   // <<data_sketch.getKmerSize()<< " and  "  << ref_sketch.getKmerSize()<< endl;
 
+  //LOG(INFO) << "minhash passes = " << bool(score <= 65) << " with p value = " << pValue;
   return score <= 65;
 }
 

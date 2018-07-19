@@ -64,7 +64,7 @@ double pValue(uint64_t x, uint64_t lengthRef, uint64_t lengthQuery, double kmerS
     // return gsl_cdf_hypergeometric_Q(x - 1, r * M, M - r * M, sketchSize);
     
 #ifndef USE_BOOST
-    // cout << "In the Pvalue function,  matches is " << x <<" lengthref is " << lengthRef << " lengthquery is " << lengthQuery << " kmerspace is " << kmerSpace <<" sketchSize is " <<sketchSize << " px is " << pX << " pY is "<< pY <<" r is " << r << endl;
+    //cout << "In the Pvalue function,  matches is " << x <<" lengthref is " << lengthRef << " lengthquery is " << lengthQuery << " kmerspace is " << kmerSpace <<" sketchSize is " <<sketchSize << " px is " << pX << " pY is "<< pY <<" r is " << r << endl;
     return cdf(complement(binomial(sketchSize, r), x - 1));
 #else
     return gsl_cdf_binomial_Q(x - 1, r, sketchSize);
@@ -116,9 +116,9 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
             denom += hashesSortedQry.size() - j;
         }
         
-        if ( denom > 800 )
+        if ( denom > sketchSize )
         {
-            denom = 800;
+            denom = sketchSize;
         }
     }
     
@@ -150,7 +150,7 @@ void compareSketches(minhash_distance::CompareOutput::PairOutput * output, const
     output->numer = common;
     output->denom = denom;
     output->distance = distance;
-    output->pValue = 0.1f; //pValue(common, refRef.length, refQry.length, kmerSpace, denom);
+    output->pValue = pValue(common, refRef.length, refQry.length, kmerSpace, denom);
     
     if ( output->pValue > maxPValue )
     {
