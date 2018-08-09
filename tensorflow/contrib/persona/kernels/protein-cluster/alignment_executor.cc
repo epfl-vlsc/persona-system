@@ -64,6 +64,7 @@ void AlignmentExecutor::init_workers() {
         continue;
       }
 
+
       if (!aligner.Params()) {
         aligner = ProteinAligner(envs_, params_);
       }
@@ -110,8 +111,8 @@ void AlignmentExecutor::init_workers() {
       MultiNotification* n = get<3>(item);
       n->Notify();
       total_alignments_++;
-      if (total_alignments_.load() % 1000 == 0)
-        LOG(INFO) << "total alignments " << total_alignments_.load();
+      /*if (total_alignments_.load() % 1000 == 0)
+        LOG(INFO) << "total alignments " << total_alignments_.load();*/
 
       auto compute_error = !compute_status_.ok();
       if (compute_error) {
@@ -141,6 +142,12 @@ void AlignmentExecutor::init_workers() {
       if (!cluster_work_queue_->pop(item)) {
         continue;
       }
+      
+      /*if (work_queue_->size() == 0) {
+        num_times_emptied_++;
+        if (num_times_emptied_.load() % 1000 == 0)
+          LOG(INFO) << "total times emptied " << num_times_emptied_.load();
+      }*/
 
       auto& seq = get<0>(item);
       auto cluster = get<1>(item);
