@@ -1565,4 +1565,58 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     .Doc(R"doc(
     Op that aggregates cluster matches from multiple protein cluster ops.
     )doc");
+
+
+    REGISTER_OP("AGDProteinSort")  // TODO input output are ok?
+    .Input("buffer_pair_pool: Ref(string)")
+    .Input("results_handles: string")
+    .Input("column_handles: string")
+    .Input("num_records: int32")
+    .Output("partial_handle: string")
+    .Output("superchunk_records: int32")
+    .SetShapeFn([](InferenceContext *c) {
+
+    auto dim = c->Dim(c->input(2), 0);
+    auto dimval = c->Value(dim);
+    c->set_output(0, c->Matrix(dimval + 1, 2));
+    c->set_output(1, c->Scalar());
+
+    return Status::OK();
+    })
+    .SetIsStateful()
+    .Doc(R"doc(
+    Takes N results buffers, and associated bases, qualities and metadata
+    chunks, and sorts them into a merged a superchunk output buffer. This
+    is the main sort step in the AGD external merge sort.
+
+    Outputs handle to merged, sorted superchunks in `partial_handles`.
+    A BufferList that contains bases, qual, meta, results superchunk
+    BufferPairs ready for writing to disk.
+
+    Inputs -> (N, 2) string handles to buffers containing results, bases,
+    qualities and metadata. num_records is a vector of int32's with the
+    number of records per chunk.
+
+    Currently does not support a general number of columns.
+    The column order (for passing into AGDWriteColumns) is [bases, qualities, metadata, results]
+
+      )doc");
+
+
+    REGISTER_OP("AGDProteinMerge")  // TODO input output are ok?
+    .Attr("chunk_size: int >= 1")
+    .Input("buffer_pair_pool: Ref(string)")
+    .Input("output_buffer_queue_handle: resource")
+    .Input("chunk_group_handles: string") // a record of NUM_SUPER_CHUNKS x NUM_COLUMNS x 2 (2 for reference)
+    .Doc(R"doc(
+    Merges multiple input chunks into chunks based on `chunk_size`
+    Only supports a single-stage of merging, i.e. this will not write out to an arbitrarily-large single chunk.
+
+    Each buffer list dequeued will have the same number of elements as the NUM_COLUMNS dimension for chunk_group_handles
+
+    chunk_size: the size, in number of records, of the output chunks
+    *_handles: matrix of processed handles
+    output_buffer_queue_handle: a handle to a queue, into which are enqueued BufferList instance handles.
+    )doc");
+
 }
