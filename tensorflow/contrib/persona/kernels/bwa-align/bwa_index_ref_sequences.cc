@@ -30,11 +30,11 @@ namespace tensorflow {
               &sizes_t));
 
         auto refs = refs_t->flat<string>();
-        auto sizes = sizes_t->flat<int32>();
+        auto sizes = sizes_t->flat<string>();
 
         for (int i = 0; i < num_contigs; i++) {
           refs(i) = string(contigs[i].name);
-          sizes(i) = static_cast<uint32>(contigs[i].len);
+          sizes(i) = to_string(contigs[i].len);
           //LOG(INFO) << "contig name is: " << contigs[i].name << " and len is: "
             //<< contigs[i].len;
         }
