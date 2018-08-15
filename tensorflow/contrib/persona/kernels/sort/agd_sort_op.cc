@@ -71,7 +71,7 @@ namespace tensorflow {
       for (int i = 0; i < handles_t->dim_size(0); i++) {
         for (int j = 0; j < handles_t->dim_size(1); j++) {
           TF_RETURN_IF_ERROR(rmgr->Lookup(handles_tensor(i, j, 0), handles_tensor(i, j, 1), &input));
-          matrix[i].push_back(AGDRecordReader(input, num_records(i)));
+          matrix[i].push_back(AGDRecordReader(input, num_records(j)));
           releasers.push_back(move(vector<unique_ptr<ResourceContainer<Data>, decltype(resource_releaser)&>>::value_type(input, resource_releaser)));
 
         }
