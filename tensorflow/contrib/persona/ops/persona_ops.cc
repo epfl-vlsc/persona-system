@@ -1567,7 +1567,8 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
     )doc");
 
 
-    REGISTER_OP("AGDProteinSort")  // TODO input output are ok?
+    REGISTER_OP("AGDProteinSort")
+    .Attr("sort_ascending: bool")
     .Input("buffer_pair_pool: Ref(string)")
     .Input("results_handles: string")
     .Input("column_handles: string")
@@ -1603,8 +1604,9 @@ first_ordinal: ranges from 0 to the number of reads in the SRA file
       )doc");
 
 
-    REGISTER_OP("AGDProteinMerge")  // TODO input output are ok?
+    REGISTER_OP("AGDProteinMerge")
     .Attr("chunk_size: int >= 1")
+    .Attr("sort_ascending: bool")
     .Input("buffer_pair_pool: Ref(string)")
     .Input("output_buffer_queue_handle: resource")
     .Input("chunk_group_handles: string") // a record of NUM_SUPER_CHUNKS x NUM_COLUMNS x 2 (2 for reference)
