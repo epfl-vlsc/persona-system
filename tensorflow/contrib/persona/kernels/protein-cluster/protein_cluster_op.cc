@@ -129,9 +129,11 @@ namespace tensorflow {
       file << "]\n";
       file.close();
   
-      double seconds = double(total_wait_) / 1000000.0f;
-      LOG(INFO) << "Node: " << node_id_ << " spent " << seconds << " waiting for input and had " 
-        << clusters_.size() << " clusters, with a longest seq len of " << len;
+      double seconds_i = double(total_wait_i_) / 1000000.0f;
+      double seconds_nb = double(total_wait_nb_) / 1000000.0f;
+      LOG(INFO) << "Node: " << node_id_ << " spent " << seconds_i << " waiting for input, spent " 
+        << seconds_nb << " waiting for neighbor, had " << clusters_.size() 
+        << " clusters, with a longest seq len of " << len;
 
     }
 
@@ -327,7 +329,7 @@ namespace tensorflow {
         }
 
         sequence_t.scalar<int32>()() = new_sequence;
-        LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
+        //LOG(INFO) << "Node " << to_string(node_id_) << " neighbor queue size is " << neighbor_queue_out_->size();
         OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
               first_ord_t, total_seqs_t, abs_seq_t));
        
@@ -407,14 +409,14 @@ namespace tensorflow {
         // queue<pair<int, int>> abs_sequence_queue_;
         if (sequence < ring_size_) { // first time we've seen
           abs_sequence_queue_.push(make_pair(abs_seq, clusters_.size()));
-          LOG(INFO) << "pushing to queue";
+          //LOG(INFO) << "pushing to queue";
           cluster_start = 0;
         } else if (sequence > ring_size_) { // second time we've seen
           auto& point = abs_sequence_queue_.front();
           CHECK_EQ(point.first, abs_seq);
           cluster_start = point.second;
-          LOG(INFO) << "Node " << node_id_ << "received abs seq " << abs_seq << " for second time. " 
-            << "Comparing to " << clusters_.size() - cluster_start << " more clusters";
+          //LOG(INFO) << "Node " << node_id_ << "received abs seq " << abs_seq << " for second time. " 
+            //<< "Comparing to " << clusters_.size() - cluster_start << " more clusters";
           abs_sequence_queue_.pop();
         } else {
           LOG(INFO) << " equal to ring size wtf ";
@@ -460,7 +462,7 @@ namespace tensorflow {
       bool passed = false;
       // this is some test logic for forwarding chunks so other nodes can process while 
       // we process
-      /*if (sequence != ring_size_ - 1 && sequence != ring_size_*2 - 1) {
+      if (sequence != ring_size_ - 1 && sequence != ring_size_*2 - 1) {
 
         // we pass early if the next node is not the originator of this chunk
         passed = true;
@@ -470,7 +472,7 @@ namespace tensorflow {
         //LOG(INFO) << "Node " << to_string(node_id_) << " enqueuing to neighbor seq " << new_sequence << " with abs seq " << abs_seq;
         OP_REQUIRES_OK(ctx, EnqueueChunk(ctx, chunk_t, num_recs_t, sequence_t, was_added_t, coverages_t, genome_t, 
               first_ord_t, total_seqs_t, abs_seq_t));
-      }*/
+      }
 
 
       int num_added = 0;
@@ -513,7 +515,7 @@ namespace tensorflow {
       }
       n.SetMinNotifies(num_added);
       n.WaitForNotification();
-      LOG(INFO) << "finished " << num_added << " cluster evals";
+      //LOG(INFO) << "finished " << num_added << " cluster evals";
 
       if (!passed) {
         // pass all to neighbor queue
@@ -612,7 +614,7 @@ namespace tensorflow {
     vector<char> scratch_;
     int node_id_;
     vector<int> abs_seq_;
-    int64 total_wait_ = 0;
+    int64 total_wait_nb_ = 0, total_wait_i_ = 0;
     bool do_allall_ = true;
 
     AlignmentExecutor* executor_;
@@ -628,8 +630,8 @@ namespace tensorflow {
         Tensor& sequence, Tensor& was_added, Tensor& coverages, Tensor& genome, Tensor& first_ord,
         Tensor& total_seqs, Tensor& abs_seq) {
         
-      LOG(INFO) << "Node " << to_string(node_id_) << " input queue closed " << input_queue_->is_closed() 
-        << "input queue size: " << input_queue_->size();
+      /*LOG(INFO) << "Node " << to_string(node_id_) << " input queue closed " << input_queue_->is_closed() 
+        << "input queue size: " << input_queue_->size();*/
 
       auto begin = std::chrono::steady_clock::now();
       // prefer to dequeue neighbor queue, otherwise attempt to dequeue the main input
@@ -685,7 +687,7 @@ namespace tensorflow {
         //LOG(INFO) << "Node " << node_id_ << " status was " << ctx->status() << " continuing to neighbor ";
       
         auto end = std::chrono::steady_clock::now();
-        total_wait_ += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        total_wait_i_ += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
         return Status::OK();
       } 
 
@@ -717,7 +719,7 @@ namespace tensorflow {
       auto abs_seq_val = abs_seq.scalar<int32>()();
       abs_seq_.push_back(abs_seq_val);
       auto end = std::chrono::steady_clock::now();
-      total_wait_ += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+      total_wait_nb_ += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
       return Status::OK();
     }
 

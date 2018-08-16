@@ -57,7 +57,7 @@ namespace bwa_wrapper {
       result.set_cigar(cigar);
       result_builders[0].AppendAlignmentResult(result);
       if (num_alignments > 1) {
-        LOG(INFO) << "result single has a supplemental";
+        //LOG(INFO) << "result single has a supplemental";
         ProcessResult(&alignments[1], nullptr, result_sup, cigar_sup);
         result_sup.set_cigar(cigar_sup);
         result_builders[1].AppendAlignmentResult(result_sup);
