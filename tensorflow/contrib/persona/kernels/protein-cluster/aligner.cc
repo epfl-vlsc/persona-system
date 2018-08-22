@@ -3,6 +3,9 @@
 #include <cfloat>
 #include <vector>
 #include <fstream>
+
+#include <math.h> // milad
+
 extern "C" {
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/DynProgr_sse_short.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/DynProgr_sse_double.h"
@@ -311,6 +314,10 @@ bool ProteinAligner::PassesThreshold(const char* seq1, const char* seq2, int seq
   return value >= 0.75f * params_->min_score;
 }
 
+bool isPowerof2(unsigned int x) {
+    return x && !(x & (x - 1));
+}
+
 bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
   
   //Constants Being Initialised
@@ -321,17 +328,30 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   const int8_t* mat = mata;
   int8_t* ref_num = (int8_t*)malloc(s1);
   int8_t* num = (int8_t*)malloc(s2);
+
+//    int8_t aa_table[128] = {
+//            23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+//            23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+//            23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+//            23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+//            23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+//            14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23,
+//            23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
+//            14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23
+//    };
+
   //Table for Protein Matchings
-  int8_t aa_table[128] = {
+  static const int8_t aa_table[128] = { // milad modified table for normalized input (optimization)
+    0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23, 14,
+    5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23, 23,
+    0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23, 14,
+    5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23, 23,
     23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
     23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
     23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
     23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
-    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23,
-    23, 0,  20, 4,  3,  6,  13, 7,  8,  9,  23, 11, 10, 12, 2,  23,
-    14, 5,  1,  15, 16, 23, 19, 17, 22, 18, 21, 23, 23, 23, 23, 23
   };
+
   // cout << 335 <<endl;
   //Alignment Matrix
   static const int8_t mat50[] = {
@@ -370,14 +390,17 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   // cout << 369 <<endl;
   for (m = 0; LIKELY(m < 5); ++m) mata[k++] = 0; //387,385,384 mata -> mat
   n = 24;
-  int8_t* table = aa_table;
+//  int8_t* table = aa_table;
+  const int8_t* table = aa_table; // milad
   // table = aa_table;
   mat = mat50;
 
 
-  //To be done every time
-  const char * seq1 = denormalize(seq1_norm, seq1_len);
-  const char * seq2 = denormalize(seq2_norm, seq2_len);
+  //To be done every time // milad not anymore (optimization)
+  //const char * seq1 = denormalize(seq1_norm, seq1_len);
+  //const char * seq2 = denormalize(seq2_norm, seq2_len);
+  const char * seq1 = seq1_norm; // watch out for \0 at the end of denormalized form
+  const char * seq2 = seq2_norm;
 
   //SSW_Environment ssw_env_pair = envs_ ->GetSSWEnv();
   s_profile* p= 0;
@@ -386,13 +409,23 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   // cout << match <<endl;
   // cout << 378 <<endl;
 
-  while (readLen >= s2) {
-      // cout << "s2: "<<s2<<endl;
-      ++s2;
-      kroundup32(s2);
-      num = (int8_t*)realloc(num, s2);
-      
-  }
+    // milad
+//  while (readLen >= s2) {
+//      // cout << "s2: "<<s2<<endl;
+//      ++s2;
+//      kroundup32(s2);
+//      num = (int8_t*)realloc(num, s2);
+//
+//  }
+    // milad
+    if (readLen >= s2) {
+        int32_t temp = readLen;
+        if (isPowerof2(readLen))
+            temp ++; // force it to roundup to next power of two
+        kroundup32(temp);
+        num = (int8_t*)realloc(num, temp);
+    }
+
   // cout <<393<<endl;
   for (int m = 0; m < readLen; ++m) num[m] = table[(int)seq2[m]];
     // cout <<394<<endl;
@@ -402,12 +435,20 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   int32_t refLen = (int32_t)seq1_len;
   int8_t flag = 0;
   // cout <<398<<endl;
-  while (refLen > s1) {
-      // cout << "s1: "<<s1<<endl;
-      ++s1;
-      kroundup32(s1);
-      ref_num = (int8_t*)realloc(ref_num, s1);
-  }
+  // milad
+//  while (refLen > s1) {
+//      // cout << "s1: "<<s1<<endl;
+//      ++s1;
+//      kroundup32(s1);
+//      ref_num = (int8_t*)realloc(ref_num, s1);
+//  }
+    //milad
+    if (refLen >= s1) {
+        int32_t temp = refLen;
+        kroundup32(temp);
+        ref_num = (int8_t*)realloc(ref_num, temp);
+    }
+
   for (int m = 0; m < refLen; ++m) ref_num[m] = table[(int)seq1[m]];
     // cout <<404<<endl;
     /*Printerere
@@ -430,8 +471,8 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
   
   free(mata);
   free(ref_num);
-  free(num); 
-  
+  free(num);
+
   //To here
 
   bool retval;
