@@ -589,7 +589,7 @@ end:
 	return bests;
 }
 
-/*
+
 static cigar* banded_sw (const int8_t* ref,
 				 const int8_t* read,
 				 int32_t refLen,
@@ -777,7 +777,7 @@ static cigar* banded_sw (const int8_t* ref,
 	free(c);
 	return result;
 }
-*/
+// milad
 
 static int8_t* seq_reverse(const int8_t* seq, int32_t end)	/* end is 0-based alignment ending position */
 {
@@ -831,13 +831,16 @@ s_align* ssw_align (const s_profile* prof,
 					const int32_t filterd,
 					const int32_t maskLen) {
 
-	alignment_end* bests = 0; //, *bests_reverse = 0;
+//	alignment_end* bests = 0; //, *bests_reverse = 0;
+	alignment_end* bests = 0, *bests_reverse = 0; // milad
 	__m128i* vP = 0;
-	int32_t word = 0,  readLen = prof->readLen; //band_width = 0,
-	  
+//	int32_t word = 0,  readLen = prof->readLen; //band_width = 0,
+	int32_t word = 0,  readLen = prof->readLen, band_width = 0;// milad
+
 
 	int8_t* read_reverse = 0;
 	//cigar* path;
+	cigar* path; // milad
 	// cout <<818 <<endl;
 	s_align* r = (s_align*)calloc(1, sizeof(s_align));
 	r->ref_begin1 = -1;
@@ -888,8 +891,14 @@ s_align* ssw_align (const s_profile* prof,
 	}
 	// cout <<848 <<endl;
 	r->score1 = bests[0].score;
-	//r->ref_end1 = bests[0].ref;
-	//r->read_end1 = bests[0].read;
+
+//	// TODO milad: implementing part of PassesThresholdSSW in here. Not a good thing to do at all
+	if (r-> score1 <= 110){ // doesn't pass the threshold. no need for backtrace
+		return r;
+	}
+
+	r->ref_end1 = bests[0].ref;
+	r->read_end1 = bests[0].read;
 	/*Removing second
 	if (maskLen >= 15) {
 		r->score2 = bests[1].score;
@@ -901,10 +910,10 @@ s_align* ssw_align (const s_profile* prof,
 	/**/
 	free(bests);
 
-	/*Commenting out from here
+	//Commenting out from here
 
-
-	if (flag == 0 || (flag == 2 && r->score1 < filters)) goto end;
+	//cerr << "flag: " << flag << endl;
+//	if (flag == 0 || (flag == 2 && r->score1 < filters)) goto end;
 
 	// Find the beginning position of the best alignment.
 	read_reverse = seq_reverse(prof->read, r->read_end1);
@@ -920,6 +929,14 @@ s_align* ssw_align (const s_profile* prof,
 	r->ref_begin1 = bests_reverse[0].ref;
 	r->read_begin1 = r->read_end1 - bests_reverse[0].read;
 	free(bests_reverse);
+
+//	cerr << " !!! " << endl;
+//	cerr << "ref_begin1: " << r->ref_begin1 << endl;
+//	cerr << "ref_end1: " << r->ref_end1 << endl;
+//	cerr << "read_begin1: " << r->read_begin1 << endl;
+//	cerr << "read_end1: " << r->read_end1 << endl;
+//	cerr << " /// " << endl;
+
 	if ((7&flag) == 0 || ((2&flag) != 0 && r->score1 < filters) || ((4&flag) != 0 && (r->ref_end1 - r->ref_begin1 > filterd || r->read_end1 - r->read_begin1 > filterd))) goto end;
 
 	// Generate cigar.
@@ -937,8 +954,9 @@ s_align* ssw_align (const s_profile* prof,
 		free(path);
 	}
 
-	Commenting till here
-	*/
+
+	//Commenting till here
+
 
 end:
 	return r;
