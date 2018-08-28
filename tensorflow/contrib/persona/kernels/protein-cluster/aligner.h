@@ -13,7 +13,7 @@ namespace tensorflow {
         int32_t ref_end1;
         int32_t	read_begin1;
         int32_t read_end1;
-    } m_threshold; // milad_threshold // TODO move to header file (used by aligner.cc and protein_cluster.cc)
+    } SSWAlignmentResult; // milad_threshold
 
 class ProteinAligner {
 
@@ -53,7 +53,7 @@ class ProteinAligner {
 
     bool PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len);
 //    bool PassesThresholdSSW(const char* seq1, const char* seq2, int seq1_len, int seq2_len);
-    m_threshold PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len);
+    SSWAlignmentResult PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len);
 
     // with full range calc
     Status AlignDouble(const char* seq1, const char* seq2, int seq1_len, int seq2_len,

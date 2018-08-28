@@ -318,18 +318,10 @@ bool isPowerof2(unsigned int x) {
     return x && !(x & (x - 1));
 }
 
-//bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
-
-//typedef struct {
-//    bool passed;
-//    int32_t ref_begin1;
-//    int32_t ref_end1;
-//    int32_t	read_begin1;
-//    int32_t read_end1;
-//} m_threshold; // milad_threshold
-
 // bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
-m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
+// seq1 is the reference. seq2 is the read. (because: ref_num[m] = table[(int)seq1[m]] )
+// m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
+SSWAlignmentResult ProteinAligner::PassesThresholdSSW(const char* seq1, const char* seq2, int seq1_len, int seq2_len) {
 
   //Constants Being Initialised
   
@@ -410,15 +402,11 @@ m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char
   //To be done every time // milad not anymore (optimization)
   //const char * seq1 = denormalize(seq1_norm, seq1_len);
   //const char * seq2 = denormalize(seq2_norm, seq2_len);
-  const char * seq1 = seq1_norm; // watch out for \0 at the end of denormalized form
-  const char * seq2 = seq2_norm;
 
   //SSW_Environment ssw_env_pair = envs_ ->GetSSWEnv();
   s_profile* p= 0;
   int32_t readLen = (int32_t)seq2_len;
   int32_t maskLen = readLen / 2;
-  // cout << match <<endl;
-  // cout << 378 <<endl;
 
     // milad
 //  while (readLen >= s2) {
@@ -437,7 +425,6 @@ m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char
         num = (int8_t*)realloc(num, temp);
     }
 
-  // cout <<393<<endl;
   for (int m = 0; m < readLen; ++m) num[m] = table[(int)seq2[m]];
     // cout <<394<<endl;
   p = ssw_init(num, readLen, mat, n, 2);
@@ -445,7 +432,6 @@ m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char
   s_align* result = 0;
   int32_t refLen = (int32_t)seq1_len;
   int8_t flag = 0;
-  // cout <<398<<endl;
   // milad
 //  while (refLen > s1) {
 //      // cout << "s1: "<<s1<<endl;
@@ -461,7 +447,6 @@ m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char
     }
 
   for (int m = 0; m < refLen; ++m) ref_num[m] = table[(int)seq1[m]];
-    // cout <<404<<endl;
     /*Printerere
   cout << "p: "<< p << endl;
   cout << "ref_num: "<< ref_num << endl;
@@ -473,7 +458,9 @@ m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char
   cout << "maskLen: "<< maskLen << endl;
   */
 
-  result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
+//  result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen);
+  uint16_t threshold = 110;
+  result = ssw_align (p, ref_num, refLen, gap_open, gap_extension, flag, filter, 0, maskLen, threshold);
   init_destroy(p);
   // cout << result->score1<< endl;
   //ThresholdSSw
@@ -487,21 +474,21 @@ m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char
   //To here
 
   bool retval;
-  if (result-> score1 > 110){
+  if (result->score1 > threshold){
     retval =  true;
   }
   else retval = false;
 
-  m_threshold threshold; // milad TODO check performance. it's not a pointer!
-  threshold.passed = retval;
-  threshold.ref_begin1 = result->ref_begin1;
-  threshold.ref_end1 = result->ref_end1;
-  threshold.read_begin1 = result->read_begin1;
-  threshold.read_end1 = result->read_end1; // TODO check segfault?
+  SSWAlignmentResult sswAlignmentResult; // milad
+  sswAlignmentResult.passed = retval;
+  sswAlignmentResult.ref_begin1 = result->ref_begin1;
+  sswAlignmentResult.ref_end1 = result->ref_end1;
+  sswAlignmentResult.read_begin1 = result->read_begin1;
+  sswAlignmentResult.read_end1 = result->read_end1;
 
   align_destroy(result);
 //  return retval;
-  return threshold;
+  return sswAlignmentResult;
 }
 
 double ProteinAligner::c_align_double_global(double* matrix, const char *s1, int ls1,

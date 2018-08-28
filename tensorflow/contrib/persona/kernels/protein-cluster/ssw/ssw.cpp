@@ -829,7 +829,9 @@ s_align* ssw_align (const s_profile* prof,
 					const uint8_t flag,	//  (from high to low) bit 5: return the best alignment beginning position; 6: if (ref_end1 - ref_begin1 <= filterd) && (read_end1 - read_begin1 <= filterd), return cigar; 7: if max score >= filters, return cigar; 8: always return cigar; if 6 & 7 are both setted, only return cigar when both filter fulfilled
 					const uint16_t filters,
 					const int32_t filterd,
-					const int32_t maskLen) {
+					const int32_t maskLen,
+					const uint16_t threshold // added by milad passing threshold to aligner. if passed: backtrace
+					) {
 
 //	alignment_end* bests = 0; //, *bests_reverse = 0;
 	alignment_end* bests = 0, *bests_reverse = 0; // milad
@@ -861,16 +863,11 @@ s_align* ssw_align (const s_profile* prof,
 	*/
 	if (prof->profile_byte) {
 		bests = sw_sse2_byte(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_byte, -1, prof->bias, maskLen);
-		// cout <<834 <<endl;
 		if (prof->profile_word && bests[0].score == 255) {
-			// cout <<836 <<endl;
 			free(bests);
-			// cout <<838<<endl;
 			bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen);
-			// cout <<840<<endl;
 			word = 1;
 		} else if (bests[0].score == 255) {
-			// cout <<841 <<endl;
 			fprintf(stderr, "Please set 2 to the score_size parameter of the function ssw_init, otherwise the alignment results will be incorrect.\n");
 			free(r);
 			return NULL;
@@ -878,22 +875,19 @@ s_align* ssw_align (const s_profile* prof,
 	}
 	
 	else if (prof->profile_word) {
-		// cout <<849 <<endl;
 		bests = sw_sse2_word(ref, 0, refLen, readLen, weight_gapO, weight_gapE, prof->profile_word, -1, maskLen);
 		word = 1;
 	}
 	
 	else {
-		// cout <<846 <<endl;
 		fprintf(stderr, "Please call the function ssw_init before ssw_align.\n");
 		free(r);
 		return NULL;
 	}
-	// cout <<848 <<endl;
 	r->score1 = bests[0].score;
 
-//	// TODO milad: implementing part of PassesThresholdSSW in here. Not a good thing to do at all
-	if (r-> score1 <= 110){ // doesn't pass the threshold. no need for backtrace
+// TODO milad: implementing part of PassesThresholdSSW in here. Not a good thing to do ...
+	if (r-> score1 <= threshold){ // doesn't pass the threshold. no need for backtrace
 		return r;
 	}
 
@@ -930,30 +924,22 @@ s_align* ssw_align (const s_profile* prof,
 	r->read_begin1 = r->read_end1 - bests_reverse[0].read;
 	free(bests_reverse);
 
-//	cerr << " !!! " << endl;
-//	cerr << "ref_begin1: " << r->ref_begin1 << endl;
-//	cerr << "ref_end1: " << r->ref_end1 << endl;
-//	cerr << "read_begin1: " << r->read_begin1 << endl;
-//	cerr << "read_end1: " << r->read_end1 << endl;
-//	cerr << " /// " << endl;
-
 	if ((7&flag) == 0 || ((2&flag) != 0 && r->score1 < filters) || ((4&flag) != 0 && (r->ref_end1 - r->ref_begin1 > filterd || r->read_end1 - r->read_begin1 > filterd))) goto end;
 
 	// Generate cigar.
-	refLen = r->ref_end1 - r->ref_begin1 + 1;
-	readLen = r->read_end1 - r->read_begin1 + 1;
-	band_width = abs(refLen - readLen) + 1;
-	path = banded_sw(ref + r->ref_begin1, prof->read + r->read_begin1, refLen, readLen, r->score1, weight_gapO, weight_gapE, band_width, prof->mat, prof->n);
-	if (path == 0) {
-		free(r);
-		r = NULL;
-	}
-	else {
-		r->cigar = path->seq;
-		r->cigarLen = path->length;
-		free(path);
-	}
-
+//	refLen = r->ref_end1 - r->ref_begin1 + 1;
+//	readLen = r->read_end1 - r->read_begin1 + 1;
+//	band_width = abs(refLen - readLen) + 1;
+//	path = banded_sw(ref + r->ref_begin1, prof->read + r->read_begin1, refLen, readLen, r->score1, weight_gapO, weight_gapE, band_width, prof->mat, prof->n);
+//	if (path == 0) {
+//		free(r);
+//		r = NULL;
+//	}
+//	else {
+//		r->cigar = path->seq;
+//		r->cigarLen = path->length;
+//		free(path);
+//	}
 
 	//Commenting till here
 
