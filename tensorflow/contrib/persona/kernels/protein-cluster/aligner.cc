@@ -318,8 +318,19 @@ bool isPowerof2(unsigned int x) {
     return x && !(x & (x - 1));
 }
 
-bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
-  
+//bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
+
+//typedef struct {
+//    bool passed;
+//    int32_t ref_begin1;
+//    int32_t ref_end1;
+//    int32_t	read_begin1;
+//    int32_t read_end1;
+//} m_threshold; // milad_threshold
+
+// bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
+m_threshold ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len) {
+
   //Constants Being Initialised
   
   int32_t l, m, k, match = 2, mismatch_ssw = 2, gap_open = 37.64 - 7.434 * log10(224), gap_extension = 1.3961, n = 5, s1 = 1024, s2 = 1024, filter = 0;
@@ -480,9 +491,17 @@ bool ProteinAligner::PassesThresholdSSW(const char* seq1_norm, const char* seq2_
     retval =  true;
   }
   else retval = false;
+
+  m_threshold threshold; // milad TODO check performance. it's not a pointer!
+  threshold.passed = retval;
+  threshold.ref_begin1 = result->ref_begin1;
+  threshold.ref_end1 = result->ref_end1;
+  threshold.read_begin1 = result->read_begin1;
+  threshold.read_end1 = result->read_end1; // TODO check segfault?
+
   align_destroy(result);
-  return retval;
-  
+//  return retval;
+  return threshold;
 }
 
 double ProteinAligner::c_align_double_global(double* matrix, const char *s1, int ls1,

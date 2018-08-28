@@ -30,6 +30,19 @@ namespace tensorflow {
 
   }
 
+    string PrintDebuggingStuff(bool isIf, m_threshold threshold, ProteinAligner::Alignment alignment) {
+        string retVal = "else:\n";
+        if (isIf)
+            retVal = "if:\n";
+        retVal += string("threshold:\n") + "ref:\t" + to_string(threshold.ref_begin1) + "\t" + to_string(threshold.ref_end1) + "\n";
+        retVal += string("read\t") + to_string(threshold.read_begin1) + "\t" + to_string(threshold.read_end1) + "\n";
+        retVal += string("//\n") + "alignment:\n";
+        retVal += string("seq1\t") + to_string(alignment.seq1_min) + "\t" + to_string(alignment.seq1_max) + "\n";
+        retVal += string("seq2\t") + to_string(alignment.seq2_min) + "\t" + to_string(alignment.seq2_max) + "\n";
+        retVal += string("----END---\n");
+        return retVal;
+    }
+
   bool Cluster::EvaluateSequence(Sequence& sequence,  
       const AlignmentEnvironments* envs, const Parameters* params) {
     ProteinAligner aligner(envs, params);
@@ -45,11 +58,13 @@ namespace tensorflow {
       total_comps_++;
       //auto t1 = chrono::high_resolution_clock::now();
       // bool passed = aligner.PassesThreshold(sequence.data, rep.Data(), sequence.length, rep.Length());
-      bool passed = aligner.PassesThresholdSSW(sequence.data, rep.Data(), sequence.length, rep.Length());
+//      bool passed = aligner.PassesThresholdSSW(sequence.data, rep.Data(), sequence.length, rep.Length());
+      m_threshold threshold = aligner.PassesThresholdSSW(sequence.data, rep.Data(), sequence.length, rep.Length()); // milad
       //auto t2 = chrono::high_resolution_clock::now();
       //auto elapsed = chrono::duration_cast<chrono::microseconds>(t2 - t1);
       //outfile << sequence.length << ", " << rep.Length() << ", " << elapsed.count() << "\n";
-      if (passed) {
+//      if (threshold->passed) {
+      if (threshold.passed) {
 
         //LOG(INFO) << "passed threshold";
         ProteinAligner::Alignment alignment;
@@ -57,19 +72,32 @@ namespace tensorflow {
         // if subsequence homology, fully align and calculate coverages
         if (params->subsequence_homology) {
           skip++;
-          if (sequence.total_seqs > rep.TotalSeqs() || (sequence.total_seqs == rep.TotalSeqs() 
-              && *sequence.genome > rep.Genome()) || ((*sequence.genome == rep.Genome())
-              && sequence.genome_index > rep.GenomeIndex()) ) {
+          // milad
+//          if (sequence.total_seqs > rep.TotalSeqs() || (sequence.total_seqs == rep.TotalSeqs()
+//              && *sequence.genome > rep.Genome()) || ((*sequence.genome == rep.Genome())
+//              && sequence.genome_index > rep.GenomeIndex()) ) {
       
             //s = aligner.AlignLocal(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
-            s = aligner.AlignSingle(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment);
-            AddCoveredRange(*sequence.coverages, alignment.seq2_min, alignment.seq2_max);
-          } else {
+            //s = aligner.AlignSingle(rep.Data(), sequence.data, rep.Length(), sequence.length, alignment); // milad
+//            AddCoveredRange(*sequence.coverages, alignment.seq2_min, alignment.seq2_max); // milad
+//            AddCoveredRange(*sequence.coverages, threshold->read_begin1, threshold->read_end1);
+//            cerr << PrintDebuggingStuff(true, threshold, alignment);
+//            AddCoveredRange(*sequence.coverages, threshold.read_begin1, threshold.read_end1);
 
-            //s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
-            s = aligner.AlignSingle(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
-            AddCoveredRange(*sequence.coverages, alignment.seq1_min, alignment.seq1_max);
-          }
+//              cerr << "if. ref: \t" << threshold.ref_begin1 << " " << threshold.ref_end1 << " \t read: " << threshold.read_begin1 << " " << threshold.read_end1 << endl;
+
+            AddCoveredRange(*sequence.coverages, threshold.ref_begin1, threshold.ref_end1);
+//          } else {
+//
+//            //s = aligner.AlignLocal(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment);
+//            s = aligner.AlignSingle(sequence.data, rep.Data(), sequence.length, rep.Length(), alignment); // milad
+////            AddCoveredRange(*sequence.coverages, alignment.seq1_min, alignment.seq1_max); // milad
+////            AddCoveredRange(*sequence.coverages, threshold->ref_begin1, threshold->ref_end1);
+////            AddCoveredRange(*sequence.coverages, threshold.ref_begin1, threshold.ref_end1);
+////              cerr << "else. ref: \t" << threshold.ref_begin1 << " " << threshold.ref_end1 << " \t read: " << threshold.read_begin1 << " " << threshold.read_end1 << endl;
+//              cerr << PrintDebuggingStuff(false, threshold, alignment);
+//            AddCoveredRange(*sequence.coverages, threshold.read_begin1, threshold.read_end1);
+//          }
         }
 
         ClusterSequence new_seq(string(sequence.data, sequence.length), *sequence.genome, 
@@ -86,6 +114,8 @@ namespace tensorflow {
     return false;
 
   }
+
+
     
   int Cluster::LongestSeqLength() {
     int len = 0;

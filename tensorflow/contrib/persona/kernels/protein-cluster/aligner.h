@@ -4,7 +4,16 @@
 #include "tensorflow/contrib/persona/kernels/protein-cluster/params.h"
 #include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/extras.h"
 
+
 namespace tensorflow {
+
+    typedef struct {
+        bool passed;
+        int32_t ref_begin1;
+        int32_t ref_end1;
+        int32_t	read_begin1;
+        int32_t read_end1;
+    } m_threshold; // milad_threshold // TODO move to header file (used by aligner.cc and protein_cluster.cc)
 
 class ProteinAligner {
 
@@ -43,7 +52,8 @@ class ProteinAligner {
     Status AlignLocal(const char* seq1, const char* seq2, int seq1_len, int seq2_len, Alignment& result);
 
     bool PassesThreshold(const char* seq1, const char* seq2, int seq1_len, int seq2_len);
-    bool PassesThresholdSSW(const char* seq1, const char* seq2, int seq1_len, int seq2_len);
+//    bool PassesThresholdSSW(const char* seq1, const char* seq2, int seq1_len, int seq2_len);
+    m_threshold PassesThresholdSSW(const char* seq1_norm, const char* seq2_norm, int seq1_len, int seq2_len);
 
     // with full range calc
     Status AlignDouble(const char* seq1, const char* seq2, int seq1_len, int seq2_len,
