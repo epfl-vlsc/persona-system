@@ -33,18 +33,19 @@
 #include "swps3.h"
 #include "matrix.h"
 #include <xmmintrin.h>
+#include <emmintrin.h>
 
 typedef struct{
 	int len;
-	unsigned char bias;
-	__m64   * profile;
+	uint16_t bias;
+	__m128i * profile;
 	__m128i * rD;
 	__m128i * storeOpt;
 	__m128i * loadOpt;
-	char data[1];
+	uint16_t data[1];
 } ProfileShort;
 
-ProfileShort * swps3_createProfileShortSSE( const char * query, int queryLen, SBMatrix matrix );
+ProfileShort * swps3_createProfileShortSSE( const char * query, int queryLen, SMatrix matrix );
 double swps3_alignmentShortSSE( ProfileShort * query, const char * db, int dbLen, Options * options );
 void swps3_freeProfileShortSSE( ProfileShort * profile );
 

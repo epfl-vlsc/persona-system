@@ -40,7 +40,8 @@ def validate_shape_and_dtype(tensor, expected_shape, expected_dtype):
     if tensor_dtype != expected_dtype:
         raise Exception("Tensor {t} doesn't have expected dtype {d}. Has {a}".format(t=tensor, d=expected_dtype, a=tensor_dtype))
 
-valid_columns = {"base", "qual", "metadata", "results", "secondary","refcompress"} # TODO add for other columns
+valid_columns = {"base", "qual", "metadata", "results", "secondary", "prot","refcompress","uncompress"} # TODO add for other columns
+
 def validate_columns(columns):
     """
     Validates the columns based on their validity, returning a set

@@ -1,11 +1,13 @@
 #pragma once
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/contrib/persona/kernels/protein-cluster/swps3/EstimatePam.h"
+extern "C" {
+#include "swps3/EstimatePam.h"
+}
 #include <vector>
 
 namespace tensorflow {
 
-class AlignmentEnvironment {
+struct AlignmentEnvironment {
     double gap_open;
     double gap_extend;
     double pam_distance;
@@ -20,14 +22,26 @@ class AlignmentEnvironment {
 };
 
 class AlignmentEnvironments {
+ // pointers here own no data
  public:
-  void EstimatePam(char* seq1, char* seq2, int len);
-  const AlignmentEnvironment& FindNearest(double pam);
+  AlignmentEnvironments() {}
+  void EstimPam(char* seq1, char* seq2, int len, double result[3]) const;
+  const AlignmentEnvironment& FindNearest(double pam) const;
+  const AlignmentEnvironment& LogPamEnv() const;
+  const AlignmentEnvironment& JustScoreEnv() const;
+
+  // init methods
+  void CreateDayMatrices(std::vector<double>& gap_open, std::vector<double>& gap_ext,
+      std::vector<double>& pam_dist, std::vector<double*>& matrices);
+  void Initialize(std::vector<AlignmentEnvironment>& envs, AlignmentEnvironment& logpam_env, 
+      AlignmentEnvironment& just_score_env);
 
  private:
   std::vector<AlignmentEnvironment> envs_;
   DayMatrix* day_matrices_;
-  double* logpam1_matrix_;
+  //double* logpam1_matrix_;
+  AlignmentEnvironment logpam_env_;
+  AlignmentEnvironment just_score_env_;
 };
 
 }

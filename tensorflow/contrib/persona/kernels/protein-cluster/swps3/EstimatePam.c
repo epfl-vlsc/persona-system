@@ -18,7 +18,7 @@
  #							*/
 
 double NorFre[MAXMUTDIM];
-int DelFrom[MAXSEQLEN+1];
+//int DelFrom[MAXSEQLEN+1];
 
 #define ABS(a)	((a)>=0?(a):-(a))
 
