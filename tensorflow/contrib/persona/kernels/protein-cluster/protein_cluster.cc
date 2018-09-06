@@ -54,7 +54,9 @@ namespace tensorflow {
         if (params->subsequence_homology) {
           skip++;
           // milad
-          AddCoveredRange(*sequence.coverages, alignmentResult.ref_begin1, alignmentResult.ref_end1);
+//          AddCoveredRange(*sequence.coverages, alignmentResult.ref_begin1, alignmentResult.ref_end1);
+            // TODO milad addCoverage: [min, max) . is alignmentResult.ref_end1 inclusive or exclusive range boundary?
+          AddCoveredRange(*sequence.coverages, std::max(0, alignmentResult.ref_end1 - rep.Length()), alignmentResult.ref_end1);
         }
         ClusterSequence new_seq(string(sequence.data, sequence.length), *sequence.genome, 
             sequence.genome_index, sequence.total_seqs);

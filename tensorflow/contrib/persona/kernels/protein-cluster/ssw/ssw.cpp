@@ -910,21 +910,21 @@ s_align* ssw_align (const s_profile* prof,
 //	if (flag == 0 || (flag == 2 && r->score1 < filters)) goto end;
 
 	// Find the beginning position of the best alignment.
-	read_reverse = seq_reverse(prof->read, r->read_end1);
-	if (word == 0) {
-		vP = qP_byte(read_reverse, prof->mat, r->read_end1 + 1, prof->n, prof->bias);
-		bests_reverse = sw_sse2_byte(ref, 1, r->ref_end1 + 1, r->read_end1 + 1, weight_gapO, weight_gapE, vP, r->score1, prof->bias, maskLen);
-	} else {
-		vP = qP_word(read_reverse, prof->mat, r->read_end1 + 1, prof->n);
-		bests_reverse = sw_sse2_word(ref, 1, r->ref_end1 + 1, r->read_end1 + 1, weight_gapO, weight_gapE, vP, r->score1, maskLen);
-	}
-	free(vP);
-	free(read_reverse);
-	r->ref_begin1 = bests_reverse[0].ref;
-	r->read_begin1 = r->read_end1 - bests_reverse[0].read;
-	free(bests_reverse);
-
-	if ((7&flag) == 0 || ((2&flag) != 0 && r->score1 < filters) || ((4&flag) != 0 && (r->ref_end1 - r->ref_begin1 > filterd || r->read_end1 - r->read_begin1 > filterd))) goto end;
+//	read_reverse = seq_reverse(prof->read, r->read_end1);
+//	if (word == 0) {
+//		vP = qP_byte(read_reverse, prof->mat, r->read_end1 + 1, prof->n, prof->bias);
+//		bests_reverse = sw_sse2_byte(ref, 1, r->ref_end1 + 1, r->read_end1 + 1, weight_gapO, weight_gapE, vP, r->score1, prof->bias, maskLen);
+//	} else {
+//		vP = qP_word(read_reverse, prof->mat, r->read_end1 + 1, prof->n);
+//		bests_reverse = sw_sse2_word(ref, 1, r->ref_end1 + 1, r->read_end1 + 1, weight_gapO, weight_gapE, vP, r->score1, maskLen);
+//	}
+//	free(vP);
+//	free(read_reverse);
+//	r->ref_begin1 = bests_reverse[0].ref;
+//	r->read_begin1 = r->read_end1 - bests_reverse[0].read;
+//	free(bests_reverse);
+//
+//	if ((7&flag) == 0 || ((2&flag) != 0 && r->score1 < filters) || ((4&flag) != 0 && (r->ref_end1 - r->ref_begin1 > filterd || r->read_end1 - r->read_begin1 > filterd))) goto end;
 
 	// Generate cigar.
 //	refLen = r->ref_end1 - r->ref_begin1 + 1;
